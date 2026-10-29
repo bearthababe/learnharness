@@ -13,8 +13,15 @@ const { chatStore } = await import("../src/store/chats.ts");
 const { newUserMessage, activeProblemOf, modelSolutionForConclude } = await import("../src/core/native-messages.ts");
 const { handleChatRequest } = await import("../src/server/chat-handler.ts");
 const { runningTurn } = await import("../src/server/turn-runs.ts");
-const { createPracticeAgent, composeInstructions } = await import("../src/agent/teacher-agent.ts");
+const { createPracticeAgent, createProberAgent, composeInstructions } = await import("../src/agent/teacher-agent.ts");
+const { jobStore } = await import("../src/store/jobs.ts");
+const { PATHS } = await import("../config.ts");
+const { promptOverrides } = await import("../src/store/prompt-overrides.ts");
+const { settingsStore } = await import("../src/store/settings.ts");
 process.env.OPENROUTER_API_KEY = "test-key-presence-gate";
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async () => { throw new Error("Unexpected network request in isolated drill test"); };
+after(() => { globalThis.fetch = originalFetch; });
 after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 
 function create(body: unknown) {
@@ -72,16 +79,19 @@ it("runs a drill through help, saved work, conclusion and the learner's next pro
 		() => fauxAssistantMessage([fauxText("Arrange the ratio so litres cancel: multiply by 1 m³ / 1000 L.")]),
 		() => fauxAssistantMessage([fauxToolCall("conclude", { outcome: "solvedWithHints", verdict: "Correct after help arranging the ratio.", rung: "R4", missClass: "execution", retest: true }, { id: "drill-c1" })], { stopReason: "toolUse" }),
 		() => fauxAssistantMessage([fauxText("You used the ratio correctly. Ready for another example?")]),
+		() => fauxAssistantMessage([fauxText("The ratio equals one: both parts describe the same volume, so the quantity stays the same.")]),
 		() => fauxAssistantMessage([fauxToolCall("problem", { ...pose, statement: "Convert 0.08 m³ to litres.", modelSolution: "0.08 × 1000 = 80 L." }, { id: "drill-p2" })], { stopReason: "toolUse" }),
 	]);
 	const engine = { model: faux.getModel(), streamFn: faux.streamSimple };
 	const prompts: string[] = [];
+	const toolSchemas: string[] = [];
 	async function turn(input: unknown) {
 		const response = await handleChatRequest(new Request("http://test/api/chat", {
 			method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chatId: id, input }),
 		}), (opts) => {
 			const agent = createPracticeAgent({ chatId: id, chatStore }, { ...opts, engine });
 			prompts.push(agent.state.systemPrompt);
+			toolSchemas.push(JSON.stringify(agent.state.tools.map((tool) => tool.parameters)));
 			return agent;
 		});
 		assert.equal(response.status, 200, await response.clone().text());
@@ -93,6 +103,8 @@ it("runs a drill through help, saved work, conclusion and the learner's next pro
 	assert.match(prompts[0]!, /separate, optional drill/);
 	assert.doesNotMatch(prompts[0]!, /Never issue blocks of same-target problems/);
 	assert.match(composeInstructions("practice"), /Never issue blocks of same-target problems/);
+	assert.doesNotMatch(toolSchemas[0]!, /NEVER announces the target proposition|hint-ladder rung|do NOT give the correction/);
+	assert.match(toolSchemas[0]!, /most revealing relevant help/);
 	await turn({ type: "thinking", problemCallId: "drill-p1", text: "I don't know which way the ratio goes." });
 	assert.equal(activeProblemOf(chatStore.getChat(id)!.messages)?.toolCallId, "drill-p1");
 	await turn({ type: "thinking", problemCallId: "drill-p1", text: "250 L × 1 m³ / 1000 L = 0.25 m³" });
@@ -101,7 +113,97 @@ it("runs a drill through help, saved work, conclusion and the learner's next pro
 	assert.equal(activeProblemOf(completed.messages), null);
 	assert.match(JSON.stringify(completed.messages), /solvedWithHints/);
 	assert.equal(modelSolutionForConclude(completed.messages, "drill-c1"), pose.modelSolution);
+	await turn({ type: "text", text: "Why is it okay to multiply by that ratio?" });
+	assert.equal(activeProblemOf(chatStore.getChat(id)!.messages), null);
 	await turn({ type: "text", text: "Next problem" });
 	assert.equal(activeProblemOf(chatStore.getChat(id)!.messages)?.toolCallId, "drill-p2");
 	assert.ok(prompts.every((prompt) => prompt.includes("separate, optional drill")));
+});
+
+it("an existing drill reads revised policy next turn, honors shared overrides and preserves earlier work", async (t) => {
+	const policyPath = path.join(PATHS.root, "src/agent/prompts/drill/10-drill.md");
+	const policy = fs.readFileSync(policyPath, "utf-8");
+	const fixture = path.join(dataDir, "drill-policy.md");
+	fs.writeFileSync(fixture, policy);
+	// Redirect only this worker's policy read to an owned file. Never edit shared source files.
+	const read = fs.readFileSync;
+	t.mock.method(fs, "readFileSync", (...args: Parameters<typeof read>) => read(args[0] === policyPath ? fixture : args[0], args[1]));
+	promptOverrides.writeOverride("shared/10-voice.md", "Shared voice override for this learner.");
+	promptOverrides.writeOverride("practice/10-doctrine.md", "Ordinary practice override must stay isolated.");
+	t.after(() => {
+		promptOverrides.deleteOverride("shared/10-voice.md");
+		promptOverrides.deleteOverride("practice/10-doctrine.md");
+		settingsStore.writeSettings({ version: 1, agent: { prompts: {} } });
+	});
+	settingsStore.writeSettings({ version: 1, agent: { prompts: { "shared/10-voice.md": true, "practice/10-doctrine.md": true } } });
+	const { id } = await (await create({ title: "Ratios", kind: "practice", practiceMode: "drill" })).json();
+	chatStore.saveSettings(id, { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } });
+	const faux = createFauxCore({});
+	faux.setResponses([
+		() => fauxAssistantMessage([fauxText("We can work on ratios.")]),
+		() => fauxAssistantMessage([fauxText("We can continue with your target.")]),
+	]);
+	const prompts: string[] = [];
+	const agents: ReturnType<typeof createPracticeAgent>[] = [];
+	async function turn(text: string) {
+		const response = await handleChatRequest(new Request("http://test/api/chat", {
+			method: "POST", headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ chatId: id, practiceMode: "ordinary", input: { type: "text", text } }),
+		}), (opts) => {
+			const agent = createPracticeAgent({ chatId: id, chatStore }, { ...opts, engine: { model: faux.getModel(), streamFn: faux.streamSimple } });
+			prompts.push(agent.state.systemPrompt);
+			agents.push(agent);
+			return agent;
+		});
+		assert.equal(response.status, 200);
+		const run = runningTurn(id);
+		if (run) await new Response(run.subscribe()).text();
+	}
+	await turn("I need help with ratios.");
+	const earlier = chatStore.getChat(id)!.messages;
+	fs.writeFileSync(fixture, `${policy}\n\nRevised policy marker: check unit cancellation explicitly.`);
+	await turn("Let's continue.");
+	assert.doesNotMatch(prompts[0]!, /Revised policy marker/);
+	assert.match(prompts[1]!, /Revised policy marker/);
+	assert.equal(agents[0]!.state.systemPrompt, prompts[0], "an already-built response retains its original policy");
+	assert.deepEqual(chatStore.getChat(id)!.messages.slice(0, earlier.length), earlier);
+	for (const prompt of prompts) {
+		assert.match(prompt, /separate, optional drill/);
+		assert.match(prompt, /Shared voice override/);
+		assert.doesNotMatch(prompt, /Ordinary practice override/);
+	}
+});
+
+it("ordinary and older sessions ignore a request's claimed drill mode and retain their own instructions and schemas", async () => {
+	for (const kind of [undefined, "practice"] as const) {
+		const { id } = await (await create({ title: "Ordinary session", kind })).json();
+		chatStore.saveSettings(id, { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } });
+		const faux = createFauxCore({});
+		faux.setResponses([() => fauxAssistantMessage([fauxText("Ordinary response.")])]);
+		let prompt = "";
+		let schema = "";
+		const response = await handleChatRequest(new Request("http://test/api/chat", {
+			method: "POST", headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ chatId: id, practiceMode: "drill", input: { type: "text", text: "Let's work." } }),
+		}), (opts) => {
+			assert.equal(opts.practiceMode, undefined);
+			const engine = { model: faux.getModel(), streamFn: faux.streamSimple };
+			const agent = kind === "practice"
+				? createPracticeAgent({ chatId: id, chatStore }, { ...opts, engine })
+				: createProberAgent({ chatId: id, chatStore, jobStore, deliver: () => {}, spawn: () => {} }, { ...opts, engine });
+			prompt = agent.state.systemPrompt;
+			schema = JSON.stringify(agent.state.tools.map((tool) => tool.parameters));
+			return agent;
+		});
+		assert.equal(response.status, 200);
+		const run = runningTurn(id);
+		if (run) await new Response(run.subscribe()).text();
+		assert.equal(prompt, composeInstructions(kind === "practice" ? "practice" : "prober"));
+		assert.doesNotMatch(prompt, /separate, optional drill/);
+		if (kind === "practice") {
+			assert.match(schema, /NEVER announces the target proposition/);
+			assert.match(schema, /hint-ladder rung/);
+		}
+		assert.equal(chatStore.getChat(id)!.practiceMode, undefined);
+	}
 });

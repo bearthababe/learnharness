@@ -25,6 +25,7 @@ import { jobTools, type JobToolContext } from "./jobs.ts";
 import { proberGraphTools, type GraphToolContext } from "./graph.ts";
 import { activeProblemOf } from "../../core/native-messages.ts";
 import type { LhMessage } from "../../core/native-messages.ts";
+import type { ChatRecord } from "../../core/contracts/chat.ts";
 import { concludeResult, invalidInputResult, problemResult } from "../tool-execute.ts";
 import { healEncodedArguments, healToolRecord } from "./heal.ts";
 
@@ -220,7 +221,7 @@ export function concludeTool(gate: PracticeGate): AgentTool<typeof concludeInput
 }
 
 /** The practice toolset (the practice agent's whole registry). */
-export function practiceTools(ctx: PracticeToolContext): Record<string, AgentTool<any>> {
+export function practiceTools(ctx: PracticeToolContext, practiceMode?: ChatRecord["practiceMode"]): Record<string, AgentTool<any>> {
 	// ONE gate per turn, shared by both tools — the intra-turn truth.
 	const gate = createPracticeGate(ctx);
 	// THE RARELY-NEEDED SET (owner round 10): read/ls/find/grep over the
@@ -231,13 +232,44 @@ export function practiceTools(ctx: PracticeToolContext): Record<string, AgentToo
 	// toggle-filtered: problem/conclude are the session; these are
 	// exceptions the doctrine says to reach for rarely.
 	const jobs = ctx.jobs ? jobTools(ctx.jobs) : null;
+	const problem = problemTool(gate, ctx.graphNodes);
+	const conclude = concludeTool(gate);
+	if (practiceMode === "drill") {
+		// Only descriptive metadata differs: keep shared schemas and execution gates intact.
+		const drillProblemParameters = {
+			...problem.parameters,
+			properties: {
+				...problem.parameters.properties,
+				statement: {
+					...problem.parameters.properties.statement,
+					description: "REQUIRED — the problem as the learner sees it (markdown + LaTeX). Must be self-contained and solvable from the session's material. It may name the skill being drilled.",
+				},
+			},
+		};
+		const drillConcludeParameters = {
+			...conclude.parameters,
+			properties: {
+				...conclude.parameters.properties,
+				verdict: {
+					...conclude.parameters.properties.verdict,
+					description: "REQUIRED — the plain-language verdict: what was credited, where it broke, what support was provided and what the learner then did. Success after relevant help is not independent success.",
+				},
+				rung: {
+					...conclude.parameters.properties.rung,
+					description: "REQUIRED — the most revealing relevant help actually given: R0 through R5, or null only when no help was given. These describe assistance, not a required sequence; explain the actual support in the verdict.",
+				},
+			},
+		};
+		problem.parameters = drillProblemParameters;
+		conclude.parameters = drillConcludeParameters;
+	}
 	// healToolRecord (owner, 2026-10-09 — the whitehead generalization):
 	// the standard argument heal over the WHOLE registry. problem/conclude
 	// keep their own (target-normalizing) prepareArguments as the composed
 	// inner pass; the double heal is idempotent by construction.
 	return healToolRecord({
-		problem: problemTool(gate, ctx.graphNodes),
-		conclude: concludeTool(gate),
+		problem,
+		conclude,
 		read: readTool,
 		ls: lsTool,
 		find: findTool,

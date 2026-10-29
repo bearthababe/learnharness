@@ -419,6 +419,7 @@ export async function handleChatInput(
 		restoreAutomatic: (automaticIds, retainedIds) => restoreUncommittedAutomatic(chatId, constructed, automaticIds, retainedIds),
 	});
 	const agentOpts: AgentBuildOptions = {
+		practiceMode: record.kind === "practice" ? record.practiceMode : undefined,
 		engine,
 		callPurpose,
 		requestCycle,

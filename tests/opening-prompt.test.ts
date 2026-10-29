@@ -113,6 +113,20 @@ describe("new-session create and handover", () => {
 		assert.equal(bodies.length, 5);
 		assert.equal(readOpeningPrompt("chat_1"), undefined);
 	});
+	it("a failed practice handover cannot be reused after switching to drill, while an unchanged drill retry reuses its creation", async () => {
+		const starter = new SessionStarter();
+		const { bodies, fetchLike } = createFetch();
+		const setItem = storage.setItem;
+		storage.setItem = fail;
+		await assert.rejects(starter.start({ title: "Ratios", kind: "practice" }, fetchLike));
+		const drill = { title: "Ratios", kind: "practice" as const, practiceMode: "drill" as const };
+		await assert.rejects(starter.start(drill, fetchLike));
+		storage.setItem = setItem;
+		assert.equal(await starter.start(drill, fetchLike), "/chat/chat_2");
+		assert.deepEqual(bodies, [{ title: "Ratios", kind: "practice" }, drill]);
+		assert.equal(readOpeningPrompt("chat_1"), undefined);
+		assert.equal(readOpeningPrompt("chat_2"), "Ratios");
+	});
 	it("does not stash or navigate on a refused creation or invalid ID", async () => {
 		for (const response of [new Response("unavailable", { status: 503 }), Response.json({}), Response.json({ id: "../bad?prompt=leak" })]) {
 			const starter = new SessionStarter();

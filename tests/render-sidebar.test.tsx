@@ -138,6 +138,13 @@ describe("timeAgo", () => {
 });
 
 describe("SessionRow practice badge (practice sessions, 2026-10-04)", () => {
+	it("a saved drill has a visible Drill tag and preserves the learner's title", () => {
+		const html = render(item({ title: "Volume conversions", kind: "practice", practiceMode: "drill", pendingProblem: true }));
+		assert.match(html, /Volume conversions/);
+		assert.match(html, />Drill<\/span>/);
+		assert.match(html, /Problem waiting/);
+		assert.doesNotMatch(html, /aria-label="Practice session"/);
+	});
 	it("a practice row carries the dumbbell badge and the unified Working meta while busy (owner, 2026-10-10)", () => {
 		const html = render(item({ kind: "practice", busy: true }));
 		assert.match(html, /Working…/);

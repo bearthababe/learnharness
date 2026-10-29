@@ -6,6 +6,8 @@ import type { Usage } from "@earendil-works/pi-ai";
 import { PATHS } from "../../config.ts";
 import { APP_IDENTITY, piEngineFor, type PiEngine } from "./models.ts";
 import { effectivePromptSegments } from "./prompt-segments.ts";
+import { composeDrillInstructions } from "./drill-instructions.ts";
+import type { ChatRecord } from "../core/contracts/chat.ts";
 import {
 	askUserQuestionTool,
 	createProberTools,
@@ -72,7 +74,8 @@ export type AgentKind = "prober" | "teacher" | "practice";
  *  tests/prompt-overrides.test.ts). Overrides are a static-file read
  *  through config paths, not request state — the store import carries no
  *  chat/job machinery. */
-export function composeInstructions(kind: AgentKind, switches?: Record<string, boolean>): string {
+export function composeInstructions(kind: AgentKind, switches?: Record<string, boolean>, practiceMode?: ChatRecord["practiceMode"]): string {
+	if (kind === "practice" && practiceMode === "drill") return composeDrillInstructions(switches);
 	const segments = effectivePromptSegments(kind, switches ?? {});
 	return segments
 		.map((s) => (s.enabled ? s.overrideText! : s.sourceText))
@@ -98,6 +101,8 @@ export type StepUsageCollector = (usage: Usage) => void;
 
 /** Per-request construction options (the handler wires all of these). */
 export interface AgentBuildOptions {
+	/** Saved practice activity; independent of model/thinking settings. */
+	practiceMode?: ChatRecord["practiceMode"];
 	/** Model + stream function — tests inject a scripted faux engine. */
 	engine?: PiEngine;
 	callPurpose?: { background: boolean };
@@ -181,8 +186,8 @@ function baseAgentOptions(kind: AgentKind, opts: AgentBuildOptions, tools: Agent
 	// ("practice" is not a ModelRole) honest about that.
 	const engine = opts.engine ?? piEngineFor(kind as "prober" | "teacher");
 	const stopper = makeQuestionStopper(kind);
-	const systemPrompt = opts.promptSwitches
-		? composeInstructions(kind, opts.promptSwitches)
+	const systemPrompt = opts.promptSwitches || (kind === "practice" && opts.practiceMode === "drill")
+		? composeInstructions(kind, opts.promptSwitches, opts.practiceMode)
 		: composedInstructions[kind]!;
 	// Debug recorder (owner, 2026-10-04): raw provider events when
 	// LH_PROVIDER_EVENTS=1 and the caller handed a chatId; undefined is
@@ -332,7 +337,7 @@ export function bareQuestionTools(): Record<string, AgentTool<any>> {
  * for a mixed batch (for example, send_to_user + problem).
  */
 export function createPracticeAgent(ctx: PracticeToolContext, opts: AgentBuildOptions = {}) {
-	const tools = opts.tools ?? practiceTools(ctx);
+	const tools = opts.tools ?? practiceTools(ctx, opts.practiceMode);
 	return baseAgentOptions("practice", opts, Object.values(tools));
 }
 
@@ -340,4 +345,3 @@ export type ProberAgent = ReturnType<typeof createProberAgent>;
 export type TeacherAgent = ReturnType<typeof createTeacherAgent>;
 export type PracticeAgent = ReturnType<typeof createPracticeAgent>;
 export type TeachingAgent = ProberAgent | TeacherAgent | PracticeAgent;
-
