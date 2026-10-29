@@ -262,11 +262,14 @@ export async function handleChatInput(
 			canStart: () => connectionBackgroundAllowed(conversation.provider),
 			modelId: modelIdForCompaction,
 			kind: record.kind === "practice" ? "practice" : hasProbeDone(record.messages) ? "teach" : "probe",
+			practiceMode: record.kind === "practice" ? record.practiceMode : undefined,
 			thresholdTokens: effectiveThresholdTokens(
 				effective.compaction?.thresholdTokens,
 				catalogContextLimits().get(modelIdForCompaction),
 			),
-			systemPromptTokens: Math.ceil(composeInstructions(record.kind === "practice" ? "practice" : "teacher").length / 4),
+			systemPromptTokens: Math.ceil((record.kind === "practice" && record.practiceMode === "drill"
+				? composeInstructions("practice", effective.agent.prompts, record.practiceMode)
+				: composeInstructions(record.kind === "practice" ? "practice" : "teacher")).length / 4),
 		},
 		chatId,
 	);
@@ -638,11 +641,14 @@ export async function handleChatInput(
 							canStart: () => connectionBackgroundAllowed(spec.provider),
 							modelId: kickModelId,
 							kind: freshRecord.kind === "practice" ? "practice" : hasProbeDone(freshRecord.messages) ? "teach" : "probe",
+							practiceMode: freshRecord.kind === "practice" ? freshRecord.practiceMode : undefined,
 							thresholdTokens: effectiveThresholdTokens(
 								fresh.compaction?.thresholdTokens,
 								catalogContextLimits().get(kickModelId),
 							),
-							systemPromptTokens: Math.ceil(composeInstructions(freshRecord.kind === "practice" ? "practice" : "teacher").length / 4),
+							systemPromptTokens: Math.ceil((freshRecord.kind === "practice" && freshRecord.practiceMode === "drill"
+								? composeInstructions("practice", fresh.agent.prompts, freshRecord.practiceMode)
+								: composeInstructions(freshRecord.kind === "practice" ? "practice" : "teacher")).length / 4),
 						};
 					}, chatId);
 			},

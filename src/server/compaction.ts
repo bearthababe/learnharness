@@ -41,6 +41,7 @@ import {
 	serializeForSummary,
 	toLlmMessages,
 	type CompactionDetails,
+	type ChatRecord,
 	type LhMessage,
 	type LhMarkerMessage,
 } from "../core/index.ts";
@@ -104,6 +105,8 @@ export interface CompactionDeps {
 	modelId: string;
 	/** The session kind (summarizer wording: tutor vs practice). */
 	kind: "teach" | "practice" | "probe";
+	/** Saved practice activity, supplied by either host entrypoint. */
+	practiceMode?: ChatRecord["practiceMode"];
 	/** The effective trigger threshold, RESOLVED by the caller:
 	 *  min(settings threshold, contextWindow − reserve) — the owner's
 	 *  effective-trigger ruling. The catalog window lookup is the
@@ -221,6 +224,7 @@ async function compact(deps: CompactionDeps, chatId: string): Promise<void> {
 		spanText: fullSpan,
 		planTreeText: planTreeToText(record.tree, messages),
 		kind: deps.kind,
+		practiceMode: deps.practiceMode,
 	});
 
 	emit("compaction-changed", { chatId, running: true });

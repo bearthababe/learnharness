@@ -35,7 +35,7 @@
 
 import type { PlanTree } from "./contracts/plan.ts";
 import { derivePlanStatusesLh, derivedNodeStatus } from "./contracts/plan.ts";
-import { COMPACTED_HISTORY_HEADER } from "./contracts/chat.ts";
+import { COMPACTED_HISTORY_HEADER, type ChatRecord } from "./contracts/chat.ts";
 import type { LhMessage, LhMarkerMessage } from "./native-messages.ts";
 import { newMessageId } from "./native-messages.ts";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
@@ -377,9 +377,14 @@ export function buildCompactionPrompt(input: {
 	planTreeText: string | null;
 	/** The session kind (wording: tutor vs practice agent). */
 	kind: "teach" | "practice" | "probe";
+	/** Saved practice activity; absent keeps the baseline summary prompt. */
+	practiceMode?: ChatRecord["practiceMode"];
 }): string {
 	const planSection =
 		input.planTreeText ?? "No plan tree exists in this session (nothing was persisted).";
+	const drillPreservation = input.kind === "practice" && input.practiceMode === "drill"
+		? "\n\nThis is a focused drill. Preserve its current target and learner preferences, useful mental models and whether the learner applied them, significant errors and corrections, the help actually given, independent successes, unresolved difficulties, outstanding retests or commitments, and the current problem and agreed next step. Keep uncertainty explicit; immediate success is not evidence of delayed retention."
+		: "";
 	return `You are compacting the earlier part of a tutoring session — writing the summary your future self will read INSTEAD of that transcript. Everything before the cut is replaced by what you write; everything after stays verbatim. The learner's transcript below labels the learner as [LEARNER], the tutoring agent as [TUTOR], tool traffic as [RESULT …]/[SYSTEM NOTE].
 
 Write the summary with EXACTLY these sections, in this order:
@@ -398,7 +403,7 @@ ${planSection}
 ## The current moment
 What is happening RIGHT NOW at the cut: any question or problem awaiting the learner's answer, any commitment the agent has made that a later turn must honor, and the immediate next step.
 
-Rules: no praise, no filler, no speculation beyond the transcript. Every claim about the learner must be traceable to what they actually said or answered. Keep every identifier (proposition ids, node ids, file paths) exact.
+Rules: no praise, no filler, no speculation beyond the transcript. Every claim about the learner must be traceable to what they actually said or answered. Keep every identifier (proposition ids, node ids, file paths) exact.${drillPreservation}
 
 TRANSCRIPT TO SUMMARIZE:
 

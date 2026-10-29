@@ -76,6 +76,72 @@ const depsOf = (chatId: string, thresholdTokens: number): CompactionDeps => ({
 // ── the laws ────────────────────────────────────────────────────────────────
 
 describe("the compaction service", () => {
+	it("both summary entrypoints preserve focused drill context and keep the complete original record", async () => {
+		for (const entry of ["gate", "kick"] as const) {
+			const chat = chatStore.createChat(`drill: ${entry}`, "practice", "drill");
+			const messages = [
+				newUserMessage("Focus on volume conversions; I prefer one example at a time."),
+				big("Ratio cancellation helped me correct an inverted ratio. Retest without help."),
+				big("I applied it independently on a fresh example; delayed retention is unknown."),
+				newUserMessage("Continue with the current conversion before another problem."),
+			];
+			chatStore.saveMessages(chat.id, messages);
+			let seenPrompt = "";
+			const deps: CompactionDeps = {
+				...depsOf(chat.id, 40_000),
+				kind: "practice",
+				practiceMode: chatStore.getChat(chat.id)!.practiceMode,
+				summarize: async (prompt, engine) => {
+					seenPrompt = prompt;
+					return depsOf(chat.id, 40_000).summarize!(prompt, engine);
+				},
+			};
+			if (entry === "gate") await ensureCompacted(deps, chat.id);
+			else { kickCompaction(() => deps, chat.id); await awaitCompaction(chat.id); }
+			assert.match(seenPrompt, /This is a focused drill/);
+			for (const requirement of [
+				"current target and learner preferences", "useful mental models and whether the learner applied them",
+				"significant errors and corrections", "the help actually given", "independent successes",
+				"unresolved difficulties", "outstanding retests or commitments", "current problem and agreed next step",
+				"Keep uncertainty explicit", "immediate success is not evidence of delayed retention",
+			]) assert.ok(seenPrompt.includes(requirement), requirement);
+			assert.deepEqual(seenPrompt.match(/^## .+$/gm), [
+				"## The learner's understanding", "## The teaching arc", "## The plan dependency tree", "## The current moment",
+			]);
+			assert.match(seenPrompt, /Focus on volume conversions/);
+			assert.match(seenPrompt, /Ratio cancellation helped/);
+			const record = chatStore.getChat(chat.id)!;
+			assert.equal(record.practiceMode, "drill");
+			assert.deepEqual(record.messages.slice(0, -1), messages, "summary appends, never replaces evidence");
+			assert.doesNotMatch(JSON.stringify(toLlmMessages(record.messages)), /Focus on volume conversions/);
+		}
+	});
+
+	it("ordinary teaching and practice keep their common summary guidance when the drill marker is absent", async () => {
+		const messages = [big("earlier"), big("later"), newUserMessage("current")];
+		const prompts: string[] = [];
+		for (const kind of ["teach", "practice"] as const) {
+			for (const entry of ["gate", "kick"] as const) {
+				const chat = chatStore.createChat(`ordinary: ${kind} ${entry}`, kind === "practice" ? kind : undefined);
+				chatStore.saveMessages(chat.id, messages);
+				const deps: CompactionDeps = {
+					...depsOf(chat.id, 40_000), kind,
+					summarize: async (prompt, engine) => {
+						prompts.push(prompt);
+						return depsOf(chat.id, 40_000).summarize!(prompt, engine);
+					},
+				};
+				if (entry === "gate") await ensureCompacted(deps, chat.id);
+				else { kickCompaction(() => deps, chat.id); await awaitCompaction(chat.id); }
+				assert.equal(chatStore.getChat(chat.id)!.practiceMode, undefined);
+			}
+		}
+		assert.equal(prompts.length, 4);
+		assert.ok(prompts.every((prompt) => prompt === prompts[0]));
+		assert.ok(!prompts[0]!.includes("This is a focused drill"));
+		assert.match(prompts[0]!.split("TRANSCRIPT TO SUMMARIZE:")[0]!, /The learner's understanding[\s\S]*The teaching arc[\s\S]*The plan dependency tree[\s\S]*The current moment/);
+	});
+
 	it("background eligibility skips both entrypoints without writes, but still awaits an existing structural run", async () => {
 		const chatId = overThresholdChat("compact: consent off");
 		const before = summarizeCalls;
