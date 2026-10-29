@@ -43,7 +43,7 @@ an already-running response retains the instructions it started with.
   and stale instruction-size accounting. Both findings were fixed and the
   follow-up reviews reported no remaining actionable findings.
 
-## Owner acceptance and remaining check
+## Owner acceptance and real-model summary check
 
 After the desktop walkthrough and reasoning-effort comparison, the owner
 confirmed: **“The experience was good, no mobile testing.”** The desktop
@@ -52,21 +52,50 @@ acceptance gate; physical iOS behavior has not been verified.
 
 The real walkthrough demonstrated focused problems, learner reasoning, useful
 mental-model/method explanations, side questions, explicit continuation and
-honest helped versus independent outcomes. No separate wrap-up recommendation
-was observed in the inspected transcript; the owner's overall acceptance is
-recorded without claiming that specific scenario was exercised.
+honest helped versus independent outcomes. The subsequently inspected final
+turns also show a Medium-effort trial and a wrap-up recommendation: stop here,
+recognize independent setup versus prompted arithmetic correction, and try a
+fresh conversion next time without reviewing first. The tutor explicitly
+distinguished current usability from retention after a break.
 
 The owner-approved effort sweep compared Low, Medium, High and Extra High on
 the same model across five fixed-history cases, twice each (40 replies). All
 completed without model/tool failures. Median completion times were 14.7,
-15.2, 21.3 and 28.3 seconds respectively. Medium is recommended for a live
-trial; this is not a change to saved defaults or evidence of equal capability
-on harder material. The initial drill policy remains the accepted wording.
+15.2, 21.3 and 28.3 seconds respectively. The owner's saved drill now uses
+Medium; global defaults were not changed by this evaluation. This is not
+evidence of equal capability on harder material. The initial drill policy
+remains the accepted wording.
+
+The owner-requested real-model summary review passed on 2026-10-29 using
+`chatgpt:gpt-6.1-sol` at Medium:
+
+- Summarized the first 31 messages of the actual 33-message drill using the
+  production serializer, drill-aware prompt builder, exact server summarizer
+  system prompt and zero-tool model runner. Retained the wrap-up exchange.
+- Reviewed the summary against its source: goal, preferred block mental model,
+  repeatable method, independent versus assisted work, unresolved arithmetic,
+  retest flags and untested transfer/retention all survived. The current moment
+  correctly waits for permission before another problem.
+- Saved/reopened an isolated rehearsal record, projected summary plus retained
+  messages, then ran a real continuation through the application chat handler.
+  It accurately recalled all three conversions, actual help and the next-time
+  recommendation. No new problem was posed. Fresh drill instructions were
+  confirmed through the saved prompt-token metadata.
+- The original learner record remained byte-for-byte unchanged. The local app
+  server was restored and returned HTTP 200 after the isolated check.
+
+Scope: this was a short real-record summary-quality and continuation rehearsal
+with a manual cut, not an automatic long-history threshold/cut-selection test.
+The latter is covered by the existing regression suite. The first rehearsal
+stopped on a test-script assertion comparing raw multiline text against JSON;
+correcting the assertion and reusing the same generated summary passed. No
+application change was needed.
+
+Private source, prompt, summary, continuation, runner and result evidence:
+`~/.local/share/learnharness/evaluations/drill-summary-20261029/`.
 
 The parent [specification #11](https://github.com/bearthababe/learnharness/issues/11)
-remains open for a representative real-model summary review: preserve the
-drill context, actual assistance, unresolved work and the distinction between
-immediate success and delayed retention. Merge/push approval remains separate.
+now awaits the delivery decision: approval to merge/push and close it.
 
 The two existing phone previews retain their owners and processes. No drill
 preview endpoint has been published.
