@@ -43,19 +43,30 @@ an already-running response retains the instructions it started with.
   and stale instruction-size accounting. Both findings were fixed and the
   follow-up reviews reported no remaining actionable findings.
 
-## Remaining acceptance
+## Owner acceptance and remaining check
 
-Implementation checks do not establish teaching quality. The parent
-[specification #11](https://github.com/bearthababe/learnharness/issues/11)
-retains these acceptance steps:
+After the desktop walkthrough and reasoning-effort comparison, the owner
+confirmed: **“The experience was good, no mobile testing.”** The desktop
+experience is accepted. Mobile testing is excluded from this release's
+acceptance gate; physical iOS behavior has not been verified.
 
-- Owner's unit-conversion walkthrough: useful help/mental model, fresh
-  application, side question, chosen pacing, resume and wrap-up recommendation.
-- Review a representative real-model summary for preservation of drill
-  context and honest distinctions between assistance, immediate success and
-  delayed retention.
-- Physical iOS keyboard/scrolling acceptance. The browser smoke checked a
-  mobile-sized viewport, not physical touch gestures or keyboard behavior.
+The real walkthrough demonstrated focused problems, learner reasoning, useful
+mental-model/method explanations, side questions, explicit continuation and
+honest helped versus independent outcomes. No separate wrap-up recommendation
+was observed in the inspected transcript; the owner's overall acceptance is
+recorded without claiming that specific scenario was exercised.
+
+The owner-approved effort sweep compared Low, Medium, High and Extra High on
+the same model across five fixed-history cases, twice each (40 replies). All
+completed without model/tool failures. Median completion times were 14.7,
+15.2, 21.3 and 28.3 seconds respectively. Medium is recommended for a live
+trial; this is not a change to saved defaults or evidence of equal capability
+on harder material. The initial drill policy remains the accepted wording.
+
+The parent [specification #11](https://github.com/bearthababe/learnharness/issues/11)
+remains open for a representative real-model summary review: preserve the
+drill context, actual assistance, unresolved work and the distinction between
+immediate success and delayed retention. Merge/push approval remains separate.
 
 The two existing phone previews retain their owners and processes. No drill
 preview endpoint has been published.
