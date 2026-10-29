@@ -40,6 +40,14 @@ function fakeFetch(id: string) {
 }
 
 describe("startDraftSession — the create-on-send contract", () => {
+	it("starts a drill with its own identity and shows a drill draft", async () => {
+		const { f, calls } = fakeFetch("c_drill");
+		assert.equal(await startDraftSession("Volume conversions", f, "drill"), "/chat/c_drill");
+		assert.deepEqual(calls[0]!.body, { title: "Volume conversions", kind: "practice", practiceMode: "drill" });
+		const html = renderToStaticMarkup(<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="drill" />);
+		assert.match(html, /New drill/);
+		assert.match(html, /What do you want to drill\?/);
+	});
 	it("creates the session titled with the first message and returns a short path", async () => {
 		const { f, calls } = fakeFetch("c_new");
 		const target = await startDraftSession("teach me orbital mechanics", f);

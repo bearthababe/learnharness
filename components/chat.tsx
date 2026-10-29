@@ -217,6 +217,7 @@ export function Chat({
 	initiallyCompacting = false,
 	initialConfigured = false,
 	kind = "teach",
+	practiceMode,
 }: {
 	chatId: string;
 	title: string;
@@ -227,6 +228,7 @@ export function Chat({
 	 *  renders no phase chip (no probe→teach arc applies) and a Practice
 	 *  tag rides the header instead. */
 	kind?: "teach" | "practice";
+	practiceMode?: "drill";
 	initialPrompt?: string;
 	/** A teacher turn is running server-side but attached to no client
 	 * (navigated away mid-turn, returned while in flight). */
@@ -1379,7 +1381,7 @@ export function Chat({
 							className="pointer-events-none flex shrink-0 select-none items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
 						>
 							<DumbbellIcon className="size-3" />
-							Practice
+							{practiceMode === "drill" ? "Drill" : "Practice"}
 						</span>
 					) : (
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />

@@ -3,6 +3,7 @@ import { clearOpeningPrompt, OPENING_PROMPT_FAILURE, stashOpeningPrompt } from "
 interface SessionCreation {
 	title: string;
 	kind?: "practice";
+	practiceMode?: "drill";
 	graphContext?: { propositions: readonly { id: string; name: string; statement: string }[] };
 }
 

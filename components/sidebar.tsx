@@ -323,7 +323,9 @@ export function SessionRow({
 			{/* The dumbbell rides the FAR RIGHT (owner round 6, 2026-10-05) —
 			    was left of the name; right-aligned keeps the titles flush with
 			    the teaching rows and reads cleaner. */}
-			{(chat.kind ?? "teach") === "practice" && (
+			{chat.kind === "practice" && chat.practiceMode === "drill" ? (
+				<span className="shrink-0 text-xs text-muted-foreground/70">Drill</span>
+			) : (chat.kind ?? "teach") === "practice" && (
 				<DumbbellIcon className="size-3.5 shrink-0 text-muted-foreground/70" aria-label="Practice session" />
 			)}
 		</button>
@@ -713,6 +715,16 @@ function SessionsSidebar() {
 						<DumbbellIcon className="size-3" />
 						Practice
 						<span className="sr-only">create a new practice session</span>
+					</button>
+					<button
+						type="button"
+						data-testid="new-session-drill"
+						onClick={() => router.push("/chat/new?mode=drill")}
+						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					>
+						<DumbbellIcon className="size-3" />
+						Drill
+						<span className="sr-only">create a new drill</span>
 					</button>
 				</div>
 
