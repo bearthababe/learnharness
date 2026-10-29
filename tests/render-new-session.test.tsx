@@ -47,6 +47,20 @@ describe("startDraftSession — the create-on-send contract", () => {
 		const html = renderToStaticMarkup(<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="drill" />);
 		assert.match(html, /New drill/);
 		assert.match(html, /What do you want to drill\?/);
+		assert.match(html, /Describe the skill or difficulty you want to work on\./);
+		assert.match(html, />Pick nodes<\/button>/);
+	});
+	it("drill graph picks accompany the learner's unchanged opening words", async () => {
+		const { f, calls } = fakeFetch("c_drill_picks");
+		const picks = [{ id: "n_volume", name: "Volume", statement: "1 m³ = 1000 L." }];
+		await startDraftSession("Help with volume ratios", f, "drill", picks);
+		assert.deepEqual(calls[0]!.body, {
+			title: "Help with volume ratios", kind: "practice", practiceMode: "drill",
+			graphContext: { propositions: picks },
+		});
+		assert.equal(readOpeningPrompt("c_drill_picks"), "Help with volume ratios");
+		const html = renderToStaticMarkup(<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="drill" picks={picks} />);
+		assert.match(html, /1 node selected/);
 	});
 	it("creates the session titled with the first message and returns a short path", async () => {
 		const { f, calls } = fakeFetch("c_new");
