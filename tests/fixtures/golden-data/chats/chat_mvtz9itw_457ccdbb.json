@@ -1,0 +1,294 @@
+{
+	"id": "chat_mvtz9itw_457ccdbb",
+	"title": "Golden drill: volume conversions",
+	"createdAt": "2026-10-29T20:10:12.500Z",
+	"updatedAt": "2026-10-29T20:10:13.077Z",
+	"messages": [
+		{
+			"id": "msg_mvtz9j8v_eff8127d",
+			"role": "user",
+			"content": "Help me practise volume conversions.",
+			"timestamp": 1793304613039
+		},
+		{
+			"role": "assistant",
+			"content": [
+				{
+					"type": "toolCall",
+					"id": "golden-drill-problem",
+					"name": "problem",
+					"arguments": {
+						"statement": "Convert 250 L to m³.",
+						"mode": "recall",
+						"modelSolution": "250 L × (1 m³ / 1000 L) = 0.25 m³."
+					}
+				}
+			],
+			"api": "faux:1793304613031:l6g4emsb32",
+			"provider": "openrouter",
+			"model": "offline-drill-golden",
+			"usage": {
+				"input": 4653,
+				"output": 29,
+				"cacheRead": 0,
+				"cacheWrite": 4653,
+				"totalTokens": 9335,
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0,
+					"total": 0
+				}
+			},
+			"stopReason": "toolUse",
+			"timestamp": 1793304613048,
+			"durationMs": 2,
+			"thinkingLevel": "off",
+			"id": "msg_mvtz9j9d_a09bb97e"
+		},
+		{
+			"role": "toolResult",
+			"toolCallId": "golden-drill-problem",
+			"toolName": "problem",
+			"content": [
+				{
+					"type": "text",
+					"text": "Problem posed — the turn ends here; the learner's thinking traces and answer commits arrive as labeled messages."
+				}
+			],
+			"details": null,
+			"isError": false,
+			"durationMs": 0,
+			"timestamp": 1793304613056,
+			"id": "msg_mvtz9j9d_91758726"
+		},
+		{
+			"id": "msg_mvtz9j9g_26abe219",
+			"role": "custom",
+			"customType": "practice-thinking",
+			"content": "Your thinking:\nI am unsure which way to arrange the ratio.",
+			"display": true,
+			"details": {
+				"problemCallId": "golden-drill-problem",
+				"text": "I am unsure which way to arrange the ratio."
+			},
+			"timestamp": 1793304613060
+		},
+		{
+			"role": "assistant",
+			"content": [
+				{
+					"type": "text",
+					"text": "Arrange the ratio so litres cancel: multiply by 1 m³ / 1000 L. Now apply it to 250 L."
+				}
+			],
+			"api": "faux:1793304613031:l6g4emsb32",
+			"provider": "openrouter",
+			"model": "offline-drill-golden",
+			"usage": {
+				"input": 81,
+				"output": 22,
+				"cacheRead": 4653,
+				"cacheWrite": 81,
+				"totalTokens": 4837,
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0,
+					"total": 0
+				}
+			},
+			"stopReason": "stop",
+			"timestamp": 1793304613068,
+			"durationMs": 1,
+			"thinkingLevel": "off",
+			"id": "msg_mvtz9j9p_d7ebc724"
+		},
+		{
+			"id": "msg_mvtz9j9r_66941f55",
+			"role": "custom",
+			"customType": "practice-thinking",
+			"content": "Your thinking:\n250 L × (1 m³ / 1000 L) = 0.25 m³; the litres cancel.",
+			"display": true,
+			"details": {
+				"problemCallId": "golden-drill-problem",
+				"text": "250 L × (1 m³ / 1000 L) = 0.25 m³; the litres cancel."
+			},
+			"timestamp": 1793304613071
+		},
+		{
+			"role": "assistant",
+			"content": [
+				{
+					"type": "toolCall",
+					"id": "golden-drill-conclude",
+					"name": "conclude",
+					"arguments": {
+						"outcome": "solvedWithHints",
+						"verdict": "Correct after help arranging the cancellation ratio.",
+						"rung": "R4",
+						"missClass": "execution",
+						"retest": true
+					}
+				}
+			],
+			"api": "faux:1793304613031:l6g4emsb32",
+			"provider": "openrouter",
+			"model": "offline-drill-golden",
+			"usage": {
+				"input": 43,
+				"output": 39,
+				"cacheRead": 4734,
+				"cacheWrite": 43,
+				"totalTokens": 4859,
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0,
+					"total": 0
+				}
+			},
+			"stopReason": "toolUse",
+			"timestamp": 1793304613073,
+			"durationMs": 0,
+			"thinkingLevel": "off",
+			"id": "msg_mvtz9j9x_240b624a"
+		},
+		{
+			"role": "toolResult",
+			"toolCallId": "golden-drill-conclude",
+			"toolName": "conclude",
+			"content": [
+				{
+					"type": "text",
+					"text": "Problem concluded. Say your closing words about the learner's work if useful, then END YOUR TURN — no further tool calls. The next problem is NEVER posed here: it waits for the learner's explicit go-ahead (a *Next problem* message, or their own words asking for the next one). Between problems, answer their questions about the concluded one."
+				}
+			],
+			"details": null,
+			"isError": false,
+			"durationMs": 0,
+			"timestamp": 1793304613076,
+			"id": "msg_mvtz9j9x_4c73f5a5"
+		},
+		{
+			"role": "assistant",
+			"content": [
+				{
+					"type": "text",
+					"text": "You applied the cancellation ratio correctly after help. A fresh example without help would be useful; choose when to continue."
+				}
+			],
+			"api": "faux:1793304613031:l6g4emsb32",
+			"provider": "openrouter",
+			"model": "offline-drill-golden",
+			"usage": {
+				"input": 132,
+				"output": 32,
+				"cacheRead": 4777,
+				"cacheWrite": 133,
+				"totalTokens": 5074,
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0,
+					"total": 0
+				}
+			},
+			"stopReason": "stop",
+			"timestamp": 1793304613077,
+			"durationMs": 0,
+			"thinkingLevel": "off",
+			"id": "msg_mvtz9j9x_cd4dc539"
+		}
+	],
+	"kind": "practice",
+	"practiceMode": "drill",
+	"version": 1,
+	"settings": {
+		"model": {
+			"provider": "openrouter",
+			"id": "offline-drill-golden"
+		}
+	},
+	"turns": [
+		{
+			"id": "51c5b9ac-7c09-4abd-a96f-64abc5c6bdcc",
+			"messageId": "msg_mvtz9j9d_a09bb97e",
+			"at": "2026-10-29T20:10:13.058Z",
+			"model": "openrouter:offline-drill-golden",
+			"steps": [
+				{
+					"inputTokens": 4653,
+					"outputTokens": 29,
+					"cacheReadTokens": 0,
+					"cacheWriteTokens": 4653,
+					"cacheWrite1hTokens": 0,
+					"reasoningTokens": 0
+				}
+			],
+			"drillPromptContext": {
+				"messageIds": [
+					"msg_mvtz9j9d_a09bb97e"
+				],
+				"systemPromptTokens": 2252
+			}
+		},
+		{
+			"id": "8f2994a9-6622-482a-8ce6-2a92a76ee149",
+			"messageId": "msg_mvtz9j9p_d7ebc724",
+			"at": "2026-10-29T20:10:13.069Z",
+			"model": "openrouter:offline-drill-golden",
+			"steps": [
+				{
+					"inputTokens": 81,
+					"outputTokens": 22,
+					"cacheReadTokens": 4653,
+					"cacheWriteTokens": 81,
+					"cacheWrite1hTokens": 0,
+					"reasoningTokens": 0
+				}
+			],
+			"drillPromptContext": {
+				"messageIds": [
+					"msg_mvtz9j9p_d7ebc724"
+				],
+				"systemPromptTokens": 2252
+			}
+		},
+		{
+			"id": "4f33cd5c-add8-4108-8712-1230457d829b",
+			"messageId": "msg_mvtz9j9x_240b624a",
+			"at": "2026-10-29T20:10:13.078Z",
+			"model": "openrouter:offline-drill-golden",
+			"steps": [
+				{
+					"inputTokens": 43,
+					"outputTokens": 39,
+					"cacheReadTokens": 4734,
+					"cacheWriteTokens": 43,
+					"cacheWrite1hTokens": 0,
+					"reasoningTokens": 0
+				},
+				{
+					"inputTokens": 132,
+					"outputTokens": 32,
+					"cacheReadTokens": 4777,
+					"cacheWriteTokens": 133,
+					"cacheWrite1hTokens": 0,
+					"reasoningTokens": 0
+				}
+			],
+			"drillPromptContext": {
+				"messageIds": [
+					"msg_mvtz9j9x_240b624a",
+					"msg_mvtz9j9x_cd4dc539"
+				],
+				"systemPromptTokens": 2252
+			}
+		}
+	]
+}

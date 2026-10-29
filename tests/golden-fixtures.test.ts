@@ -67,13 +67,13 @@ test.after(() => {
 
 // ── chats: records, folds, and the wire ─────────────────────────────────────
 
-test("chats: both fixture records parse through the production read path", () => {
+test("chats: all fixture records parse through the production read path", () => {
 	const list = chatStore.listChats();
 	const ids = new Set(list.map((c) => c.id));
 	assert.ok(ids.has(TEACH), "the teach master record lists");
 	assert.ok(ids.has(PRACTICE), "the practice lifecycle record lists");
 
-	for (const id of [TEACH, PRACTICE]) {
+	for (const id of ids) {
 		const r = chatStore.getChat(id);
 		assert.ok(r, `${id} reads`);
 		assert.ok(Array.isArray(r!.messages) && r!.messages.length > 0);
@@ -85,7 +85,7 @@ test("chats: both fixture records parse through the production read path", () =>
 });
 
 test("chats: the LLM wire flattening turns each full record into a legal provider message list", () => {
-	for (const id of [TEACH, PRACTICE]) {
+	for (const { id } of chatStore.listChats()) {
 		const r = chatStore.getChat(id)!;
 		const wire = toLlmMessages(r.messages as never);
 		assert.ok(wire.length > 0);
@@ -109,6 +109,29 @@ test("chats: the LLM wire flattening turns each full record into a legal provide
 			}
 		}
 	}
+});
+
+test("chats: an app-written drill retains activity, completed work and prompt context for every assistant step", () => {
+	const drills = chatStore.listChats().filter((chat) => chat.practiceMode === "drill");
+	assert.equal(drills.length, 1, "the new on-disk drill shape must be covered by a real application record");
+	const drill = chatStore.getChat(drills[0]!.id)!;
+	assert.equal(drill.version, 1);
+	assert.equal(drill.kind, "practice");
+	assert.equal(drill.practiceMode, "drill");
+	assert.equal(activeProblemOf(drill.messages), null, "the learner's conversion has been concluded");
+	assert.match(JSON.stringify(drill.messages), /250 L/);
+	assert.match(JSON.stringify(drill.messages), /solvedWithHints/);
+	assert.equal(drill.turns!.length, 3, "pose, help and conclusion each persist usage");
+	assert.ok(drill.turns!.some((turn) => turn.steps.length === 2), "the conclusion exercises multi-step usage");
+	const covered = drill.turns!.flatMap((turn) => {
+		assert.ok(turn.steps.every((step) => step.inputTokens! > 0));
+		assert.ok(turn.drillPromptContext);
+		assert.ok(turn.drillPromptContext.systemPromptTokens > 0);
+		assert.equal(turn.drillPromptContext.messageIds[0], turn.messageId, "first assistant still provides billing provenance");
+		return turn.drillPromptContext.messageIds;
+	});
+	assert.deepEqual(covered, drill.messages.filter((message) => message.role === "assistant").map((message) => message.id),
+		"all persisted assistant steps can be matched to their actual run's instructions after reopen");
 });
 
 test("markers: the fixture pair covers EVERY custom-marker kind of the current contract", () => {

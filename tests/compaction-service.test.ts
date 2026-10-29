@@ -76,6 +76,63 @@ const depsOf = (chatId: string, thresholdTokens: number): CompactionDeps => ({
 // ── the laws ────────────────────────────────────────────────────────────────
 
 describe("the compaction service", () => {
+	it("drill gates and kicks adjust only the matching valid assistant anchor across multi-step and failed turns", async () => {
+		for (const entry of ["gate", "kick"] as const) {
+			for (const stopReason of ["error", "aborted"] as const) {
+				const chat = chatStore.createChat(`anchor ${entry} ${stopReason}`, "practice", "drill");
+				const assistant = (id: string, reason: "stop" | "error" | "aborted"): LhMessage => ({
+					...fauxAssistantMessage("oops", { stopReason: reason }), id,
+					usage: { input: 40_000, output: 100, cacheRead: 2_000, cacheWrite: 3_000, totalTokens: 45_100,
+						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+				});
+				const messages = [big("earlier"), big("later"), assistant("step-1", "stop"), assistant("step-2", "stop"), assistant("failed", stopReason)];
+				chatStore.saveMessages(chat.id, messages);
+				chatStore.appendTurnUsage(chat.id, {
+					id: "good-run", messageId: "step-1", at: new Date().toISOString(), model: "faux:test", steps: [],
+					drillPromptContext: { messageIds: ["step-1", "step-2"], systemPromptTokens: 1_000 },
+				});
+				chatStore.appendTurnUsage(chat.id, {
+					id: "failed-run", messageId: "failed", at: new Date().toISOString(), model: "faux:test", steps: [],
+					drillPromptContext: { messageIds: ["failed"], systemPromptTokens: 9_000 },
+				});
+				const deps = { ...depsOf(chat.id, 46_000), kind: "practice" as const, practiceMode: "drill" as const, systemPromptTokens: 2_000 };
+				if (entry === "gate") await ensureCompacted(deps, chat.id);
+				else { kickCompaction(() => deps, chat.id); await awaitCompaction(chat.id); }
+				const record = chatStore.getChat(chat.id)!;
+				const marker = activeCompactionOf(record.messages);
+				assert.ok(marker, "the last valid step plus current instructions crosses the threshold");
+				assert.equal(marker.details.tokensBefore, 46_101, "45,100 provider tokens + 1 trailing token + 1,000 instruction delta");
+				assert.deepEqual(record.messages.slice(0, -1), messages);
+				const calls = summarizeCalls;
+				await ensureCompacted(deps, chat.id);
+				assert.equal(summarizeCalls, calls, "the compaction boundary invalidates all prior usage anchors and their metadata");
+			}
+		}
+	});
+
+	it("legacy drills and unmatched metadata use the cut-honoring heuristic; ordinary usage anchors remain unchanged", async () => {
+		for (const mode of ["legacy", "unmatched", "ordinary"] as const) {
+			const chat = chatStore.createChat(mode, "practice", mode === "ordinary" ? undefined : "drill");
+			const response: LhMessage = {
+				...fauxAssistantMessage("okay"), id: "anchor",
+				usage: { input: 100, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: 200,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+			};
+			chatStore.saveMessages(chat.id, [newUserMessage("x".repeat(100_000)), newUserMessage("y".repeat(100_000)), response]);
+			if (mode !== "legacy") chatStore.appendTurnUsage(chat.id, {
+				id: "different-run", messageId: "different", at: new Date().toISOString(), model: "faux:test", steps: [],
+				drillPromptContext: { messageIds: ["different"], systemPromptTokens: 1_000 },
+			});
+			await ensureCompacted({ ...depsOf(chat.id, 40_000), kind: "practice", practiceMode: mode === "ordinary" ? undefined : "drill", systemPromptTokens: 2_000 }, chat.id);
+			const marker = activeCompactionOf(chatStore.getChat(chat.id)!.messages);
+			if (mode === "ordinary") assert.equal(marker, null, "ordinary sessions still trust the provider anchor without instruction adjustment");
+			else {
+				assert.ok(marker);
+				assert.equal(marker.details.tokensBefore, 52_001, "50,001 transcript tokens + 2,000 current instructions");
+			}
+		}
+	});
+
 	it("both summary entrypoints preserve focused drill context and keep the complete original record", async () => {
 		for (const entry of ["gate", "kick"] as const) {
 			const chat = chatStore.createChat(`drill: ${entry}`, "practice", "drill");

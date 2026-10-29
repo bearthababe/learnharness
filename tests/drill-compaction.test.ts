@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { after, it } from "node:test";
-import { createAssistantMessageEventStream, fauxProvider, fauxAssistantMessage, getSystemMessageText, type TranscriptContext } from "@earendil-works/pi-ai";
+import { createAssistantMessageEventStream, fauxProvider, fauxAssistantMessage, fauxToolCall, getSystemMessageText, type TranscriptContext } from "@earendil-works/pi-ai";
 
 // Closed synthetic environment: no learner records, credentials, or network.
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "lh-drill-compaction-"));
@@ -19,7 +19,7 @@ const { piModels } = await import("../src/agent/models.ts");
 const { handleChatRequest } = await import("../src/server/chat-handler.ts");
 const { runningTurn } = await import("../src/server/turn-runs.ts");
 const { awaitCompaction } = await import("../src/server/compaction.ts");
-const { newUserMessage, activeCompactionOf, estimateTokens, toLlmMessages } = await import("../src/core/index.ts");
+const { newUserMessage, activeCompactionOf, estimateTokens, estimateContextTokens, toLlmMessages } = await import("../src/core/index.ts");
 const { PATHS } = await import("../config.ts");
 const faux = fauxProvider({ provider: "openrouter", models: [{ id: "offline-drill", contextWindow: 1_000_000 }] });
 piModels().setProvider(faux.provider);
@@ -150,4 +150,124 @@ it("settle compaction uses the saved drill and freshly effective shared override
 		estimateTokens(toLlmMessages(compacted.messages.slice(0, -1))) + Math.ceil(nextPrompt.length / 4),
 		"settle counts the freshly effective drill prompt, including shared overrides");
 	assert.deepEqual(chatStore.getChat(chat.id)!.messages.slice(0, compacted.messages.length), compacted.messages);
+});
+
+it("records the constructed drill prompt for every assistant step even when instructions change mid-flight", async () => {
+	promptOverrides.writeOverride("shared/10-voice.md", "Voice captured at construction.");
+	settingsStore.writeSettings({ version: 1, agent: { prompts: { "shared/10-voice.md": true } } });
+	const chat = chatStore.createChat("Captured instructions", "practice", "drill");
+	chatStore.saveSettings(chat.id, { model: { provider: "openrouter", id: "offline-drill" } });
+	let sentPrompt = "";
+	faux.setResponses([
+		(context) => {
+			sentPrompt = systemText(context);
+			promptOverrides.writeOverride("shared/10-voice.md", "Changed during generation. " + "v".repeat(8_000));
+			// Validation failure keeps this run going to a second assistant step.
+			return fauxAssistantMessage(fauxToolCall("problem", { statement: "Incomplete pose" }), { stopReason: "toolUse" });
+		},
+		() => fauxAssistantMessage("Which conversion would you like to work on?"),
+	]);
+	await turn(chat.id);
+	const reopened = chatStore.getChat(chat.id)!;
+	const assistants = reopened.messages.filter((message) => message.role === "assistant");
+	assert.equal(assistants.length, 2);
+	assert.equal(reopened.turns!.length, 1);
+	assert.equal(reopened.turns![0]!.steps.length, 2);
+	assert.ok(reopened.turns![0]!.steps.every((step) => step.inputTokens! > 0));
+	assert.deepEqual(reopened.turns![0]!.drillPromptContext, {
+		messageIds: assistants.map((message) => message.id),
+		systemPromptTokens: Math.ceil(sentPrompt.length / 4),
+	}, "reopening retains the actual run's prompt and both possible usage anchors");
+});
+
+it("an interrupted multi-step drill retains prompt provenance for the successful usage anchor", async () => {
+	settingsStore.writeSettings({ version: 1 });
+	for (const stopReason of ["error", "aborted"] as const) {
+		const chat = chatStore.createChat(`Interrupted ${stopReason}`, "practice", "drill");
+		chatStore.saveSettings(chat.id, { model: { provider: "openrouter", id: "offline-drill" } });
+		faux.setResponses([
+			() => fauxAssistantMessage(fauxToolCall("problem", { statement: "Incomplete pose" }), { stopReason: "toolUse" }),
+			() => fauxAssistantMessage("Interrupted response", { stopReason, errorMessage: "Synthetic interruption" }),
+		]);
+		await turn(chat.id);
+		const reopened = chatStore.getChat(chat.id)!;
+		const assistants = reopened.messages.filter((message) => message.role === "assistant");
+		assert.equal(assistants.length, 2);
+		assert.equal(assistants[1]!.stopReason, stopReason);
+		const estimate = estimateContextTokens(reopened.messages);
+		assert.ok(estimate.usageTokens > 0);
+		assert.equal(reopened.messages[estimate.lastUsageIndex!]!.id, assistants[0]!.id);
+		assert.deepEqual(reopened.turns![0]!.drillPromptContext!.messageIds, assistants.map((message) => message.id),
+			"the saved run identifies the valid earlier step as well as the interrupted tail");
+	}
+});
+
+it("a reopened drill adjusts its usage anchor for policy and shared-override growth before the next turn", async (t) => {
+	const policyPath = path.join(PATHS.root, "src/agent/prompts/drill/10-drill.md");
+	const policy = fs.readFileSync(policyPath, "utf-8");
+	const fixture = path.join(dataDir, "growing-policy.md");
+	fs.writeFileSync(fixture, policy);
+	const read = fs.readFileSync;
+	t.mock.method(fs, "readFileSync", (...args: Parameters<typeof read>) => read(args[0] === policyPath ? fixture : args[0], args[1]));
+	promptOverrides.writeOverride("shared/10-voice.md", "Shared voice.");
+	settingsStore.writeSettings({ version: 1, agent: { prompts: { "shared/10-voice.md": true } } });
+	const chat = chatStore.createChat("Growing drill instructions", "practice", "drill");
+	chatStore.saveSettings(chat.id, { model: { provider: "openrouter", id: "offline-drill" } });
+	chatStore.saveMessages(chat.id, [newUserMessage("Opening target."), newUserMessage("x".repeat(100_000)), newUserMessage("y".repeat(100_000))]);
+	faux.setResponses([() => fauxAssistantMessage("Continue with cancellation.")]);
+	await turn(chat.id);
+	const reopened = chatStore.getChat(chat.id)!;
+	const anchor = estimateContextTokens(reopened.messages);
+	assert.ok(anchor.usageTokens > 40_000);
+	fs.writeFileSync(fixture, policy.trim() + "p".repeat(4_000));
+	promptOverrides.writeOverride("shared/10-voice.md", "Shared voice." + "v".repeat(4_000));
+	settingsStore.writeSettings({ version: 1, agent: { prompts: { "shared/10-voice.md": true } }, compaction: { thresholdTokens: anchor.tokens + 1_000 } });
+	let summaryInput = "";
+	faux.setResponses([
+		(context) => { summaryInput = JSON.stringify(context.messages); return fauxAssistantMessage("SUMMARY: conversions; cancellation; continue current work."); },
+		() => fauxAssistantMessage("Use the revised guidance."),
+	]);
+	env.NODE_ENV = "development";
+	t.after(() => { env.NODE_ENV = "test"; });
+	await turn(chat.id);
+	const marker = activeCompactionOf(chatStore.getChat(chat.id)!.messages);
+	assert.ok(marker, "instruction growth crosses the threshold even though provider usage alone does not");
+	assert.ok(summaryInput.includes("This is a focused drill"), "the first call after reopen must be the summarizer");
+	assert.equal(marker.details.tokensBefore, anchor.tokens + 2_000, "retain all provider-counted context and tools; add only the instruction delta");
+});
+
+it("settle uses the captured prompt to subtract a mid-flight instruction shrink from nonzero provider usage", async (t) => {
+	const policyPath = path.join(PATHS.root, "src/agent/prompts/drill/10-drill.md");
+	const policy = fs.readFileSync(policyPath, "utf-8").trim();
+	const fixture = path.join(dataDir, "shrinking-policy.md");
+	fs.writeFileSync(fixture, policy + "p".repeat(40_000));
+	const read = fs.readFileSync;
+	t.mock.method(fs, "readFileSync", (...args: Parameters<typeof read>) => read(args[0] === policyPath ? fixture : args[0], args[1]));
+	promptOverrides.writeOverride("shared/10-voice.md", "Shared voice." + "v".repeat(40_000));
+	settingsStore.writeSettings({ version: 1, agent: { prompts: { "shared/10-voice.md": true } }, compaction: { thresholdTokens: 150_000 } });
+	const chat = chatStore.createChat("Shrinking drill instructions", "practice", "drill");
+	chatStore.saveSettings(chat.id, { model: { provider: "openrouter", id: "offline-drill" } });
+	chatStore.saveMessages(chat.id, [newUserMessage("Opening target."), newUserMessage("x".repeat(30_000)), newUserMessage("y".repeat(30_000))]);
+	let startedPrompt = "";
+	faux.setResponses([
+		(context) => {
+			startedPrompt = systemText(context);
+			fs.writeFileSync(fixture, policy);
+			promptOverrides.writeOverride("shared/10-voice.md", "Shared voice.");
+			settingsStore.writeSettings({ version: 1, agent: { prompts: { "shared/10-voice.md": true } }, compaction: { thresholdTokens: 70_000 } });
+			return fauxAssistantMessage("Continue with cancellation.");
+		},
+	]);
+	env.NODE_ENV = "development";
+	t.after(() => { env.NODE_ENV = "test"; });
+	await turn(chat.id);
+	const reopened = chatStore.getChat(chat.id)!;
+	const anchor = estimateContextTokens(reopened.messages);
+	assert.ok(anchor.usageTokens > 70_000, "old instructions alone would have triggered settlement compaction");
+	assert.ok(anchor.tokens - 20_000 < 70_000, "the current instructions put the projection below threshold");
+	assert.equal(activeCompactionOf(reopened.messages), null, "shrinking instructions avoid an unnecessary summary");
+	assert.equal(reopened.turns![0]!.drillPromptContext!.systemPromptTokens, Math.ceil(startedPrompt.length / 4));
+	faux.setResponses([() => fauxAssistantMessage("Keep using cancellation.")]);
+	await turn(chat.id);
+	assert.equal(activeCompactionOf(chatStore.getChat(chat.id)!.messages), null, "the reopened turn-start gate uses the same saved prompt delta");
 });

@@ -154,6 +154,13 @@ export interface TurnUsage {
 	model: string;
 	/** One entry per agent step (model call) in this turn. */
 	steps: CallUsage[];
+	/** Drill instructions actually used by this run. All new assistant ids
+	 * let compaction match the provider-usage anchor, including multi-step
+	 * runs whose last step failed. Absent on older and ordinary turns. */
+	drillPromptContext?: {
+		messageIds: string[];
+		systemPromptTokens: number;
+	};
 }
 
 // ─── Plan blocks (the plan lives in the chat) ────────────────────────────────

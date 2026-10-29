@@ -500,9 +500,11 @@ export async function handleChatInput(
 					agentOpts,
 				);
 
-	// A test-injected agent gets no usage collector (tests assert the
-	// transcript, not the money channel); when it's ours, usage flows through
-	// the factory's subscription (wired above via onUsage).
+	// Capture the constructed state once: edits during generation apply to
+	// the next run, not to the instructions behind this run's usage anchors.
+	const drillSystemPromptTokens = record.kind === "practice" && record.practiceMode === "drill"
+		? Math.ceil(constructed.state.systemPrompt.length / 4)
+		: undefined;
 	try {
 		// THE TURN AS A BACKGROUND OBJECT (owner ruling, 2026-09-25):
 		// runPiTurn executes decoupled from this response — the POST stream
@@ -577,6 +579,12 @@ export async function handleChatInput(
 						at: new Date().toISOString(),
 						model: modelId,
 						steps,
+						...(drillSystemPromptTokens !== undefined ? {
+							drillPromptContext: {
+								messageIds: stamped.filter((message) => message.role === "assistant").map((message) => message.id),
+								systemPromptTokens: drillSystemPromptTokens,
+							},
+						} : {}),
 					});
 				}
 				// GRAPH GATE (settings-storage wave, 2026-09-19): the write channel —

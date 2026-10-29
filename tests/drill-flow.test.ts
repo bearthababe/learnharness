@@ -205,5 +205,6 @@ it("ordinary and older sessions ignore a request's claimed drill mode and retain
 			assert.match(schema, /hint-ladder rung/);
 		}
 		assert.equal(chatStore.getChat(id)!.practiceMode, undefined);
+		assert.ok(chatStore.getChat(id)!.turns!.every((turn) => turn.drillPromptContext === undefined), "ordinary turns retain the existing usage shape");
 	}
 });

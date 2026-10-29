@@ -41,6 +41,19 @@ Propose a small drill-specific instruction loader at `src/agent/drill-instructio
 - Retain the existing demand categories, outcomes and assistance fields. Treat the assistance rung as a description of the most revealing help actually given, not a mandatory sequence. Record detail in the verdict and conversation; never invent an unassisted success after supplying relevant help.
 - Both pre-turn and post-turn context-size estimates must use the drill composition and its effective shared overrides for drills.
 
+### Owner-approved final-review extension — 2026-10-29
+
+Provider usage already includes the instructions, tools and earlier context. Merely passing the current instruction size to the heuristic does not account for edits when a valid provider-usage anchor exists. The owner approved this bounded extension after final review:
+
+- Add optional `drillPromptContext: { messageIds: string[], systemPromptTokens: number }` to the existing `TurnUsage` entry for drills. Keep the existing `appendTurnUsage` persistence path and record version.
+- Capture `Math.ceil(constructed.state.systemPrompt.length / 4)` once when the agent is built. Save that run's actual instruction size, even if policy/shared overrides change before settlement. List every newly persisted assistant message ID from the run so multi-step, errored and aborted runs retain the correct provenance.
+- Both compaction entrypoints match the actual valid assistant usage anchor against those IDs. Keep its provider-counted context/tools and trailing-message estimate, adjusting only by **current instruction tokens minus that anchor's recorded instruction tokens**. Never use another anchor's metadata. Existing compaction boundaries still invalidate older usage anchors.
+- For a drill anchor without matching saved metadata (including older records), use the existing cut-honoring transcript heuristic plus current instructions. Ordinary sessions retain their existing accounting and usage-record shape.
+- Verify through the actual chat handler and summary service with nonzero usage: policy/shared-override growth and shrinkage, reopen, mid-flight edits, multi-step/error/abort anchors, missing/unmatched metadata, compaction boundaries and ordinary behavior.
+- Capture an app-written golden drill record with both `practiceMode` and usage metadata. Creation/reopen run through real Next HTTP in an isolated profile; model execution uses the actual handler and registered scripted provider because the HTTP route exposes no engine injection. Copy the persisted record verbatim and document the exact provenance in the fixture README.
+
+**Final-review adaptation footprint:** production changes are limited to the already-touched `src/core/contracts/chat.ts`, `src/server/chat-handler.ts` and `src/server/compaction.ts`. Verification changes are in `tests/drill-compaction.test.ts`, `tests/compaction-service.test.ts`, `tests/drill-flow.test.ts` and `tests/golden-fixtures.test.ts`, plus `tests/fixtures/capture-drill-golden.ts`, its captured chat JSON and the fixture README. This section records the approved adaptation; no new storage API or runtime hook is required. The persisted optional metadata and host-side estimate adjustment will need assessment when adopting future upstream record/accounting changes or plugin interfaces.
+
 ### Proposed drill-policy text
 
 The following is candidate wording for owner approval, not an already installed prompt:
