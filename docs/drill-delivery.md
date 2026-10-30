@@ -94,8 +94,9 @@ application change was needed.
 Private source, prompt, summary, continuation, runner and result evidence:
 `~/.local/share/learnharness/evaluations/drill-summary-20261029/`.
 
-The parent [specification #11](https://github.com/bearthababe/learnharness/issues/11)
-now awaits the delivery decision: approval to merge/push and close it.
+On 2026-10-30, the owner approved merging into `main`, pushing to the fork,
+and closing the parent [specification #11](https://github.com/bearthababe/learnharness/issues/11).
+The issue records the final delivery commit and closure.
 
 The two existing phone previews retain their owners and processes. No drill
 preview endpoint has been published.
