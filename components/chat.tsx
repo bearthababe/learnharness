@@ -23,7 +23,11 @@ import { AnsweredCard } from "@/components/answered-card";
 import { artifactRenderers } from "@/components/artifacts";
 import { SubagentSteerCard } from "@/components/artifacts/steer-card";
 import { Composer } from "@/components/composer";
-import { useEnterSubmits } from "@/components/enter-submits";
+import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
+import { useNotebookSession } from "@/components/use-notebook-session";
+import { NotebookPanel } from "@/components/notebook-panel";
+import { useNotebookDestination } from "@/components/notebook-destination";
+import { useSessionInputViewport } from "@/components/session-input-viewport";
 import { blurAfterPointerClick } from "@/components/focus-hygiene";
 import { dockStateKey } from "@/components/dock-state-key";
 import { clearOpeningPrompt, readOpeningPromptEntry, stashOpeningPrompt, OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
@@ -258,6 +262,11 @@ export function Chat({
 		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight });
 
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
+	const workspaceRef = useRef<HTMLDivElement | null>(null);
+	const notebook = useNotebookSession(chatId);
+	const notebookVisible = notebook.view?.visible ?? false;
+	useNotebookDestination(workspaceRef, notebook.session, notebookVisible);
+	useSessionInputViewport(workspaceRef);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
 	const sourceTextParts = useMemo(() => firstSourceTextParts(messages), [messages]);
 
@@ -1268,7 +1277,7 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div className="flex h-dvh">
+		<div ref={workspaceRef} data-session-workspace="" className="session-workspace flex h-dvh">
 			<div className="flex min-w-0 flex-1 flex-col">
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its
@@ -1347,6 +1356,11 @@ export function Chat({
 					{/* The plan chip (owner, plan-placement round): session-level
 					    structure beside the phase chip — access to the full-DAG popup
 					    at every width; the marginalia is the wide-screen glance view. */}
+					<button type="button" data-input-owner="notebook" aria-expanded={notebookVisible}
+						className="lh-no-drag shrink-0 rounded border border-border px-2 py-1 text-xs"
+						onClick={() => { void notebook.session.dispatch({ type: "visibility", visible: !notebookVisible }).catch(() => {}); }}>
+						{notebookVisible ? "Collapse Notebook" : "Notebook"}
+					</button>
 					{planTree && (
 						<Hint label="Open the full plan" side="bottom">
 <button
@@ -1387,9 +1401,11 @@ export function Chat({
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
 					)}
 				</TopBar>
+				{!notebookVisible && notebook.error && <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>}
 
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
-				<div ref={sessionFindScopeRef} className="relative flex min-h-0 flex-1">
+				<div className="session-panes min-h-0 flex-1" data-notebook-open={notebookVisible}>
+				<div ref={sessionFindScopeRef} data-input-owner="tutor" className="relative flex min-h-0 min-w-0 overflow-hidden">
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
 					<ConversationContent className="min-h-full gap-0 p-0">
@@ -1772,6 +1788,8 @@ export function Chat({
 				)}
 				{planOpen && <PlanPopup messages={messages} onClose={() => setPlanOpen(false)} />}
 				<AbortTurnDialog mode={abortAsk} onClose={() => setAbortAsk(null)} onConfirm={confirmAbort} busy={busy} />
+				</div>
+				{notebookVisible && <NotebookPanel session={notebook.session} />}
 				</div>
 			</div>
 		</div>
@@ -2211,6 +2229,7 @@ function DockOverlay({
 	useEffect(() => {
 		if (!pending || expanded) return;
 		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.defaultPrevented || notebookOwnsKeyboard(e)) return;
 			if (e.key !== "Enter" || e.altKey) return;
 			if (e.shiftKey && !e.metaKey && !e.ctrlKey) return;
 			const t = e.target as HTMLElement | null;
@@ -2235,6 +2254,7 @@ function DockOverlay({
 		const el = scrollRef.current;
 		if (!el) return;
 		const onScroll = () => {
+			if (el.closest('[data-input-focused="tutor"]')) return;
 			if (!pendingRef.current) return;
 			// Resize mute (owner, resize round): a geometry change re-clamps
 			// scrollTop and the browser emits the clamp as a scroll event —
