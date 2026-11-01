@@ -1466,12 +1466,13 @@ export function Chat({
 								// assistant group — is gone). Never a user bubble: the wake is
 								// scaffolding; the model-facing instruction lives in the adapter.
 								<PhaseDivider key={m.id || `m-${mi}`} phase="plan" />
-							) : m.role === "user" && m.parts.length > 0 && m.parts.every((p) => p.type.startsWith("data-")) ? (
+							) : m.role === "user" && m.parts.length > 0 && m.parts.every((p) => p.type.startsWith("data-") && p.type !== "data-learner-explanation") ? (
 								// Marker cards (custom messages, 2026-10-04): user-side
 								// scaffolding — the graph-context pick, the practice
 								// thinking trace — render as cards in the transcript
 								// column directly, NO chat bubble (the subagent-steer
-								// precedent). The user branch below renders text only;
+								// precedent). Learner explanations belong to the You row
+								// below even though their structured part is data-only;
 								// without this hoist a data-only message read as an
 								// EMPTY bubble (owner report, 2026-10-04).
 								<Fragment key={m.id || `m-${mi}`}>

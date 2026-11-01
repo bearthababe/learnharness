@@ -135,3 +135,22 @@ queue, sidebar policy or preview-server change was needed.
 - Physical iOS keyboard/gesture checks, browser layout and actual-learning
   acceptance remain pending parent/#28 review. Phone checks use the existing
   closed-sidebar setup. Full integration build/review remains a parent gate.
+
+### #22 reopen-rendering follow-up
+
+Parent live acceptance found that submitted explanations disappeared from Chat
+on reopen despite intact native messages and successful Tutor delivery. The
+generic data-only marker branch intercepted `data-learner-explanation` and
+returned nothing before the learner's **You** row could render it. The correction
+excludes that part from marker-card routing; storage, projection and deduplication
+are unchanged.
+
+The exact no-call browser reproduction reported zero snapshots instead of three.
+A new regression renders the complete `Chat` component from a JSON-round-tripped
+native record and reproduced that failure, then passed with all three snapshots
+in one learner row. It also covers working-only input alongside plain text and an
+existing practice marker. Read-only replay of the parent's actual saved session
+through the corrected full renderer likewise reports three snapshots. **57
+targeted tests, typecheck, lint and whitespace checks passed.** The parent must
+merge and rerun its exact browser check against the live endpoint before #22
+display acceptance; no new model calls or preview-server changes were made.
