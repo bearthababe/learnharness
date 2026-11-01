@@ -1,4 +1,4 @@
-import React, { act, useRef } from "react";
+import React, { act, useRef, useCallback, useSyncExternalStore } from "react";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { after, test } from "node:test";
@@ -21,7 +21,76 @@ const { Composer } = await import("../components/composer.tsx");
 const { useEnterSubmits } = await import("../components/enter-submits.ts");
 const { QuestionDock } = await import("../components/question-dock.tsx");
 const { useNotebookDestination } = await import("../components/notebook-destination.ts");
+const { NotebookDraftReview, LearnerExplanation } = await import("../components/learner-explanation.tsx");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+test("mounted continuation reviews immutable snapshots, edits earlier prose, appends on return and sends working-only content explicitly", async () => {
+	const chat = chatStore.createChat("Mounted explanation");
+	const faux = createFauxCore({});
+	faux.setResponses([
+		() => fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"p=F/A"}]}'),
+		() => fauxAssistantMessage('{"action":"edit","operations":[{"op":"replace","id":"L1","latex":"p=F/(2A)"}]}'),
+	]);
+	const service = createNotebookService({ chatStore, engine: async () => ({ engine: { model: faux.getModel(), streamFn: faux.streamSimple }, model: "faux:editor" }) });
+	const session = createNotebookSession(chat.id, async (url, init) => service.handle(new Request(`http://test${url}`, init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	session.tutor.updateText({ kind: "ordinary" }, ""); await session.tutor.idle();
+	let sent: import("../src/core/contracts/notebook.ts").LearnerExplanation | undefined;
+	function Workspace() {
+		const root = useRef<HTMLDivElement>(null);
+		const state = useSyncExternalStore(session.tutor.subscribe, session.tutor.getSnapshot, session.tutor.getSnapshot);
+		const draft = state.drafts[0];
+		const part = draft?.parts.at(-1);
+		const returning = useCallback(() => { void session.tutor.returnToTutor({ kind: "ordinary" }); }, []);
+		useNotebookDestination(root, session, true, returning);
+		return <div ref={root}>
+			<div data-input-owner="tutor">
+				<NotebookDraftReview draft={draft} onTextChange={(id, text) => session.tutor.updateText({ kind: "ordinary" }, text, id)} />
+				<Composer value={part?.kind === "text" ? part.text : ""} onChange={(text) => session.tutor.updateText({ kind: "ordinary" }, text)} busy={false} canSend={!!draft?.parts.some((part) => part.kind === "working" || part.text.trim())} onStop={() => {}} onSend={() => { void session.tutor.prepareSubmission({ kind: "ordinary" }).then((input) => { sent = input.explanation; }); }} />
+				{sent && <LearnerExplanation parts={sent} />}
+			</div><NotebookPanel session={session} />
+		</div>;
+	}
+	const host = document.createElement("div"); document.body.append(host);
+	const root = createRoot(host);
+	try {
+		await act(async () => root.render(<Workspace />));
+		async function apply(text: string) {
+			await act(async () => session.dispatch({ type: "draft", text }));
+			const instruction = host.querySelector('[aria-label="Notebook instruction"]')!;
+			await act(async () => instruction.dispatchEvent(new window.Event("focusin", { bubbles: true })));
+			await act(async () => {
+				instruction.closest("form")!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+				await session.idle(); await service.settled(chat.id); await session.refresh();
+			});
+		}
+		await apply("Write pressure");
+		const composer = host.querySelector<HTMLTextAreaElement>('[data-testid="composer"] textarea')!;
+		await act(async () => { composer.dispatchEvent(new window.Event("focusin", { bubbles: true })); await session.tutor.idle(); });
+		assert.equal(sent, undefined, "focus return never submits");
+		assert.equal(host.querySelectorAll('[data-snapshot-id]').length, 1);
+		assert.equal(host.querySelector<HTMLButtonElement>('[aria-label="Send"]')!.disabled, false, "working-only ordinary content is eligible");
+		// Native input event on the actual earlier-text control.
+		const earlier = host.querySelector<HTMLTextAreaElement>('[aria-label="Earlier explanation"]')!;
+		await act(async () => {
+			const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+			setter!.call(earlier, "Same force, larger area.");
+			earlier.dispatchEvent(new window.Event("input", { bubbles: true }));
+			await session.tutor.idle();
+		});
+		assert.equal(session.tutor.draft({ kind: "ordinary" })!.parts[0]!.kind, "text");
+		assert.match(JSON.stringify(session.tutor.draft({ kind: "ordinary" })), /Same force, larger area/);
+		await apply("Double area");
+		await act(async () => { earlier.dispatchEvent(new window.Event("focusin", { bubbles: true })); await session.tutor.idle(); });
+		const draft = session.tutor.draft({ kind: "ordinary" })!;
+		assert.deepEqual(draft.parts.filter((part) => part.kind === "working").map((part) => part.lines[0]!.latex), ["p=F/A", "p=F/(2A)"]);
+		assert.equal(draft.parts.at(-1)?.kind, "text", "return from earlier editor still appends at continuation");
+		assert.equal(sent, undefined);
+		await act(async () => { host.querySelector('[data-testid="composer"]')!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); await session.tutor.idle(); });
+		assert.deepEqual(sent, draft.parts);
+		assert.equal(service.view(chat.id).draft.text, "");
+	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); }
+});
 
 test("mounted Notebook applies, shows exact fallback, preserves Tutor draft, and reopens with Undo", async () => {
 	const chat = chatStore.createChat("Mounted notebook");

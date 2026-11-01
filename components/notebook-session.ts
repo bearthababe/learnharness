@@ -1,9 +1,11 @@
 import type { NotebookCommand, NotebookCommandReceipt, NotebookView } from "@/src/core";
+import { createNotebookTutorDrafts, type DraftRecoveryStorage } from "./notebook-tutor-drafts";
 
 export type NotebookSessionCommand =
 	| { type: "visibility"; visible: boolean }
 	| { type: "draft"; text: string }
 	| { type: "apply"; cursorLineId?: string | null }
+	| Extract<NotebookCommand, { type: "tutor-draft" | "snapshot" }>
 	| { type: "undo" | "start-fresh" };
 export interface NotebookSessionSnapshot {
 	view: NotebookView | null;
@@ -14,7 +16,7 @@ export interface NotebookSessionSnapshot {
 
 /** One session-lifetime observable. Serialized saves never overwrite newer text;
  * detaching a view does not abort requests or accepted server computation. */
-export function createNotebookSession(chatId: string, fetcher: typeof fetch = fetch) {
+export function createNotebookSession(chatId: string, fetcher: typeof fetch = fetch, recoveryStorage?: DraftRecoveryStorage) {
 	const url = `/api/chats/${encodeURIComponent(chatId)}/notebook`;
 	const listeners = new Set<() => void>();
 	let state: NotebookSessionSnapshot = { view: null, draftText: "", saving: false, error: null };
@@ -22,7 +24,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	let localRevision = 0;
 	let savedLocalRevision = 0;
 	let requests = 0;
-	let uncertain: Extract<NotebookCommand, { id: string }> | null = null;
+	let uncertain: Extract<NotebookCommand, { type: "apply" | "undo" | "start-fresh" }> | null = null;
 	let uncertainRevision = 0;
 	const recovered = new Set<string>();
 	const recoveryPrefixes: string[] = [];
@@ -33,6 +35,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	};
 	function adopt(view: NotebookView) {
 		if (state.view && view.revision < state.view.revision) return;
+		tutor.adopt(view);
 		if (view.problem && !recovered.has(view.problem.operationId)) {
 			recovered.add(view.problem.operationId);
 			if (view.problem.instruction) {
@@ -73,7 +76,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 			if (!state.view) throw new Error("Notebook is not loaded");
 			let wire: NotebookCommand;
 			if (command.type === "draft") wire = { ...command, text: prepend(recoveryPrefixes.slice(recoveryEpoch), command.text), expectedRevision: state.view.draft.revision };
-			else if (command.type === "visibility") wire = command;
+			else if (command.type === "visibility" || command.type === "tutor-draft" || command.type === "snapshot") wire = command;
 			else {
 				if (!state.view.contextId) throw new Error("Open Notebook before editing");
 				if (uncertain) {
@@ -98,7 +101,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 				uncertainRevision = revision;
 			}
 			const receipt = await post(wire);
-			if ("id" in wire) uncertain = null;
+			if ("id" in wire && wire.id === uncertain?.id) uncertain = null;
 			if (command.type === "draft" || command.type === "apply") savedLocalRevision = revision;
 			adopt(receipt.view); publish({ error: null });
 			return receipt;
@@ -109,12 +112,16 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		tail = task.catch(() => {});
 		return task;
 	}
+	let storage = recoveryStorage;
+	try { storage ??= typeof window === "undefined" ? undefined : window.localStorage; } catch { /* server saves still work */ }
+	const tutor = createNotebookTutorDrafts(chatId, dispatch, refresh, storage);
 	return {
+		tutor,
 		getSnapshot: () => state,
 		subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
 		dispatch, refresh,
 		async idle() { await tail; },
-		dispose() { listeners.clear(); },
+		dispose() { listeners.clear(); tutor.dispose(); },
 	};
 }
 export type NotebookSession = ReturnType<typeof createNotebookSession>;

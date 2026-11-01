@@ -1,6 +1,8 @@
 "use client";
 
-import { createContext, Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { explanationHasContent, serializeLearnerExplanation, type LearnerExplanation as Explanation } from "@/src/core";
+import { LearnerExplanation, NotebookDraftReview } from "./learner-explanation";
 import { useChatSession } from "@/components/session";
 import { visibleQueuedSteers } from "@/components/session-core";
 import { SetupDialog } from "@/components/setup-dialog";
@@ -265,7 +267,8 @@ export function Chat({
 	const workspaceRef = useRef<HTMLDivElement | null>(null);
 	const notebook = useNotebookSession(chatId);
 	const notebookVisible = notebook.view?.visible ?? false;
-	useNotebookDestination(workspaceRef, notebook.session, notebookVisible);
+	const tutorDraftState = useSyncExternalStore(notebook.session.tutor.subscribe, notebook.session.tutor.getSnapshot, notebook.session.tutor.getSnapshot);
+	const ordinaryDraft = tutorDraftState.drafts.find((draft) => draft.owner.kind === "ordinary");
 	useSessionInputViewport(workspaceRef);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
 	const sourceTextParts = useMemo(() => firstSourceTextParts(messages), [messages]);
@@ -567,7 +570,21 @@ export function Chat({
 	const applyText = useCallback((v: string) => {
 		textRef.current = v;
 		setText(v);
-	}, []);
+		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
+	}, [notebook.session]);
+	useEffect(() => {
+		if (!notebook.view?.contextId) return;
+		const part = ordinaryDraft?.parts.at(-1);
+		const value = part?.kind === "text" ? part.text : "";
+		textRef.current = value;
+		setText(value);
+	}, [ordinaryDraft, notebook.view?.contextId]);
+	const returnToOrdinary = useCallback(() => {
+		if (pending || activeProblem) return;
+		if (!notebook.session.tutor.draft({ kind: "ordinary" })) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
+		void notebook.session.tutor.returnToTutor({ kind: "ordinary" }).catch(() => {});
+	}, [notebook.session, pending, activeProblem]);
+	useNotebookDestination(workspaceRef, notebook.session, notebookVisible, returnToOrdinary);
 	// Saved slot completeness is live, but the session's selected route
 	// comes from its own ordinary model control, never today's Strong pin.
 	const { catalog, configured, zeroKeys } = useModelSetup(initialConfigured);
@@ -752,7 +769,7 @@ export function Chat({
 	const retryable = (status === "ready" || status === "error") && !busy && !compacting && endsInFailedTurn(nativeMessages);
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
 	const canSend =
-		(text.trim().length > 0 || dictation.active) && !pending && !activeProblem && !compacting;
+		(text.trim().length > 0 || (ordinaryDraft && explanationHasContent(ordinaryDraft.parts)) || dictation.active) && !pending && !activeProblem && !compacting;
 
 	/* THE PRACTICE PAUSE (owner round 16): between problems — practice
 	 * kind, nothing active, nothing in flight, and at least one problem
@@ -1243,6 +1260,16 @@ export function Chat({
 	 * plain send; a raced settle 409s and falls back to exactly that. */
 	const doSteerOrSend = () => {
 		if (pending || compacting) return;
+		if (notebook.session.getSnapshot().view?.contextId) {
+			if (zeroKeys) { setSetupOpen(true); return; }
+			if (selectedModelUnavailable(catalog, selectedModel)) { openModelPicker(); return; }
+			void notebook.session.tutor.prepareSubmission({ kind: "ordinary" }).then(async (input) => {
+				// Explicit Send is the only authority; switching and autosaves never enter here.
+				if (busy) await steer(input.text, input); else await send(input);
+				await notebook.session.tutor.reconcile();
+			}).catch(() => {});
+			return;
+		}
 		const t = textRef.current.trim();
 		if (!t) return;
 		if (busy) {
@@ -1358,7 +1385,11 @@ export function Chat({
 					    at every width; the marginalia is the wide-screen glance view. */}
 					<button type="button" data-input-owner="notebook" aria-expanded={notebookVisible}
 						className="lh-no-drag shrink-0 rounded border border-border px-2 py-1 text-xs"
-						onClick={() => { void notebook.session.dispatch({ type: "visibility", visible: !notebookVisible }).catch(() => {}); }}>
+						onClick={() => {
+							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
+							if (notebookVisible) returnToOrdinary();
+							void notebook.session.dispatch({ type: "visibility", visible: !notebookVisible }).catch(() => {});
+						}}>
 						{notebookVisible ? "Collapse Notebook" : "Notebook"}
 					</button>
 					{planTree && (
@@ -1525,7 +1556,9 @@ export function Chat({
 												    rail as the thinking rows — one quote geometry. */}
 												<div className="font-medium uppercase tracking-wide text-muted-foreground">You</div>
 												<div className="lh-prose whitespace-pre-wrap text-foreground">
-													{m.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n")}
+													{m.parts.some((part) => part.type === "data-learner-explanation")
+														? m.parts.filter((part) => part.type === "data-learner-explanation").map((part, index) => <LearnerExplanation key={index} parts={part.data as Explanation} />)
+														: m.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n")}
 												</div>
 											</div>
 									) : (
@@ -1712,7 +1745,10 @@ export function Chat({
 					onReserve={setDockReserve}
 					dictationSlot={<DictationBar dictation={dictation} />}
 					dictationCancel={dictation.cancel}
-					queuedSteers={visibleQueuedSteers(steerQueue, nativeMessages)}
+					queuedSteers={visibleQueuedSteers([
+						...steerQueue,
+						...(notebook.view?.submissions ?? []).filter((receipt) => receipt.status === "pending" && !steerQueue.some((entry) => entry.id === receipt.submission.id)).map((receipt) => ({ id: receipt.submission.id, text: serializeLearnerExplanation(receipt.explanation) })),
+					], nativeMessages)}
 					setupCta={
 						zeroKeys ? (
 							<ZeroKeysPill onOpen={() => setSetupOpen(true)} />
@@ -1732,6 +1768,11 @@ export function Chat({
 						)
 					}
 					composer={
+						<div>
+						<NotebookDraftReview draft={ordinaryDraft} onTextChange={(id, value) => notebook.session.tutor.updateText({ kind: "ordinary" }, value, id)} />
+						{tutorDraftState.error && <p role="alert" className="px-3 text-xs text-destructive">Unsent draft: {tutorDraftState.error}</p>}
+						{tutorDraftState.saving && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
+						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}
 						<Composer
 							// Stop aborts ANY in-flight turn (stream-reattach wave): the
 							// square renders while a reattached/wake turn runs too — the
@@ -1752,6 +1793,7 @@ export function Chat({
 							onNext={sendNext}
 							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : undefined}
 						/>
+						</div>
 					}
 					onSubmitAnswer={(output) => {
 						if (!pending) return;

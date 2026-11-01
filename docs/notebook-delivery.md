@@ -97,3 +97,41 @@ extensions with #20's existing boundary.
 #21 (history) and #22 (ordinary snapshots) follow #20 independently. Then
 #22 → #23 → #24; #21 + #24 → #25; #25 → #26 and #27; #26 + #27 → #28.
 Each later slice must verify its behavior before combined acceptance.
+
+## #22 — ordinary explanations and working snapshots
+
+Implemented on `notebook/22-snapshots`, including integration of #21 history.
+The ordinary composer now keeps a session-owned ordered draft once Notebook is
+used. Settled return captures immutable working at the continuation; earlier
+prose is editable above the continuing composer, with no reorder/remove controls.
+Per-change revisioned saves and local write-ahead recovery preserve unfinished
+work. Older conflicting local copies remain visible for review.
+
+Explicit ordinary send and live steer retain native user roles and carry the
+ordered explanation through validation, durable messages, rendering, model
+context, compaction summary input and Markdown. Assisted working uses the approved
+label and evidence distinction. Notebook commands stay outside learner input.
+Notebook submissions atomically consume only their accepted draft revision;
+logical receipts and a parked-steer outbox reconcile against saved native ids.
+Text-only sessions retain their existing send/steer path.
+
+Integration is additive: optional input/message fields, one scoped atomic store
+operation, ordinary-input validation/commit hooks, and notebook-only live-steer
+acceptance/restoration hooks. Notebook modules own draft recovery, snapshots,
+serialization and receipts. No provider transport, tool authority, general job
+queue, sidebar policy or preview-server change was needed.
+
+### Verification — 2026-11-01
+
+- **256 targeted tests passed**, including #20/#21 regressions, real filesystem
+  storage and session handlers with scripted external model context, compaction,
+  mounted Apply/return/review/Send controls, ordinary/live-steer delivery and its
+  settle race, snapshot-only content, duplicate requests, lost acknowledgments,
+  conflicting local recovery, atomic write failure, and canonical UI deduplication.
+- Typecheck, lint and whitespace checks passed.
+- No paid/live provider calls or preview changes were made for this slice.
+- Pending-cutoff/multiple-edit return remains #25: this slice captures settled
+  working and reports a pending edit rather than claiming its cutoff is complete.
+- Physical iOS keyboard/gesture checks, browser layout and actual-learning
+  acceptance remain pending parent/#28 review. Phone checks use the existing
+  closed-sidebar setup. Full integration build/review remains a parent gate.

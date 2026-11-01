@@ -137,6 +137,7 @@ export function pendingCallTool(messages: readonly LhMessage[], toolCallId: stri
  * absorbed (live turn content is never dropped).
  */
 export function absorbed(m: LhMessage, record: readonly LhMessage[]): boolean {
+	if (m.explanation) return record.some((saved) => saved.id === m.id);
 	if (typeof m.id !== "string" || !m.id.startsWith("c_")) return false;
 	const role = (m as { role?: string }).role;
 	if (role === "user") {
@@ -400,6 +401,7 @@ export class SessionModel {
 					// live stream dropped the marker until the settle sync.
 					const mid = message.id;
 					if (mid === undefined) return false;
+					if (message.explanation && this.base.some((saved) => saved.id === mid)) return false;
 					this.mutate(() => {
 						const idx = this.tail.findIndex((m) => m.id === mid);
 						this.tail =
@@ -686,7 +688,7 @@ export class SessionModel {
 		// write-ahead will persist (inputAppends), with LOCAL ids so
 		// adoption can tell them from the record's absorbed copies.
 		const optimistic: LhMessage[] = [];
-		if (input.type === "text") optimistic.push({ ...newUserMessage(input.text), id: localId() });
+		if (input.type === "text") optimistic.push({ ...newUserMessage(input.text, input.explanation), id: input.submission?.id ?? localId() });
 		else if (input.type === "thinking") {
 			// The practice submissions (2026-10-04): the marker lands
 			// optimistically — the card renders from its details the
@@ -768,7 +770,7 @@ export class SessionModel {
 			// existing setup recovery. A newer send/reattach ALWAYS owns errors
 			// and status instead, even if that request has since been stopped.
 			// Ordinary text and answer teardown behavior stays unchanged.
-			if (input.type === "answer") {
+			if (input.type === "answer" || (input.type === "text" && input.submission)) {
 				const ids = new Set(optimistic.map(m => m.id));
 				this.mutate(() => {
 					this.tail = this.tail.filter(m => !ids.has(m.id));
@@ -796,11 +798,11 @@ export class SessionModel {
 	 *  settled mid-send (the race): fall back to the plain text send —
 	 *  the entry is dropped and send() pushes its own optimistic card.
 	 */
-	async steer(text: string): Promise<void> {
+	async steer(text: string, notebook?: Pick<Extract<ChatInput, { type: "text" }>, "explanation" | "submission">): Promise<boolean> {
 		const t = text.trim();
-		if (!t) return;
-		const id = `steer_${localId()}`;
-		this.steerQueueValue = [...this.steerQueueValue, { id, text: t }];
+		if (!t && !notebook?.explanation) return false;
+		const id = notebook?.submission?.id ?? `steer_${localId()}`;
+		if (!this.steerQueueValue.some((entry) => entry.id === id)) this.steerQueueValue = [...this.steerQueueValue, { id, text: t || "Notebook-assisted working" }];
 		this.onChange?.();
 		const dropSteer = () => {
 			this.steerQueueValue = this.steerQueueValue.filter((s) => s.id !== id);
@@ -810,13 +812,12 @@ export class SessionModel {
 			const res = await this.fetch(`/api/chats/${this.chatId}/steer`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ input: { type: "steer", id, text: t } }),
+				body: JSON.stringify({ input: { type: "steer", id, text: t, ...notebook } }),
 			});
-			if (res.ok) return; // parked or delivered — the stream lands the card
+			if (res.ok) return true; // parked or delivered — the stream lands the card
 			if (res.status === 409) {
 				dropSteer();
-				await this.send({ type: "text", text: t }); // the settle race: plain send
-				return;
+				return this.send({ type: "text", text: t, ...notebook }); // preserve notebook identity through the settle race
 			}
 			dropSteer();
 			this.setError((await res.text()) || `The steer failed (${res.status}).`);
@@ -824,6 +825,7 @@ export class SessionModel {
 			dropSteer();
 			this.setError((err as Error).message);
 		}
+		return false;
 	}
 
 	/** The answer path (the dock): the answer IS the question call's tool

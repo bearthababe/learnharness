@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { CallUsage } from "./chat.ts";
+import type { LhMessage } from "../native-messages.ts";
 
 export interface NotebookLine { id: string; latex: string }
 export interface NotebookState { lines: NotebookLine[]; undo: NotebookLine[][] }
@@ -74,10 +75,49 @@ export interface NotebookRecord {
 	notebookDraft: { id: string; revision: number; text: string };
 	nextSequence: number;
 	operations: NotebookOperation[];
+	tutorDrafts?: OwnedTutorDraft[];
+	snapshots?: WorkingSnapshot[];
+	submissions?: NotebookSubmissionReceipt[];
+}
+export interface NotebookSubmission {
+	id: string;
+	draftId: string;
+	draftRevision: number;
+	owner: TutorDraftOwner;
+}
+export interface NotebookSubmissionReceipt {
+	submission: NotebookSubmission;
+	explanation: LearnerExplanation;
+	message: LhMessage;
+	status: "pending" | "delivered";
+}
+export type TutorDraftOwner =
+	| { kind: "ordinary" }
+	| { kind: "question"; toolCallId: string; channel: "text" | "thinking" | "reading-thinking" }
+	| { kind: "practice"; problemCallId: string };
+export interface WorkingSnapshot {
+	id: string;
+	contextId: string;
+	revision: number;
+	lines: NotebookLine[];
+	owner: TutorDraftOwner;
+	draftId: string;
+}
+export type LearnerExplanationPart =
+	| { id: string; kind: "text"; text: string }
+	| { id: string; kind: "working"; snapshotId: string; contextId: string; revision: number; lines: NotebookLine[] };
+export type LearnerExplanation = LearnerExplanationPart[];
+export interface OwnedTutorDraft {
+	id: string;
+	owner: TutorDraftOwner;
+	revision: number;
+	parts: LearnerExplanation;
 }
 export type NotebookCommand =
 	| { type: "visibility"; visible: boolean }
 	| { type: "draft"; expectedRevision: number; text: string }
+	| { type: "tutor-draft"; expectedRevision: number; draft: OwnedTutorDraft }
+	| { type: "snapshot"; id: string; owner: TutorDraftOwner; draftId: string; expectedRevision: number; continuationId: string; contextId?: string; workingRevision?: number }
 	| { type: "apply"; id: string; contextId: string; draftRevision: number; instruction: string; cursorLineId?: string | null }
 	| { type: "undo" | "start-fresh"; id: string; contextId: string };
 export interface NotebookUsage {
@@ -102,5 +142,7 @@ export interface NotebookView {
 	pending: { id: string; kind: NotebookOperation["kind"]; status: NotebookOperation["status"] } | null;
 	problem: { operationId: string; instruction?: string; status: "failed" | "clarification" | "unknown"; message: string } | null;
 	usage: NotebookUsage;
+	tutorDrafts?: OwnedTutorDraft[];
+	submissions?: Array<Pick<NotebookSubmissionReceipt, "submission" | "status" | "explanation">>;
 }
 export interface NotebookCommandReceipt { id?: string; view: NotebookView }
