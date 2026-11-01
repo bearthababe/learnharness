@@ -299,6 +299,9 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 	/** The deferred transcript (owner round 2): finals land here during the
 	 *  run and flush into the primary input once, at teardown. */
 	const bufferRef = useRef<string[]>([]);
+	// A submit/reveal captures its input before awaiting finalization. Timestamped
+	// ownership during ongoing capture is handled separately by the Notebook router.
+	const finishingTargetRef = useRef<((text: string) => void) | null>(null);
 	/** Resolvers waiting for the run to fully end (finish(), owner
 	 *  2026-10-01): released by cleanup() — every terminal path runs it. */
 	const waitersRef = useRef<Array<() => void>>([]);
@@ -310,7 +313,7 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 		if (bufferRef.current.length === 0) return;
 		const text = bufferRef.current.join(" ");
 		bufferRef.current = [];
-		(questionTarget ?? appendRef.current)(text);
+		(finishingTargetRef.current ?? questionTarget ?? appendRef.current)(text);
 	}, []);
 
 	/** Full teardown of one run's machinery. Idempotent; generation-guarded by callers. */
@@ -318,6 +321,7 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 		genRef.current++;
 		setDictationActive(false);
 		flush(); // the deferred transcript appears when the run ends (owner round 2)
+		finishingTargetRef.current = null;
 		if (safetyRef.current) {
 			clearTimeout(safetyRef.current);
 			safetyRef.current = null;
@@ -557,6 +561,7 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 				return;
 			}
 			waitersRef.current.push(resolve);
+			finishingTargetRef.current ??= questionTarget ?? appendRef.current;
 			// "stopping" is already ending — the waiter just rides to cleanup.
 			if (phase === "recording" || phase === "connecting") stop();
 		});

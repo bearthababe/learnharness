@@ -7,6 +7,7 @@ import { notifySettingsSaved } from "../components/settings-signal.ts";
 import { useDictationLanguage } from "../components/dictation-preference.ts";
 import { isDictationActive, useDictationActive } from "../components/dictation-state.ts";
 import type { UserSettings } from "../src/core/index.ts";
+import { PracticeDock } from "../components/practice-dock.tsx";
 
 function deferred<T>() {
 	let resolve!: (value: T) => void;
@@ -45,7 +46,7 @@ const globals = globalThis as Record<string, unknown>;
 let restore: (() => void) | undefined;
 let dispose: (() => Promise<void>) | undefined;
 
-async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Response>) {
+async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Response>, controls?: () => React.ReactNode) {
 	const dom = parseHTML("<html><body><div id='root'></div></body></html>");
 	const state = {
 		record: { version: 1, dictation: { language } } as UserSettings,
@@ -100,7 +101,7 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 		latest = useDictation({ append: (text) => state.appends.push(text) });
 		setting = useDictationLanguage();
 		state.active = useDictationActive();
-		return null;
+		return controls?.() ?? null;
 	}
 	let root = createRoot(document.getElementById("root")!);
 	let firstMount = true;
@@ -129,6 +130,24 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 }
 
 afterEach(async () => { await dispose?.(); restore?.(); dispose = undefined; restore = undefined; });
+
+test("actual practice Send finishes empty-visible deferred speech against its captured problem", async () => {
+	let problem = "old";
+	const sent: Array<[string, string]> = [];
+	const f = await fixture("en", undefined, () => <PracticeDock key={problem} problemCallId={problem} input={{ statement: problem }} expanded onExpand={() => {}} onSubmit={(text, id) => { sent.push([text, id]); }} />);
+	await f.mount();
+	await act(async () => { f.dictation.toggle(); });
+	const socket = Socket.all.at(-1)!;
+	await act(async () => { socket.open(); socket.final("My deferred reasoning"); });
+	assert.equal(document.querySelector<HTMLTextAreaElement>("textarea")!.value, "");
+	await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="practice-send"]')!.click());
+	assert.equal(f.dictation.phase, "stopping");
+	assert.deepEqual(sent, []);
+	problem = "new"; await f.mount();
+	await act(async () => { socket.end(); });
+	assert.deepEqual(sent, [["My deferred reasoning", "old"]]);
+	assert.equal(document.querySelector<HTMLTextAreaElement>("textarea")!.value, "");
+});
 
 test("waits for the saved language; reconnect preserves it and finals still flush exactly once", async () => {
 	const read = deferred<Response>();

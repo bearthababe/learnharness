@@ -42,11 +42,11 @@ import {
 	pendingProblemDismissalOf,
 } from "./native-messages.ts";
 import { QUESTION_TOOLS, toolQuestionKind } from "./pending.ts";
-import type { LearnerExplanation, NotebookSubmission } from "./contracts/notebook.ts";
+import type { LearnerExplanation, NotebookSubmission, TutorDraftOwner } from "./contracts/notebook.ts";
 import { parseNotebookInput } from "./notebook-content.ts";
 export interface NotebookInputFields { explanation?: LearnerExplanation; submission?: NotebookSubmission }
-function notebookFields(input: Record<string, unknown>): NotebookInputFields {
-	try { return parseNotebookInput(input); }
+function notebookFields(input: Record<string, unknown>, owner?: TutorDraftOwner): NotebookInputFields {
+	try { return parseNotebookInput(input, owner); }
 	catch { throw new ChatInputError("Invalid notebook explanation or submission"); }
 }
 
@@ -61,7 +61,7 @@ export type ChatInput =
 	 *  thinking on the ACTIVE problem — one lane (owner 2026-10-05):
 	 *  whether it claims an answer is read from the text. One
 	 *  problem may carry many submissions; each is its own turn. */
-	| { type: "thinking"; problemCallId: string; text: string }
+	| ({ type: "thinking"; problemCallId: string; text: string } & NotebookInputFields)
 	/** The practice move-on signal (owner round 16): the learner's
 	 *  explicit go-ahead during the between-problems pause — the Next
 	 *  chip or Enter on an empty composer. Practice sessions only, and
@@ -187,14 +187,16 @@ export function parseChatInput(input: unknown): ChatInput {
 			return { type: "continue" };
 		case "retry":
 			return { type: "retry" };
-		case "thinking":
+		case "thinking": {
 			if (typeof i.problemCallId !== "string" || i.problemCallId.length === 0) {
 				throw new ChatInputError("thinking input requires problemCallId");
 			}
-			if (typeof i.text !== "string" || i.text.trim().length === 0) {
+			const notebook = notebookFields(i, { kind: "practice", problemCallId: i.problemCallId });
+			if (typeof i.text !== "string" || (!notebook.explanation && i.text.trim().length === 0)) {
 				throw new ChatInputError("thinking input requires non-empty text");
 			}
-			return { type: "thinking", problemCallId: i.problemCallId, text: i.text };
+			return { type: "thinking", problemCallId: i.problemCallId, text: i.text, ...notebook };
+		}
 		case "next":
 			return { type: "next" };
 		default:
@@ -236,7 +238,7 @@ export function inputAppends(
 			if (!active || active.toolCallId !== input.problemCallId) {
 				throw new ChatInputError("thinking input targets no active problem");
 			}
-			return [...dismissalConclusion(record), newThinkingMessage(input.problemCallId, input.text)];
+			return [...dismissalConclusion(record), newThinkingMessage(input.problemCallId, input.text, input.explanation, input.submission?.id)];
 		}
 		case "next": {
 			// Honest 400s, the thinking gate's discipline: the signal is a

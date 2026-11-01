@@ -20,9 +20,58 @@ const { NotebookPanel } = await import("../components/notebook-panel.tsx");
 const { Composer } = await import("../components/composer.tsx");
 const { useEnterSubmits } = await import("../components/enter-submits.ts");
 const { QuestionDock } = await import("../components/question-dock.tsx");
+const { PracticeDock } = await import("../components/practice-dock.tsx");
 const { useNotebookDestination } = await import("../components/notebook-destination.ts");
 const { NotebookDraftReview, LearnerExplanation } = await import("../components/learner-explanation.tsx");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+test("practice keeps its existing text draft when Notebook is first opened, without creating Notebook while typing", async () => {
+	const chat = chatStore.createChat("Existing practice draft", "practice");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor call expected"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh();
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	try {
+		await act(async () => root.render(<PracticeDock problemCallId="p1" input={{ statement: "Pressure?" }} expanded onExpand={() => {}} notebook={session} onSubmit={async () => false} />));
+		const field = host.querySelector<HTMLTextAreaElement>("textarea")!;
+		await act(async () => {
+			Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(field, "Pressure is force per area.");
+			field.dispatchEvent(new window.Event("input", { bubbles: true }));
+			await session.tutor.idle();
+		});
+		assert.equal(service.view(chat.id).contextId, null, "ordinary practice typing does not open a notebook aggregate");
+		await act(async () => { await session.dispatch({ type: "visibility", visible: true }); await session.tutor.idle(); });
+		assert.equal(field.value, "Pressure is force per area.");
+		await session.tutor.idle();
+		assert.equal(session.tutor.draft({ kind: "practice", problemCallId: "p1" })?.parts.at(-1)?.kind, "text");
+		assert.match(JSON.stringify(service.view(chat.id).tutorDrafts), /Pressure is force per area/);
+	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); }
+});
+
+test("mounted practice adapter reopens its owned working-only draft and retains it when send is unconfirmed", async () => {
+	const chat = chatStore.createChat("Practice draft", "practice");
+	const editor = createFauxCore({});
+	editor.setResponses([() => fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"p=F/A"}]}')]);
+	const service = createNotebookService({ chatStore, engine: async () => ({ engine: { model: editor.getModel(), streamFn: editor.streamSimple }, model: "faux:editor" }) });
+	const transport: typeof fetch = async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id);
+	const session = createNotebookSession(chat.id, transport);
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	const owner = { kind: "practice" as const, problemCallId: "p1" };
+	session.tutor.updateText(owner, ""); await session.tutor.idle();
+	await session.dispatch({ type: "draft", text: "Write pressure" }); await session.dispatch({ type: "apply" }); await service.settled(chat.id); await session.refresh();
+	await session.tutor.returnToTutor(owner); session.dispose();
+	const reopened = createNotebookSession(chat.id, transport); await reopened.refresh();
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	let sent: unknown;
+	try {
+		await act(async () => root.render(<PracticeDock problemCallId="p1" input={{ statement: "Pressure?" }} expanded onExpand={() => {}} notebook={reopened} onSubmit={async (_text, _id, fields) => { sent = fields; return false; }} />));
+		assert.equal(host.querySelectorAll("[data-snapshot-id]").length, 1);
+		assert.equal(host.querySelector<HTMLButtonElement>('[data-testid="practice-send"]')!.disabled, false);
+		await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="practice-send"]')!.click(); await reopened.tutor.idle(); });
+		assert.match(JSON.stringify(sent), /p=F\/A/);
+		assert.equal(reopened.tutor.draft(owner)?.parts.length, 3);
+	} finally { await act(async () => root.unmount()); reopened.dispose(); host.remove(); }
+});
 
 test("mounted continuation reviews immutable snapshots, edits earlier prose, appends on return and sends working-only content explicitly", async () => {
 	const chat = chatStore.createChat("Mounted explanation");

@@ -1,10 +1,14 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRightIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
-import { joinDictation, useDictationTarget } from "@/components/dictation";
+import { finishDictation, isDictationActive, joinDictation, useDictationTarget } from "@/components/dictation";
+import { explanationHasContent, type NotebookInputFields } from "@/src/core";
+import type { NotebookSession } from "./notebook-session";
+import { useNotebookActivityDraft } from "./notebook-activity-draft";
+import { NotebookDraftReview } from "./learner-explanation";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { cn } from "@/lib/utils";
 
@@ -38,7 +42,8 @@ export interface PracticeDockProps {
 	expanded: boolean;
 	onExpand: () => void;
 	/** text — POST {type:"thinking"} (one lane; the register is read from the text). */
-	onSubmit: (text: string) => void;
+	onSubmit: (text: string, problemCallId: string, fields?: NotebookInputFields) => void | Promise<boolean>;
+	notebook?: NotebookSession;
 	/** Escape in the thinking field stops dictation (threaded from the page). */
 	onEscape?: () => void;
 	/** Compaction is running for this chat (owner round 14): the thinking
@@ -48,32 +53,55 @@ export interface PracticeDockProps {
 	compactionRunning?: boolean;
 }
 
-export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmit, onEscape, compactionRunning = false }: PracticeDockProps) {
+export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmit, onEscape, notebook, compactionRunning = false }: PracticeDockProps) {
+	const owner = { kind: "practice" as const, problemCallId };
+	const owned = useNotebookActivityDraft(notebook, owner);
 	const [thinking, setThinking] = useState("");
 	// Ref MIRRORS the field ("nothing gets lost", the question-dock
 	// discipline): a submit resuming after `await finishDictation()` reads
 	// the tail, never a stale closure.
 	const thinkingRef = useRef("");
+	const sending = useRef(false);
+	const activated = useRef<string | null>(null);
+	useEffect(() => {
+		if (!owned.enabled || activated.current === problemCallId) return;
+		activated.current = problemCallId;
+		if (!owned.draft && thinkingRef.current) notebook!.tutor.updateText({ kind: "practice", problemCallId }, thinkingRef.current);
+	}, [notebook, problemCallId, owned.enabled, owned.draft]);
+	const update = (text: string) => {
+		thinkingRef.current = text; setThinking(text);
+		if (owned.enabled) notebook!.tutor.updateText(owner, text);
+	};
 
 	useDictationTarget(
 		useCallback(
 			(t: string) => {
-				const v = joinDictation(thinkingRef.current, t);
-				thinkingRef.current = v;
-				setThinking(v);
+				const part = notebook?.tutor.draft({ kind: "practice", problemCallId })?.parts.at(-1);
+				update(joinDictation(part?.kind === "text" ? part.text : thinkingRef.current, t));
 			},
-			[],
+			[notebook, problemCallId, owned.enabled],
 		),
 		true,
 	);
 
-	const submit = () => {
-		if (compactionRunning) return;
-		const text = thinkingRef.current.trim();
-		if (text.length === 0) return;
-		thinkingRef.current = "";
-		setThinking("");
-		onSubmit(text);
+	const submit = async () => {
+		if (compactionRunning || sending.current) return;
+		sending.current = true;
+		// Capture this problem and adapter before finalization can change activity.
+		try {
+			await finishDictation();
+			if (owned.enabled) {
+				const prepared = await notebook!.tutor.prepareSubmission(owner);
+				await onSubmit(prepared.text, problemCallId, prepared);
+				await notebook!.tutor.reconcile();
+			} else {
+				const text = thinkingRef.current.trim();
+				if (!text) return;
+				const accepted = await onSubmit(text, problemCallId);
+				if (accepted !== false && thinkingRef.current.trim() === text) update("");
+			}
+		} catch { /* The shared draft model exposes recoverable save failures. */ }
+		finally { sending.current = false; }
 	};
 
 	/* ENTER SUBMITS FROM ANYWHERE (owner round 6, 2026-10-05): dictation
@@ -100,7 +128,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 
 	/* ── the expanded form ── */
 	return (
-		<div data-testid="practice-dock" data-problem={problemCallId}>
+		<div data-testid="practice-dock" data-problem={problemCallId} data-tutor-owner={JSON.stringify(owner)}>
 			{/* The agent's half: the 'Problem' eyebrow (mirroring the quiz
 			    cards' label row — owner round, 2026-10-05) + the statement,
 			    markdown + LaTeX rendered, capped by the measured column
@@ -114,6 +142,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 
 			{/* The learner's half: Enter SENDS (owner round 2, 2026-10-05);
 			    Shift+Enter makes a newline — less to decide about. */}
+			<NotebookDraftReview draft={owned.draft} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
 			<div
 				data-testid="practice-thinking-field"
 				className="m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
@@ -122,10 +151,9 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 					YOUR THINKING
 				</div>
 				<textarea
-					value={thinking}
+					value={owned.enabled ? owned.text : thinking}
 					onChange={(e) => {
-						thinkingRef.current = e.target.value;
-						setThinking(e.target.value);
+						update(e.target.value);
 					}}
 					onKeyDown={(e) => {
 						// Esc ends dictation — stopPropagation claims it (the
@@ -160,7 +188,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 					<Button
 						type="button"
 						data-testid="practice-send"
-						disabled={thinking.trim().length === 0 || compactionRunning}
+						disabled={(!(owned.enabled ? explanationHasContent(owned.draft?.parts ?? []) : thinking.trim().length > 0) && !isDictationActive()) || compactionRunning}
 						onClick={() => submit()}
 						className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 					>

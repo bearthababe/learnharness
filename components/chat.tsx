@@ -27,6 +27,8 @@ import { SubagentSteerCard } from "@/components/artifacts/steer-card";
 import { Composer } from "@/components/composer";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
 import { useNotebookSession } from "@/components/use-notebook-session";
+import type { NotebookSession } from "@/components/notebook-session";
+import type { NotebookInputFields } from "@/src/core";
 import { NotebookPanel } from "@/components/notebook-panel";
 import { useNotebookDestination } from "@/components/notebook-destination";
 import { useSessionInputViewport } from "@/components/session-input-viewport";
@@ -505,10 +507,10 @@ export function Chat({
 	// the dock stays mounted (the problem is still active until the agent
 	// concludes).
 	const submitThinking = useCallback(
-		(text: string) => {
+		(text: string, problemCallId: string, fields?: NotebookInputFields) => {
 			const problem = activeProblemRef.current;
-			if (!problem) return;
-			void send({ type: "thinking", problemCallId: problem.toolCallId, text });
+			if (!problem || problem.toolCallId !== problemCallId) return Promise.resolve(false);
+			return send({ type: "thinking", problemCallId, text, ...fields });
 		},
 		[send],
 	);
@@ -580,7 +582,13 @@ export function Chat({
 		setText(value);
 	}, [ordinaryDraft, notebook.view?.contextId]);
 	const returnToOrdinary = useCallback(() => {
-		if (pending || activeProblem) return;
+		if (pending) return;
+		if (activeProblem) {
+			const owner = { kind: "practice" as const, problemCallId: activeProblem.toolCallId };
+			if (!notebook.session.tutor.draft(owner)) notebook.session.tutor.updateText(owner, "");
+			void notebook.session.tutor.returnToTutor(owner).catch(() => {});
+			return;
+		}
 		if (!notebook.session.tutor.draft({ kind: "ordinary" })) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
 		void notebook.session.tutor.returnToTutor({ kind: "ordinary" }).catch(() => {});
 	}, [notebook.session, pending, activeProblem]);
@@ -1726,6 +1734,7 @@ export function Chat({
 				    height morph (typing, a question growing the band, the
 				    fold) and NEVER overlaps the composer. */}
 				<DockOverlay
+					notebook={notebook.session}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.toolCallId)?.form : undefined}
 					onSaveQuestionDraft={(form) => { if (pending) saveQuestionDraft(pending.toolCallId, { form }); }}
@@ -1967,6 +1976,7 @@ export function shouldStampGeometryMute(nextH: number, prevH: number, pending: b
 }
 
 function DockOverlay({
+	notebook,
 	pending,
 	initialQuestionDraft,
 	onSaveQuestionDraft,
@@ -1992,6 +2002,7 @@ function DockOverlay({
 	setupCta,
 	queuedSteers,
 }: {
+	notebook: NotebookSession;
 	pending: ReturnType<typeof findPendingToolCall>;
 	initialQuestionDraft?: QuestionFormDraft;
 	onSaveQuestionDraft: (draft: QuestionFormDraft) => void;
@@ -2003,7 +2014,7 @@ function DockOverlay({
 	 *  question (the composer is replaced); null in teaching sessions. */
 	practice: { toolCallId: string; input: unknown } | null;
 	/** (commit, text) — the practice dock's two submit lanes. */
-	onSubmitThinking: (text: string) => void;
+	onSubmitThinking: (text: string, problemCallId: string, fields?: NotebookInputFields) => Promise<boolean>;
 	/** Teach-phase pending question: arrives collapsed behind the reveal button (W5). */
 	requiresReveal: boolean;
 	/** The reading-thinking draft (owner 2026-10-03) — owned by ChatView so
@@ -2448,6 +2459,7 @@ function DockOverlay({
 								/>
 							) : practice ? (
 								<PracticeDock
+									notebook={notebook}
 									problemCallId={practice.toolCallId}
 									input={practice.input as { statement: string }}
 									expanded={expanded}

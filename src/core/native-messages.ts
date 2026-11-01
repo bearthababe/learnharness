@@ -296,14 +296,14 @@ export function newGraphContextMessage(picks: readonly GraphContextPick[], chain
  *  content label is the single "Your thinking"; `details` keeps the raw
  *  payload for the transcript card. One problem may carry many
  *  submissions. */
-export function newThinkingMessage(problemCallId: string, text: string): LhMarkerMessage {
+export function newThinkingMessage(problemCallId: string, text: string, explanation?: LearnerExplanation, id = newMessageId()): LhMarkerMessage {
 	return {
-		id: newMessageId(),
+		id,
 		role: "custom",
 		customType: "practice-thinking",
-		content: `${THINKING_LABEL}:\n${text}`,
+		content: `${THINKING_LABEL}:\n${explanation ? serializeLearnerExplanation(explanation) : text}`,
 		display: true,
-		details: { problemCallId, text },
+		details: { problemCallId, text, ...(explanation ? { explanation } : {}) },
 		timestamp: Date.now(),
 	};
 }

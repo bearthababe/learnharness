@@ -14,12 +14,12 @@ export const learnerExplanationSchema = z.array(z.discriminatedUnion("kind", [
 export const ownedTutorDraftSchema = z.object({ id, owner: tutorDraftOwnerSchema, revision: z.number().int().nonnegative(), parts: learnerExplanationSchema }).strict();
 export const notebookSubmissionSchema = z.object({ id, draftId: id, draftRevision: z.number().int().nonnegative(), owner: tutorDraftOwnerSchema }).strict();
 /** Both fields travel together; text-only callers keep the original contract. */
-export function parseNotebookInput(input: Record<string, unknown>) {
+export function parseNotebookInput(input: Record<string, unknown>, owner: TutorDraftOwner = { kind: "ordinary" }) {
 	if (input.explanation === undefined && input.submission === undefined) return {};
 	const explanation = learnerExplanationSchema.parse(input.explanation);
 	const submission = notebookSubmissionSchema.parse(input.submission);
 	if (!explanationHasContent(explanation)) throw new Error("Enter an explanation or notebook working");
-	if (submission.owner.kind !== "ordinary") throw new Error("Ordinary input requires an ordinary draft");
+	if (!sameDraftOwner(submission.owner, owner)) throw new Error("Input requires its own draft");
 	return { explanation, submission };
 }
 export function sameDraftOwner(a: TutorDraftOwner, b: TutorDraftOwner): boolean {

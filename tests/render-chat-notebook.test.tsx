@@ -7,7 +7,7 @@ import { parseHTML } from "linkedom";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime.js";
 import { Chat } from "../components/chat.tsx";
 import { ServerEventsProvider } from "../components/server-events.tsx";
-import { newNextMessage, newUserMessage, type LhMessage } from "../src/core/native-messages.ts";
+import { newNextMessage, newUserMessage, newThinkingMessage, type LhMessage } from "../src/core/native-messages.ts";
 import type { LearnerExplanation } from "../src/core/contracts/notebook.ts";
 
 /** Reopen's real Chat → useChatSession → projectView → transcript branch.
@@ -52,4 +52,11 @@ test("reopened Chat keeps working-only learner input visible while existing mark
 	assert.equal(document.querySelectorAll('[data-testid="practice-next-line"]').length, 1);
 	assert.equal(document.querySelectorAll("[data-snapshot-id]").length, 1);
 	assert.match(document.querySelector('[data-testid="user-message"]')!.textContent!, /Plain learner text/);
+});
+
+test("complete Chat renders practice thinking working once under its existing learner card", () => {
+	const parts: LearnerExplanation = [{ id: "working", kind: "working", snapshotId: "practice", contextId: "context", revision: 1, lines: [{ id: "L1", latex: "p=" }] }];
+	const document = reopen(JSON.parse(JSON.stringify([newThinkingMessage("problem", "compatibility", parts)])));
+	assert.equal(document.querySelectorAll("[data-snapshot-id]").length, 1);
+	assert.doesNotMatch(document.querySelector('[data-testid="thinking-card"]')!.textContent!, /compatibility/);
 });

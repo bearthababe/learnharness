@@ -169,6 +169,8 @@ export function messageMarkdown(
 		for (const text of userFacingTextOf((message as { content: unknown }).content)) {
 			parts.push(`### Learner${anchor}\n\n${text.trim()}`);
 		}
+	} else if (message.role === "custom" && message.customType === "practice-thinking") {
+		parts.push(`### Learner${anchor}\n\n${message.content}`);
 	} else if (role === "assistant") {
 		for (const text of userFacingTextOf((message as { content: unknown }).content, ctx?.failedOutputCalls ?? failedOutputCallIds([message]))) {
 			parts.push(`### Teacher${anchor}\n\n${text.trim()}`);
