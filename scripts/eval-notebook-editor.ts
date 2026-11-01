@@ -33,7 +33,7 @@ try {
 	await refreshConnectionCatalog(cheap.provider);
 	// User-requested notebook editing is foreground work, not an autonomous job.
 	const engine = piEngineForSpec(cheap, false);
-	const sourcePaths = ["src/agent/notebook-editor.ts", "src/agent/models.ts", "src/agent/chatgpt-stream.ts", "scripts/eval-notebook-editor.ts", "scripts/notebook-editor-cases.ts", "docs/research/conversational-math-eval/cases.mjs"];
+	const sourcePaths = ["src/agent/notebook-editor.ts", "src/core/contracts/notebook.ts", "src/agent/models.ts", "src/agent/chatgpt-stream.ts", "scripts/eval-notebook-editor.ts", "scripts/notebook-editor-cases.ts", "docs/research/conversational-math-eval/cases.mjs"];
 	const sources = Object.fromEntries(await Promise.all(sourcePaths.map(async (file) => [file, createHash("sha256").update(await readFile(file)).digest("hex")])));
 	const manifest = {
 		startedAt: new Date().toISOString(), selectedFrom: "models.cheap", requested: cheap,

@@ -4,6 +4,24 @@ import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai";
 import { AssistantMessageEventStream } from "@earendil-works/pi-ai/utils/event-stream";
 import { runNotebookEditor, type NotebookEditorInput } from "../src/agent/notebook-editor.ts";
 
+test("attempt accounting is checkpointed before retry, and checkpoint failure cannot dispatch another call", async () => {
+	const faux = createFauxCore({});
+	let calls = 0;
+	faux.setResponses([() => { calls++; return fauxAssistantMessage("invalid JSON"); }]);
+	const saved: unknown[] = [];
+	await assert.rejects(runNotebookEditor({ state: { lines: [], undo: [] }, instruction: "Write p=" }, {
+		engine: { model: faux.getModel(), streamFn: faux.streamSimple },
+		onAttemptFinished: async (attempt) => {
+			saved.push(structuredClone(attempt));
+			assert.equal(attempt.failure, "format");
+			assert.ok(attempt.usage);
+			throw new Error("Checkpoint unavailable");
+		},
+	}), /Checkpoint unavailable/);
+	assert.equal(calls, 1);
+	assert.equal(saved.length, 1);
+});
+
 test("an editor instruction changes only the addressed line and retains an undoable original", async () => {
 	const faux = createFauxCore({});
 	faux.setResponses([() => fauxAssistantMessage(JSON.stringify({ action: "edit", operations: [

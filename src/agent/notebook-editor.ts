@@ -1,26 +1,7 @@
 import { normalizeContext, type AssistantMessage, type Usage } from "@earendil-works/pi-ai";
-import { z } from "zod";
 import { APP_IDENTITY, type PiEngine } from "./models.ts";
-
-export interface NotebookLine { id: string; latex: string }
-export interface NotebookState { lines: NotebookLine[]; undo: NotebookLine[][] }
-export interface NotebookHistoryEntry { id: string; lines: NotebookLine[] }
-export interface NotebookExchange {
-	instruction: string;
-	selection: { lineId: string; text: string } | null;
-	cursorLineId: string | null;
-	response: NotebookResponse | null;
-	error?: string;
-	notebookAfter: NotebookLine[];
-}
-export interface NotebookEditorInput {
-	state: NotebookState;
-	instruction: string;
-	selection?: { lineId: string; text: string } | null;
-	cursorLineId?: string | null;
-	history?: NotebookExchange[];
-	notebookHistory?: NotebookHistoryEntry[];
-}
+import { notebookResponseSchema as responseSchema, type NotebookState, type NotebookExchange, type NotebookEditorInput, type NotebookResponse } from "../core/contracts/notebook.ts";
+export type { NotebookLine, NotebookState, NotebookHistoryEntry, NotebookExchange, NotebookEditorInput, NotebookResponse } from "../core/contracts/notebook.ts";
 
 // Frozen prototype rewrite instructions, followed by the owner's history and
 // whole-line targeting decisions. No expected evaluation answers enter here.
@@ -41,16 +22,6 @@ NOTEBOOK HISTORY contains read-only saved entries, separate from EARLIER CONVERS
 
 // Affected-line replacement is the accepted prototype contract. Parsing and
 // application finish before the caller receives a new state to persist.
-const operation = z.discriminatedUnion("op", [
-	z.object({ op: z.literal("replace"), id: z.string(), latex: z.string() }).strict(),
-	z.object({ op: z.literal("insert"), after: z.string().nullable(), id: z.string().regex(/^L[1-9]\d*$/), latex: z.string() }).strict(),
-]);
-const responseSchema = z.discriminatedUnion("action", [
-	z.object({ action: z.literal("edit"), operations: z.array(operation).min(1) }).strict(),
-	z.object({ action: z.literal("question"), question: z.string().trim().min(1) }).strict(),
-	z.object({ action: z.literal("undo") }).strict(),
-]);
-export type NotebookResponse = z.infer<typeof responseSchema>;
 export interface NotebookAttempt {
 	prompt: string;
 	raw?: string;
@@ -103,7 +74,11 @@ function apply(state: NotebookState, response: NotebookResponse): NotebookState 
 	return { lines, undo: [...structuredClone(state.undo), structuredClone(state.lines)] };
 }
 
-export async function runNotebookEditor(input: NotebookEditorInput, { engine, signal }: { engine: PiEngine; signal?: AbortSignal }) {
+export async function runNotebookEditor(input: NotebookEditorInput, { engine, signal, onAttemptFinished }: {
+	engine: PiEngine;
+	signal?: AbortSignal;
+	onAttemptFinished?: (attempt: NotebookAttempt, index: number) => Promise<void>;
+}) {
 	input = structuredClone(input);
 	const attempts: NotebookAttempt[] = [];
 	let state = structuredClone(input.state);
@@ -138,19 +113,24 @@ export async function runNotebookEditor(input: NotebookEditorInput, { engine, si
 		} catch (error) {
 			attempt.failure = "provider";
 			attempt.error = error instanceof Error ? error.message : "Notebook editor failed";
-			break; // No invisible transport retry.
 		} finally {
 			attempt.elapsedMs = Math.round(performance.now() - started);
 		}
+		if (attempt.failure === "provider") {
+			await onAttemptFinished?.(structuredClone(attempt), index);
+			break; // No invisible transport retry.
+		}
 		try {
-			const parsed = responseSchema.parse(JSON.parse(attempt.raw));
+			const parsed = responseSchema.parse(JSON.parse(attempt.raw!));
 			state = apply(input.state, parsed);
 			response = parsed;
-			break;
 		} catch (error) {
 			attempt.failure = "format";
 			attempt.error = error instanceof Error ? error.message : "Invalid notebook response";
 		}
+		// Storage failure escapes; it is neither a provider nor a format retry.
+		await onAttemptFinished?.(structuredClone(attempt), index);
+		if (response !== null) break;
 	}
 	const error = response === null ? attempts.at(-1)?.error : undefined;
 	const history: NotebookExchange[] = [...structuredClone(input.history ?? []), {

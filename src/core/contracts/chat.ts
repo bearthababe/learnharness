@@ -10,6 +10,7 @@ import type { LhMessage } from "../native-messages.ts";
 import type { Phase3 } from "../phases.ts";
 import type { PlanNodeStatus, PlanTree } from "./plan.ts";
 import type { EmissionStats } from "./graph.ts";
+import type { NotebookRecord } from "./notebook.ts";
 
 // ─── Chat records (the session store's on-disk format) ───────────────────────
 
@@ -28,6 +29,7 @@ import type { EmissionStats } from "./graph.ts";
 export type ChatKind = "teach" | "practice";
 
 export interface ChatRecord {
+	notebook?: NotebookRecord;
 	id: string;
 	title: string;
 	createdAt: string;
@@ -63,7 +65,7 @@ export interface ChatRecord {
 }
 
 /** The chat record format this build writes and understands. */
-export const CURRENT_CHAT_VERSION = 1;
+export const CURRENT_CHAT_VERSION = 2;
 
 /** The conversation agents' runtime model choice (model-control wave,
  *  2026-09-12): a per-chat override of config.ts's pinned prober/teacher

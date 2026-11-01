@@ -598,3 +598,19 @@ body {
 	outline: 1px solid var(--border);
 	border-radius: 0.25rem;
 }
+/* Session-owned Notebook: fixed split, native inner scrolling, no resize rail. */
+.session-panes { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+.session-panes[data-notebook-open="true"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+.notebook-panel { border-top-width: 1px; }
+html[data-session-input-locked], html[data-session-input-locked] body { overflow: hidden; overscroll-behavior: none; }
+.session-workspace[data-input-focused] {
+	position: fixed; top: var(--session-viewport-top); left: var(--session-viewport-left);
+	width: var(--session-viewport-width); height: var(--session-viewport-height); overflow: hidden;
+}
+.session-workspace[data-input-focused] :is(textarea, [data-notebook-scroll], [data-dock-scroll-area], [data-input-owner="tutor"] [style*="overflow"]) { overscroll-behavior: contain; }
+.session-workspace[data-keyboard-open="true"][data-input-focused="tutor"] .session-panes[data-notebook-open="true"] { grid-template-rows: minmax(0, 2fr) minmax(0, 1fr); }
+.session-workspace[data-keyboard-open="true"][data-input-focused="notebook"] .session-panes[data-notebook-open="true"] { grid-template-rows: minmax(0, 1fr) minmax(0, 2fr); }
+@media (min-width: 768px) {
+	.session-panes[data-notebook-open="true"] { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); grid-template-rows: minmax(0, 1fr); }
+	.notebook-panel { border-top-width: 0; border-left-width: 1px; }
+}

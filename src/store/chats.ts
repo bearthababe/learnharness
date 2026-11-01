@@ -17,6 +17,7 @@ import { CURRENT_CHAT_VERSION } from "../core/contracts.ts";
 import type { LhMessage } from "../core/native-messages.ts";
 import { activeProblemOf, danglingQuestionOf } from "../core/native-messages.ts";
 import { phaseAt3Lh } from "../core/phases.ts";
+import type { NotebookRecord } from "../core/contracts/notebook.ts";
 
 function chatFile(id: string): string {
 	if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error(`Invalid chat id: ${id}`);
@@ -59,7 +60,24 @@ function createChat(title: string, kind?: "practice", practiceMode?: "drill"): C
  *  lazy migration means existing files only get stamped on their next write.
  *  A future-version guard lives on the read side (getChat). */
 function writeChat(record: ChatRecord): void {
-	fs.writeFileSync(chatFile(record.id), JSON.stringify({ ...record, version: CURRENT_CHAT_VERSION }, null, "\t"), "utf-8");
+	const destination = chatFile(record.id);
+	const temporary = `${destination}.${crypto.randomUUID()}.tmp`;
+	try {
+		fs.writeFileSync(temporary, JSON.stringify({ ...record, version: CURRENT_CHAT_VERSION }, null, "\t"), "utf-8");
+		fs.renameSync(temporary, destination);
+	} finally {
+		try { fs.unlinkSync(temporary); } catch { /* rename already removed it */ }
+	}
+}
+
+function saveNotebook(id: string, expectedRevision: number, notebook: NotebookRecord): NotebookRecord {
+	const record = getChat(id);
+	if (!record) throw new Error(`Chat not found: ${id}`);
+	if ((record.notebook?.revision ?? 0) !== expectedRevision) throw new Error("Notebook revision conflict");
+	const next = structuredClone({ ...notebook, revision: expectedRevision + 1 });
+	writeChat({ ...record, notebook: next });
+	emit("notebook-changed", { chatId: id });
+	return next;
 }
 
 function getChat(id: string): ChatRecord | null {
@@ -88,7 +106,7 @@ function listChats(): ChatSummary[] {
 			.filter((f) => f.endsWith(".json"))
 			.map((f) => getChat(f.slice(0, -5)))
 			.filter((r): r is ChatRecord => r !== null)
-			.map(({ messages, tree, turns, extractions, ...summary }) => {
+			.map(({ messages, tree, turns, extractions, notebook: _notebook, ...summary }) => {
 				// Per-record isolation (Wave B): a record whose messages fail the
 				// projection (e.g. pre-Wave-B UIMessage-format scratch — the
 				// zero-back-compat wipe makes these "corrupt") must not blank the
@@ -210,6 +228,7 @@ function saveTree(id: string, tree: PlanTree): void {
 }
 
 export const chatStore: ChatStore = {
+	saveNotebook,
 	createChat,
 	getChat,
 	listChats,
