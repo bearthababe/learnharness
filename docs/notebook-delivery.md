@@ -92,6 +92,46 @@ notebook service/client/panel. No additional general app hooks, persistence
 system, executor or dependencies. Plugin migration would carry these notebook
 extensions with #20's existing boundary.
 
+## #21 — history and Start fresh
+
+Merged at `fc4f53a` (implementation `3bb79cc`). Immutable numbered/time history
+and a waiting Start fresh barrier extend the existing notebook pump. Earlier
+failures/clarifications pause the barrier; legacy records without history load.
+
+- Worker: 28 focused tests; merger: 19 focused tests, typecheck, lint and diff checks passed.
+- Combined actual-app #21/#22 flow used three Luna-medium editor calls and one
+  Tutor call in separate test data. Start fresh archived the settled two-line
+  working, cleared current working/Undo, and preserved both owned drafts and two
+  immutable snapshots. Reload retained all of these; history was browsable.
+- The real editor then copied only the requested pressure equation from Entry 1
+  into blank working, exactly preserving its source. History and earlier snapshots
+  stayed unchanged. No Tutor message existed until explicit Send.
+- Scripted storage/UI coverage includes waiting/clarification barriers, duplicate
+  command IDs, failed edits, history disambiguation, reuse/Undo/reopen and legacy
+  records. Physical-device/learning acceptance remains #28.
+
+## #22 — ordinary explanations and snapshots (acceptance in progress)
+
+Merged at `d23020b`. Worker: 256 targeted tests, typecheck/lint/diff checks passed;
+merger: 46 focused tests, typecheck/diff checks passed.
+
+Actual-app checks passed explanation → snapshot → continuation ordering, editing
+earlier prose, immutable older working after later edits, separate unsent drafts,
+Start fresh/reload retention, history reuse and explicit submission. The saved
+native user message contains the full ordered explanation, three working snapshots
+and approved assistance wording, excluding editor instructions. The live Tutor
+acknowledged receiving these as assisted steps.
+
+**Open defect:** after reopening, the saved learner message is absent from the
+conversation display. Saved native content and snapshots are intact. A minimized
+no-provider-call browser check reproduces zero displayed snapshots instead of
+three. #22 remains open while the renderer/reopen path is diagnosed and fixed.
+Evidence: `/tmp/opencode/notebook-integration/check-21-22.json` and
+`check-22-reopen.mjs`; do not rerun the original live script to diagnose display.
+
+Total authorized live allowance consumed so far: seven editor calls, one Tutor
+call, zero speech minutes. No physical-device acceptance is claimed.
+
 ## Remaining graph
 
 #21 (history) and #22 (ordinary snapshots) follow #20 independently. Then
