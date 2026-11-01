@@ -5,6 +5,11 @@ import type { CallUsage } from "./chat.ts";
 export interface NotebookLine { id: string; latex: string }
 export interface NotebookState { lines: NotebookLine[]; undo: NotebookLine[][] }
 export interface NotebookHistoryEntry { id: string; lines: NotebookLine[] }
+export interface SavedNotebookHistoryEntry extends NotebookHistoryEntry {
+	sourceContextId: string;
+	sourceRevision: number;
+	createdAt: string;
+}
 export interface NotebookExchange {
 	instruction: string;
 	selection: { lineId: string; text: string } | null;
@@ -49,7 +54,7 @@ export interface NotebookOperation {
 	id: string;
 	sequence: number;
 	contextId: string;
-	kind: "edit" | "undo";
+	kind: "edit" | "undo" | "start-fresh";
 	instruction?: string;
 	cursorLineId?: string | null;
 	acceptedAt: string;
@@ -64,6 +69,8 @@ export interface NotebookRecord {
 	revision: number;
 	visible: boolean;
 	current: { id: string; revision: number; state: NotebookState; exchanges: NotebookExchange[] };
+	/** Absent on sessions saved before history support. */
+	history?: SavedNotebookHistoryEntry[];
 	notebookDraft: { id: string; revision: number; text: string };
 	nextSequence: number;
 	operations: NotebookOperation[];
@@ -72,7 +79,7 @@ export type NotebookCommand =
 	| { type: "visibility"; visible: boolean }
 	| { type: "draft"; expectedRevision: number; text: string }
 	| { type: "apply"; id: string; contextId: string; draftRevision: number; instruction: string; cursorLineId?: string | null }
-	| { type: "undo"; id: string; contextId: string };
+	| { type: "undo" | "start-fresh"; id: string; contextId: string };
 export interface NotebookUsage {
 	calls: number;
 	unknownCalls: number;
@@ -88,6 +95,8 @@ export interface NotebookView {
 	contextId: string | null;
 	workingRevision: number;
 	lines: NotebookLine[];
+	history: SavedNotebookHistoryEntry[];
+	startFreshPending: boolean;
 	canUndo: boolean;
 	draft: { id: string; revision: number; text: string };
 	pending: { id: string; kind: NotebookOperation["kind"]; status: NotebookOperation["status"] } | null;
