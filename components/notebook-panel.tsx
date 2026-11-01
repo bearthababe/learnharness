@@ -6,10 +6,12 @@ import { NotebookWorking } from "./notebook-working";
 
 export function NotebookPanel({ session }: { session: NotebookSession }) {
 	const { view, draftText, saving, error } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
-	const [selected, setSelected] = useState<string | null>(null);
-	const cursorLineId = view?.lines.some((line) => line.id === selected) ? selected : null;
+	const [selected, setSelected] = useState<{ contextId: string | null; lineId: string } | null>(null);
+	const [historyOpen, setHistoryOpen] = useState(false);
+	const cursorLineId = selected && selected.contextId === view?.contextId && view?.lines.some((line) => line.id === selected.lineId) ? selected.lineId : null;
+	const applyWaiting = view?.pending?.kind === "edit" || !!view?.startFreshPending && !view.problem;
 	const apply = () => {
-		if (!draftText.trim() || view?.pending?.kind === "edit") return;
+		if (!draftText.trim() || applyWaiting) return;
 		void session.dispatch({ type: "apply", cursorLineId }).catch(() => {});
 	};
 	return <section aria-label="Notebook" data-input-owner="notebook" className="notebook-panel flex min-h-0 min-w-0 flex-col border-border bg-background">
@@ -23,17 +25,28 @@ export function NotebookPanel({ session }: { session: NotebookSession }) {
 					if (event.key === "Tab") event.stopPropagation();
 				}} />
 			<div className="flex flex-wrap items-center gap-2">
-				<button type="submit" disabled={!draftText.trim() || view?.pending?.kind === "edit"} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">Apply changes</button>
-				<button type="button" disabled={!view?.canUndo && !view?.pending} onClick={() => { void session.dispatch({ type: "undo" }).catch(() => {}); }} className="rounded border border-border px-3 py-1.5 text-sm disabled:opacity-50">Undo</button>
+				<button type="submit" disabled={!draftText.trim() || applyWaiting} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">Apply changes</button>
+				<button type="button" disabled={view?.startFreshPending || !view?.canUndo && !view?.pending} onClick={() => { void session.dispatch({ type: "undo" }).catch(() => {}); }} className="rounded border border-border px-3 py-1.5 text-sm disabled:opacity-50">Undo</button>
+				<button type="button" disabled={!view?.contextId || view.startFreshPending} onClick={() => { void session.dispatch({ type: "start-fresh" }).catch(() => {}); }} className="rounded border border-border px-3 py-1.5 text-sm disabled:opacity-50">Start fresh</button>
+				<button type="button" aria-expanded={historyOpen} aria-controls="notebook-history" onClick={() => setHistoryOpen(!historyOpen)} className="rounded border border-border px-3 py-1.5 text-sm">History</button>
 				{saving && <span className="text-xs text-muted-foreground" role="status">Saving…</span>}
 			</div>
-			{view?.pending && <p role="status" className="text-sm">{view.problem ? "Waiting for correction" : view.pending.kind === "undo" ? "Undo waiting" : "Applying changes…"}</p>}
+			{view?.pending && view.pending.kind !== "start-fresh" && <p role="status" className="text-sm">{view.problem ? "Waiting for correction" : view.pending.kind === "undo" ? "Undo waiting" : "Applying changes…"}</p>}
+			{view?.startFreshPending && <p role="status" className="text-sm">{view.problem ? "Start fresh waiting for correction" : "Start fresh waiting for earlier operations"}</p>}
 			{view?.problem && <p role="status" className="text-sm">{view.problem.message}</p>}
 			{error && <p role="alert" className="text-sm text-destructive">Not saved: {error} <button type="button" className="underline" onClick={() => { void session.refresh(); }}>Refresh</button></p>}
 		</form>
 		<div data-notebook-scroll="" className="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
-			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} onSelect={setSelected} />
+			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} onSelect={(lineId) => setSelected({ contextId: view?.contextId ?? null, lineId })} />
 			{view?.lines.length === 0 && <p className="text-sm text-muted-foreground">Your working appears here.</p>}
+			{historyOpen && <section id="notebook-history" aria-label="Notebook history" className="mt-4 space-y-4 border-t border-border pt-3">
+				<h3 className="text-sm font-medium">History</h3>
+				{!view?.history.length && <p className="text-sm text-muted-foreground">No earlier working yet.</p>}
+				{view?.history.map((entry, index) => <article key={entry.id} aria-label={`Entry ${index + 1}`}>
+					<h4 className="text-sm font-medium">Entry {index + 1} · <time dateTime={entry.createdAt}>{new Date(entry.createdAt).toLocaleString()}</time></h4>
+					<NotebookWorking lines={entry.lines} />
+				</article>)}
+			</section>}
 			<details className="mt-4 text-xs text-muted-foreground"><summary className="cursor-pointer">Usage</summary>
 				<p>Reported tokens: {view?.usage.tokens ?? 0}</p>
 				<p>Unknown calls: {view?.usage.unknownCalls ?? 0}</p>

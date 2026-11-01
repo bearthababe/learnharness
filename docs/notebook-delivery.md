@@ -58,6 +58,40 @@ build/review. Detailed local browser evidence and scripts are retained under
 `/tmp/opencode/notebook-integration/check-20*`; the reproducible automated tests
 are in `tests/notebook-*` and `tests/session-input-viewport.test.tsx`.
 
+## #21 — Start fresh and history
+
+Implemented on `notebook/21-history`; live/model acceptance is pending parent
+verification. Start fresh uses #20's existing durable pump, waits visibly for
+earlier work, and pauses behind failures/clarifications until corrected. It
+archives settled nonempty source once and opens a new empty context. Notebook
+drafts and other aggregate fields are retained. Older records without history
+remain readable.
+
+History shows numbered, timestamped read-only entries with the existing exact
+source fallback. The existing editor input receives actual entries and matching
+numbered labels; the editor prompt/output contract is unchanged. Reuse edits
+current working through the existing validation/undo behavior. Cursor selection
+is scoped to its working context.
+
+### Worker verification — 2026-11-01
+
+- 28 focused history/UI/flow/editor/viewport checks passed, including six new
+  mounted-control and real-session-storage history tests with scripted providers.
+- Covered archive/browse/reuse/undo/reopen, duplicate historical line numbers,
+  whole-line and individual-equation scripted outputs, invalid edits, held work,
+  failed/clarification barriers, lost acknowledgments, legacy records, and cursor
+  isolation. Scripted responses establish app behavior, not real-model accuracy.
+- Typecheck, lint and whitespace checks passed. No live/provider/browser calls
+  or preview processes were started by this worker.
+- Pending: chosen-model history-reference evaluation, actual desktop/mobile
+  browser review, physical iOS/learning acceptance, and combined #22 draft/snapshot
+  retention verification once that slice is integrated.
+
+Core impact is additive notebook contracts plus changes inside the existing
+notebook service/client/panel. No additional general app hooks, persistence
+system, executor or dependencies. Plugin migration would carry these notebook
+extensions with #20's existing boundary.
+
 ## Remaining graph
 
 #21 (history) and #22 (ordinary snapshots) follow #20 independently. Then

@@ -4,7 +4,7 @@ export type NotebookSessionCommand =
 	| { type: "visibility"; visible: boolean }
 	| { type: "draft"; text: string }
 	| { type: "apply"; cursorLineId?: string | null }
-	| { type: "undo" };
+	| { type: "undo" | "start-fresh" };
 export interface NotebookSessionSnapshot {
 	view: NotebookView | null;
 	draftText: string;
@@ -22,7 +22,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	let localRevision = 0;
 	let savedLocalRevision = 0;
 	let requests = 0;
-	let uncertain: Extract<NotebookCommand, { type: "apply" | "undo" }> | null = null;
+	let uncertain: Extract<NotebookCommand, { id: string }> | null = null;
 	let uncertainRevision = 0;
 	const recovered = new Set<string>();
 	const recoveryPrefixes: string[] = [];
@@ -78,7 +78,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 				if (!state.view.contextId) throw new Error("Open Notebook before editing");
 				if (uncertain) {
 					// First reconcile the exact earlier request, never mint a duplicate.
-					const isRetry = command.type === uncertain.type && (command.type === "undo" || revision === uncertainRevision);
+					const isRetry = command.type === uncertain.type && (command.type !== "apply" || revision === uncertainRevision);
 					const receipt = await post(uncertain);
 					uncertain = null;
 					if (isRetry) savedLocalRevision = revision;
@@ -93,12 +93,12 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 						adopt(saved.view);
 					}
 					wire = { type: "apply", id: crypto.randomUUID(), contextId: state.view.contextId!, draftRevision: state.view.draft.revision, instruction, cursorLineId: command.cursorLineId };
-				} else wire = { type: "undo", id: crypto.randomUUID(), contextId: state.view.contextId };
+				} else wire = { type: command.type, id: crypto.randomUUID(), contextId: state.view.contextId };
 				uncertain = wire;
 				uncertainRevision = revision;
 			}
 			const receipt = await post(wire);
-			if (command.type === "apply" || command.type === "undo") uncertain = null;
+			if ("id" in wire) uncertain = null;
 			if (command.type === "draft" || command.type === "apply") savedLocalRevision = revision;
 			adopt(receipt.view); publish({ error: null });
 			return receipt;
