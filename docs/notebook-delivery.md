@@ -110,7 +110,7 @@ failures/clarifications pause the barrier; legacy records without history load.
   command IDs, failed edits, history disambiguation, reuse/Undo/reopen and legacy
   records. Physical-device/learning acceptance remains #28.
 
-## #22 — ordinary explanations and snapshots (acceptance in progress)
+## #22 — ordinary explanations and snapshots
 
 Merged at `d23020b`. Worker: 256 targeted tests, typecheck/lint/diff checks passed;
 merger: 46 focused tests, typecheck/diff checks passed.
@@ -122,15 +122,31 @@ native user message contains the full ordered explanation, three working snapsho
 and approved assistance wording, excluding editor instructions. The live Tutor
 acknowledged receiving these as assisted steps.
 
-**Open defect:** after reopening, the saved learner message is absent from the
-conversation display. Saved native content and snapshots are intact. A minimized
-no-provider-call browser check reproduces zero displayed snapshots instead of
-three. #22 remains open while the renderer/reopen path is diagnosed and fixed.
-Evidence: `/tmp/opencode/notebook-integration/check-21-22.json` and
-`check-22-reopen.mjs`; do not rerun the original live script to diagnose display.
+The actual-app check exposed a hidden learner-message defect: Chat's generic
+data-marker branch intercepted the new explanation part before its learner
+renderer. Fix `a186551`, merged at `3323fa7`, narrows that one predicate. The new
+complete-Chat regression failed before the fix and passed after it (worker: 57
+targeted tests, typecheck/lint; merger: 2 actual-Chat tests, typecheck/diff checks).
+The exact no-provider-call browser replay now passes: one learner explanation,
+all three immutable working snapshots and ordered prose visible after reopen.
+Saved content had remained intact throughout. Evidence:
+`/tmp/opencode/notebook-integration/check-21-22.json`, `check-22-reopen.mjs` and
+`22-reopen-diagnostic.json`. The live scenario was not repeated to fix rendering.
 
 Total authorized live allowance consumed so far: seven editor calls, one Tutor
 call, zero speech minutes. No physical-device acceptance is claimed.
+
+## Clicked Apply mechanism — owner follow-up
+
+The owner selected continuous-stream finalized-prefix tracking: record the click
+on the capture timeline, wait until finalized audio coverage passes that cutoff,
+then apply complete words whose start precedes it. Post-click words remain in the
+next instruction, even in the same returned result. This does not require later
+speech or recording to finish. Verify clock mapping, whole crossing words,
+delayed/missing coverage, repeated cuts, silence and formatting. Provider timestamps
+are estimates; a timer is never proof that missing transcription is complete.
+Keep ordering and notebook behavior in the notebook module behind the existing
+speech hook. A different completion mechanism requires evidence and owner review.
 
 ## Remaining graph
 
