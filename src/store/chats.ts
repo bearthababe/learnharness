@@ -80,6 +80,18 @@ function saveNotebook(id: string, expectedRevision: number, notebook: NotebookRe
 	return next;
 }
 
+function commitNotebookSubmission(id: string, expectedRevision: number, notebook: NotebookRecord, appends: LhMessage[]): void {
+	const record = getChat(id);
+	if (!record) throw new Error(`Chat not found: ${id}`);
+	if (record.notebook?.revision !== expectedRevision) throw new Error("Notebook revision conflict");
+	record.notebook = structuredClone({ ...notebook, revision: expectedRevision + 1 });
+	const ids = new Set(record.messages.map((message) => message.id));
+	record.messages.push(...appends.filter((message) => !ids.has(message.id)));
+	if (appends.length) record.updatedAt = new Date().toISOString();
+	writeChat(record);
+	emit("notebook-changed", { chatId: id });
+}
+
 function getChat(id: string): ChatRecord | null {
 	let parsed: unknown;
 	try {
@@ -228,6 +240,7 @@ function saveTree(id: string, tree: PlanTree): void {
 }
 
 export const chatStore: ChatStore = {
+	commitNotebookSubmission,
 	saveNotebook,
 	createChat,
 	getChat,

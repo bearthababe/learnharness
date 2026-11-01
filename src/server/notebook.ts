@@ -9,11 +9,15 @@ import { stores, effectiveSettings } from "./stores.ts";
 import { initAuthEnv } from "./keys.ts";
 import { refreshConnectionCatalog } from "./model-catalog.ts";
 import { callCost } from "./pricing.ts";
+import { ownedTutorDraftSchema, tutorDraftOwnerSchema } from "../core/notebook-content.ts";
+import { changeNotebookDraft, NotebookDraftConflict } from "./notebook-drafts.ts";
 
 const id = z.string().min(1);
 const commandSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("visibility"), visible: z.boolean() }).strict(),
 	z.object({ type: z.literal("draft"), expectedRevision: z.number().int().nonnegative(), text: z.string() }).strict(),
+	z.object({ type: z.literal("tutor-draft"), expectedRevision: z.number().int().nonnegative(), draft: ownedTutorDraftSchema }).strict(),
+	z.object({ type: z.literal("snapshot"), id, owner: tutorDraftOwnerSchema, draftId: id, expectedRevision: z.number().int().nonnegative(), continuationId: id, contextId: id.optional(), workingRevision: z.number().int().nonnegative().optional() }).strict(),
 	z.object({ type: z.literal("apply"), id, contextId: id, draftRevision: z.number().int().nonnegative(), instruction: z.string().refine((s) => s.trim().length > 0), cursorLineId: z.string().nullable().optional() }).strict(),
 	z.object({ type: z.literal("undo"), id, contextId: id }).strict(),
 ]);
@@ -58,7 +62,7 @@ export function notebookView(record?: NotebookRecord): NotebookView {
 		draft: structuredClone(record?.notebookDraft ?? { id: "", revision: 0, text: "" }),
 		pending: pending ? { id: pending.id, kind: pending.kind, status: pending.status } : null,
 		problem: problem ? { operationId: problem.id, instruction: problem.instruction, status: problem.status as "failed" | "clarification" | "unknown", message: problem.error ?? "Edit needs attention" } : null,
-		usage };
+		usage, tutorDrafts: structuredClone(record?.tutorDrafts ?? []), submissions: record?.submissions?.map(({ submission, status, explanation }) => ({ submission, status, explanation })) ?? [] };
 }
 
 export function createNotebookService({ chatStore, engine }: {
@@ -69,6 +73,10 @@ export function createNotebookService({ chatStore, engine }: {
 	function read(chatId: string) {
 		const chat = chatStore.getChat(chatId);
 		if (!chat) throw new NotebookRefusal("Session not found", 404);
+		if (chat.notebook?.submissions?.some((receipt) => receipt.status === "pending")) {
+			const ids = new Set(chat.messages.map((message) => message.id));
+			for (const receipt of chat.notebook.submissions) if (ids.has(receipt.message.id)) receipt.status = "delivered";
+		}
 		return chat.notebook;
 	}
 	function mutate(chatId: string, change: (record: NotebookRecord) => void) {
@@ -200,7 +208,7 @@ export function createNotebookService({ chatStore, engine }: {
 	function dispatch(chatId: string, command: NotebookCommand) {
 		resume(chatId);
 		const previous = read(chatId);
-		if ("id" in command) {
+		if (command.type === "apply" || command.type === "undo") {
 			const duplicate = previous?.operations.find((op) => op.id === command.id);
 			if (duplicate) {
 				if (duplicate.contextId !== command.contextId || duplicate.kind !== (command.type === "apply" ? "edit" : "undo") ||
@@ -209,6 +217,7 @@ export function createNotebookService({ chatStore, engine }: {
 			}
 		}
 		const saved = mutate(chatId, (record) => {
+			if (command.type === "tutor-draft" || command.type === "snapshot") { changeNotebookDraft(record, command); return; }
 			if (command.type === "visibility") { record.visible = command.visible; return; }
 			if (command.type === "draft") {
 				if (record.notebookDraft.text === command.text && record.notebookDraft.revision === command.expectedRevision + 1) return;
@@ -252,7 +261,7 @@ export function createNotebookService({ chatStore, engine }: {
 				if (!parsed.success) return Response.json({ error: "Invalid notebook command" }, { status: 400 });
 				return Response.json(dispatch(chatId, parsed.data), { status: parsed.data.type === "apply" || parsed.data.type === "undo" ? 202 : 200 });
 			} catch (error) {
-				return Response.json({ error: error instanceof Error ? error.message : "Notebook unavailable" }, { status: error instanceof NotebookRefusal ? error.status : 503 });
+				return Response.json({ error: error instanceof Error ? error.message : "Notebook unavailable" }, { status: error instanceof NotebookRefusal ? error.status : error instanceof NotebookDraftConflict ? 409 : 503 });
 			}
 		},
 	};

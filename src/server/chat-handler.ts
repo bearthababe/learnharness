@@ -80,6 +80,9 @@ import type {CallUsage} from "../core/contracts.ts";
  * for write-ahead persistence, turn liveness, and the turn services.
  */
 
+import { commitNotebookInput, notebookSubmissionAccepted, validateNotebookSubmission } from "./notebook-submissions.ts";
+import { NotebookDraftConflict } from "./notebook-drafts.ts";
+
 function settlementErrorText(error: unknown): string {
 	return error instanceof TurnPersistenceError ? error.message : "An error occurred.";
 }
@@ -186,6 +189,15 @@ export async function handleChatInput(
 	if (!record) {
 		return Response.json({ error: "Unknown chat" }, { status: 404 });
 	}
+	if (input.type === "text" && input.submission) {
+		try {
+			if (notebookSubmissionAccepted(record, input)) return settledTurnResponse();
+			validateNotebookSubmission(record, input);
+		} catch (error) {
+			if (error instanceof NotebookDraftConflict) return Response.json({ error: error.message }, { status: 409 });
+			throw error;
+		}
+	}
 
 	// Refuse an ineligible Retry before catalog refresh, compaction, or any
 	// turn/write effects. Revalidate after the awaited gates below too.
@@ -276,6 +288,15 @@ export async function handleChatInput(
 	const compactedRecord = stores.chatStore.getChat(chatId);
 	if (!compactedRecord) return Response.json({ error: "Unknown chat" }, { status: 404 });
 	record = compactedRecord;
+	if (input.type === "text" && input.submission) {
+		try {
+			if (notebookSubmissionAccepted(record, input)) return settledTurnResponse();
+			validateNotebookSubmission(record, input);
+		} catch (error) {
+			if (error instanceof NotebookDraftConflict) return Response.json({ error: error.message }, { status: 409 });
+			throw error;
+		}
+	}
 	// Recompute Retry eligibility on current truth, still before beginTurn.
 	// A compaction marker or another writer may have landed during awaits.
 	// These omissions affect ONLY the agent context, never the saved record.
@@ -353,7 +374,10 @@ export async function handleChatInput(
 	const stagedAutomatic = isSubscriptionProvider(conversation.provider) && input.type === "steers";
 	let persistBaseCount = stagedAutomatic ? record.messages.length : agentMessages.length;
 	try {
-		if (!stagedAutomatic) stores.chatStore.saveMessages(chatId, merged);
+		if (!stagedAutomatic) {
+			if (input.type === "text" && input.submission) commitNotebookInput(stores.chatStore, chatId, input, appends);
+			else stores.chatStore.saveMessages(chatId, merged);
+		}
 	} catch (err) {
 		console.error(`[chat ${chatId}] write-ahead persist failed:`, err);
 		endTurn(chatId);

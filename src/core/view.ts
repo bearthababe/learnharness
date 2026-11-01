@@ -179,6 +179,10 @@ export function projectView(messages: readonly LhMessage[], live?: LiveTurnState
 		}
 
 		if (role === "user") {
+			if (m.explanation) {
+				out.push({ id: m.id, role: "user", parts: [{ type: "data-learner-explanation", data: m.explanation }] });
+				continue;
+			}
 			const content = m.content as string | Array<{ type: string; text?: string }>;
 			const texts =
 				typeof content === "string"
