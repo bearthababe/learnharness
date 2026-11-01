@@ -24,12 +24,24 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	let requests = 0;
 	let uncertain: Extract<NotebookCommand, { type: "apply" | "undo" }> | null = null;
 	let uncertainRevision = 0;
+	const recovered = new Set<string>();
+	const recoveryPrefixes: string[] = [];
+	const prepend = (prefixes: string[], text: string) => [...prefixes, text].filter(Boolean).join("\n\n");
 	const publish = (patch: Partial<NotebookSessionSnapshot>) => {
 		state = { ...state, ...patch };
 		for (const listener of listeners) listener();
 	};
 	function adopt(view: NotebookView) {
 		if (state.view && view.revision < state.view.revision) return;
+		if (view.problem && !recovered.has(view.problem.operationId)) {
+			recovered.add(view.problem.operationId);
+			if (view.problem.instruction) {
+				recoveryPrefixes.push(view.problem.instruction);
+				// Accepted words were restored server-side while these local words
+				// were still being saved. Rebase both the field and queued saves.
+				if (savedLocalRevision !== localRevision) publish({ draftText: prepend([view.problem.instruction], state.draftText) });
+			}
+		}
 		publish({ view, ...(savedLocalRevision === localRevision ? { draftText: view.draft.text } : {}) });
 	}
 	async function post(command: NotebookCommand): Promise<NotebookCommandReceipt> {
@@ -37,7 +49,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		const body = await response.json();
 		if (!response.ok) {
 			// A definite refusal is safe to correct; a lost ACK retains identity.
-			if (response.status < 500) uncertain = null;
+			if (response.status < 500 && "id" in command && command.id === uncertain?.id) uncertain = null;
 			throw new Error(body.error ?? "Notebook save failed");
 		}
 		return body;
@@ -52,6 +64,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	}
 	function dispatch(command: NotebookSessionCommand): Promise<NotebookCommandReceipt> {
 		const instruction = state.draftText;
+		const recoveryEpoch = recoveryPrefixes.length;
 		if (command.type === "draft") { localRevision++; publish({ draftText: command.text }); }
 		const revision = localRevision;
 		requests++; publish({ saving: true });
@@ -59,7 +72,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 			if (!state.view) await refresh();
 			if (!state.view) throw new Error("Notebook is not loaded");
 			let wire: NotebookCommand;
-			if (command.type === "draft") wire = { ...command, expectedRevision: state.view.draft.revision };
+			if (command.type === "draft") wire = { ...command, text: prepend(recoveryPrefixes.slice(recoveryEpoch), command.text), expectedRevision: state.view.draft.revision };
 			else if (command.type === "visibility") wire = command;
 			else {
 				if (!state.view.contextId) throw new Error("Open Notebook before editing");

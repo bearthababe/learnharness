@@ -57,7 +57,7 @@ export function notebookView(record?: NotebookRecord): NotebookView {
 		lines: structuredClone(record?.current.state.lines ?? []), canUndo: !!record?.current.state.undo.length,
 		draft: structuredClone(record?.notebookDraft ?? { id: "", revision: 0, text: "" }),
 		pending: pending ? { id: pending.id, kind: pending.kind, status: pending.status } : null,
-		problem: problem ? { status: problem.status as "failed" | "clarification" | "unknown", message: problem.error ?? "Edit needs attention" } : null,
+		problem: problem ? { operationId: problem.id, instruction: problem.instruction, status: problem.status as "failed" | "clarification" | "unknown", message: problem.error ?? "Edit needs attention" } : null,
 		usage };
 }
 

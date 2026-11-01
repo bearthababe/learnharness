@@ -91,7 +91,7 @@ export interface NotebookView {
 	canUndo: boolean;
 	draft: { id: string; revision: number; text: string };
 	pending: { id: string; kind: NotebookOperation["kind"]; status: NotebookOperation["status"] } | null;
-	problem: { status: "failed" | "clarification" | "unknown"; message: string } | null;
+	problem: { operationId: string; instruction?: string; status: "failed" | "clarification" | "unknown"; message: string } | null;
 	usage: NotebookUsage;
 }
 export interface NotebookCommandReceipt { id?: string; view: NotebookView }

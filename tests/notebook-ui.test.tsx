@@ -159,3 +159,26 @@ test("reconciling an earlier lost acknowledgment does not swallow an explicitly 
 	assert.deepEqual(session.getSnapshot().view?.lines, [{ id: "L1", latex: "x=2" }]);
 	assert.equal(session.getSnapshot().draftText, "");
 });
+
+test("clarification recovery stays ahead of typing whose autosaves were already queued", async () => {
+	const chat = chatStore.createChat("Recovery while typing");
+	const faux = createFauxCore({});
+	let finish!: () => void, releaseSave!: () => void;
+	const held = new Promise<void>((resolve) => { finish = resolve; });
+	const saveHeld = new Promise<void>((resolve) => { releaseSave = resolve; });
+	faux.setResponses([async () => { await held; return fauxAssistantMessage('{"action":"question","question":"Which denominator?"}'); }]);
+	const service = createNotebookService({ chatStore, engine: async () => ({ engine: { model: faux.getModel(), streamFn: faux.streamSimple }, model: "faux:editor" }) });
+	const session = createNotebookSession(chat.id, async (url, init) => {
+		if (init?.body && JSON.parse(String(init.body)).text === "Later") await saveHeld;
+		return service.handle(new Request(`http://test${url}`, init), chat.id);
+	});
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	await session.dispatch({ type: "draft", text: "Double it" }); await session.dispatch({ type: "apply" });
+	const earlierSave = session.dispatch({ type: "draft", text: "Later" }).catch(() => {});
+	const laterSave = session.dispatch({ type: "draft", text: "Later words" });
+	await Promise.resolve(); finish(); await service.settled(chat.id); await session.refresh();
+	releaseSave(); await earlierSave; await laterSave; await session.refresh();
+	assert.equal(session.getSnapshot().draftText, "Double it\n\nLater words");
+	assert.equal(service.view(chat.id).draft.text, "Double it\n\nLater words");
+	assert.equal(session.getSnapshot().view?.problem?.message, "Which denominator?");
+});
