@@ -337,8 +337,9 @@ export function steerLiveChat(chatId: string, message: LhMessage, acceptNotebook
 
 /** TURN SETTLEMENT RECONCILIATION for user steers: delivered ids drop
  *  (the record holds them); undelivered stay parked for the next run.
- *  Memory-only by design (same tradeoff as job markers): a server
- *  restart drops parked steers — and the whole turn dies with it anyway. */
+ *  Plain text retains its existing memory-only lifetime. Notebook-bearing
+ *  steers also have durable receipts/outbox ownership and restore at the next
+ *  foreground registration, filtered against the canonical saved ids. */
 export function reconcileUserSteers(chatId: string, persisted: readonly LhMessage[]): void {
 	const q = state().userSteers.get(chatId);
 	if (!q || q.length === 0) return;

@@ -153,6 +153,10 @@ test("return appends immutable hydraulic working to a durable explanation, witho
 	const tamperedResponse = await service.handle(new Request("http://test/notebook", { method: "POST", body: JSON.stringify({ type: "tutor-draft", expectedRevision: continued.revision, draft: tampered }) }), chat.id);
 	assert.equal(tamperedResponse.status, 409);
 	assert.equal(service.view(chat.id).tutorDrafts![0]!.parts.length, 3);
+	service.dispatch(chat.id, { type: "start-fresh", id: "fresh", contextId: service.view(chat.id).contextId! });
+	await service.settled(chat.id);
+	assert.deepEqual(service.view(chat.id).tutorDrafts, reopened.tutorDrafts, "Start fresh retains the actual owned explanation and immutable snapshots");
+	assert.equal(service.view(chat.id).history[0]!.lines[0]!.latex, "p=F/(2A)");
 });
 
 test("live notebook steer is accepted once, restored from its durable outbox, and reconciled against canonical native identity", async () => {

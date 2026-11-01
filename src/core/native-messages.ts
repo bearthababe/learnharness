@@ -9,9 +9,10 @@
  * WHY pi MESSAGES LACK OUR `id`: pi's session format gives every ENTRY an
  * id, never the message. This app needs a per-message id for client
  * identity (React keys, append-only adoption, the continuation seam), so
- * every record message carries ONE extra field — `id` — alongside the
- * native shape. `toLlmMessages` strips it at the wire: the provider never
- * sees it (verified single site, below).
+ * every record message carries `id` alongside the native shape. Notebook
+ * user messages additionally carry app-owned `explanation` for exact display;
+ * their native content is its canonical model text. `toLlmMessages` strips
+ * both app fields at the wire.
  *
  * UI-ONLY CONTENT (owner ruling, fork 1 + the plan's custom-message
  * taxonomy): the probe→teach handoff, sub-agent steers,
@@ -620,7 +621,7 @@ export function toLlmMessages(messages: readonly AgentMessage[]): Message[] {
 			});
 			continue;
 		}
-		// Strip the record id: the wire carries the native shape only.
+		// Strip app-owned fields: the wire carries the native shape only.
 		const { id: _id, explanation: _explanation, ...native } = m as LhMessage;
 		out.push(native as Message);
 		// Repair unanswered calls from completed generations, not calls in

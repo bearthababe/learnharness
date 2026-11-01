@@ -20,6 +20,7 @@ const commandSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("snapshot"), id, owner: tutorDraftOwnerSchema, draftId: id, expectedRevision: z.number().int().nonnegative(), continuationId: id, contextId: id.optional(), workingRevision: z.number().int().nonnegative().optional() }).strict(),
 	z.object({ type: z.literal("apply"), id, contextId: id, draftRevision: z.number().int().nonnegative(), instruction: z.string().refine((s) => s.trim().length > 0), cursorLineId: z.string().nullable().optional() }).strict(),
 	z.object({ type: z.literal("undo"), id, contextId: id }).strict(),
+	z.object({ type: z.literal("start-fresh"), id, contextId: id }).strict(),
 ]);
 const executable = (op: NotebookOperation) => ["queued", "running", "result-ready"].includes(op.status);
 const paused = (op: NotebookOperation) => ["failed", "clarification", "unknown"].includes(op.status);
@@ -59,6 +60,8 @@ export function notebookView(record?: NotebookRecord): NotebookView {
 	return { revision: record?.revision ?? 0, visible: record?.visible ?? false,
 		contextId: record?.current.id ?? null, workingRevision: record?.current.revision ?? 0,
 		lines: structuredClone(record?.current.state.lines ?? []), canUndo: !!record?.current.state.undo.length,
+		history: structuredClone(record?.history ?? []),
+		startFreshPending: !!record?.operations.some((op) => op.kind === "start-fresh" && executable(op)),
 		draft: structuredClone(record?.notebookDraft ?? { id: "", revision: 0, text: "" }),
 		pending: pending ? { id: pending.id, kind: pending.kind, status: pending.status } : null,
 		problem: problem ? { operationId: problem.id, instruction: problem.instruction, status: problem.status as "failed" | "clarification" | "unknown", message: problem.error ?? "Edit needs attention" } : null,
@@ -115,6 +118,21 @@ export function createNotebookService({ chatStore, engine }: {
 			if (!record || !op || paused(op)) return;
 			if (op.status === "result-ready") { commit(chatId, op.id); continue; }
 			if (op.status !== "queued") return;
+			if (op.kind === "start-fresh") {
+				mutate(chatId, (record) => {
+					const current = record.operations.find((item) => item.id === op.id)!;
+					if (record.current.id !== op.contextId) throw new Error("Notebook fresh action has stale working context");
+					if (record.current.state.lines.length) {
+						(record.history ??= []).push({ id: crypto.randomUUID(), sourceContextId: record.current.id,
+							sourceRevision: record.current.revision, createdAt: new Date().toISOString(),
+							lines: structuredClone(record.current.state.lines) });
+					}
+					record.current = { id: crypto.randomUUID(), revision: 0, state: { lines: [], undo: [] }, exchanges: [] };
+					current.status = "applied";
+					current.appliedRevision = 0;
+				});
+				continue;
+			}
 			if (op.kind === "undo") {
 				mutate(chatId, (record) => {
 					const current = record.operations.find((item) => item.id === op.id)!;
@@ -142,6 +160,7 @@ export function createNotebookService({ chatStore, engine }: {
 				current.execution = { id: crypto.randomUUID(), model: resolved.model, attempts: [], input: {
 					state: structuredClone(record.current.state), instruction: current.instruction!, cursorLineId: current.cursorLineId,
 					history: structuredClone(record.current.exchanges),
+					notebookHistory: (record.history ?? []).map((entry, index) => ({ ...structuredClone(entry), label: `Entry ${index + 1}` })),
 				} };
 			});
 			const input = prepared.operations.find((item) => item.id === op.id)!.execution!.input;
@@ -208,10 +227,10 @@ export function createNotebookService({ chatStore, engine }: {
 	function dispatch(chatId: string, command: NotebookCommand) {
 		resume(chatId);
 		const previous = read(chatId);
-		if (command.type === "apply" || command.type === "undo") {
+		if (command.type === "apply" || command.type === "undo" || command.type === "start-fresh") {
 			const duplicate = previous?.operations.find((op) => op.id === command.id);
 			if (duplicate) {
-				if (duplicate.contextId !== command.contextId || duplicate.kind !== (command.type === "apply" ? "edit" : "undo") ||
+				if (duplicate.contextId !== command.contextId || duplicate.kind !== (command.type === "apply" ? "edit" : command.type) ||
 					(command.type === "apply" && (duplicate.instruction !== command.instruction || (duplicate.cursorLineId ?? null) !== (command.cursorLineId ?? null)))) throw new NotebookRefusal("Operation identity already used for different work", 409);
 				return { id: command.id, view: notebookView(previous) };
 			}
@@ -225,6 +244,8 @@ export function createNotebookService({ chatStore, engine }: {
 				record.notebookDraft.text = command.text; record.notebookDraft.revision++; return;
 			}
 			if (record.current.id !== command.contextId) throw new NotebookRefusal("Notebook working context changed", 409);
+			if (record.operations.some((op) => op.kind === "start-fresh" && executable(op)) &&
+				!(command.type === "apply" && record.operations.some(paused))) throw new NotebookRefusal("Start fresh is waiting; resolve earlier work first", 409);
 			let correctionIndex = -1;
 			if (command.type === "apply") {
 				if (record.operations.some((op) => op.kind === "edit" && executable(op))) throw new NotebookRefusal("An edit is pending", 409);
@@ -234,7 +255,7 @@ export function createNotebookService({ chatStore, engine }: {
 				if (correctionIndex >= 0) record.operations[correctionIndex]!.status = "recovered";
 				record.notebookDraft.text = ""; record.notebookDraft.revision++;
 			}
-			const op: NotebookOperation = { id: command.id, contextId: command.contextId, sequence: record.nextSequence++, kind: command.type === "apply" ? "edit" : "undo",
+			const op: NotebookOperation = { id: command.id, contextId: command.contextId, sequence: record.nextSequence++, kind: command.type === "apply" ? "edit" : command.type,
 				acceptedAt: new Date().toISOString(), status: "queued",
 				...(command.type === "apply" ? { instruction: command.instruction, cursorLineId: command.cursorLineId } : {}) };
 			// A corrected instruction resolves the paused head before waiting controls.
@@ -259,7 +280,7 @@ export function createNotebookService({ chatStore, engine }: {
 				if (request.method !== "POST") return Response.json({ error: "Method not allowed" }, { status: 405 });
 				const parsed = commandSchema.safeParse(await request.json().catch(() => null));
 				if (!parsed.success) return Response.json({ error: "Invalid notebook command" }, { status: 400 });
-				return Response.json(dispatch(chatId, parsed.data), { status: parsed.data.type === "apply" || parsed.data.type === "undo" ? 202 : 200 });
+				return Response.json(dispatch(chatId, parsed.data), { status: "id" in parsed.data ? 202 : 200 });
 			} catch (error) {
 				return Response.json({ error: error instanceof Error ? error.message : "Notebook unavailable" }, { status: error instanceof NotebookRefusal ? error.status : error instanceof NotebookDraftConflict ? 409 : 503 });
 			}
