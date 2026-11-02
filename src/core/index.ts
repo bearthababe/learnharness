@@ -42,6 +42,8 @@ export * from "./math-delims.ts";
 // pure logic, browser-safe.
 export * from "./native-messages.ts";
 export * from "./notebook-content.ts";
+export * from "./notebook-speech.ts";
+export type { NotebookSpeechRun, NotebookSpeechFragment, NotebookSpeechTarget } from "./contracts/notebook.ts";
 export type { LearnerExplanation, LearnerExplanationPart, OwnedTutorDraft, TutorDraftOwner, WorkingSnapshot, NotebookSubmission, NotebookSubmissionReceipt } from "./contracts/notebook.ts";
 export * from "./compaction.ts";
 export * from "./input-events.ts";
@@ -63,6 +65,7 @@ export * from "./fuzzy.ts";
 // view. Browser-safe — the Wave-4 panel imports these directly.
 export * from "./settings.ts";
 export * from "./dictation.ts";
+export * from "./dictation-capture.ts";
 // graph-deletion.ts (wave 6): the whole module is PURE but storage-port
 // driven — the deletion RUNS server-side only. The shell needs exactly one
 // two type-only things from it: the ChatDeleteMode union (the delete

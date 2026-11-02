@@ -7,6 +7,7 @@ import { ActivityProvider } from "@/components/activity-dock";
 import { ServerEventsProvider } from "@/components/server-events";
 import { AppearanceProvider } from "@/components/settings/appearance";
 import UpdateBanner from "@/components/update-banner";
+import { NotebookPreviewTools } from "@/components/notebook-preview-tools";
 
 // Chrome = JetBrains Mono, teaching prose = Source Sans 3, titles = CMU
 // Serif (the bundled lh-cmu @font-face in globals.css — no CDN).
@@ -16,6 +17,11 @@ const prose = Source_Sans_3({ subsets: ["latin"], variable: "--font-sans3" });
 export const metadata: Metadata = {
 	title: "Learning Harness",
 	description: "A teacher agent with a memory — sessions, quizzes, and a knowledge graph of what you know.",
+	...(process.env.LH_NOTEBOOK_PREVIEW === "1" ? {
+		manifest: "/notebook-preview/manifest.webmanifest",
+		appleWebApp: { capable: true, title: "Notebook preview", statusBarStyle: "default" as const },
+		icons: { apple: "/notebook-preview/apple-touch-icon.png" },
+	} : {}),
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -35,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 			</ServerEventsProvider>
 			{/* Auto-update banner (Wave C): fixed card, Electron-only pushes. */}
 			<UpdateBanner />
+			{process.env.LH_NOTEBOOK_PREVIEW === "1" && <NotebookPreviewTools />}
 		</body>
 		</html>
 	);

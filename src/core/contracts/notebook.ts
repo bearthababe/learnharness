@@ -79,6 +79,27 @@ export interface NotebookRecord {
 	tutorDrafts?: OwnedTutorDraft[];
 	snapshots?: WorkingSnapshot[];
 	submissions?: NotebookSubmissionReceipt[];
+	speechRuns?: NotebookSpeechRun[];
+}
+export type NotebookSpeechTarget =
+	| { kind: "notebook"; draftId: string }
+	| { kind: "tutor"; owner: TutorDraftOwner; draftId: string; partId: string };
+export interface NotebookSpeechFragment {
+	id: string;
+	start: number | null;
+	end: number | null;
+	text: string;
+	target: NotebookSpeechTarget | null;
+}
+export interface NotebookSpeechRun {
+	id: string;
+	revision: number;
+	status: "recording" | "revealed" | "interrupted" | "cancelled";
+	incomplete: boolean;
+	fragments: NotebookSpeechFragment[];
+	/** Server-computed placement failures; never silently retarget an input. */
+	unplaced?: string[];
+	discarded?: string[];
 }
 export interface NotebookDraftReference {
 	draftId: string;
@@ -120,6 +141,8 @@ export interface OwnedTutorDraft {
 	form?: Omit<QuestionFormDraft, "selection"> & { selection: { selected: number[]; otherSelected: boolean; dontKnow: boolean } };
 }
 export type NotebookCommand =
+	| { type: "speech-run"; expectedRevision: number; run: NotebookSpeechRun }
+	| { type: "discard-speech"; runId: string; fragmentId: string }
 	| { type: "discard-tutor-draft"; owner: TutorDraftOwner; draftId: string; expectedRevision: number }
 	| { type: "visibility"; visible: boolean }
 	| { type: "draft"; expectedRevision: number; text: string }
@@ -151,5 +174,6 @@ export interface NotebookView {
 	usage: NotebookUsage;
 	tutorDrafts?: OwnedTutorDraft[];
 	submissions?: Array<Pick<NotebookSubmissionReceipt, "submission" | "status" | "explanation">>;
+	speechRuns?: NotebookSpeechRun[];
 }
 export interface NotebookCommandReceipt { id?: string; view: NotebookView }

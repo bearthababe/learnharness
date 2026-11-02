@@ -1,11 +1,12 @@
 import type { NotebookCommand, NotebookCommandReceipt, NotebookView } from "@/src/core";
 import { createNotebookTutorDrafts, type DraftRecoveryStorage } from "./notebook-tutor-drafts";
+import { createNotebookSpeech } from "./notebook-speech";
 
 export type NotebookSessionCommand =
 	| { type: "visibility"; visible: boolean }
 	| { type: "draft"; text: string }
 	| { type: "apply"; cursorLineId?: string | null }
-	| Extract<NotebookCommand, { type: "tutor-draft" | "snapshot" | "discard-tutor-draft" }>
+	| Extract<NotebookCommand, { type: "tutor-draft" | "snapshot" | "discard-tutor-draft" | "speech-run" | "discard-speech" }>
 	| { type: "undo" | "start-fresh" };
 export interface NotebookSessionSnapshot {
 	view: NotebookView | null;
@@ -36,6 +37,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	function adopt(view: NotebookView) {
 		if (state.view && view.revision < state.view.revision) return;
 		tutor.adopt(view);
+		speech.adopt(view);
 		if (view.problem && !recovered.has(view.problem.operationId)) {
 			recovered.add(view.problem.operationId);
 			if (view.problem.instruction) {
@@ -76,7 +78,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 			if (!state.view) throw new Error("Notebook is not loaded");
 			let wire: NotebookCommand;
 			if (command.type === "draft") wire = { ...command, text: prepend(recoveryPrefixes.slice(recoveryEpoch), command.text), expectedRevision: state.view.draft.revision };
-			else if (command.type === "visibility" || command.type === "tutor-draft" || command.type === "snapshot" || command.type === "discard-tutor-draft") wire = command;
+			else if (command.type === "visibility" || command.type === "tutor-draft" || command.type === "snapshot" || command.type === "discard-tutor-draft" || command.type === "speech-run" || command.type === "discard-speech") wire = command;
 			else {
 				if (!state.view.contextId) throw new Error("Open Notebook before editing");
 				if (uncertain) {
@@ -115,8 +117,9 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	let storage = recoveryStorage;
 	try { storage ??= typeof window === "undefined" ? undefined : window.localStorage; } catch { /* server saves still work */ }
 	const tutor = createNotebookTutorDrafts(chatId, dispatch, refresh, storage);
+	const speech = createNotebookSpeech(chatId, { tutor, dispatch, getSnapshot: () => state }, storage);
 	return {
-		tutor,
+		tutor, speech,
 		getSnapshot: () => state,
 		subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
 		dispatch, refresh,

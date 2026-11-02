@@ -15,10 +15,10 @@ export function LearnerExplanation({ parts }: { parts: Explanation }) {
 
 export function NotebookDraftReview({ draft, onTextChange }: { draft?: OwnedTutorDraft; onTextChange: (id: string, text: string) => void }) {
 	if (!draft || draft.parts.length < 2) return null;
-	return <section data-input-owner="tutor" aria-label="Earlier in this answer" className="max-h-56 overflow-auto overscroll-contain border-b border-border p-3">
+	return <section data-input-owner="tutor" data-notebook-question={draft.owner.kind === "question" ? draft.owner.toolCallId : undefined} data-notebook-channel={draft.owner.kind === "question" ? draft.owner.channel : undefined} data-problem={draft.owner.kind === "practice" ? draft.owner.problemCallId : undefined} aria-label="Earlier in this answer" className="max-h-56 overflow-auto overscroll-contain border-b border-border p-3">
 		<h3 className="mb-2 text-xs font-medium text-muted-foreground">Earlier in this answer</h3>
 		<div className="space-y-2">{draft.parts.slice(0, -1).map((part) => part.kind === "text"
-			? <textarea key={part.id} aria-label="Earlier explanation" value={part.text} onChange={(event) => onTextChange(part.id, event.target.value)} className="field-sizing-content lh-input w-full resize-none bg-transparent text-sm" />
+			? <textarea key={part.id} data-notebook-part={part.id} aria-label="Earlier explanation" value={part.text} onChange={(event) => onTextChange(part.id, event.target.value)} className="field-sizing-content lh-input w-full resize-none bg-transparent text-sm" />
 			: <LearnerExplanation key={part.id} parts={[part]} />)}</div>
 	</section>;
 }

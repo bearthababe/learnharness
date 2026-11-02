@@ -90,7 +90,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 		// Capture this problem and adapter before finalization can change activity.
 		try {
 			await finishDictation();
-			if (owned.enabled) {
+			if (notebook?.getSnapshot().view?.contextId) {
 				const prepared = await notebook!.tutor.prepareSubmission(owner);
 				await onSubmit(prepared.text, problemCallId, prepared);
 				await notebook!.tutor.reconcile();
@@ -116,6 +116,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 			<button
 				type="button"
 				data-testid="practice-dock-bar"
+				data-input-owner="tutor" data-problem={problemCallId}
 				onClick={onExpand}
 				className="flex w-full cursor-pointer items-center gap-2 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:text-foreground"
 			>
@@ -128,7 +129,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 
 	/* ── the expanded form ── */
 	return (
-		<div data-testid="practice-dock" data-problem={problemCallId} data-tutor-owner={JSON.stringify(owner)}>
+		<div data-testid="practice-dock" data-input-owner="tutor" data-problem={problemCallId} data-tutor-owner={JSON.stringify(owner)}>
 			{/* The agent's half: the 'Problem' eyebrow (mirroring the quiz
 			    cards' label row — owner round, 2026-10-05) + the statement,
 			    markdown + LaTeX rendered, capped by the measured column

@@ -11,9 +11,13 @@ import { refreshConnectionCatalog } from "./model-catalog.ts";
 import { callCost } from "./pricing.ts";
 import { ownedTutorDraftSchema, tutorDraftOwnerSchema } from "../core/notebook-content.ts";
 import { changeNotebookDraft, NotebookDraftConflict } from "./notebook-drafts.ts";
+import { changeNotebookSpeech } from "./notebook-speech.ts";
+import { notebookSpeechRunSchema } from "../core/notebook-speech.ts";
 
 const id = z.string().min(1);
 const commandSchema = z.discriminatedUnion("type", [
+	z.object({ type: z.literal("speech-run"), expectedRevision: z.number().int().nonnegative(), run: notebookSpeechRunSchema }).strict(),
+	z.object({ type: z.literal("discard-speech"), runId: id, fragmentId: id }).strict(),
 	z.object({ type: z.literal("visibility"), visible: z.boolean() }).strict(),
 	z.object({ type: z.literal("draft"), expectedRevision: z.number().int().nonnegative(), text: z.string() }).strict(),
 	z.object({ type: z.literal("tutor-draft"), expectedRevision: z.number().int().nonnegative(), draft: ownedTutorDraftSchema }).strict(),
@@ -66,7 +70,7 @@ export function notebookView(record?: NotebookRecord): NotebookView {
 		draft: structuredClone(record?.notebookDraft ?? { id: "", revision: 0, text: "" }),
 		pending: pending ? { id: pending.id, kind: pending.kind, status: pending.status } : null,
 		problem: problem ? { operationId: problem.id, instruction: problem.instruction, status: problem.status as "failed" | "clarification" | "unknown", message: problem.error ?? "Edit needs attention" } : null,
-		usage, tutorDrafts: structuredClone(record?.tutorDrafts ?? []), submissions: record?.submissions?.map(({ submission, status, explanation }) => ({ submission, status, explanation })) ?? [] };
+		usage, speechRuns: structuredClone(record?.speechRuns ?? []), tutorDrafts: structuredClone(record?.tutorDrafts ?? []), submissions: record?.submissions?.map(({ submission, status, explanation }) => ({ submission, status, explanation })) ?? [] };
 }
 
 export function createNotebookService({ chatStore, engine }: {
@@ -237,6 +241,7 @@ export function createNotebookService({ chatStore, engine }: {
 			}
 		}
 		const saved = mutate(chatId, (record) => {
+			if (command.type === "speech-run" || command.type === "discard-speech") { changeNotebookSpeech(record, command); return; }
 			if (command.type === "tutor-draft" || command.type === "snapshot" || command.type === "discard-tutor-draft") { changeNotebookDraft(record, command); return; }
 			if (command.type === "visibility") { record.visible = command.visible; return; }
 			if (command.type === "draft") {

@@ -2,6 +2,22 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
+import { createDictationTimeline } from "../src/core/dictation-capture.ts";
+
+test("socket sample time maps through silence and reconnects without inventing time across capture gaps", () => {
+	const timeline = createDictationTimeline("first");
+	assert.equal(timeline.sent({ buffer: new Int16Array(16000), sampleRate: 16000, contextStart: 10 }), true);
+	assert.equal(timeline.sent({ buffer: new Int16Array(16000), sampleRate: 16000, contextStart: 12 }), false);
+	const result = timeline.final({ start: 0.5, duration: 1, channel: { alternatives: [{ transcript: "Crossing", words: [{ word: "Crossing", start: 0.9, end: 1.1 }] }] } });
+	assert.equal(result.start, null);
+	assert.deepEqual(result.words, []);
+	assert.equal(result.text, "Crossing");
+	const next = createDictationTimeline("next");
+	next.sent({ buffer: new Int16Array(16000), sampleRate: 16000, contextStart: 20 });
+	assert.equal(next.final({ start: 0, duration: 1 }).start, 20);
+	const unknown = () => next.final({ channel: { alternatives: [{ transcript: "Untimed speech" }] } });
+	assert.notEqual(unknown().id, unknown().id, "missing timestamps cannot collapse different received fragments");
+});
 
 test("capture preserves timestamped full and partial audio, including silence, before acknowledging Stop", () => {
 	const packets: Array<{ type: string; buffer?: Int16Array; contextStart?: number; sampleRate?: number }> = [];
