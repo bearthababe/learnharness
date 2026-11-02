@@ -6,9 +6,11 @@ import { useDictation, type Dictation } from "../components/dictation.tsx";
 import { notifySettingsSaved } from "../components/settings-signal.ts";
 import { useDictationLanguage } from "../components/dictation-preference.ts";
 import { isDictationActive, useDictationActive } from "../components/dictation-state.ts";
-import type { UserSettings } from "../src/core/index.ts";
+import type { DictationCaptureAdapter, DictationFinal, UserSettings } from "../src/core/index.ts";
 import { PracticeDock } from "../components/practice-dock.tsx";
 import { QuestionDock } from "../components/question-dock.tsx";
+import { NotebookPanel } from "../components/notebook-panel.tsx";
+import { useNotebookDestination } from "../components/notebook-destination.ts";
 
 function deferred<T>() {
 	let resolve!: (value: T) => void;
@@ -36,18 +38,33 @@ class Socket extends EventTarget {
 }
 
 class AudioGraph {
+	static time = 0;
+	get currentTime() { return AudioGraph.time; }
 	state = "running";
 	destination = {};
 	audioWorklet = { addModule: async () => {} };
 	createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
 }
-class Worklet { port = {}; connect() {} disconnect() {} }
+class Worklet {
+	static all: Worklet[] = [];
+	static autoFlush = true;
+	port = {
+		onmessage: null as ((event: { data: unknown }) => void) | null,
+		postMessage: (message: { type: string }) => {
+			if (message.type === "flush" && Worklet.autoFlush) queueMicrotask(() => this.emit({ type: "flushed" }));
+		},
+	};
+	constructor() { Worklet.all.push(this); }
+	emit(data: unknown) { this.port.onmessage?.({ data }); }
+	connect() {}
+	disconnect() {}
+}
 
 const globals = globalThis as Record<string, unknown>;
 let restore: (() => void) | undefined;
 let dispose: (() => Promise<void>) | undefined;
 
-async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Response>, controls?: () => React.ReactNode) {
+async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Response>, controls?: () => React.ReactNode, capture?: DictationCaptureAdapter) {
 	const dom = parseHTML("<html><body><div id='root'></div></body></html>");
 	const state = {
 		record: { version: 1, dictation: { language } } as UserSettings,
@@ -62,6 +79,7 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 		appends: [] as string[],
 	};
 	Socket.all = [];
+	Worklet.all = []; Worklet.autoFlush = true;
 	const previous = new Map<string, PropertyDescriptor | undefined>();
 	for (const [key, value] of Object.entries({
 		React, window: dom.window, document: dom.document, CustomEvent: dom.window.CustomEvent,
@@ -99,7 +117,7 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 	let latest!: Dictation;
 	let setting!: ReturnType<typeof useDictationLanguage>;
 	function Harness() {
-		latest = useDictation({ append: (text) => state.appends.push(text) });
+		latest = useDictation({ append: (text) => state.appends.push(text), capture });
 		setting = useDictationLanguage();
 		state.active = useDictationActive();
 		return controls?.() ?? null;
@@ -131,6 +149,157 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 }
 
 afterEach(async () => { await dispose?.(); restore?.(); dispose = undefined; restore = undefined; });
+
+test("mounted Notebook and practice inputs keep crossing words in the old input until Stop", async () => {
+	const fs = await import("node:fs");
+	const dir = fs.mkdtempSync("/tmp/opencode/notebook-speech-mounted-");
+	process.env.LH_DATA_DIR = dir; process.env.LH_AUTH_FILE = `${dir}/auth.json`;
+	const { chatStore } = await import("../src/store/chats.ts");
+	const { createNotebookService } = await import("../src/server/notebook.ts");
+	const { createNotebookSession } = await import("../components/notebook-session.ts");
+	const chat = chatStore.createChat("Mounted speech");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor calls"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	session.tutor.updateText({ kind: "practice", problemCallId: "old" }, "Prefilled."); await session.tutor.idle();
+	function Controls() {
+		const root = React.useRef<HTMLDivElement>(null);
+		useNotebookDestination(root, session, true);
+		return <div ref={root}><PracticeDock notebook={session} problemCallId="old" input={{ statement: "Pressure?" }} expanded onExpand={() => {}} onSubmit={() => { throw new Error("Switching cannot submit"); }} /><NotebookPanel session={session} /></div>;
+	}
+	const f = await fixture("en", undefined, () => <Controls />, session.speech);
+	try {
+		await f.mount(); AudioGraph.time = 10;
+		await act(async () => f.dictation.toggle());
+		const socket = Socket.all.at(-1)!;
+		await act(async () => { socket.open(); Worklet.all.at(-1)!.emit({ type: "audio", buffer: new Int16Array(64000), contextStart: 10, sampleRate: 16000 }); });
+		await act(async () => { AudioGraph.time = 12; document.querySelector('#notebook-instruction')!.dispatchEvent(new window.Event("pointerdown", { bubbles: true })); });
+		await act(async () => socket.dispatchEvent(Object.assign(new Event("message"), { data: JSON.stringify({ type: "Results", is_final: true, speech_final: true, start: 1, duration: 2, channel: { alternatives: [{ transcript: "Earlier crossing later.", words: [{ word: "Earlier", start: 1.5, end: 1.8 }, { word: "crossing", start: 1.9, end: 2.1 }, { word: "later.", start: 2.2, end: 2.5 }] }] } }) })));
+		await act(async () => session.speech.idle());
+		assert.equal(document.querySelector<HTMLTextAreaElement>('[data-testid="practice-dock"] textarea')!.value, "Prefilled.");
+		assert.equal(document.querySelector<HTMLTextAreaElement>('#notebook-instruction')!.value, "");
+		await act(async () => f.dictation.stop()); await act(async () => { socket.end(); await session.speech.idle(); });
+		assert.equal(document.querySelector<HTMLTextAreaElement>('[data-testid="practice-dock"] textarea')!.value, "Prefilled. Earlier crossing");
+		assert.equal(document.querySelector<HTMLTextAreaElement>('#notebook-instruction')!.value, "later.");
+		assert.equal(f.state.captures, 1);
+		assert.deepEqual(chatStore.getChat(chat.id)!.messages, []);
+	} finally { await f.unmount(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the optional capture adapter receives source-timed finals while normal text stays deferred", async () => {
+	const finals: DictationFinal[] = []; const endings: string[] = [];
+	const f = await fixture("en", undefined, undefined, { begin: async () => ({ final: result => finals.push(result), incomplete() {}, end: async reason => { endings.push(reason); } }) });
+	await f.mount();
+	AudioGraph.time = 10;
+	await act(async () => f.dictation.toggle());
+	const socket = Socket.all.at(-1)!; const worklet = Worklet.all.at(-1)!;
+	await act(async () => {
+		worklet.emit({ type: "audio", buffer: new Int16Array(16000), contextStart: 10, sampleRate: 16000 });
+		socket.open();
+		socket.dispatchEvent(Object.assign(new Event("message"), { data: JSON.stringify({ type: "Results", is_final: false, channel: { alternatives: [{ transcript: "Switch to notebook" }] } }) }));
+		assert.equal(finals.length, 0, "interim hypotheses never reach command routing");
+		socket.dispatchEvent(Object.assign(new Event("message"), { data: JSON.stringify({ type: "Results", is_final: true, start: 0, duration: 1, speech_final: true, channel: { alternatives: [{ transcript: "Earlier words.", words: [{ word: "earlier", punctuated_word: "Earlier", start: 0.2, end: 0.4 }, { word: "words", punctuated_word: "words.", start: 0.5, end: 0.8 }] }] } }) }));
+	});
+	assert.equal(finals.length, 1);
+	assert.deepEqual({ ...finals[0], id: "ignored" }, { id: "ignored", text: "Earlier words.", start: 10, end: 11, speechFinal: true, words: [{ text: "Earlier", start: 10.2, end: 10.4 }, { text: "words.", start: 10.5, end: 10.8 }] });
+	assert.deepEqual(f.state.appends, []);
+	await act(async () => f.dictation.stop()); await act(async () => socket.end());
+	assert.deepEqual(endings, ["stop"]);
+	assert.deepEqual(f.state.appends, [], "the session adapter owns revealing, not the current input registry");
+});
+
+test("Send arriving during terminal draft persistence waits for that same completion", async () => {
+	const saved = deferred<void>();
+	const f = await fixture("en", undefined, undefined, { begin: async () => ({ final() {}, incomplete() {}, end: () => saved.promise }) });
+	await f.mount(); await act(async () => f.dictation.toggle());
+	const socket = Socket.all.at(-1)!;
+	await act(async () => socket.open());
+	await act(async () => f.dictation.stop());
+	await act(async () => socket.end());
+	let completed = false;
+	void f.dictation.finish().then(() => { completed = true; });
+	assert.equal(completed, false);
+	await act(async () => saved.resolve());
+	assert.equal(completed, true);
+});
+
+test("Stop timeout reports interruption and blocks a waiting Send", async (context) => {
+	const reasons: string[] = [];
+	const f = await fixture("en", undefined, undefined, { begin: async () => ({ final() {}, incomplete() {}, end: async reason => { reasons.push(reason); } }) });
+	await f.mount(); await act(async () => f.dictation.toggle());
+	await act(async () => Socket.all.at(-1)!.open());
+	context.mock.timers.enable({ apis: ["setTimeout"] });
+	let finished!: Promise<void>;
+	await act(async () => { finished = f.dictation.finish(); });
+	const refusal = assert.rejects(finished, /interrupted/);
+	await act(async () => context.mock.timers.tick(3000));
+	await refusal;
+	assert.deepEqual(reasons, ["interrupted"]);
+	assert.equal(f.dictation.phase, "idle");
+});
+
+test("Stop sends the worklet's partial tail before closing the provider stream", async () => {
+	const f = await fixture("en");
+	await f.mount();
+	await act(async () => { f.dictation.toggle(); });
+	const socket = Socket.all.at(-1)!;
+	const worklet = Worklet.all.at(-1)!;
+	await act(async () => socket.open());
+	Worklet.autoFlush = false;
+	await act(async () => { f.dictation.stop(); });
+	assert.equal(f.dictation.phase, "stopping");
+	assert.deepEqual(socket.sent, [], "CloseStream must wait for the partial audio packet");
+	const tail = new Int16Array([120, -120]);
+	await act(async () => {
+		worklet.emit({ type: "audio", buffer: tail, contextStart: 10, sampleRate: 16000 });
+		worklet.emit({ type: "flushed" });
+	});
+	assert.deepEqual(socket.sent, [tail, JSON.stringify({ type: "CloseStream" })]);
+	await act(async () => { socket.final("complete tail"); socket.end(); });
+	assert.deepEqual(f.state.appends, ["complete tail"]);
+	assert.equal(f.state.stops, 1);
+});
+
+test("a dying replaced socket cannot append or stop the continuing recording", async () => {
+	const f = await fixture("en");
+	await f.mount();
+	await act(async () => { f.dictation.toggle(); });
+	const old = Socket.all.at(-1)!;
+	await act(async () => { old.open(); old.final("before reconnect"); old.end(1006); });
+	const current = Socket.all.at(-1)!;
+	assert.notEqual(current, old);
+	await act(async () => { current.open(); old.final("stale duplicate"); old.end(); });
+	assert.equal(f.dictation.phase, "recording");
+	assert.deepEqual(f.state.appends, []);
+	await act(async () => { current.final("after reconnect"); f.dictation.stop(); });
+	await act(async () => current.end());
+	assert.deepEqual(f.state.appends, ["before reconnect after reconnect"]);
+	assert.equal(f.state.captures, 1);
+});
+
+test("Stop during the socket handshake retains queued audio and sends its tail before CloseStream", async () => {
+	const f = await fixture("en");
+	await f.mount();
+	await act(async () => { f.dictation.toggle(); });
+	const socket = Socket.all.at(-1)!;
+	const worklet = Worklet.all.at(-1)!;
+	const audio = new Int16Array([1, 2]);
+	const tail = new Int16Array([3]);
+	Worklet.autoFlush = false;
+	await act(async () => {
+		worklet.emit({ type: "audio", buffer: audio, contextStart: 0, sampleRate: 16000 });
+		f.dictation.stop();
+		worklet.emit({ type: "audio", buffer: tail, contextStart: 2 / 16000, sampleRate: 16000 });
+		worklet.emit({ type: "flushed" });
+	});
+	assert.equal(f.dictation.phase, "stopping");
+	assert.equal(socket.readyState, Socket.CONNECTING);
+	await act(async () => socket.open());
+	assert.equal(f.dictation.phase, "stopping", "opening a draining stream must not restart recording");
+	assert.deepEqual(socket.sent, [audio, tail, JSON.stringify({ type: "CloseStream" })]);
+	await act(async () => { socket.final("queued beginning and end"); socket.end(); });
+	assert.deepEqual(f.state.appends, ["queued beginning and end"]);
+});
 
 test("actual practice Send finishes empty-visible deferred speech against its captured problem", async () => {
 	let problem = "old";

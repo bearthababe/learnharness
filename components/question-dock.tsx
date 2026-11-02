@@ -431,7 +431,7 @@ function QuestionDockForm({
 			confidenceIndex: confIdx,
 		});
 		const answer = buildAnswer(qd, req, toolName);
-		const prepared = owned.enabled ? await notebook!.tutor.prepareAnswer(owner, answer) : undefined;
+		const prepared = notebook?.getSnapshot().view?.contextId ? await notebook.tutor.prepareAnswer(owner, answer) : undefined;
 		await onSubmit(prepared?.answer ?? answer, toolCallId, prepared ? { submission: prepared.submission } : undefined);
 		if (prepared) await notebook!.tutor.reconcile();
 		setSubmitError(null);

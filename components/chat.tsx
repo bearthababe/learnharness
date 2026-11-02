@@ -32,6 +32,8 @@ import type { NotebookInputFields } from "@/src/core";
 import { NotebookPanel } from "@/components/notebook-panel";
 import { NotebookSavedDrafts } from "@/components/notebook-saved-drafts";
 import { useNotebookDestination } from "@/components/notebook-destination";
+import { notebookTutorInput } from "@/components/notebook-speech-input";
+import { NotebookSpeechDestination, NotebookSpeechRecovery } from "@/components/notebook-speech-status";
 import { useSessionInputViewport } from "@/components/session-input-viewport";
 import { blurAfterPointerClick } from "@/components/focus-hygiene";
 import { dockStateKey } from "@/components/dock-state-key";
@@ -601,7 +603,7 @@ export function Chat({
 		if (!notebook.session.tutor.draft({ kind: "ordinary" })) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
 		void notebook.session.tutor.returnToTutor({ kind: "ordinary" }).catch(() => {});
 	}, [notebook.session, pending, activeProblem]);
-	useNotebookDestination(workspaceRef, notebook.session, notebookVisible, returnToOrdinary);
+	const focusDictationDestination = useNotebookDestination(workspaceRef, notebook.session, notebookVisible, returnToOrdinary);
 	// Saved slot completeness is live, but the session's selected route
 	// comes from its own ordinary model control, never today's Strong pin.
 	const { catalog, configured, zeroKeys } = useModelSetup(initialConfigured);
@@ -743,12 +745,12 @@ export function Chat({
 		// Ref-first (see textRef): the join is computed from the mirror so a
 		// send resuming after `await finish()` reads the dictated tail.
 		append: (t) => applyText(joinDictation(textRef.current, t)),
+		capture: notebook.session.speech,
 	});
 	/* When a dictation run ends, the bare composer takes focus (owner
 	 * 2026-10-01) — the hands are already on the keyboard from the stop.
-	 * Falling edge of `active` only (idle→idle never focuses), and ONLY the
-	 * composer: with a question pending the Composer is unmounted, the ref
-	 * is null, and the thinking field is left alone by design. */
+	 * Falling edge of `active` only (idle→idle never focuses). Notebook's
+	 * destination adapter restores the applicable field, including reading. */
 	const dictationWasActiveRef = useRef(false);
 	const composerInputRef = useRef<HTMLTextAreaElement>(null);
 	useEffect(() => {
@@ -756,9 +758,9 @@ export function Chat({
 			dictationWasActiveRef.current = true;
 		} else if (dictationWasActiveRef.current) {
 			dictationWasActiveRef.current = false;
-			composerInputRef.current?.focus();
+			focusDictationDestination();
 		}
-	}, [dictation.active]);
+	}, [dictation.active, focusDictationDestination]);
 
 	// Jobs never gate the composer (contracts.ts "THE ASYNC PROTOCOL" §4): job
 	// tools resolve with an ack mid-turn, so the learner can interject while
@@ -1243,7 +1245,7 @@ export function Chat({
 			doSteerOrSend();
 			return;
 		}
-		void dictation.finish().then(doSteerOrSend);
+		void dictation.finish().then(doSteerOrSend).catch(() => {});
 	};
 	const doSend = () => {
 		if (busy || pending || compacting) return;
@@ -1404,11 +1406,15 @@ export function Chat({
 						className="lh-no-drag shrink-0 rounded border border-border px-2 py-1 text-xs"
 						onClick={() => {
 							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
-							if (notebookVisible) returnToOrdinary();
+							if (notebookVisible) {
+								if (notebook.session.speech.isActive() && workspaceRef.current) notebook.session.speech.choose(notebookTutorInput(workspaceRef.current));
+								else returnToOrdinary();
+							}
 							void notebook.session.dispatch({ type: "visibility", visible: !notebookVisible }).catch(() => {});
 						}}>
 						{notebookVisible ? "Collapse Notebook" : "Notebook"}
 					</button>
+					<NotebookSpeechDestination session={notebook.session} />
 					{planTree && (
 						<Hint label="Open the full plan" side="bottom">
 <button
@@ -1735,6 +1741,7 @@ export function Chat({
 						    sticky dock. Zero only pre-measurement (the first layout
 						    effect reports before paint). */}
 						<NotebookSavedDrafts session={notebook.session} questionId={pending?.toolCallId} problemId={activeProblem?.toolCallId} messages={nativeMessages} />
+						<NotebookSpeechRecovery session={notebook.session} />
 						<div aria-hidden data-testid="dock-spacer" style={{ height: dockReserve }} />
 				</ConversationContent>
 				{/* The dock: an overlay sibling of the scroller (the
@@ -2309,7 +2316,7 @@ function DockOverlay({
 			e.preventDefault();
 			void finishDictation().then(() => {
 				expandAndRevealRef.current();
-			});
+			}).catch(() => {});
 		};
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
@@ -2440,7 +2447,7 @@ function DockOverlay({
 									? () => {
 											void finishDictation().then(() => {
 												expandAndRevealRef.current();
-											});
+											}).catch(() => {});
 										}
 									: undefined
 							}

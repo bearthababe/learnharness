@@ -1,0 +1,11 @@
+{
+  "id": "/notebook-integration",
+  "name": "LearnHarness Notebook preview",
+  "short_name": "Notebook",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#171717",
+  "theme_color": "#171717",
+  "icons": [{ "src": "/notebook-preview/icon.png", "sizes": "512x512", "type": "image/png" }]
+}
