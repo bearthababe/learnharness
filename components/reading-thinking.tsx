@@ -82,7 +82,7 @@ export function ReadingThinkingField({
 			<div className="pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 				Thinking while reading
 			</div>
-			<NotebookDraftReview draft={owned.draft} waiting={owned.state.waitingForWorking} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
+			<NotebookDraftReview draft={owned.draft} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
 			{owned.state.error && <p role="alert" className="text-xs text-destructive">{owned.state.error}</p>}
 			<textarea
 				value={text}

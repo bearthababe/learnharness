@@ -150,7 +150,7 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 
 afterEach(async () => { await dispose?.(); restore?.(); dispose = undefined; restore = undefined; });
 
-test("mounted Notebook and practice inputs keep crossing words in the old input until Stop", async () => {
+test("switching mounted practice to Notebook finishes recording and keeps all its final words in practice", async () => {
 	const fs = await import("node:fs");
 	const dir = fs.mkdtempSync("/tmp/opencode/notebook-speech-mounted-");
 	process.env.LH_DATA_DIR = dir; process.env.LH_AUTH_FILE = `${dir}/auth.json`;
@@ -174,16 +174,41 @@ test("mounted Notebook and practice inputs keep crossing words in the old input 
 		const socket = Socket.all.at(-1)!;
 		await act(async () => { socket.open(); Worklet.all.at(-1)!.emit({ type: "audio", buffer: new Int16Array(64000), contextStart: 10, sampleRate: 16000 }); });
 		await act(async () => { AudioGraph.time = 12; document.querySelector('#notebook-instruction')!.dispatchEvent(new window.Event("pointerdown", { bubbles: true })); });
+		assert.equal(f.dictation.phase, "stopping");
 		await act(async () => socket.dispatchEvent(Object.assign(new Event("message"), { data: JSON.stringify({ type: "Results", is_final: true, speech_final: true, start: 1, duration: 2, channel: { alternatives: [{ transcript: "Earlier crossing later.", words: [{ word: "Earlier", start: 1.5, end: 1.8 }, { word: "crossing", start: 1.9, end: 2.1 }, { word: "later.", start: 2.2, end: 2.5 }] }] } }) })));
 		await act(async () => session.speech.idle());
 		assert.equal(document.querySelector<HTMLTextAreaElement>('[data-testid="practice-dock"] textarea')!.value, "Prefilled.");
 		assert.equal(document.querySelector<HTMLTextAreaElement>('#notebook-instruction')!.value, "");
-		await act(async () => f.dictation.stop()); await act(async () => { socket.end(); await session.speech.idle(); });
-		assert.equal(document.querySelector<HTMLTextAreaElement>('[data-testid="practice-dock"] textarea')!.value, "Prefilled. Earlier crossing");
-		assert.equal(document.querySelector<HTMLTextAreaElement>('#notebook-instruction')!.value, "later.");
+		await act(async () => { socket.end(); await session.speech.choose({ kind: "notebook" }); });
+		assert.equal(document.querySelector<HTMLTextAreaElement>('[data-testid="practice-dock"] textarea')!.value, "Prefilled. Earlier crossing later.");
+		assert.equal(document.querySelector<HTMLTextAreaElement>('#notebook-instruction')!.value, "");
+		assert.equal(f.dictation.phase, "idle");
 		assert.equal(f.state.captures, 1);
 		assert.deepEqual(chatStore.getChat(chat.id)!.messages, []);
 	} finally { await f.unmount(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the global dictation shortcut cannot record into a submitted Notebook-assisted draft", async () => {
+	const fs = await import("node:fs");
+	const dir = fs.mkdtempSync("/tmp/opencode/notebook-shortcut-locked-");
+	process.env.LH_DATA_DIR = dir; process.env.LH_AUTH_FILE = `${dir}/auth.json`;
+	const { chatStore } = await import("../src/store/chats.ts");
+	const { createNotebookService } = await import("../src/server/notebook.ts");
+	const { createNotebookSession } = await import("../components/notebook-session.ts");
+	const chat = chatStore.createChat("Shortcut during Send");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No provider calls"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); session.tutor.updateText({ kind: "ordinary" }, "Fixed reasoning."); await session.tutor.idle();
+	const f = await fixture("en", undefined, undefined, session.speech);
+	try {
+		await f.mount(); const prepared = await session.tutor.prepareSubmission({ kind: "ordinary" });
+		await act(async () => window.dispatchEvent(new window.Event("lh:kbd-toggle-dictation")));
+		assert.match(f.dictation.error!, /Finish sending/);
+		assert.equal(f.dictation.phase, "idle"); assert.equal(Socket.all.length, 0);
+		assert.equal(session.speech.isActive(), false);
+		assert.deepEqual(service.view(chat.id).tutorDrafts![0]!.parts, prepared.explanation);
+		assert.deepEqual(service.view(chat.id).speechRuns, []);
+	} finally { await f.unmount(); session.dispose(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("the optional capture adapter receives source-timed finals while normal text stays deferred", async () => {
@@ -208,7 +233,7 @@ test("the optional capture adapter receives source-timed finals while normal tex
 	assert.deepEqual(f.state.appends, [], "the session adapter owns revealing, not the current input registry");
 });
 
-for (const trigger of ["Apply button", "pane Enter"] as const) test(`mounted ${trigger} keeps capture running and waits for the complete pre-click word after switching to practice`, async () => {
+for (const trigger of ["Apply button", "pane Enter"] as const) test(`mounted ${trigger} keeps capture running until a return finalizes the crossing word and completed working`, async () => {
 	const fs = await import("node:fs");
 	const dir = fs.mkdtempSync("/tmp/opencode/notebook-click-mounted-");
 	process.env.LH_DATA_DIR = dir; process.env.LH_AUTH_FILE = `${dir}/auth.json`;
@@ -249,6 +274,7 @@ for (const trigger of ["Apply button", "pane Enter"] as const) test(`mounted ${t
 		assert.equal(service.view(chat.id).pending?.status, "awaiting-transcript");
 		assert.equal(f.state.stops, 0); assert.equal(Socket.all.length, 1);
 		await act(async () => { AudioGraph.time = 12.5; document.querySelector('[data-testid="practice-dock"] textarea')!.dispatchEvent(new window.Event("pointerdown", { bubbles: true })); });
+		assert.equal(f.dictation.phase, "stopping");
 		const final = (start: number, duration: number, transcript: string, words: Array<{ word: string; start: number; end: number }>) => socket.dispatchEvent(Object.assign(new Event("message"), { data: JSON.stringify({ type: "Results", is_final: true, speech_final: true, start, duration, channel: { alternatives: [{ transcript, words }] } }) }));
 		await act(async () => { final(0, 2.1, "pressure.", [{ word: "pressure.", start: 1.9, end: 2.2 }]); await session.idle(); });
 		assert.equal(calls, 0, "whole crossing word needs finalized coverage through its end");
@@ -256,9 +282,9 @@ for (const trigger of ["Apply button", "pane Enter"] as const) test(`mounted ${t
 		assert.equal(calls, 1); assert.match(prompt, /Write pressure/); assert.doesNotMatch(prompt, /Later|Reasoning/);
 		assert.equal(document.querySelector<HTMLTextAreaElement>('#notebook-instruction')!.value, "");
 		assert.equal(document.querySelector<HTMLTextAreaElement>('[data-testid="practice-dock"] textarea')!.value, "");
-		await act(async () => f.dictation.stop()); await act(async () => { socket.end(); await session.speech.idle(); });
-		assert.equal(document.querySelector<HTMLTextAreaElement>('#notebook-instruction')!.value, "Later.");
-		assert.equal(document.querySelector<HTMLTextAreaElement>('[data-testid="practice-thinking-field"] textarea')!.value, "Reasoning.");
+		await act(async () => { socket.end(); await session.speech.choose({ kind: "tutor", owner: { kind: "practice", problemCallId: "problem" } }); });
+		assert.equal(document.querySelector<HTMLTextAreaElement>('#notebook-instruction')!.value, "Later. Reasoning.");
+		assert.equal(document.querySelector<HTMLTextAreaElement>('[data-testid="practice-thinking-field"] textarea')!.value, "");
 		assert.deepEqual(service.view(chat.id).snapshots![0]!.lines, [{ id: "L1", latex: "p=" }]);
 		assert.equal(f.state.captures, 1);
 	} finally { await f.unmount(); fs.rmSync(dir, { recursive: true, force: true }); }

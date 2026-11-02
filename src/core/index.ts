@@ -16,7 +16,6 @@
  */
 
 export * from "./contracts.ts";
-export * from "./notebook-speech-timeline.ts";
 export type { NotebookLine, NotebookState, NotebookHistoryEntry, NotebookExchange, NotebookEditorInput, NotebookResponse, NotebookRecord, NotebookOperation, NotebookAttemptRecord, NotebookCommand, NotebookCommandReceipt, NotebookView, NotebookUsage } from "./contracts/notebook.ts";
 export * from "./ports.ts";
 export * from "./chains.ts";

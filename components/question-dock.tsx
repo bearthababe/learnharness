@@ -391,7 +391,7 @@ function QuestionDockForm({
 			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0;
 
 	const submit = () => {
-		if (sending.current || compactionRunning || (!canSubmit && !isDictationActive())) return;
+		if (sending.current || compactionRunning || notebook?.getSnapshot().sendBlocked || (!canSubmit && !isDictationActive())) return;
 		sending.current = true;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): Enter may arrive while
 		 * a run is live with reasoning still in Deepgram's hands. Stop the
@@ -432,8 +432,8 @@ function QuestionDockForm({
 		});
 		const answer = buildAnswer(qd, req, toolName);
 		const prepared = notebook?.getSnapshot().view?.contextId ? await notebook.tutor.prepareAnswer(owner, answer) : undefined;
-		await onSubmit(prepared?.answer ?? answer, toolCallId, prepared ? { submission: prepared.submission } : undefined);
-		if (prepared) await notebook!.tutor.reconcile();
+		try { await onSubmit(prepared?.answer ?? answer, toolCallId, prepared ? { submission: prepared.submission } : undefined); }
+		finally { if (prepared) await notebook!.tutor.reconcile(prepared.submission?.id); }
 		setSubmitError(null);
 	};
 
@@ -856,7 +856,7 @@ function QuestionDockForm({
 				</div>
 			)}
 
-			<NotebookDraftReview draft={owned.draft} waiting={owned.state.waitingForWorking} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
+			<NotebookDraftReview draft={owned.draft} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
 			{(submitError || owned.state.error) && <p role="alert" className="px-4 text-xs text-destructive">{submitError || owned.state.error}</p>}
 			{owned.state.saving && <p role="status" className="px-4 text-xs text-muted-foreground">Saving draft…</p>}
 			{/* The learner's half of the dock — a composer TWIN: a labeled, bordered
@@ -949,7 +949,7 @@ function QuestionDockForm({
 						<Button
 							type="submit"
 							data-testid="question-send"
-							disabled={(!canSubmit && !isDictationActive()) || compactionRunning}
+							disabled={owned.blocked || (!canSubmit && !isDictationActive()) || compactionRunning}
 							className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 						>
 							Submit answer

@@ -44,7 +44,13 @@ try {
 	const turn = runningTurn(chat.id); if (turn) await new Response(turn.subscribe()).text();
 	await session.tutor.reconcile();
 	session.tutor.updateText(owner, "Unsent next thought."); await session.tutor.idle(); await session.tutor.returnToTutor(owner);
-	await session.dispatch({ type: "draft", text: "Next unsent instruction." }); session.dispose();
+	await session.dispatch({ type: "draft", text: "Next unsent instruction." });
+	// One recording, one owned Tutor continuation; production code writes the
+	// received words without applying or submitting them.
+	await session.speech.choose({ kind: "tutor", owner });
+	const capture = await session.speech.begin({ id: crypto.randomUUID(), now: () => 0 });
+	capture.final({ id: "continuation", text: "Saved spoken continuation.", start: 0, end: 1, words: [{ text: "Saved spoken continuation.", start: 0, end: 0.9 }], speechFinal: true });
+	await capture.end("stop"); session.dispose();
 	const source = path.join(dir, "chats", `${chat.id}.json`);
 	const destination = path.resolve("tests/fixtures/golden-data/chats", `${chat.id}.json`);
 	fs.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);

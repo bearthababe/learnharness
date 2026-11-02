@@ -5,9 +5,107 @@ Branch: `integration/conversational-notebook`, based on `f65d108` (#19).
 The owner requested the complete spec through `/implement-spec`, subject to
 keeping notebook behavior isolated and app integration as non-intrusive as possible.
 
-The latest owner decisions are recorded on #18. In particular, optional Stop
-application is **Notebook-only**; Tutor keeps its existing submission actions.
+The latest owner-approved policy is in `docs/notebook-correction-plan.md`.
+Stop never applies or sends; #27 was closed as not planned. The #28 settled
+handoffs below supersede the earlier overlapping-action delivery notes.
 Current mobile limitations do not authorize redesigning the app-wide sidebar.
+
+## #28 — settled handoffs and combined acceptance (2026-11-02)
+
+Software implementation and automated acceptance are complete. **Physical iPhone,
+installed Home Screen behavior and owner-learning acceptance remain open**;
+#28 and parent #18 must remain open pending those checks.
+
+### Delivered policy
+
+- Each recording has one destination. Switching finalizes it, interprets its
+  final commands in that destination, waits for requested work, then switches.
+- One Apply at a time. Busy spoken Apply is consumed with the approved retry
+  notice; later instructions remain in the draft. Undo and Start fresh also wait
+  for explicit use after the edit finishes. Legacy accepted queues still recover.
+- Return inserts completed immutable working. Interruption, clarification and
+  failed Apply requests retain content for review and do not complete the return.
+- Send is never queued. Its content stays fixed through acceptance/failure;
+  receipt acceptance unlocks without waiting for Tutor's response stream.
+  Keyboard-triggered recording cannot bypass that lock.
+- Native ordinary Send, steering, written answers, reading thoughts, practice
+  and drills keep their own actions. Notebook preparation supplies content only.
+- Focus is restored after the rendered handoff lock is removed. Native history
+  and multiline scrolling remain available while focused mobile outer containers
+  stay stationary.
+
+The superseded overlap implementation remains at local ref
+`prototype/notebook-overlap-experiment` (`3d82ff4`), and the accepted prototype at
+`prototype/math-notebook-live-apply-v1` (`8ee472b`). Neither is merged as the
+settled-handoff implementation.
+
+### Verification
+
+- **2,662 tests / 499 suites passed**, plus typecheck, lint and production build.
+  Coverage includes actual Chat/native parser/persistence paths, exact retries,
+  interrupted capture, late-command absorption, legacy paused queues, disposal,
+  Strict Mode, shortcut lock bypass and post-lock focus restoration.
+- Independent spec and standards reviews found four concrete issues: legacy
+  correction gating, failed-request handoffs, Strict Mode subscriptions and
+  recording during Send. Each was reproduced and fixed with regressions; targeted
+  re-review reported no remaining concrete findings. Final browser emulation
+  subsequently exposed and verified the post-lock focus fix.
+- App-written golden fixture `chat_mvzsbob5_3a6d3a3b.json` captures fixed-destination
+  speech, saved drafts, Undo and immutable submitted working. Scripted providers,
+  zero live calls; provenance/hash are in the fixture README.
+- Actual HTTPS Chromium checks passed both interrupted and successful returns,
+  earlier-prose focus, no implicit Send, restored drafts and preview assets.
+- Real Deepgram + subscription editor/Tutor flows completed in all five contexts:
+
+  | Context | Isolated chat | Editor calls | Tutor calls |
+  | --- | --- | ---: | ---: |
+  | Ordinary | `chat_mvzjfqll_da20ba0f` | 2 | 2 |
+  | Written answer | `chat_mvzjfqln_d5e8ca63` | 2 | 0 |
+  | Reading thoughts + answer | `chat_mvzjfqln_4e92c542` | 3 | 0 |
+  | Practice | `chat_mvzjfqlo_22cf7205` | 2 | 1 |
+  | Drill | `chat_mvzjfqlo_18080d28` | 2 | 1 |
+
+  Each flow used separate recordings, spoken and clicked Apply, two completed
+  snapshots interleaved with explanation, retained later instructions, explicit
+  native submission and reload. Question flows left a separate native question
+  pending, so no Tutor generation was due. Synthetic audio is real-provider
+  integration evidence, not human microphone or learning acceptance. Recognition
+  errors were preserved; one genuine clarification required an explicit typed
+  correction. No keyword tuning or speech-provider changes were made.
+- Total allowance used across integration: **26/30 editor calls, 5/10 Tutor
+  calls, at most 573.800/900 speech seconds**. The written-answer run lost its
+  speech counter on reload and is conservatively charged its entire 300-second
+  command bound. Remaining: 4 editor calls, 5 Tutor calls, at least 326.200 seconds.
+- At 390×844, HTTPS phone emulation passed 50/50 panes; simulated keyboard focus
+  gave the active pane two-thirds. Both panes passed history top/bottom/interior,
+  multiline top/bottom/interior, header/backdrop containment, pinch allowance,
+  stationary page, blur unlock and desktop unlock. Desktop measured 864/576
+  columns (60/40). This is Chromium touch emulation, not physical iOS evidence.
+
+Detailed logs and browser harnesses are retained in
+`/tmp/opencode/notebook-integration/`: `check-28-settled-{all,types,lint,build}.log`,
+`check-28-settled-browser.json`, `check-28-settled-phone.json`,
+`check-28-settled-live-*.json`, ordinary/reading resume evidence, and
+`live-budget.md`. Harness-only interruptions (selectors, response shape/status,
+hydration waits) resumed saved content rather than repeating accepted live work.
+
+### Owner acceptance preview
+
+Stable slot 1: **https://thinkpad.tailfd9bf6.ts.net:8444/** (localhost 3000).
+Dedicated isolated preview data; slot 2 remains another session's app.
+Page, manifest, Apple icon and manifest icon returned 200 over HTTPS.
+**Reload preview** uses ordinary reload and preserved saved drafts; it ends any
+active recording, whose known content is restored for review. No offline cache.
+
+One-time installation: **Safari → Share → Add to Home Screen → Open as Web App
+→ Add**, then launch that icon. Tailnet connection and an awake host are required.
+Standalone removes browser chrome; keyboard accessory chrome may remain.
+
+Owner still needs to check real keyboard opening/closing, gestures at history
+and multiline edges, header/backdrop containment, pinch zoom, input handoffs and
+Home Screen reload, then use Notebook for an actual learning exercise. Keep
+app-wide mobile sidebar limitations separate; the sidebar was closed for pane
+checks, not redesigned. These are acceptance gates, not claims already passed.
 
 ## #20 — saved typed working
 

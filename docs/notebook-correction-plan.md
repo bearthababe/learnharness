@@ -6,6 +6,41 @@ Scope: correct the integrated Notebook delivered through #26, then finish #28 ac
 
 ## Agreed design
 
+### Superseding policy — settled handoffs (owner approved 2026-11-02)
+
+The owner approved simplifying the interaction instead of supporting arbitrary
+overlap. This section supersedes conflicting queue/pending-return requirements
+below and in the earlier speech-context extension.
+
+- A recording belongs to one destination. Switching finalizes it before the
+  destination changes; recording never starts automatically in the new pane.
+- Finalization still interprets commands in that original destination. A delayed
+  spoken Apply runs under the same one-edit-at-a-time rule before the switch
+  completes; an earlier command covered by a clicked Apply is absorbed as usual.
+  The owner explicitly approved the potentially longer finalization wait.
+- One Apply at a time; recording may continue in Notebook during that edit.
+  Further spoken Apply commands are consumed but never queued. Preserve later
+  instructions and show “Still applying. Apply again when finished”.
+- Undo and Start fresh also require the current edit to finish; neither queues
+  behind it. This explicitly supersedes the earlier Start fresh waiting rule.
+- Returning to Tutor waits for transcription and requested work to settle,
+  then inserts a completed immutable snapshot. Failures return the learner to
+  review rather than silently completing a handoff.
+- No queued Send. Dictation and editing finish first. Keep the submitted draft
+  fixed until acceptance/failure, preserving exact retries after unknown ACKs.
+- Interruption restores known words and completed working for explicit review.
+  Stop never authorizes an edit or Tutor submission.
+
+Implementation reuses the existing capture finalization, session observable,
+executor and native submission seams. Replace live cross-destination routing,
+new pending-return checkpoints and waiting Send preparation with these gates.
+Read legacy accepted operations/recordings without replaying new commands.
+Exercise actual controls, request parsing, persistence and capture interfaces.
+
+The superseded experiment is retained at local source ref
+`prototype/notebook-overlap-experiment` (`3d82ff4`). It is historical evidence,
+not a pending implementation to merge.
+
 - Notebook owns mathematical working and edits. Tutor owns native messages, answers, practice thinking and steering.
 - A small integration module owns Tutor draft preservation, chronological snapshots and preparation for explicit Send. Reuse the substantial existing draft implementation rather than wrap it in another layer.
 - One source-time timeline determines speech ownership. Focus changes and Apply cutoffs are separate facts; returning to Notebook must not freeze an obsolete draft identity.
@@ -37,6 +72,8 @@ Add `src/core/notebook-speech-timeline.ts` for the deterministic ownership calcu
 Inputs are the initial Notebook draft, source-timed focus destinations, Apply draft transitions and timed transcript results. Tutor destinations retain their explicit owner/draft/part identity; Notebook focus events refer to Notebook rather than copying its current draft ID. Resolve the active Notebook draft from Apply cutoffs at each word's start time.
 
 Use that same calculation for fragment placement, selecting Apply instructions and identifying the click covering an earlier spoken command. Remove the parallel mutable current-draft interpretation. Keep finalized-prefix coverage and command recognition consistent with ownership before releasing an instruction for execution. Preserve existing source-time boundary semantics and stable capture order for tied events; any uncovered conflicting same-time behavior requires a concrete owner question rather than an invented precedence rule.
+
+Follow-up owner decision: spoken commands take effect only after preceding audio is finalized and their destination is known. This replaces provisional spoken-Apply reservation before earlier audio arrives. Recording continues, clicked Apply stays explicit/immediate, and affected returns/Send visibly wait. Checkpoint requirements for a return while speech context remains unresolved must be verified before implementing that part.
 
 Save the resulting owned fragments and accepted Apply checkpoints in existing shapes. Historical persisted data retains its saved ownership; unavailable original timing is not reconstructed by inference.
 

@@ -1,4 +1,4 @@
-import React, { act, useRef, useCallback, useSyncExternalStore } from "react";
+import React, { act, useRef, useSyncExternalStore } from "react";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { after, test } from "node:test";
@@ -57,6 +57,63 @@ test("Notebook notifications coalesce, reconnect refreshes immediately, and unmo
 	assert.equal(reads, 3);
 });
 
+test("Strict Mode remount preserves the session bridge for Tutor submission locks", async () => {
+	const { useNotebookSession } = await import("../components/use-notebook-session.ts");
+	const chat = chatStore.createChat("Strict Mode ownership");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No model calls"); } });
+	const previous = globalThis.fetch;
+	globalThis.fetch = async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id);
+	let session!: ReturnType<typeof createNotebookSession>;
+	function View() {
+		const state = useNotebookSession(chat.id); session = state.session;
+		return <output>{String(state.inputLocked)}</output>;
+	}
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	try {
+		await act(async () => root.render(<React.StrictMode><View /></React.StrictMode>));
+		await act(async () => { session.tutor.updateText({ kind: "ordinary" }, "Before."); await session.tutor.idle(); });
+		let sending!: Promise<unknown>;
+		await act(async () => { sending = session.tutor.prepareSubmission({ kind: "ordinary" }); });
+		await sending;
+		assert.equal(host.textContent, "true");
+		assert.equal(session.getSnapshot().sendBlocked, true);
+		await act(async () => session.tutor.reconcile());
+		assert.equal(host.textContent, "false");
+	} finally { await act(async () => root.unmount()); host.remove(); globalThis.fetch = previous; }
+});
+
+test("settled return focuses the continuation after the rendered handoff lock is removed", async () => {
+	const chat = chatStore.createChat("Focus after handoff");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor calls"); } });
+	let release!: () => void; const held = new Promise<void>(resolve => { release = resolve; });
+	let reached!: () => void; const waiting = new Promise<void>(resolve => { reached = resolve; });
+	const session = createNotebookSession(chat.id, async (_url, init) => {
+		if (init?.method !== "POST") { reached(); await held; }
+		return service.handle(new Request("http://test/notebook", init), chat.id);
+	});
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	function Workspace() {
+		const ref = useRef<HTMLDivElement>(null);
+		const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+		useNotebookDestination(ref, session, true);
+		return <div ref={ref} inert={state.inputLocked}><div data-input-owner="tutor" data-testid="composer"><textarea /></div><textarea id="notebook-instruction" data-input-owner="notebook" /></div>;
+	}
+	try {
+		await act(async () => root.render(<Workspace />));
+		const field = host.querySelector<HTMLTextAreaElement>('[data-testid="composer"] textarea')!;
+		let focused = false;
+		field.focus = () => { if (!field.closest("[inert]")) focused = true; };
+		await act(async () => session.speech.choose({ kind: "notebook" }));
+		let returning!: Promise<void>;
+		await act(async () => { returning = session.speech.choose({ kind: "tutor", owner: { kind: "ordinary" } }); await waiting; });
+		assert.ok(host.querySelector("[inert]"));
+		assert.equal(focused, false);
+		await act(async () => { release(); await returning; });
+		assert.equal(host.querySelector("[inert]"), null);
+		assert.equal(focused, true);
+	} finally { release(); await act(async () => root.unmount()); session.dispose(); host.remove(); }
+});
+
 test("spoken Apply captures the same selected whole line as the Notebook button", async () => {
 	const chat = chatStore.createChat("Spoken selection"); const faux = createFauxCore({}); let prompt = "";
 	faux.setResponses([
@@ -81,7 +138,7 @@ test("spoken Apply captures the same selected whole line as the Notebook button"
 	} finally { await act(async () => root.unmount()); host.remove(); }
 });
 
-test("mounted practice Send waits visibly for pending working and submits only its completed snapshot", async () => {
+test("mounted practice Send is disabled during editing and needs a fresh click after the settled return", async () => {
 	const chat = chatStore.createChat("Pending practice");
 	let release!: () => void; const gate = new Promise<void>(done => { release = done; });
 	const editor = createFauxCore({}); editor.setResponses([async () => { await gate; return fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"p=F/A"}]}'); }]);
@@ -93,14 +150,16 @@ test("mounted practice Send waits visibly for pending working and submits only i
 	const sent: unknown[] = [];
 	try {
 		await act(async () => root.render(<PracticeDock notebook={session} problemCallId="p" input={{ statement: "Pressure?" }} expanded onExpand={() => {}} onSubmit={async (...args) => { sent.push(args); return false; }} />));
-		await act(async () => { await session.dispatch({ type: "draft", text: "Write pressure" }); await session.dispatch({ type: "apply" }); await session.tutor.returnToTutor(owner); });
-		assert.match(host.textContent!, /Working pending/);
+		await act(async () => { await session.speech.choose({ kind: "notebook" }); await session.dispatch({ type: "draft", text: "Write pressure" }); await session.dispatch({ type: "apply" }); });
+		assert.doesNotMatch(host.textContent!, /Working pending/);
 		const send = host.querySelector<HTMLButtonElement>('[data-testid="practice-send"]')!;
-		assert.equal(send.disabled, false);
+		assert.equal(send.disabled, true);
 		await act(async () => { send.click(); });
 		assert.equal(sent.length, 0);
-		assert.match(host.textContent!, /Waiting for notebook working/);
-		await act(async () => { release(); await service.settled(chat.id); await session.refresh(); await session.tutor.idle(); });
+		await act(async () => { release(); await service.settled(chat.id); await session.refresh(); await session.speech.choose({ kind: "tutor", owner }); });
+		assert.equal(sent.length, 0);
+		assert.equal(send.disabled, false);
+		await act(async () => { send.click(); await session.tutor.idle(); });
 		assert.equal(sent.length, 1);
 		assert.match(JSON.stringify(sent), /p=F\/A/);
 		assert.doesNotMatch(JSON.stringify(sent), /"pending":true/);
@@ -243,8 +302,7 @@ test("mounted continuation reviews immutable snapshots, edits earlier prose, app
 		const state = useSyncExternalStore(session.tutor.subscribe, session.tutor.getSnapshot, session.tutor.getSnapshot);
 		const draft = state.drafts[0];
 		const part = draft?.parts.at(-1);
-		const returning = useCallback(() => { void session.tutor.returnToTutor({ kind: "ordinary" }); }, []);
-		useNotebookDestination(root, session, true, returning);
+		useNotebookDestination(root, session, true);
 		return <div ref={root}>
 			<div data-input-owner="tutor">
 				<NotebookDraftReview draft={draft} onTextChange={(id, text) => session.tutor.updateText({ kind: "ordinary" }, text, id)} />

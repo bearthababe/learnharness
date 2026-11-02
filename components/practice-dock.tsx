@@ -85,15 +85,15 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 	);
 
 	const submit = async () => {
-		if (compactionRunning || sending.current) return;
+		if (compactionRunning || sending.current || notebook?.getSnapshot().sendBlocked) return;
 		sending.current = true;
 		// Capture this problem and adapter before finalization can change activity.
 		try {
 			await finishDictation();
 			if (notebook?.getSnapshot().view?.contextId) {
 				const prepared = await notebook!.tutor.prepareSubmission(owner);
-				await onSubmit(prepared.text, problemCallId, prepared);
-				await notebook!.tutor.reconcile();
+				try { await onSubmit(prepared.text, problemCallId, prepared); }
+				finally { await notebook!.tutor.reconcile(prepared.submission.id); }
 			} else {
 				const text = thinkingRef.current.trim();
 				if (!text) return;
@@ -143,7 +143,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 
 			{/* The learner's half: Enter SENDS (owner round 2, 2026-10-05);
 			    Shift+Enter makes a newline — less to decide about. */}
-			<NotebookDraftReview draft={owned.draft} waiting={owned.state.waitingForWorking} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
+			<NotebookDraftReview draft={owned.draft} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
 			<div
 				data-testid="practice-thinking-field"
 				className="m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
@@ -189,7 +189,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 					<Button
 						type="button"
 						data-testid="practice-send"
-						disabled={(!(owned.enabled ? explanationHasContent(owned.draft?.parts ?? []) : thinking.trim().length > 0) && !isDictationActive()) || compactionRunning}
+						disabled={owned.blocked || (!(owned.enabled ? explanationHasContent(owned.draft?.parts ?? []) : thinking.trim().length > 0) && !isDictationActive()) || compactionRunning}
 						onClick={() => submit()}
 						className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 					>

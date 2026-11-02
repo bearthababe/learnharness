@@ -155,22 +155,26 @@ test("a refused recording start releases its run and can retry after saving beco
 	assert.equal(service.view(chat.id).speechRuns![0]!.status, "interrupted");
 });
 
-test("formatted speech that cannot be split reliably across inputs retains the original transcript for review", async () => {
+test("switch finalization keeps formatted speech whole in its original input", async () => {
 	const chat = chatStore.createChat("Formatted words");
 	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No model calls"); } });
 	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
-	await session.refresh(); let now = 0;
-	const capture = await session.speech.begin({ id: "formatted", now: () => now });
-	now = 2; session.speech.choose({ kind: "notebook" });
-	capture.final({ id: "number", text: "24", start: 1, end: 3, words: [{ text: "twenty", start: 1.9, end: 2.1 }, { text: "four", start: 2.2, end: 2.4 }], speechFinal: true });
-	await assert.rejects(capture.end("stop"), /interrupted/);
+	await session.refresh();
+	const capture = await session.speech.begin({ id: "formatted", now: () => 0 });
+	session.speech.configure({ tutor: () => ({ kind: "tutor", owner: { kind: "ordinary" } }), select() {}, finish: async () => {
+		capture.final({ id: "number", text: "24", start: 1, end: 3, words: [{ text: "twenty", start: 1.9, end: 2.1 }, { text: "four", start: 2.2, end: 2.4 }], speechFinal: true });
+		await capture.end("stop");
+	} });
+	await session.speech.choose({ kind: "notebook" });
 	const run = service.view(chat.id).speechRuns![0]!;
-	assert.deepEqual(run.unplaced, ["number"]);
+	assert.deepEqual(run.unplaced, []);
 	assert.equal(run.fragments[0]!.text, "24");
 	assert.equal(session.getSnapshot().draftText, "");
+	assert.match(JSON.stringify(session.tutor.draft({ kind: "ordinary" })), /24/);
+	assert.equal(session.speech.isActive(), false); session.dispose();
 });
 
-test("finalized switches act immediately, keep commands out of drafts, and put late speech before the return snapshot", async () => {
+test("a spoken switch waits for earlier finals, finishes the original recording and needs a new recording in Notebook", async () => {
 	const { createFauxCore, fauxAssistantMessage } = await import("@earendil-works/pi-ai");
 	const chat = chatStore.createChat("Speech switching");
 	const faux = createFauxCore({}); faux.setResponses([() => fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"p=F/A"}]}')]);
@@ -181,23 +185,27 @@ test("finalized switches act immediately, keep commands out of drafts, and put l
 	const owner = { kind: "ordinary" as const };
 	session.tutor.updateText(owner, "Before."); await session.tutor.idle();
 	const choices: string[] = [];
-	session.speech.configure({ tutor: () => ({ kind: "tutor", owner }), select: input => choices.push(input.kind) });
-	let now = 0;
-	const capture = await session.speech.begin({ id: "switching", now: () => now });
-	const result = (id: string, text: string, start: number, speechFinal = false) => ({ id, text, start, end: start + 0.8, speechFinal, words: text.split(" ").map((text, index) => ({ text, start: start + index / 10, end: start + (index + 1) / 10 })) });
+	const capture = await session.speech.begin({ id: "switching", now: () => 0 });
+	let finished!: () => void; const stopped = new Promise<void>(resolve => { finished = resolve; });
+	session.speech.configure({ tutor: () => ({ kind: "tutor", owner }), select: input => choices.push(input.kind), finish: async () => { await capture.end("stop"); finished(); } });
+	const result = (id: string, text: string, start: number, speechFinal = false) => ({ id, text, start, end: start + 1, speechFinal, words: text ? text.split(" ").map((text, index) => ({ text, start: start + index / 10, end: start + (index + 1) / 10 })) : [] });
+	capture.final(result("silence", "", 0, true));
 	capture.final(result("switch", "Switch to notebook!", 2));
-	assert.deepEqual(choices, ["notebook"], "exact final acts without waiting for speech_final");
+	assert.deepEqual(choices, [], "earlier context must be known before acting");
 	capture.final(result("edit", "Write force", 3));
-	capture.final(result("return", "Switch to tutor.", 4));
-	assert.deepEqual(choices, ["notebook", "tutor"]);
+	assert.deepEqual(choices, []);
 	capture.final(result("late", "Earlier speech.", 1, true));
-	capture.final(result("later", "After speech.", 5, true));
-	await session.speech.idle();
-	assert.deepEqual(session.tutor.draft(owner)!.parts.map(part => part.kind === "text" ? part.text : "working"), ["Before.", "working", ""]);
-	now = 6; await capture.end("stop");
-	assert.deepEqual(session.tutor.draft(owner)!.parts.map(part => part.kind === "text" ? part.text : "working"), ["Before. Earlier speech.", "working", "After speech."]);
+	await stopped; await session.speech.choose({ kind: "notebook" });
+	assert.deepEqual(choices, ["notebook"]);
+	assert.deepEqual(session.tutor.draft(owner)!.parts.map(part => part.kind === "text" ? part.text : "working"), ["Before. Earlier speech. Write force"]);
+	assert.equal(session.getSnapshot().draftText, ""); assert.equal(session.speech.isActive(), false);
+	const next = await session.speech.begin({ id: "notebook", now: () => 0 });
+	next.final(result("next-instruction", "Write force", 0, true)); await next.end("stop");
 	assert.equal(session.getSnapshot().draftText, "Write force");
+	await session.speech.choose({ kind: "tutor", owner });
+	assert.deepEqual(session.tutor.draft(owner)!.parts.map(part => part.kind === "text" ? part.text : part.lines[0]?.latex), ["Before. Earlier speech. Write force", "p=F/A", ""]);
 	assert.deepEqual(chatStore.getChat(chat.id)!.messages, []);
+	session.dispose();
 });
 
 test("session speech keeps delayed words with their old draft part and restores them on reload", async () => {
@@ -210,10 +218,8 @@ test("session speech keeps delayed words with their old draft part and restores 
 	await session.refresh();
 	const owner = { kind: "question" as const, toolCallId: "old", channel: "reading-thinking" as const };
 	session.tutor.updateText(owner, "Prefilled."); await session.tutor.idle();
-	let now = 0;
 	session.speech.configure({ tutor: () => ({ kind: "tutor", owner }), select: () => {} });
-	const capture = await session.speech.begin({ id: "capture", now: () => now });
-	now = 2; session.speech.choose({ kind: "notebook" });
+	const capture = await session.speech.begin({ id: "capture", now: () => 0 });
 	capture.final({ id: "late", text: "Earlier words.", start: 1, end: 1.8, words: [{ text: "Earlier", start: 1, end: 1.4 }, { text: "words.", start: 1.4, end: 1.8 }], speechFinal: true });
 	capture.final({ id: "next", text: "Write force.", start: 3, end: 4, words: [{ text: "Write", start: 3, end: 3.4 }, { text: "force.", start: 3.4, end: 4 }], speechFinal: true });
 	await session.speech.idle();
@@ -223,40 +229,34 @@ test("session speech keeps delayed words with their old draft part and restores 
 	// from the real endpoint, not inferred from whichever field is now mounted.
 	const restored = createNotebookSession(chat.id, fetcher, storage);
 	await restored.refresh(); await restored.speech.idle();
-	assert.deepEqual(restored.tutor.draft(owner)!.parts, [{ ...restored.tutor.draft(owner)!.parts[0], text: "Prefilled. Earlier words." }]);
-	assert.equal(restored.getSnapshot().draftText, "Write force.");
+	assert.deepEqual(restored.tutor.draft(owner)!.parts, [{ ...restored.tutor.draft(owner)!.parts[0], text: "Prefilled. Earlier words. Write force." }]);
+	assert.equal(restored.getSnapshot().draftText, "");
 	assert.equal(restored.getSnapshot().view!.speechRuns![0]!.status, "interrupted");
 	assert.deepEqual(chatStore.getChat(chat.id)!.messages, []);
 });
 
-test("split commands need an endpoint, embedded phrases remain text, and later explicit focus wins over late speech", async () => {
+test("split switches need an endpoint, embedded phrases remain text, and duplicate finals cannot restart recording", async () => {
 	const chat = chatStore.createChat("Command boundaries");
 	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No model calls"); } });
 	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
 	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
 	const owner = { kind: "ordinary" as const }; const input = { kind: "tutor" as const, owner };
-	const choices: string[] = []; let now = 0;
-	session.speech.configure({ tutor: () => input, select: input => choices.push(input.kind) });
-	const capture = await session.speech.begin({ id: "commands", now: () => now });
-	const final = (id: string, text: string, start: number, speechFinal = false) => capture.final({ id, text, start, end: start + 0.5, speechFinal, words: text ? text.split(" ").map((text, index) => ({ text, start: start + index / 10, end: start + (index + 1) / 10 })) : [] });
+	const choices: string[] = [];
+	const capture = await session.speech.begin({ id: "commands", now: () => 0 });
+	let finished!: () => void; const stopped = new Promise<void>(resolve => { finished = resolve; });
+	session.speech.configure({ tutor: () => input, select: input => choices.push(input.kind), finish: async () => { await capture.end("stop"); finished(); } });
+	const final = (id: string, text: string, start: number, speechFinal = false) => capture.final({ id, text, start, end: start + 1, speechFinal, words: text ? text.split(" ").map((text, index) => ({ text, start: start + index / 10, end: start + (index + 1) / 10 })) : [] });
+	final("silence", "", 0, true);
 	final("a", "Switch", 1); final("b", "to notebook", 1.2);
 	assert.deepEqual(choices, []);
-	final("endpoint", "", 2, true); assert.deepEqual(choices, ["notebook"]);
+	final("endpoint", "", 2, true);
 	final("embedded", "I could switch to tutor later.", 3, true);
-	now = 5; session.speech.choose(input);
-	final("late-command", "switch to notebook", 4, true);
-	assert.deepEqual(choices, ["notebook"], "the late command cannot steal the later explicitly selected input");
-	final("after-focus", "Tutor again.", 6, true);
-	final("dup", "SWITCH TO NOTEBOOK!", 7); final("dup", "SWITCH TO NOTEBOOK!", 7);
-	assert.deepEqual(choices, ["notebook", "notebook"]);
-	await capture.end("stop");
-	assert.equal(session.getSnapshot().draftText, "I could switch to tutor later.");
-	assert.match(JSON.stringify(session.tutor.draft(owner)), /Tutor again/);
+	await stopped; await session.speech.choose({ kind: "notebook" });
+	final("b", "to notebook", 1.2);
+	assert.deepEqual(choices, ["notebook"]);
+	assert.equal(session.speech.isActive(), false);
+	assert.equal(session.getSnapshot().draftText, "");
+	assert.match(JSON.stringify(session.tutor.draft(owner)), /I could switch to tutor later/);
 	assert.doesNotMatch(JSON.stringify(session.tutor.draft(owner)), /SWITCH|Switch/);
-	session.speech.choose(input); now = 10;
-	const next = await session.speech.begin({ id: "late-same-input", now: () => now });
-	now = 12; session.speech.choose(input);
-	next.final({ id: "earlier-command", text: "switch to notebook", start: 11, end: 11.5, speechFinal: true, words: ["switch", "to", "notebook"].map((text, index) => ({ text, start: 11 + index / 10, end: 11.1 + index / 10 })) });
-	assert.deepEqual(choices, ["notebook", "notebook"], "explicitly refocusing Tutor also outranks an earlier spoken switch");
-	await next.end("cancel");
+	session.dispose();
 });

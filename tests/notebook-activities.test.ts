@@ -107,6 +107,7 @@ test("teaching sends separate reading and written working atomically, retaining 
 	} finally { fs.renameSync = rename; syncBuiltinESMExports(); }
 	assert.deepEqual(chatStore.getChat(chat.id), beforeFailure, "failed atomic save preserves both channels and the pending question");
 	assert.equal(calls, 0);
+	await session.tutor.reconcile();
 	session.tutor.updateText(reading, "Later unsent thought");
 	await post(input); await post(input);
 	session.dispose(); session = createNotebookSession(chat.id, transport, storage);
@@ -170,7 +171,7 @@ test("parallel selection answers keep native grading and confidence, save the fi
 	session.dispose();
 });
 
-test("typing while an answer waits for draft persistence is not consumed by that earlier Send", async () => {
+test("an answer remains fixed while Send persists its draft", async () => {
 	const chat = chatStore.createChat("Draft save race");
 	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor call expected"); } });
 	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
@@ -181,7 +182,9 @@ test("typing while an answer waits for draft persistence is not consumed by that
 	session.tutor.updateText(owner, "Later answer");
 	const input = await pending;
 	assert.equal(input.answer.text, "First answer");
-	assert.match(JSON.stringify(session.tutor.draft(owner)), /Later answer/);
+	assert.match(JSON.stringify(session.tutor.draft(owner)), /First answer/);
+	assert.doesNotMatch(JSON.stringify(session.tutor.draft(owner)), /Later answer/);
+	assert.equal(session.tutor.getSnapshot().locked, true);
 	assert.match(JSON.stringify(service.view(chat.id).tutorDrafts), /First answer/);
 	session.dispose();
 });

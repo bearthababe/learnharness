@@ -50,6 +50,7 @@ test("legacy frozen content reopens with the same receipt and supplies content r
 	assert.equal("type" in prepared, false);
 	assert.equal(prepared.submission?.id, "original-send");
 	assert.deepEqual(prepared.explanation, draft.parts);
+	await restored.tutor.reconcile();
 	assert.deepEqual(await restored.tutor.prepareSubmission(owner), prepared);
 	assert.deepEqual(chatStore.getChat(chat.id)!.messages, []);
 	restored.dispose();
@@ -160,11 +161,13 @@ test("failed notebook sends retain the complete draft; lost send ACK reconciles 
 	assert.equal(await model.send({ type: "text", ...frozen }), false);
 	assert.deepEqual(session.tutor.draft(owner)!.parts, frozen.explanation);
 	assert.deepEqual(chatStore.getChat(chat.id)!.messages, []);
+	await session.tutor.reconcile();
 	const retry = await session.tutor.prepareSubmission(owner);
 	assert.deepEqual(retry, frozen);
 	fail = false;
 	assert.equal(await model.send({ type: "text", ...retry }), false);
 	const turn = runningTurn(chat.id); if (turn) await new Response(turn.subscribe()).text();
+	await session.tutor.reconcile();
 	session.tutor.updateText(owner, "New words after Send.");
 	await session.tutor.reconcile(); await session.tutor.idle();
 	assert.match(JSON.stringify(session.tutor.draft(owner)), /New words after Send/);
@@ -173,6 +176,39 @@ test("failed notebook sends retain the complete draft; lost send ACK reconciles 
 	assert.equal(chatStore.getChat(chat.id)!.messages.filter((message) => message.role === "user").length, 1);
 	await session.tutor.reconcile();
 	assert.equal(calls, 1, "reopen/reconcile never wakes Tutor");
+});
+
+test("submission acceptance unlocks before Tutor finishes, and an older completion cannot unlock a newer Send", async () => {
+	process.env.OPENROUTER_API_KEY = "test-key";
+	const { handleChatRequest } = await import("../src/server/chat-handler.ts");
+	const { createTeacherAgent } = await import("../src/agent/teacher-agent.ts");
+	const { createFauxCore, fauxAssistantMessage } = await import("@earendil-works/pi-ai");
+	const { runningTurn } = await import("../src/server/turn-runs.ts");
+	const chat = chatStore.createChat("Accepted while streaming");
+	chatStore.saveSettings(chat.id, { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } });
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor calls"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	let release!: () => void; const held = new Promise<void>(resolve => { release = resolve; });
+	const faux = createFauxCore({}); faux.setResponses([async () => { await held; return fauxAssistantMessage("Consider the units."); }]);
+	try {
+		await session.refresh(); session.tutor.updateText(owner, "First reasoning."); await session.tutor.idle();
+		const first = await session.tutor.prepareSubmission(owner);
+		assert.equal(session.tutor.getSnapshot().locked, true);
+		const response = await handleChatRequest(new Request("http://test/api/chat", { method: "POST", body: JSON.stringify({ chatId: chat.id, input: { type: "text", ...first } }) }), opts => createTeacherAgent(undefined, { engine: { model: faux.getModel(), streamFn: faux.streamSimple }, messages: opts.messages }));
+		assert.equal(response.status, 200); assert.ok(runningTurn(chat.id));
+		await session.refresh();
+		assert.equal(session.tutor.getSnapshot().locked, false, "saved acceptance releases the submitted draft without waiting for the response stream");
+		session.tutor.updateText(owner, "A follow-up."); await session.tutor.idle();
+		const second = await session.tutor.prepareSubmission(owner);
+		await session.tutor.reconcile(first.submission.id);
+		assert.equal(session.tutor.getSnapshot().locked, true);
+		session.tutor.updateText(owner, "Cannot change the in-flight follow-up.");
+		assert.doesNotMatch(JSON.stringify(session.tutor.draft(owner)), /Cannot change/);
+		await session.tutor.reconcile(second.submission.id);
+		assert.equal(session.tutor.getSnapshot().locked, false);
+	} finally {
+		release(); const turn = runningTurn(chat.id); if (turn) await new Response(turn.subscribe()).text(); session.dispose();
+	}
 });
 
 test("reopen resumes unsaved local changes, but retains an older conflicting copy for review", async () => {

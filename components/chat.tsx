@@ -584,26 +584,7 @@ export function Chat({
 		textRef.current = value;
 		setText(value);
 	}, [ordinaryDraft, notebook.view?.contextId]);
-	const returnToOrdinary = useCallback((target?: HTMLElement) => {
-		if (pending) {
-			const channel = target?.closest<HTMLElement>("[data-notebook-channel]")?.dataset.notebookChannel;
-			const reading = channel === "reading-thinking" || (!channel && !!workspaceRef.current?.querySelector('[data-reading-claim="true"]'));
-			const input = pending.input as { options?: unknown[] };
-			const owner = { kind: "question" as const, toolCallId: pending.toolCallId, channel: reading ? "reading-thinking" as const : channel === "text" || (pending.tool !== "quiz" && pending.tool !== "probe" && !input.options?.length) ? "text" as const : "thinking" as const };
-			if (!notebook.session.tutor.draft(owner)) notebook.session.tutor.updateText(owner, reading ? readingThinkingRef.current : "");
-			void notebook.session.tutor.returnToTutor(owner).catch(() => {});
-			return;
-		}
-		if (activeProblem) {
-			const owner = { kind: "practice" as const, problemCallId: activeProblem.toolCallId };
-			if (!notebook.session.tutor.draft(owner)) notebook.session.tutor.updateText(owner, "");
-			void notebook.session.tutor.returnToTutor(owner).catch(() => {});
-			return;
-		}
-		if (!notebook.session.tutor.draft({ kind: "ordinary" })) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
-		void notebook.session.tutor.returnToTutor({ kind: "ordinary" }).catch(() => {});
-	}, [notebook.session, pending, activeProblem]);
-	const focusDictationDestination = useNotebookDestination(workspaceRef, notebook.session, notebookVisible, returnToOrdinary);
+	const focusDictationDestination = useNotebookDestination(workspaceRef, notebook.session, notebookVisible);
 	// Saved slot completeness is live, but the session's selected route
 	// comes from its own ordinary model control, never today's Strong pin.
 	const { catalog, configured, zeroKeys } = useModelSetup(initialConfigured);
@@ -788,7 +769,7 @@ export function Chat({
 	const retryable = (status === "ready" || status === "error") && !busy && !compacting && endsInFailedTurn(nativeMessages);
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
 	const canSend =
-		(text.trim().length > 0 || (ordinaryDraft && explanationHasContent(ordinaryDraft.parts)) || dictation.active) && !pending && !activeProblem && !compacting;
+		(text.trim().length > 0 || (ordinaryDraft && explanationHasContent(ordinaryDraft.parts)) || dictation.active) && !notebook.sendBlocked && !pending && !activeProblem && !compacting;
 
 	/* THE PRACTICE PAUSE (owner round 16): between problems — practice
 	 * kind, nothing active, nothing in flight, and at least one problem
@@ -1236,7 +1217,7 @@ export function Chat({
 	});
 
 	const onSend = () => {
-		if (pending || compacting) return;
+		if (pending || compacting || notebook.session.getSnapshot().sendBlocked) return;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): a learner who keeps
 		 * talking right through Enter must not lose the tail — stop the run,
 		 * let the last finals land in the composer, then send the REF value
@@ -1278,14 +1259,14 @@ export function Chat({
 	 * time the send's POST resolved, so the steer lands. Idle takes the
 	 * plain send; a raced settle 409s and falls back to exactly that. */
 	const doSteerOrSend = () => {
-		if (pending || compacting) return;
+		if (pending || compacting || notebook.session.getSnapshot().sendBlocked) return;
 		if (notebook.session.getSnapshot().view?.contextId) {
 			if (zeroKeys) { setSetupOpen(true); return; }
 			if (selectedModelUnavailable(catalog, selectedModel)) { openModelPicker(); return; }
 			void notebook.session.tutor.prepareSubmission({ kind: "ordinary" }).then(async (input) => {
 				// Explicit Send is the only authority; switching and autosaves never enter here.
-				if (busy) await steer(input.text, input); else await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission });
-				await notebook.session.tutor.reconcile();
+				try { if (busy) await steer(input.text, input); else await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission }); }
+				finally { await notebook.session.tutor.reconcile(input.submission.id); }
 			}).catch(() => {});
 			return;
 		}
@@ -1323,7 +1304,7 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div ref={workspaceRef} data-session-workspace="" className="session-workspace flex h-dvh">
+		<div ref={workspaceRef} inert={notebook.inputLocked} data-session-workspace="" className="session-workspace flex h-dvh">
 			<div className="flex min-w-0 flex-1 flex-col">
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its
@@ -1406,11 +1387,9 @@ export function Chat({
 						className="lh-no-drag shrink-0 rounded border border-border px-2 py-1 text-xs"
 						onClick={() => {
 							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
-							if (notebookVisible) {
-								if (notebook.session.speech.isActive() && workspaceRef.current) notebook.session.speech.choose(notebookTutorInput(workspaceRef.current));
-								else returnToOrdinary();
-							}
-							void notebook.session.dispatch({ type: "visibility", visible: !notebookVisible }).catch(() => {});
+							if (notebookVisible && workspaceRef.current) {
+								void notebook.session.speech.choose(notebookTutorInput(workspaceRef.current)).then(() => notebook.session.dispatch({ type: "visibility", visible: false })).catch(() => {});
+							} else void notebook.session.dispatch({ type: "visibility", visible: true }).catch(() => {});
 						}}>
 						{notebookVisible ? "Collapse Notebook" : "Notebook"}
 					</button>
@@ -1796,7 +1775,7 @@ export function Chat({
 					}
 					composer={
 						<div>
-						<NotebookDraftReview draft={ordinaryDraft} waiting={tutorDraftState.waitingForWorking} onTextChange={(id, value) => notebook.session.tutor.updateText({ kind: "ordinary" }, value, id)} />
+						<NotebookDraftReview draft={ordinaryDraft} onTextChange={(id, value) => notebook.session.tutor.updateText({ kind: "ordinary" }, value, id)} />
 						{tutorDraftState.error && <p role="alert" className="px-3 text-xs text-destructive">Unsent draft: {tutorDraftState.error}</p>}
 						{tutorDraftState.saving && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
 						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}

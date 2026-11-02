@@ -151,7 +151,7 @@ test("learner reuses supplied history across duplicate line numbers, clarifies, 
 	} finally { await ui.close(); }
 });
 
-for (const outcome of ["failed", "clarification"] as const) test(`Start fresh visibly waits, pauses for ${outcome} edits, and archives only the corrected settled context`, async () => {
+for (const outcome of ["failed", "clarification"] as const) test(`Start fresh is disabled during an edit and explicitly archives the corrected ${outcome} context`, async () => {
 	const faux = createFauxCore({});
 	let release!: () => void;
 	const held = new Promise<void>((resolve) => { release = resolve; });
@@ -164,26 +164,25 @@ for (const outcome of ["failed", "clarification"] as const) test(`Start fresh vi
 	try {
 		const context = ui.session.getSnapshot().view!.contextId;
 		await ui.draft("Write pressure"); await ui.click("Apply changes", false);
-		await ui.click("Start fresh", false);
 		await ui.draft("Later unsent words");
-		assert.match(ui.host.textContent!, /Start fresh waiting for earlier operations/);
+		const startFresh = [...ui.host.querySelectorAll("button")].find((button) => button.textContent === "Start fresh")!;
+		assert.equal(startFresh.disabled, true);
 		assert.deepEqual(ui.session.getSnapshot().view!.history, []);
 		assert.equal(ui.session.getSnapshot().view!.contextId, context);
 		const undo = [...ui.host.querySelectorAll("button")].find((button) => button.textContent === "Undo")!;
-		assert.equal(undo.disabled, true, "a new control cannot cross a closing context");
+		assert.equal(undo.disabled, true, "a new control cannot overlap an edit");
 		for (const type of ["undo", "start-fresh", "apply"] as const) {
-			const view = ui.session.getSnapshot().view!;
-			const response = await ui.fetcher("/notebook", { method: "POST", body: JSON.stringify({ type, id: `later-${type}`, contextId: context,
-				...(type === "apply" ? { instruction: view.draft.text, draftRevision: view.draft.revision } : {}) }) });
-			assert.equal(response.status, 409, `later ${type} cannot silently cross Start fresh`);
+			await act(async () => { await assert.rejects(ui.session.dispatch({ type }), /Still applying/); });
 		}
 		await act(async () => { release(); await ui.service.settled(ui.chat.id); await ui.session.refresh(); });
-		assert.match(ui.host.textContent!, /Start fresh waiting for correction/);
+		assert.equal(ui.session.getSnapshot().view!.startFreshPending, false);
 		assert.equal(ui.session.getSnapshot().draftText, "Write pressure\n\nLater unsent words");
 		assert.equal(ui.session.getSnapshot().view!.contextId, context);
 		assert.deepEqual(ui.session.getSnapshot().view!.history, []);
 		assert.equal(ui.session.getSnapshot().view!.problem?.status, outcome);
 		await ui.draft("Write p=F/A"); await ui.click("Apply changes");
+		assert.equal(ui.session.getSnapshot().view!.contextId, context, "completion does not queue a new context");
+		await ui.click("Start fresh");
 		const fresh = ui.session.getSnapshot().view!;
 		assert.notEqual(fresh.contextId, context);
 		assert.deepEqual(fresh.lines, []);
@@ -195,7 +194,7 @@ for (const outcome of ["failed", "clarification"] as const) test(`Start fresh vi
 	} finally { release(); await ui.service.settled(ui.chat.id); await ui.close(); }
 });
 
-test("older records accept a held edit and fresh barrier; lost fresh acknowledgments cannot archive twice", async () => {
+test("older records require the edit to settle before Start fresh; lost fresh acknowledgments cannot archive twice", async () => {
 	const chat = chatStore.createChat("Older notebook");
 	const faux = createFauxCore({});
 	let release!: () => void;
@@ -220,6 +219,8 @@ test("older records accept a held edit and fresh barrier; lost fresh acknowledgm
 		assert.deepEqual(session.getSnapshot().view!.history, []);
 		const oldContext = session.getSnapshot().view!.contextId;
 		await session.dispatch({ type: "draft", text: "Write x=" }); await session.dispatch({ type: "apply" });
+		await assert.rejects(session.dispatch({ type: "start-fresh" }), /Still applying/);
+		release(); await service.settled(chat.id); await session.refresh();
 		await assert.rejects(session.dispatch({ type: "start-fresh" }), /Lost fresh acknowledgment/);
 		await session.dispatch({ type: "draft", text: "Keep for later" });
 		release(); await service.settled(chat.id);

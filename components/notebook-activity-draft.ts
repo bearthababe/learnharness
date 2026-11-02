@@ -14,5 +14,5 @@ export function useNotebookActivityDraft(session: NotebookSession | undefined, o
 	const state = useSyncExternalStore(session?.tutor.subscribe ?? subscribe, session?.tutor.getSnapshot ?? snapshot, session?.tutor.getSnapshot ?? snapshot);
 	const draft = state.drafts.find((draft) => sameDraftOwner(draft.owner, owner));
 	const part = draft?.parts.at(-1);
-	return { draft, text: part?.kind === "text" ? part.text : "", enabled: !!notebook?.view?.contextId, state };
+	return { draft, text: part?.kind === "text" ? part.text : "", enabled: !!notebook?.view?.contextId, blocked: !!notebook?.sendBlocked, state };
 }

@@ -103,6 +103,16 @@ provider or physical-phone acceptance. SHA-256:
 
 `cc3bc8ee2936ab4485431ad864fe53caf15e2a82eae6480d768e1ab0ce142e5c`
 
+The superseded pending-return experiment and its fixture are retained at
+`prototype/notebook-overlap-experiment`. The settled-handoff policy does not
+introduce its additional persisted fields.
+
+`chats/chat_mvzsbob5_3a6d3a3b.json` was captured with the same script after the
+settled-handoff change. It also exercises one completed recording into a fixed
+Tutor continuation, using the production capture/save path with scripted words.
+Two scripted editor responses, one scripted Tutor response, zero live calls.
+SHA-256: `6b45bd9bd02722a8b64e1a621d670c1e201691aac64a29b6092427192940f108`.
+
 Re-running captures an additional record with new IDs/timestamps. Replace the
 intended capture deliberately and update provenance; preserve legacy fixtures.
 

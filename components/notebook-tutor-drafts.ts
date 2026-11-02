@@ -22,7 +22,7 @@ export interface TutorDraftSnapshot {
 	recovery: OwnedTutorDraft[];
 	saving: boolean;
 	error: string | null;
-	waitingForWorking?: boolean;
+	locked?: boolean;
 }
 const canonical = (value: unknown) => JSON.stringify(value, (_key, item) => item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
 const equal = (a: unknown, b: unknown) => canonical(a) === canonical(b);
@@ -31,20 +31,20 @@ const keyOf = (owner: TutorDraftOwner) => owner.kind === "ordinary" ? "ordinary"
 
 /** Durable learner drafts are an optional notebook adapter, not a replacement
  * for the ordinary text composer. No mutation here authorizes a Tutor send. */
-export function createNotebookTutorDrafts(chatId: string, post: (command: DraftCommand | Extract<NotebookCommand, { type: "discard-tutor-draft" }>) => Promise<NotebookCommandReceipt>, refresh: () => Promise<void>, storage?: DraftRecoveryStorage, requestedCutoff?: () => { id: string; contextId: string } | undefined) {
+export function createNotebookTutorDrafts(chatId: string, post: (command: DraftCommand | Extract<NotebookCommand, { type: "discard-tutor-draft" }>) => Promise<NotebookCommandReceipt>, refresh: () => Promise<void>, storage?: DraftRecoveryStorage, canPrepare: () => boolean = () => true) {
 	const entries = new Map<string, Entry>();
 	const listeners = new Set<() => void>();
-	const cancelWaiters = new Set<() => void>();
 	let disposed = false;
 	const storageKey = `lh:notebook-drafts:${chatId}`;
 	let loaded = false;
 	let tail: Promise<unknown> = Promise.resolve();
 	let saving = 0;
-	let waitingForWorking = 0;
+	let locked = false;
+	let lockedSubmission: string | undefined;
 	let view: NotebookView | null = null;
 	let state: TutorDraftSnapshot = { drafts: [], recovery: [], saving: false, error: null };
 	function publish(error: string | null = state.error) {
-		state = { drafts: [...entries.values()].flatMap((entry) => entry.conflict ? view?.tutorDrafts?.filter((draft) => sameDraftOwner(draft.owner, entry.draft.owner)) ?? [] : [entry.draft]), recovery: [...entries.values()].filter((entry) => entry.conflict).map((entry) => entry.draft), saving: saving > 0, waitingForWorking: waitingForWorking > 0, error };
+		state = { drafts: [...entries.values()].flatMap((entry) => entry.conflict ? view?.tutorDrafts?.filter((draft) => sameDraftOwner(draft.owner, entry.draft.owner)) ?? [] : [entry.draft]), recovery: [...entries.values()].filter((entry) => entry.conflict).map((entry) => entry.draft), saving: saving > 0, locked, error };
 		for (const listener of listeners) listener();
 	}
 	function stash() {
@@ -80,15 +80,11 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		for (const [key, entry] of entries) {
 			const remote = next.tutorDrafts?.find((draft) => sameDraftOwner(draft.owner, entry.draft.owner)) ?? null;
 			// Server-owned pending working resolves without changing learner text.
-			// Rebase just that reserved content, including a Send already waiting.
+			// Retain compatibility with snapshots accepted before settled handoffs.
 			if (remote && entry.base && entry.wire?.type !== "snapshot" && remote.revision > entry.base.revision) {
 				const previous = entry.base;
-				const comparison = { ...remote, revision: previous.revision, parts: remote.parts.map(part => {
-					const before = previous.parts.find(item => item.id === part.id);
-					return part.kind === "working" && before?.kind === "working" && before.pending ? before : part;
-				}) };
-				if (equal(comparison, previous)) {
-					const resolved = (draft: OwnedTutorDraft) => ({ ...draft, parts: draft.parts.map(part => part.kind === "working" && part.pending ? remote.parts.find(item => item.id === part.id) ?? part : part) });
+				const resolved = (draft: OwnedTutorDraft) => resolveWorking(draft, remote);
+				if (equal({ ...resolved(previous), revision: remote.revision }, remote)) {
 					entry.base = remote;
 					entry.draft = resolved(entry.draft);
 					if (entry.preparing) entry.preparing = resolved(entry.preparing);
@@ -98,6 +94,7 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 			}
 			if (entry.frozen && next.submissions?.some((receipt) => receipt.submission.id === entry.frozen!.content.submission?.id)) {
 				confirmed = true;
+				if (entry.frozen.content.submission?.id === lockedSubmission) { locked = false; lockedSubmission = undefined; }
 				if (entry.frozenDraft ? sameContent(entry.draft, entry.frozenDraft) : entry.frozen.kind === "content" && equal(entry.draft.parts, entry.frozen.content.explanation)) { entries.delete(key); continue; }
 				entry.base = remote; entry.frozen = undefined; entry.frozenDraft = undefined; entry.wire = undefined; entry.dirty = true;
 				void queue(() => flush(entry.draft.owner)).catch(() => {});
@@ -123,6 +120,9 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		if (hydrating) for (const entry of entries.values()) {
 			if (!entry.conflict && !entry.frozen && (entry.dirty || entry.wire || entry.capture)) void queue(() => flush(entry.draft.owner)).catch(() => {});
 		}
+	}
+	function resolveWorking(draft: OwnedTutorDraft, remote: OwnedTutorDraft): OwnedTutorDraft {
+		return { ...draft, parts: draft.parts.map(part => part.kind === "working" ? remote.parts.find(item => item.id === part.id) ?? part : part) };
 	}
 	function queue<T>(work: () => Promise<T>): Promise<T> {
 		saving++; publish();
@@ -168,9 +168,10 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		if (!entry.base || !sameContent(entry.base, desired)) await save(entry, desired);
 	}
 	function captured(entry: Entry, remote: OwnedTutorDraft) {
-		const resolved = (draft: OwnedTutorDraft) => ({ ...draft, parts: draft.parts.map(part => part.kind === "working" ? remote.parts.find(item => item.id === part.id) ?? part : part) });
+		const resolved = (draft: OwnedTutorDraft) => resolveWorking(draft, remote);
 		entry.base = remote; entry.wire = undefined; entry.capture = entry.nextCaptures?.shift();
 		entry.draft = { ...resolved(entry.draft), revision: remote.revision };
+		if (entry.preparing) entry.preparing = resolved(entry.preparing);
 		for (const capture of [entry.capture, ...entry.nextCaptures ?? []]) if (capture) capture.before = resolved(capture.before);
 		entry.dirty = !sameContent(entry.draft, remote);
 	}
@@ -185,6 +186,7 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		stash(); publish(null);
 	}
 	function updateText(owner: TutorDraftOwner, text: string, partId?: string) {
+		if (locked) return;
 		load();
 		const key = keyOf(owner);
 		let entry = entries.get(key);
@@ -202,16 +204,15 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		void queue(() => flush(owner)).catch(() => {});
 	}
 	function returnToTutor(owner: TutorDraftOwner) {
+		if (locked || view?.pending) return Promise.reject(new Error("Finish the current action before returning to Tutor."));
 		const entry = entries.get(keyOf(owner));
 		if (!entry || !view?.contextId) return queue(() => flush(owner));
-		const requested = requestedCutoff?.();
-		const throughOperationId = requested?.contextId === view.contextId ? requested.id : view.lastOperationId;
-		const pending = !!view.pending || !!requested && requested.contextId === view.contextId;
+		const throughOperationId = view.lastOperationId;
 		const reserved = entry.nextCaptures?.at(-1) ?? entry.capture;
 		if (reserved && reserved.command.throughOperationId === throughOperationId) return queue(() => flush(owner));
 		const last = entry.draft.parts.filter((part) => part.kind === "working").at(-1);
 		const lastSnapshot = last?.kind === "working" ? view.snapshots?.find(snapshot => snapshot.id === last.snapshotId) : undefined;
-		if (throughOperationId && lastSnapshot?.throughOperationId === throughOperationId || !pending && !view.problem && (!view.lines.length || (last?.kind === "working" && !last.pending && last.contextId === view.contextId && last.revision === view.workingRevision))) return queue(() => flush(owner));
+		if (throughOperationId && lastSnapshot?.throughOperationId === throughOperationId || !view.problem && (!view.lines.length || (last?.kind === "working" && !last.pending && last.contextId === view.contextId && last.revision === view.workingRevision))) return queue(() => flush(owner));
 		const command: Extract<DraftCommand, { type: "snapshot" }> = { type: "snapshot", id: crypto.randomUUID(), owner, draftId: entry.draft.id, expectedRevision: entry.base?.revision ?? 0, continuationId: crypto.randomUUID(), contextId: view.contextId,
 			...(throughOperationId ? { throughOperationId } : { workingRevision: view.workingRevision }) };
 		const capture = { before: structuredClone(entry.draft), command };
@@ -219,13 +220,14 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		// Reserve the settled position synchronously, before a keystroke or save
 		// can move continuation prose ahead of working, even across rapid returns.
 		entry.draft = { ...entry.draft, parts: [...entry.draft.parts,
-			{ id: command.id, kind: "working", snapshotId: command.id, contextId: view.contextId, revision: view.workingRevision, lines: structuredClone(view.lines), ...(pending ? { pending: true as const } : {}) },
+			{ id: command.id, kind: "working", snapshotId: command.id, contextId: view.contextId, revision: view.workingRevision, lines: structuredClone(view.lines) },
 			{ id: command.continuationId, kind: "text", text: "" }] };
 		entry.dirty = true;
 		stash(); publish();
 		return queue(() => flush(owner));
 	}
 	function updateForm(owner: Extract<TutorDraftOwner, { kind: "question" }>, form: NonNullable<OwnedTutorDraft["form"]>) {
+		if (locked) return;
 		const text = owner.channel === "text" ? form.text : form.thinking;
 		if (!entries.has(keyOf(owner))) updateText(owner, text);
 		const entry = entries.get(keyOf(owner))!;
@@ -237,65 +239,48 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		void queue(() => flush(owner)).catch(() => {});
 	}
 	function prepareSubmission(owner: TutorDraftOwner): Promise<PreparedNotebookContent> {
-		const reserving = entries.get(keyOf(owner));
-		if (reserving && !reserving.frozen && !reserving.preparing) reserving.preparing = structuredClone(reserving.draft);
-		return queue(async () => {
-			try {
-			await refresh();
-			let entry = entries.get(keyOf(owner));
+		return prepare([owner], () => {
+			const entry = entries.get(keyOf(owner));
 			if (entry?.frozen) {
 				if (entry.frozen.kind !== "content") throw new Error("Confirm the earlier answer before sending this draft");
 				return structuredClone(entry.frozen.content);
 			}
-			await flush(owner);
-			await waitForWorking([owner]);
-			entry = entries.get(keyOf(owner));
 			if (!entry || !explanationHasContent(entry.draft.parts)) throw new Error("Enter an explanation or notebook working");
 			const draft = entry.base!;
 			entry.frozen = { kind: "content", content: { text: draft.parts.filter((part) => part.kind === "text").map((part) => part.text).filter(Boolean).join("\n\n"), explanation: structuredClone(draft.parts), submission: { id: crypto.randomUUID(), draftId: draft.id, draftRevision: draft.revision, owner } } };
+			entry.frozenDraft = structuredClone(draft);
 			stash(); publish(null);
 			return structuredClone(entry.frozen.content);
-			} finally { const entry = entries.get(keyOf(owner)); if (entry) entry.preparing = undefined; }
 		});
 	}
-	async function waitForWorking(owners: TutorDraftOwner[]) {
-		if (disposed) throw new Error("Send cancelled after leaving this session. The draft is retained.");
-		const pending = owners.flatMap(owner => entries.get(keyOf(owner))?.draft.parts.filter(part => part.kind === "working" && part.pending).map(part => part.id) ?? []);
-		if (!pending.length) return;
-		waitingForWorking++; publish();
-		try {
-			await new Promise<void>((resolve, reject) => {
-				const cancel = () => { listeners.delete(check); cancelWaiters.delete(cancel); reject(new Error("Send cancelled after leaving this session. The draft is retained.")); };
-				const check = () => {
-					const snapshots = pending.map(id => view?.snapshots?.find(snapshot => snapshot.id === id));
-					if (snapshots.some(snapshot => !snapshot || snapshot.status === "pending")) return;
-					listeners.delete(check);
-					cancelWaiters.delete(cancel);
-					if (snapshots.some(snapshot => snapshot!.status === "failed")) reject(new Error("Notebook edits failed. Review the retained draft before sending again."));
-					else resolve();
-				};
-				listeners.add(check); cancelWaiters.add(cancel); check();
-			});
-		} finally { waitingForWorking--; publish(); }
-	}
-	function prepareAnswer(owner: Extract<TutorDraftOwner, { kind: "question" }>, answer: QuestionAnswerData): Promise<PreparedNotebookAnswer> {
-		const owners = [owner, ...(owner.channel === "reading-thinking" ? [] : [{ ...owner, channel: "reading-thinking" as const }])];
-		// Reserve exactly the complete fields observed by this Send before queued
-		// autosaves or an awaited refresh give later typing a chance to replace them.
+	async function prepare<T>(owners: TutorDraftOwner[], finish: () => T): Promise<T> {
+		if (disposed || locked || !canPrepare() || view?.pending) throw new Error("Finish dictation and Notebook edits before sending.");
+		locked = true; lockedSubmission = undefined; publish();
 		for (const owner of owners) {
 			const entry = entries.get(keyOf(owner));
 			if (entry && !entry.frozen && !entry.preparing) entry.preparing = structuredClone(entry.draft);
 		}
-		return queue(async () => {
-			try {
-			await refresh();
+		try {
+			return await queue(async () => {
+				await refresh();
+				if (!canPrepare() || view?.pending) throw new Error("Finish dictation and Notebook edits before sending.");
+				for (const owner of owners) if (!entries.get(keyOf(owner))?.frozen) await flush(owner);
+				if (owners.some(owner => entries.get(keyOf(owner))?.draft.parts.some(part => part.kind === "working" && part.pending))) throw new Error("Finish Notebook edits before sending.");
+				const result = finish();
+				lockedSubmission = owners.map(owner => entries.get(keyOf(owner))?.frozen?.content.submission?.id).find(Boolean);
+				return result;
+			});
+		} catch (error) { locked = false; publish(error instanceof Error ? error.message : "Tutor draft could not be prepared"); throw error; }
+		finally { for (const owner of owners) { const entry = entries.get(keyOf(owner)); if (entry) entry.preparing = undefined; } }
+	}
+	function prepareAnswer(owner: Extract<TutorDraftOwner, { kind: "question" }>, answer: QuestionAnswerData): Promise<PreparedNotebookAnswer> {
+		const owners = [owner, ...(owner.channel === "reading-thinking" ? [] : [{ ...owner, channel: "reading-thinking" as const }])];
+		return prepare(owners, () => {
 			const frozen = owners.map(owner => entries.get(keyOf(owner))?.frozen).find(Boolean);
 			if (frozen) {
 				if (frozen.kind !== "answer") throw new Error("Confirm the earlier submission before sending this answer");
 				return structuredClone(frozen.content);
 			}
-			for (const owner of owners) await flush(owner);
-			await waitForWorking(owners);
 			const included = owners.flatMap(owner => { const entry = entries.get(keyOf(owner)); return entry?.base ? [entry] : []; });
 			const input: PreparedNotebookAnswer = { answer: structuredClone(answer) };
 			if (!included.length) return input;
@@ -313,9 +298,6 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 			for (const entry of included) { entry.frozen = { kind: "answer", content: input }; entry.frozenDraft = structuredClone(entry.base!); }
 			stash(); publish(null);
 			return structuredClone(input);
-			} finally {
-				for (const owner of owners) { const entry = entries.get(keyOf(owner)); if (entry) entry.preparing = undefined; }
-			}
 		});
 	}
 	return {
@@ -332,8 +314,14 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 				entries.delete(keyOf(owner)); stash(); publish(null);
 			});
 		},
-		async reconcile() { await refresh(); },
+		async reconcile(submissionId?: string) {
+			try { await refresh(); }
+			finally {
+				if (!submissionId || submissionId === lockedSubmission) { locked = false; lockedSubmission = undefined; }
+				publish();
+			}
+		},
 		async idle() { await tail; },
-		dispose() { disposed = true; for (const cancel of cancelWaiters) cancel(); listeners.clear(); },
+		dispose() { disposed = true; locked = false; listeners.clear(); },
 	};
 }

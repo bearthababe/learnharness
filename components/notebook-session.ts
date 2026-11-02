@@ -12,6 +12,9 @@ export interface NotebookSessionSnapshot {
 	view: NotebookView | null;
 	draftText: string;
 	saving: boolean;
+	editing: boolean;
+	sendBlocked: boolean;
+	inputLocked: boolean;
 	error: string | null;
 	cursorLineId?: string | null;
 }
@@ -21,15 +24,17 @@ export interface NotebookSessionSnapshot {
 export function createNotebookSession(chatId: string, fetcher: typeof fetch = fetch, recoveryStorage?: DraftRecoveryStorage) {
 	const url = `/api/chats/${encodeURIComponent(chatId)}/notebook`;
 	const listeners = new Set<() => void>();
-	let state: NotebookSessionSnapshot = { view: null, draftText: "", saving: false, error: null };
+	const cancelHandoffs = new Set<() => void>();
+	let lifetime = 0;
+	let state: NotebookSessionSnapshot = { view: null, draftText: "", saving: false, editing: false, sendBlocked: false, inputLocked: false, error: null };
 	let tail: Promise<unknown> = Promise.resolve();
 	let localRevision = 0;
 	let savedLocalRevision = 0;
 	let requests = 0;
 	let uncertain: Extract<NotebookCommand, { type: "apply" | "undo" | "start-fresh" }> | null = null;
 	let uncertainRevision = 0;
+	let operationFailure: Error | undefined;
 	const requested: Array<{ id: string; contextId: string }> = [];
-	const requestOrder = new Map<string, number>();
 	type SpeechRequest = { command: Extract<NotebookSessionCommand, { type: "apply" }>; contextId: string; wire?: Extract<NotebookCommand, { type: "apply" }> };
 	let speechRequests: SpeechRequest[] = [];
 	let requestsLoaded = false;
@@ -60,6 +65,9 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	const prepend = (prefixes: string[], text: string) => [...prefixes, text].filter(Boolean).join("\n\n");
 	const publish = (patch: Partial<NotebookSessionSnapshot>) => {
 		state = { ...state, ...patch };
+		state.editing = requested.length > 0 || !!state.view?.pending && !state.view.problem;
+		state.inputLocked = speech.getSnapshot().switching || !!tutor.getSnapshot().locked;
+		state.sendBlocked = !!state.view?.pending || state.editing || state.inputLocked || speech.isActive();
 		for (const listener of listeners) listener();
 	};
 	function adopt(view: NotebookView) {
@@ -91,6 +99,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	}
 	let refreshing: Promise<void> | undefined;
 	let refreshAgain = false;
+	let refreshFailure: Error | undefined;
 	function refresh(): Promise<void> {
 		if (refreshing) { refreshAgain = true; return refreshing; }
 		refreshing = (async () => {
@@ -100,13 +109,20 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 					const response = await fetcher(url, { cache: "no-store" });
 					const body = await response.json();
 					if (!response.ok) throw new Error(body.error ?? "Notebook unavailable");
+					refreshFailure = undefined;
 					adopt(body);
-				} catch (error) { publish({ error: error instanceof Error ? error.message : "Notebook unavailable" }); }
+				} catch (error) { refreshFailure = error instanceof Error ? error : new Error("Notebook unavailable"); publish({ error: refreshFailure.message }); }
 			} while (refreshAgain);
 		})().finally(() => { refreshing = undefined; });
 		return refreshing;
 	}
 	function dispatch(command: NotebookSessionCommand, replay?: SpeechRequest): Promise<NotebookCommandReceipt> {
+		if (command.type === "start-fresh" && state.view?.problem) return Promise.reject(new Error(state.view.problem.message));
+		const updating = command.type === "apply" && command.id && (requested.some(request => request.id === command.id) || state.view?.pending?.id === command.id);
+		if (!replay && ["apply", "undo", "start-fresh"].includes(command.type) && state.editing && !updating) {
+			const error = "Still applying. Apply again when finished";
+			publish({ error }); return Promise.reject(new Error(error));
+		}
 		const prefix = command.type === "apply" && command.speech ? command.speech.prefix : state.draftText;
 		const instruction = command.type === "apply" && command.speech ? [prefix.trimEnd(), command.speech.text].filter(Boolean).join(" ") : prefix;
 		const recoveryEpoch = recoveryPrefixes.length;
@@ -116,9 +132,8 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		const revision = localRevision;
 		const operationId = command.type === "apply" || command.type === "undo" || command.type === "start-fresh"
 			? command.type === "apply" && command.id ? command.id : uncertain && command.type === uncertain.type && (command.type !== "apply" || revision === uncertainRevision) ? uncertain.id : crypto.randomUUID() : undefined;
-		const request = operationId && state.view?.contextId && command.type !== "start-fresh" ? { id: operationId, contextId: state.view.contextId } : undefined;
+		const request = operationId && state.view?.contextId ? { id: operationId, contextId: state.view.contextId } : undefined;
 		if (request) {
-			if (!requestOrder.has(request.id)) requestOrder.set(request.id, requestOrder.size);
 			if (!replay || command.type !== "apply" || command.speech?.draftId === state.view?.draft.id) requested.push(request);
 		}
 		const speechRequest = replay ?? (command.type === "apply" && command.speech && request ? { command: { ...command, id: operationId! }, contextId: request.contextId } : undefined);
@@ -160,7 +175,11 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 			if (command.type === "draft" || command.type === "apply") savedLocalRevision = revision;
 			adopt(receipt.view); publish({ error: null });
 			return receipt;
+		}).then(receipt => {
+			if (operationId) operationFailure = undefined;
+			return receipt;
 		}).catch((error: unknown) => {
+			if (operationId) operationFailure = error instanceof Error ? error : new Error("Notebook save failed");
 			publish({ error: error instanceof Error ? error.message : "Notebook save failed" });
 			throw error;
 		}).finally(() => { if (request && requested.includes(request)) requested.splice(requested.indexOf(request), 1); requests--; publish({ saving: requests > 0 }); });
@@ -169,20 +188,39 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	}
 	let storage = recoveryStorage;
 	try { storage ??= typeof window === "undefined" ? undefined : window.localStorage; } catch { /* server saves still work */ }
-	const tutor = createNotebookTutorDrafts(chatId, dispatch, refresh, storage, () => {
-		const latest = requested.reduce<typeof requested[number] | undefined>((last, item) => !last || requestOrder.get(item.id)! > requestOrder.get(last.id)! ? item : last, undefined);
-		const saved = state.view?.lastOperationId;
-		return latest && (!saved || (requestOrder.get(saved) ?? -1) <= requestOrder.get(latest.id)!) ? latest : undefined;
-	});
-	const speech = createNotebookSpeech(chatId, { tutor, dispatch, getSnapshot: () => state }, storage);
+	const tutor = createNotebookTutorDrafts(chatId, dispatch, refresh, storage, () => !state.editing && !speech.isActive() && !speech.getSnapshot().switching);
+	async function settle() {
+		const startedIn = lifetime;
+		await tail;
+		if (operationFailure) throw operationFailure;
+		await refresh();
+		if (refreshFailure) throw refreshFailure;
+		if (startedIn !== lifetime) throw new Error("Handoff cancelled after leaving this session. The draft is retained.");
+		if (state.view?.problem) throw new Error(state.view.problem.message);
+		if (state.editing) await new Promise<void>((resolve, reject) => {
+			const cancel = () => { listeners.delete(check); cancelHandoffs.delete(cancel); reject(new Error("Handoff cancelled after leaving this session. The draft is retained.")); };
+			const check = () => { if (!state.editing) { listeners.delete(check); cancelHandoffs.delete(cancel); resolve(); } };
+			listeners.add(check); cancelHandoffs.add(cancel); check();
+		});
+		if (state.view?.problem) throw new Error(state.view.problem.message);
+	}
+	const speech = createNotebookSpeech(chatId, { tutor, dispatch, settle, getSnapshot: () => state }, storage);
+	let stopObserving: (() => void) | undefined;
+	function observe() {
+		if (stopObserving) return;
+		const stopSpeech = speech.subscribe(() => publish({}));
+		const stopTutor = tutor.subscribe(() => publish({}));
+		stopObserving = () => { stopSpeech(); stopTutor(); };
+	}
+	observe();
 	return {
 		tutor, speech,
 		getSnapshot: () => state,
-		subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
-		dispatch, refresh,
+		subscribe(listener: () => void) { observe(); listeners.add(listener); return () => { listeners.delete(listener); }; },
+		dispatch, refresh, settle,
 		selectLine(cursorLineId: string) { if (state.view?.lines.some(line => line.id === cursorLineId)) publish({ cursorLineId }); },
 		async idle() { await tail; },
-		dispose() { listeners.clear(); tutor.dispose(); },
+		dispose() { lifetime++; for (const cancel of cancelHandoffs) cancel(); stopObserving?.(); stopObserving = undefined; listeners.clear(); tutor.dispose(); },
 	};
 }
 export type NotebookSession = ReturnType<typeof createNotebookSession>;

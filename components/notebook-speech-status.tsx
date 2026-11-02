@@ -5,7 +5,7 @@ import type { NotebookSession } from "./notebook-session";
 
 export function NotebookSpeechDestination({ session }: { session: NotebookSession }) {
 	const speech = useSyncExternalStore(session.speech.subscribe, session.speech.getSnapshot, session.speech.getSnapshot);
-	return speech.active ? <span role="status" data-notebook-speech-destination={speech.destination} className="text-xs text-muted-foreground">Dictating to {speech.destination === "notebook" ? "Notebook" : "Tutor"}</span> : null;
+	return speech.switching ? <span role="status" className="text-xs text-muted-foreground">{speech.active ? "Finishing dictation…" : "Applying changes…"}</span> : speech.active ? <span role="status" data-notebook-speech-destination={speech.destination} className="text-xs text-muted-foreground">Dictating to {speech.destination === "notebook" ? "Notebook" : "Tutor"}</span> : null;
 }
 
 export function NotebookSpeechRecovery({ session }: { session: NotebookSession }) {
