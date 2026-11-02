@@ -65,9 +65,13 @@ function subscribeUserThinking(fn: (open: boolean) => void): () => void {
 	return () => userThinkingListeners.delete(fn);
 }
 
+import { LearnerExplanation } from "./learner-explanation";
+import type { LearnerExplanation as Explanation } from "@/src/core";
+
 export function ThinkingBlock({
 	label = "YOUR THINKING",
 	text,
+	content,
 	testId,
 	dataCommit,
 	defaultOpen = false,
@@ -75,6 +79,7 @@ export function ThinkingBlock({
 }: {
 	label?: string;
 	text: string;
+	content?: Explanation;
 	testId?: string;
 	/** The practice marker's register flag (commit vs nudge). */
 	dataCommit?: boolean;
@@ -127,7 +132,7 @@ export function ThinkingBlock({
 				<ChevronDownIcon className={cn("size-4 shrink-0 transition-transform", open ? "rotate-180" : "rotate-0")} />
 			</button>
 			{open && (
-				<span className="lh-prose mt-1.5 block whitespace-pre-wrap text-[15px] italic text-foreground/50">{text}</span>
+				<div className="lh-prose mt-1.5 block whitespace-pre-wrap text-[15px] italic text-foreground/50">{content ? <LearnerExplanation parts={content} /> : text}</div>
 			)}
 		</div>
 	);

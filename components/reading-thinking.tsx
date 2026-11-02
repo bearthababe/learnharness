@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { joinDictation, useDictationTarget } from "@/components/dictation";
+import type { NotebookSession } from "./notebook-session";
+import { useNotebookActivityDraft } from "./notebook-activity-draft";
+import { NotebookDraftReview } from "./learner-explanation";
 
 /**
  * The reading-thinking field (owner design 2026-10-03, "two questions per
@@ -19,12 +22,16 @@ import { joinDictation, useDictationTarget } from "@/components/dictation";
  * check, the dock reclaims and this field is plain typing.
  */
 export function ReadingThinkingField({
+	notebook,
+	toolCallId = "",
 	value,
 	onChange,
 	onEscape,
 	onOpen,
 	claim,
 }: {
+	notebook?: NotebookSession;
+	toolCallId?: string;
 	value: string;
 	onChange: (v: string) => void;
 	/** Esc in the field stops dictation (threaded from the page's hook). */
@@ -37,26 +44,49 @@ export function ReadingThinkingField({
 	/** Primary dictation claim — true while the check is behind its reveal. */
 	claim: boolean;
 }) {
+	const owner = { kind: "question" as const, toolCallId, channel: "reading-thinking" as const };
+	const owned = useNotebookActivityDraft(notebook, owner);
+	const text = owned.enabled && owned.draft ? owned.text : value;
+	const textRef = useRef(text); textRef.current = text;
+	const mounted = useRef(true);
+	useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+	const activated = useRef(false);
+	useEffect(() => {
+		if (!owned.enabled || activated.current) return;
+		activated.current = true;
+		if (!owned.draft) notebook!.tutor.updateText(owner, value);
+	}, [owned.enabled, owned.draft, notebook, toolCallId, value]);
+	const change = (value: string) => {
+		textRef.current = value;
+		if (notebook?.getSnapshot().view?.contextId) notebook.tutor.updateText(owner, value);
+		if (mounted.current) onChange(value);
+	};
 	useDictationTarget(
 		useCallback(
 			(t: string) => {
-				onChange(joinDictation(value, t));
+				change(joinDictation(textRef.current, t));
 			},
-			[value, onChange],
+			[notebook, toolCallId, onChange],
 		),
 		claim,
 	);
 	return (
 		<div
+			data-input-owner="tutor"
+			data-notebook-question={toolCallId}
+			data-notebook-channel="reading-thinking"
+			data-reading-claim={claim}
 			data-testid="reading-thinking-field"
 			className="pointer-events-auto mb-2 rounded-2xl border bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50"
 		>
 			<div className="pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 				Thinking while reading
 			</div>
+			<NotebookDraftReview draft={owned.draft} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
+			{owned.state.error && <p role="alert" className="text-xs text-destructive">{owned.state.error}</p>}
 			<textarea
-				value={value}
-				onChange={(e) => onChange(e.target.value)}
+				value={text}
+				onChange={(e) => change(e.target.value)}
 				/* py-0.5 (owner round, 2026-10-07): the scrollbar fix. Source
 				   Sans 3's font box is 22px at 16px; lh-input's 1.25 leading
 				   gives a 20px line box — the content area sticks 1px below the

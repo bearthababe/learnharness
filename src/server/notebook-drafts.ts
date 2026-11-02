@@ -1,7 +1,7 @@
 /** Notebook-owned draft/snapshot rules; existing input architecture only calls
  * these at the explicit save/return/submission boundaries. */
 import type { NotebookCommand, NotebookRecord, LearnerExplanation, TutorDraftOwner } from "../core/contracts/notebook.ts";
-import { sameDraftOwner } from "../core/notebook-content.ts";
+import { sameDraftOwner, questionChannelContent } from "../core/notebook-content.ts";
 
 export class NotebookDraftConflict extends Error {}
 export function verifyNotebookExplanation(record: NotebookRecord, owner: TutorDraftOwner, draftId: string, parts: LearnerExplanation) {
@@ -11,15 +11,25 @@ export function verifyNotebookExplanation(record: NotebookRecord, owner: TutorDr
 		if (!snapshot || snapshot.draftId !== draftId || !sameDraftOwner(snapshot.owner, owner) || snapshot.contextId !== part.contextId || snapshot.revision !== part.revision || JSON.stringify(snapshot.lines) !== JSON.stringify(part.lines)) throw new NotebookDraftConflict("Working snapshot does not belong to this draft");
 	}
 }
-export function changeNotebookDraft(record: NotebookRecord, command: Extract<NotebookCommand, { type: "tutor-draft" | "snapshot" }>) {
+export function changeNotebookDraft(record: NotebookRecord, command: Extract<NotebookCommand, { type: "tutor-draft" | "snapshot" | "discard-tutor-draft" }>) {
 	const owner = command.type === "tutor-draft" ? command.draft.owner : command.owner;
 	const drafts = record.tutorDrafts ??= [];
 	const current = drafts.find((draft) => sameDraftOwner(draft.owner, owner));
+	if (command.type === "discard-tutor-draft") {
+		if (!current) return;
+		if (current.id !== command.draftId || current.revision !== command.expectedRevision) throw new NotebookDraftConflict("Tutor draft changed; review it before discarding");
+		record.tutorDrafts = drafts.filter(draft => draft !== current);
+		return;
+	}
 	if (command.type === "tutor-draft") {
 		if (current && JSON.stringify(current) === JSON.stringify(command.draft)) return;
 		if ((current?.revision ?? 0) !== command.expectedRevision || command.draft.revision !== command.expectedRevision + 1 || (current && current.id !== command.draft.id)) throw new NotebookDraftConflict("Tutor draft changed; refresh before saving");
 		verifyNotebookExplanation(record, owner, command.draft.id, command.draft.parts);
-		const before = current?.parts.filter((part) => part.kind === "working") ?? [];
+		// Newer local typing may arrive after its frozen revision was consumed.
+		// Its already-submitted immutable working remains the allowed baseline.
+		const accepted = !current ? record.submissions?.findLast(receipt => [receipt.submission, ...(receipt.submission.additionalDrafts ?? [])].some(ref => ref.draftId === command.draft.id && sameDraftOwner(ref.owner, owner))) : undefined;
+		const prior = current?.parts ?? (accepted ? accepted.answer ? questionChannelContent(accepted.answer, owner) : accepted.explanation : []);
+		const before = prior.filter((part) => part.kind === "working");
 		const after = command.draft.parts.filter((part) => part.kind === "working");
 		if (JSON.stringify(before) !== JSON.stringify(after)) throw new NotebookDraftConflict("Saved working cannot be reordered or removed");
 		if (current && JSON.stringify(current.parts.map(({ id, kind }) => [id, kind])) !== JSON.stringify(command.draft.parts.map(({ id, kind }) => [id, kind]))) throw new NotebookDraftConflict("Explanation part identities and order must be retained");

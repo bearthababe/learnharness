@@ -20,11 +20,11 @@
  * fires both).
  */
 import { ChatInputError, dismissAppends, emit, parseDismissInput } from "@/src/core";
-import { getChat, isTurnRunning, parkDismissal, stores } from "@/src/server";
+import { getChat, isTurnRunning, parkDismissal, stores, commitNotebookInput, notebookSubmissionAccepted, validateNotebookSubmission, NotebookDraftConflict } from "@/src/server";
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
 	const { id } = await ctx.params;
-	const chat = getChat(id);
+	let chat = getChat(id);
 	if (!chat) return Response.json({ error: "Unknown chat" }, { status: 404 });
 
 	let input;
@@ -36,6 +36,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 	} catch (err) {
 		if (err instanceof ChatInputError) return Response.json({ error: err.message }, { status: 400 });
 		throw err;
+	}
+
+	chat = getChat(id);
+	if (!chat) return Response.json({ error: "Unknown chat" }, { status: 404 });
+	if (input.type === "dismiss" && input.submission) {
+		try {
+			if (notebookSubmissionAccepted(chat, input)) return Response.json({ ok: true });
+			validateNotebookSubmission(chat, input);
+		} catch (err) {
+			if (err instanceof NotebookDraftConflict) return Response.json({ error: err.message }, { status: 409 });
+			throw err;
+		}
 	}
 
 	// A running turn owns the chat's record (its messages persist at
@@ -59,7 +71,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
 	// Write-ahead, turn-less: the record is the only state that moves.
 	const merged = [...chat.messages, ...appends];
-	stores.chatStore.saveMessages(id, merged);
+	if (input.type === "dismiss" && input.submission) commitNotebookInput(stores.chatStore, id, input, appends);
+	else stores.chatStore.saveMessages(id, merged);
 	emit("record-changed", { chatId: id });
 	return Response.json({ ok: true });
 }

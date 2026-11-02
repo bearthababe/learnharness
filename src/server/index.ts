@@ -8,6 +8,8 @@ export * from "./chat-handler.ts";
 export * from "./events-stream.ts";
 export * from "./chats.ts";
 export { handleNotebookRequest, initializeNotebookRecovery } from "./notebook.ts";
+export { commitNotebookInput, notebookSubmissionAccepted, validateNotebookSubmission } from "./notebook-submissions.ts";
+export { NotebookDraftConflict } from "./notebook-drafts.ts";
 export * from "./graph.ts";
 export { NotesImportError } from "../agent/subagents/extraction.ts";
 export * from "./commit-positions.ts";
