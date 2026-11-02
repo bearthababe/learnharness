@@ -44,6 +44,7 @@ export * from "./native-messages.ts";
 export * from "./notebook-content.ts";
 export * from "./notebook-speech.ts";
 export type { NotebookSpeechRun, NotebookSpeechFragment, NotebookSpeechTarget } from "./contracts/notebook.ts";
+export type { NotebookSpeechApply } from "./contracts/notebook.ts";
 export type { LearnerExplanation, LearnerExplanationPart, OwnedTutorDraft, TutorDraftOwner, WorkingSnapshot, NotebookSubmission, NotebookSubmissionReceipt } from "./contracts/notebook.ts";
 export * from "./compaction.ts";
 export * from "./input-events.ts";

@@ -856,7 +856,7 @@ function QuestionDockForm({
 				</div>
 			)}
 
-			<NotebookDraftReview draft={owned.draft} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
+			<NotebookDraftReview draft={owned.draft} waiting={owned.state.waitingForWorking} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
 			{(submitError || owned.state.error) && <p role="alert" className="px-4 text-xs text-destructive">{submitError || owned.state.error}</p>}
 			{owned.state.saving && <p role="status" className="px-4 text-xs text-muted-foreground">Saving draft…</p>}
 			{/* The learner's half of the dock — a composer TWIN: a labeled, bordered

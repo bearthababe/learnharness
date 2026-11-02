@@ -60,12 +60,27 @@ export interface NotebookOperation {
 	instruction?: string;
 	cursorLineId?: string | null;
 	acceptedAt: string;
-	status: "queued" | "running" | "result-ready" | "applied" | "clarification" | "failed" | "unknown" | "recovered";
+	status: "awaiting-transcript" | "queued" | "running" | "result-ready" | "applied" | "clarification" | "failed" | "unknown" | "recovered";
 	baseRevision?: number;
 	execution?: { id: string; model: string; input: NotebookEditorInput; attempts: NotebookAttemptRecord[]; unobservedCall?: boolean };
 	result?: { state: NotebookState; response: NotebookResponse | null; exchanges: NotebookExchange[]; error?: string };
 	appliedRevision?: number;
+	completedWorking?: { revision: number; lines: NotebookLine[] };
+	recovery?: { instructions: string[]; operationIds?: string[] };
+	speech?: NotebookSpeechApply;
 	error?: string;
+}
+export interface NotebookSpeechApply {
+	runId: string;
+	draftId: string;
+	nextDraftId: string;
+	fragmentIds: string[];
+	text: string;
+	prefix: string;
+	commandIds: string[];
+	cutoff: number;
+	ready: boolean;
+	resolves?: string;
 }
 export interface NotebookRecord {
 	revision: number;
@@ -128,10 +143,13 @@ export interface WorkingSnapshot {
 	lines: NotebookLine[];
 	owner: TutorDraftOwner;
 	draftId: string;
+	throughOperationId?: string;
+	status?: "pending" | "resolved" | "failed";
+	failure?: string;
 }
 export type LearnerExplanationPart =
 	| { id: string; kind: "text"; text: string }
-	| { id: string; kind: "working"; snapshotId: string; contextId: string; revision: number; lines: NotebookLine[] };
+	| { id: string; kind: "working"; snapshotId: string; contextId: string; revision: number; lines: NotebookLine[]; pending?: true; failure?: string };
 export type LearnerExplanation = LearnerExplanationPart[];
 export interface OwnedTutorDraft {
 	id: string;
@@ -147,8 +165,8 @@ export type NotebookCommand =
 	| { type: "visibility"; visible: boolean }
 	| { type: "draft"; expectedRevision: number; text: string }
 	| { type: "tutor-draft"; expectedRevision: number; draft: OwnedTutorDraft }
-	| { type: "snapshot"; id: string; owner: TutorDraftOwner; draftId: string; expectedRevision: number; continuationId: string; contextId?: string; workingRevision?: number }
-	| { type: "apply"; id: string; contextId: string; draftRevision: number; instruction: string; cursorLineId?: string | null }
+	| { type: "snapshot"; id: string; owner: TutorDraftOwner; draftId: string; expectedRevision: number; continuationId: string; contextId?: string; workingRevision?: number; throughOperationId?: string }
+	| { type: "apply"; id: string; contextId: string; draftRevision: number; instruction: string; cursorLineId?: string | null; speech?: NotebookSpeechApply }
 	| { type: "undo" | "start-fresh"; id: string; contextId: string };
 export interface NotebookUsage {
 	calls: number;
@@ -164,6 +182,8 @@ export interface NotebookView {
 	visible: boolean;
 	contextId: string | null;
 	workingRevision: number;
+	lastOperationId?: string;
+	snapshots?: WorkingSnapshot[];
 	lines: NotebookLine[];
 	history: SavedNotebookHistoryEntry[];
 	startFreshPending: boolean;

@@ -23,6 +23,7 @@ export function changeNotebookSpeech(record: NotebookRecord, command: Extract<No
 		run.unplaced = [];
 		for (const fragment of [...run.fragments].sort((a, b) => (a.start ?? Infinity) - (b.start ?? Infinity))) {
 			if (!fragment.text.trim()) continue;
+			if (record.operations.some(op => op.speech?.runId === run.id && (op.speech.fragmentIds.includes(fragment.id) || op.speech.commandIds.some(id => fragment.id === id || fragment.id.startsWith(`${id}:`))))) continue;
 			const target = fragment.target;
 			const join = (text: string) => text ? `${text.trimEnd()} ${fragment.text}` : fragment.text;
 			if (target?.kind === "notebook" && record.notebookDraft.id === target.draftId) {

@@ -10,9 +10,9 @@ import { initAuthEnv } from "./keys.ts";
 import { refreshConnectionCatalog } from "./model-catalog.ts";
 import { callCost } from "./pricing.ts";
 import { ownedTutorDraftSchema, tutorDraftOwnerSchema } from "../core/notebook-content.ts";
-import { changeNotebookDraft, NotebookDraftConflict } from "./notebook-drafts.ts";
+import { changeNotebookDraft, NotebookDraftConflict, resolveNotebookSnapshots } from "./notebook-drafts.ts";
 import { changeNotebookSpeech } from "./notebook-speech.ts";
-import { notebookSpeechRunSchema } from "../core/notebook-speech.ts";
+import { notebookSpeechApplySchema, notebookSpeechRunSchema } from "../core/notebook-speech.ts";
 
 const id = z.string().min(1);
 const commandSchema = z.discriminatedUnion("type", [
@@ -22,12 +22,13 @@ const commandSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("draft"), expectedRevision: z.number().int().nonnegative(), text: z.string() }).strict(),
 	z.object({ type: z.literal("tutor-draft"), expectedRevision: z.number().int().nonnegative(), draft: ownedTutorDraftSchema }).strict(),
 	z.object({ type: z.literal("discard-tutor-draft"), owner: tutorDraftOwnerSchema, draftId: id, expectedRevision: z.number().int().nonnegative() }).strict(),
-	z.object({ type: z.literal("snapshot"), id, owner: tutorDraftOwnerSchema, draftId: id, expectedRevision: z.number().int().nonnegative(), continuationId: id, contextId: id.optional(), workingRevision: z.number().int().nonnegative().optional() }).strict(),
-	z.object({ type: z.literal("apply"), id, contextId: id, draftRevision: z.number().int().nonnegative(), instruction: z.string().refine((s) => s.trim().length > 0), cursorLineId: z.string().nullable().optional() }).strict(),
+	z.object({ type: z.literal("snapshot"), id, owner: tutorDraftOwnerSchema, draftId: id, expectedRevision: z.number().int().nonnegative(), continuationId: id, contextId: id.optional(), workingRevision: z.number().int().nonnegative().optional(), throughOperationId: id.optional() }).strict(),
+	z.object({ type: z.literal("apply"), id, contextId: id, draftRevision: z.number().int().nonnegative(), instruction: z.string(), cursorLineId: z.string().nullable().optional(),
+		speech: notebookSpeechApplySchema.optional() }).strict(),
 	z.object({ type: z.literal("undo"), id, contextId: id }).strict(),
 	z.object({ type: z.literal("start-fresh"), id, contextId: id }).strict(),
 ]);
-const executable = (op: NotebookOperation) => ["queued", "running", "result-ready"].includes(op.status);
+const executable = (op: NotebookOperation) => ["awaiting-transcript", "queued", "running", "result-ready"].includes(op.status);
 const paused = (op: NotebookOperation) => ["failed", "clarification", "unknown"].includes(op.status);
 const nextOperation = (record?: NotebookRecord) => record?.operations.find((op) => executable(op) || paused(op));
 class NotebookRefusal extends Error {
@@ -64,12 +65,14 @@ export function notebookView(record?: NotebookRecord): NotebookView {
 	const pending = record?.operations.find(executable);
 	return { revision: record?.revision ?? 0, visible: record?.visible ?? false,
 		contextId: record?.current.id ?? null, workingRevision: record?.current.revision ?? 0,
+		lastOperationId: record?.operations.filter(op => op.contextId === record.current.id && op.kind !== "start-fresh").reduce<NotebookOperation | undefined>((last, op) => !last || op.sequence > last.sequence ? op : last, undefined)?.id,
+		snapshots: structuredClone(record?.snapshots ?? []),
 		lines: structuredClone(record?.current.state.lines ?? []), canUndo: !!record?.current.state.undo.length,
 		history: structuredClone(record?.history ?? []),
 		startFreshPending: !!record?.operations.some((op) => op.kind === "start-fresh" && executable(op)),
 		draft: structuredClone(record?.notebookDraft ?? { id: "", revision: 0, text: "" }),
 		pending: pending ? { id: pending.id, kind: pending.kind, status: pending.status } : null,
-		problem: problem ? { operationId: problem.id, instruction: problem.instruction, status: problem.status as "failed" | "clarification" | "unknown", message: problem.error ?? "Edit needs attention" } : null,
+		problem: problem ? { operationId: problem.id, instruction: problem.recovery?.instructions.join("\n\n") ?? problem.instruction, status: problem.status as "failed" | "clarification" | "unknown", message: problem.error ?? "Edit needs attention" } : null,
 		usage, speechRuns: structuredClone(record?.speechRuns ?? []), tutorDrafts: structuredClone(record?.tutorDrafts ?? []), submissions: record?.submissions?.map(({ submission, status, explanation }) => ({ submission, status, explanation })) ?? [] };
 }
 
@@ -95,8 +98,15 @@ export function createNotebookService({ chatStore, engine }: {
 	function restore(record: NotebookRecord, op: NotebookOperation, status: "failed" | "clarification" | "unknown", message: string) {
 		op.status = status;
 		op.error = message;
-		if (op.instruction) {
-			record.notebookDraft.text = [op.instruction, record.notebookDraft.text].filter(Boolean).join("\n\n");
+		const returned = record.operations.slice(record.operations.indexOf(op)).filter(item => item === op || item.kind === "edit" && (item.status === "queued" || item.status === "awaiting-transcript"));
+		op.recovery = { instructions: returned.flatMap(item => item.instruction ? [item.instruction] : []), operationIds: returned.map(item => item.id) };
+		for (const item of returned) {
+			if (item !== op) item.status = "recovered";
+			item.completedWorking = { revision: record.current.revision, lines: structuredClone(record.current.state.lines) };
+			resolveNotebookSnapshots(record, item.id);
+		}
+		if (op.recovery.instructions.length) {
+			record.notebookDraft.text = [...op.recovery.instructions, record.notebookDraft.text].filter(Boolean).join("\n\n");
 			record.notebookDraft.revision++;
 		}
 	}
@@ -113,6 +123,8 @@ export function createNotebookService({ chatStore, engine }: {
 				record.current.revision++;
 				op.status = "applied";
 				op.appliedRevision = record.current.revision;
+				op.completedWorking = { revision: record.current.revision, lines: structuredClone(record.current.state.lines) };
+				resolveNotebookSnapshots(record, op.id);
 			}
 		});
 	}
@@ -123,6 +135,15 @@ export function createNotebookService({ chatStore, engine }: {
 			if (!record || !op || paused(op)) return;
 			if (op.status === "result-ready") { commit(chatId, op.id); continue; }
 			if (op.status !== "queued") return;
+			if (op.kind === "edit" && op.speech?.ready && !op.instruction?.trim()) {
+				mutate(chatId, record => {
+					const current = record.operations.find(item => item.id === op.id)!;
+					current.status = "applied";
+					current.completedWorking = { revision: record.current.revision, lines: structuredClone(record.current.state.lines) };
+					resolveNotebookSnapshots(record, current.id);
+				});
+				continue;
+			}
 			if (op.kind === "start-fresh") {
 				mutate(chatId, (record) => {
 					const current = record.operations.find((item) => item.id === op.id)!;
@@ -149,6 +170,8 @@ export function createNotebookService({ chatStore, engine }: {
 					}
 					current.status = "applied";
 					current.appliedRevision = record.current.revision;
+					current.completedWorking = { revision: record.current.revision, lines: structuredClone(record.current.state.lines) };
+					resolveNotebookSnapshots(record, current.id);
 				});
 				continue;
 			}
@@ -235,13 +258,58 @@ export function createNotebookService({ chatStore, engine }: {
 		if (command.type === "apply" || command.type === "undo" || command.type === "start-fresh") {
 			const duplicate = previous?.operations.find((op) => op.id === command.id);
 			if (duplicate) {
+				if (command.type === "apply" && command.speech && duplicate.speech) {
+					const source = (speech: NonNullable<NotebookOperation["speech"]>) => JSON.stringify([speech.runId, speech.draftId, speech.nextDraftId, speech.prefix, speech.commandIds, speech.cutoff, speech.resolves]);
+					if (duplicate.contextId !== command.contextId || source(duplicate.speech) !== source(command.speech)) throw new NotebookRefusal("Operation identity already used for different work", 409);
+					if (duplicate.status === "recovered") {
+						const blocked = previous?.operations.find(op => paused(op) && op.recovery?.operationIds?.includes(duplicate.id));
+						if (blocked) {
+							const saved = mutate(chatId, record => {
+								const problem = record.operations.find(op => op.id === blocked.id)!;
+								const oldPrefix = problem.recovery!.instructions.join("\n\n");
+								const later = record.notebookDraft.text.startsWith(oldPrefix) ? record.notebookDraft.text.slice(oldPrefix.length).replace(/^\n\n/, "") : record.notebookDraft.text;
+								const op = record.operations.find(op => op.id === duplicate.id)!;
+								op.instruction = command.instruction; op.speech = structuredClone(command.speech);
+								problem.recovery!.instructions = problem.recovery!.operationIds!.flatMap(id => record.operations.find(op => op.id === id)?.instruction || []);
+								record.notebookDraft.text = [...problem.recovery!.instructions, later].filter(Boolean).join("\n\n"); record.notebookDraft.revision++;
+							});
+							return { id: command.id, view: notebookView(saved) };
+						}
+					}
+					if (duplicate.status === "awaiting-transcript") {
+						const saved = mutate(chatId, record => {
+							const op = record.operations.find(op => op.id === command.id)!;
+							if (command.instruction !== [command.speech!.prefix.trimEnd(), command.speech!.text].filter(Boolean).join(" ")) throw new NotebookRefusal("Spoken instruction changed", 409);
+							op.instruction = command.instruction; op.speech = structuredClone(command.speech);
+							if (command.speech!.ready) {
+								op.status = "queued";
+							}
+						});
+						schedule(chatId); return { id: command.id, view: notebookView(saved) };
+					}
+					// A stale reservation or recovery replay cannot downgrade accepted work.
+					if (!command.speech.ready || duplicate.status === "recovered") return { id: command.id, view: notebookView(previous) };
+				}
 				if (duplicate.contextId !== command.contextId || duplicate.kind !== (command.type === "apply" ? "edit" : command.type) ||
-					(command.type === "apply" && (duplicate.instruction !== command.instruction || (duplicate.cursorLineId ?? null) !== (command.cursorLineId ?? null)))) throw new NotebookRefusal("Operation identity already used for different work", 409);
+					(command.type === "apply" && (duplicate.instruction !== command.instruction || (duplicate.cursorLineId ?? null) !== (command.cursorLineId ?? null) || JSON.stringify(duplicate.speech) !== JSON.stringify(command.speech)))) throw new NotebookRefusal("Operation identity already used for different work", 409);
 				return { id: command.id, view: notebookView(previous) };
 			}
 		}
 		const saved = mutate(chatId, (record) => {
-			if (command.type === "speech-run" || command.type === "discard-speech") { changeNotebookSpeech(record, command); return; }
+			if (command.type === "speech-run" || command.type === "discard-speech") {
+				if (command.type === "speech-run" && command.run.status !== "recording") {
+					const awaiting = record.operations.filter(op => op.status === "awaiting-transcript" && op.speech?.runId === command.run.id);
+					for (const op of awaiting) {
+						const speech = op.speech!;
+						const known = command.run.fragments.filter(fragment => fragment.target?.kind === "notebook" && fragment.target.draftId === speech.draftId).sort((a, b) => (a.start ?? Infinity) - (b.start ?? Infinity));
+						speech.fragmentIds = known.map(fragment => fragment.id);
+						speech.text = command.run.status === "cancelled" ? "" : known.map(fragment => fragment.text).join(" ");
+						op.instruction = [speech.prefix.trimEnd(), speech.text].filter(Boolean).join(" ");
+					}
+					if (awaiting.length) restore(record, awaiting[0]!, "failed", "Recording interrupted. Review the retained instructions and explicitly Apply to retry.");
+				}
+				changeNotebookSpeech(record, command); return;
+			}
 			if (command.type === "tutor-draft" || command.type === "snapshot" || command.type === "discard-tutor-draft") { changeNotebookDraft(record, command); return; }
 			if (command.type === "visibility") { record.visible = command.visible; return; }
 			if (command.type === "draft") {
@@ -254,16 +322,29 @@ export function createNotebookService({ chatStore, engine }: {
 				!(command.type === "apply" && record.operations.some(paused))) throw new NotebookRefusal("Start fresh is waiting; resolve earlier work first", 409);
 			let correctionIndex = -1;
 			if (command.type === "apply") {
-				if (record.operations.some((op) => op.kind === "edit" && executable(op))) throw new NotebookRefusal("An edit is pending", 409);
-				if (record.notebookDraft.revision !== command.draftRevision || record.notebookDraft.text !== command.instruction) throw new NotebookRefusal("Notebook draft changed; refresh before applying", 409);
+				const blocked = record.operations.find(paused);
+				if (command.speech && blocked && command.speech.resolves !== blocked.id) {
+					if (command.speech.draftId !== record.notebookDraft.id) throw new NotebookRefusal("Notebook draft changed; review retained speech", 409);
+					const instructions = blocked.recovery?.instructions ?? (blocked.instruction ? [blocked.instruction] : []);
+					const prefix = instructions.join("\n\n");
+					const later = record.notebookDraft.text.startsWith(prefix) ? record.notebookDraft.text.slice(prefix.length).replace(/^\n\n/, "") : record.notebookDraft.text;
+					blocked.recovery = { instructions: [...instructions, command.instruction].filter(Boolean), operationIds: [...blocked.recovery?.operationIds ?? [blocked.id], command.id] };
+					record.notebookDraft = { id: command.speech.nextDraftId, revision: record.notebookDraft.revision + 1, text: [...blocked.recovery.instructions, later].filter(Boolean).join("\n\n") };
+					record.operations.push({ id: command.id, sequence: record.nextSequence++, kind: "edit", contextId: command.contextId, instruction: command.instruction, speech: structuredClone(command.speech), acceptedAt: new Date().toISOString(), status: "recovered", completedWorking: { revision: record.current.revision, lines: structuredClone(record.current.state.lines) } });
+					return;
+				}
+				if (!command.speech && !command.instruction.trim()) throw new NotebookRefusal("Enter a notebook instruction", 400);
+				const instruction = command.speech ? [record.notebookDraft.text.trimEnd(), command.speech.text].filter(Boolean).join(" ") : record.notebookDraft.text;
+				if (record.notebookDraft.revision !== command.draftRevision || instruction !== command.instruction || command.speech && command.speech.draftId !== record.notebookDraft.id) throw new NotebookRefusal("Notebook draft changed; refresh before applying", 409);
 				if (command.cursorLineId && !record.current.state.lines.some((line) => line.id === command.cursorLineId)) throw new NotebookRefusal("Selected line no longer exists", 409);
 				correctionIndex = record.operations.findIndex(paused);
 				if (correctionIndex >= 0) record.operations[correctionIndex]!.status = "recovered";
 				record.notebookDraft.text = ""; record.notebookDraft.revision++;
+				if (command.speech) record.notebookDraft.id = command.speech.nextDraftId;
 			}
 			const op: NotebookOperation = { id: command.id, contextId: command.contextId, sequence: record.nextSequence++, kind: command.type === "apply" ? "edit" : command.type,
-				acceptedAt: new Date().toISOString(), status: "queued",
-				...(command.type === "apply" ? { instruction: command.instruction, cursorLineId: command.cursorLineId } : {}) };
+				acceptedAt: new Date().toISOString(), status: command.type === "apply" && command.speech && !command.speech.ready ? "awaiting-transcript" : "queued",
+				...(command.type === "apply" ? { instruction: command.instruction, cursorLineId: command.cursorLineId, ...(command.speech ? { speech: structuredClone(command.speech) } : {}) } : {}) };
 			// A corrected instruction resolves the paused head before waiting controls.
 			if (correctionIndex >= 0) record.operations.splice(correctionIndex + 1, 0, op); else record.operations.push(op);
 		});

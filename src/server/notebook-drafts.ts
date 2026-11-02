@@ -1,14 +1,32 @@
 /** Notebook-owned draft/snapshot rules; existing input architecture only calls
  * these at the explicit save/return/submission boundaries. */
-import type { NotebookCommand, NotebookRecord, LearnerExplanation, TutorDraftOwner } from "../core/contracts/notebook.ts";
-import { sameDraftOwner, questionChannelContent } from "../core/notebook-content.ts";
+import type { NotebookCommand, NotebookRecord, LearnerExplanation, TutorDraftOwner, WorkingSnapshot } from "../core/contracts/notebook.ts";
+import { sameDraftOwner, questionChannelContent, NOTEBOOK_FAILURE } from "../core/notebook-content.ts";
 
 export class NotebookDraftConflict extends Error {}
+function snapshotPart(snapshot: WorkingSnapshot): Extract<LearnerExplanation[number], { kind: "working" }> {
+	return { id: snapshot.id, kind: "working", snapshotId: snapshot.id, contextId: snapshot.contextId, revision: snapshot.revision, lines: structuredClone(snapshot.lines),
+		...(snapshot.status === "pending" ? { pending: true } : {}), ...(snapshot.failure ? { failure: snapshot.failure } : {}) };
+}
+export function resolveNotebookSnapshots(record: NotebookRecord, operationId: string) {
+	const operation = record.operations.find(op => op.id === operationId)!;
+	if (!operation.completedWorking) return;
+	for (const snapshot of record.snapshots ?? []) {
+		if (snapshot.status !== "pending" || snapshot.throughOperationId !== operationId) continue;
+		snapshot.status = operation.status === "applied" ? "resolved" : "failed";
+		if (snapshot.status === "failed") snapshot.failure = NOTEBOOK_FAILURE;
+		snapshot.revision = operation.completedWorking.revision;
+		snapshot.lines = structuredClone(operation.completedWorking.lines);
+		const draft = record.tutorDrafts?.find(draft => draft.id === snapshot.draftId);
+		const index = draft?.parts.findIndex(part => part.id === snapshot.id) ?? -1;
+		if (draft && index >= 0) { draft.parts[index] = snapshotPart(snapshot); draft.revision++; }
+	}
+}
 export function verifyNotebookExplanation(record: NotebookRecord, owner: TutorDraftOwner, draftId: string, parts: LearnerExplanation) {
 	for (const part of parts) {
 		if (part.kind !== "working") continue;
 		const snapshot = record.snapshots?.find((item) => item.id === part.snapshotId);
-		if (!snapshot || snapshot.draftId !== draftId || !sameDraftOwner(snapshot.owner, owner) || snapshot.contextId !== part.contextId || snapshot.revision !== part.revision || JSON.stringify(snapshot.lines) !== JSON.stringify(part.lines)) throw new NotebookDraftConflict("Working snapshot does not belong to this draft");
+		if (!snapshot || snapshot.draftId !== draftId || !sameDraftOwner(snapshot.owner, owner) || JSON.stringify(snapshotPart(snapshot)) !== JSON.stringify(part)) throw new NotebookDraftConflict("Working snapshot does not belong to this draft");
 	}
 }
 export function changeNotebookDraft(record: NotebookRecord, command: Extract<NotebookCommand, { type: "tutor-draft" | "snapshot" | "discard-tutor-draft" }>) {
@@ -42,6 +60,18 @@ export function changeNotebookDraft(record: NotebookRecord, command: Extract<Not
 		return;
 	}
 	if (!current || current.id !== command.draftId || current.revision !== command.expectedRevision) throw new NotebookDraftConflict("Tutor draft changed; refresh before returning");
+	if (command.throughOperationId) {
+		const op = record.operations.find(op => op.id === command.throughOperationId);
+		if (!op || op.contextId !== command.contextId || op.kind === "start-fresh") throw new NotebookDraftConflict("Snapshot cutoff does not belong to this working context");
+		if (current.parts.some(part => part.id === command.id || part.id === command.continuationId)) throw new NotebookDraftConflict("Part identity already used");
+		const settled = op.completedWorking ?? (op.status === "applied" && op.result ? { revision: op.appliedRevision!, lines: op.result.state.lines } : undefined);
+		const snapshot: WorkingSnapshot = { id: command.id, owner, draftId: current.id, contextId: op.contextId, throughOperationId: op.id,
+			status: settled ? op.status === "applied" ? "resolved" : "failed" : "pending", revision: settled?.revision ?? record.current.revision, lines: structuredClone(settled?.lines ?? record.current.state.lines),
+			...(settled && op.status !== "applied" ? { failure: NOTEBOOK_FAILURE } : {}) };
+		(record.snapshots ??= []).push(snapshot);
+		current.parts.push(snapshotPart(snapshot), { id: command.continuationId, kind: "text", text: "" }); current.revision++;
+		return;
+	}
 	if ((command.contextId !== undefined && command.contextId !== record.current.id) || (command.workingRevision !== undefined && command.workingRevision !== record.current.revision)) throw new NotebookDraftConflict("Working changed before the snapshot could be saved; retain this draft for review");
 	if (record.operations.some((op) => ["queued", "running", "result-ready"].includes(op.status))) throw new NotebookDraftConflict("Notebook edit is pending");
 	const last = current.parts.filter((part) => part.kind === "working").at(-1);
