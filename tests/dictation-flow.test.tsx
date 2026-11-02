@@ -41,7 +41,20 @@ class AudioGraph {
 	audioWorklet = { addModule: async () => {} };
 	createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
 }
-class Worklet { port = {}; connect() {} disconnect() {} }
+class Worklet {
+	static all: Worklet[] = [];
+	static autoFlush = true;
+	port = {
+		onmessage: null as ((event: { data: unknown }) => void) | null,
+		postMessage: (message: { type: string }) => {
+			if (message.type === "flush" && Worklet.autoFlush) queueMicrotask(() => this.emit({ type: "flushed" }));
+		},
+	};
+	constructor() { Worklet.all.push(this); }
+	emit(data: unknown) { this.port.onmessage?.({ data }); }
+	connect() {}
+	disconnect() {}
+}
 
 const globals = globalThis as Record<string, unknown>;
 let restore: (() => void) | undefined;
@@ -62,6 +75,7 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 		appends: [] as string[],
 	};
 	Socket.all = [];
+	Worklet.all = []; Worklet.autoFlush = true;
 	const previous = new Map<string, PropertyDescriptor | undefined>();
 	for (const [key, value] of Object.entries({
 		React, window: dom.window, document: dom.document, CustomEvent: dom.window.CustomEvent,
@@ -131,6 +145,69 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 }
 
 afterEach(async () => { await dispose?.(); restore?.(); dispose = undefined; restore = undefined; });
+
+test("Stop sends the worklet's partial tail before closing the provider stream", async () => {
+	const f = await fixture("en");
+	await f.mount();
+	await act(async () => { f.dictation.toggle(); });
+	const socket = Socket.all.at(-1)!;
+	const worklet = Worklet.all.at(-1)!;
+	await act(async () => socket.open());
+	Worklet.autoFlush = false;
+	await act(async () => { f.dictation.stop(); });
+	assert.equal(f.dictation.phase, "stopping");
+	assert.deepEqual(socket.sent, [], "CloseStream must wait for the partial audio packet");
+	const tail = new Int16Array([120, -120]);
+	await act(async () => {
+		worklet.emit({ type: "audio", buffer: tail, contextStart: 10, sampleRate: 16000 });
+		worklet.emit({ type: "flushed" });
+	});
+	assert.deepEqual(socket.sent, [tail, JSON.stringify({ type: "CloseStream" })]);
+	await act(async () => { socket.final("complete tail"); socket.end(); });
+	assert.deepEqual(f.state.appends, ["complete tail"]);
+	assert.equal(f.state.stops, 1);
+});
+
+test("a dying replaced socket cannot append or stop the continuing recording", async () => {
+	const f = await fixture("en");
+	await f.mount();
+	await act(async () => { f.dictation.toggle(); });
+	const old = Socket.all.at(-1)!;
+	await act(async () => { old.open(); old.final("before reconnect"); old.end(1006); });
+	const current = Socket.all.at(-1)!;
+	assert.notEqual(current, old);
+	await act(async () => { current.open(); old.final("stale duplicate"); old.end(); });
+	assert.equal(f.dictation.phase, "recording");
+	assert.deepEqual(f.state.appends, []);
+	await act(async () => { current.final("after reconnect"); f.dictation.stop(); });
+	await act(async () => current.end());
+	assert.deepEqual(f.state.appends, ["before reconnect after reconnect"]);
+	assert.equal(f.state.captures, 1);
+});
+
+test("Stop during the socket handshake retains queued audio and sends its tail before CloseStream", async () => {
+	const f = await fixture("en");
+	await f.mount();
+	await act(async () => { f.dictation.toggle(); });
+	const socket = Socket.all.at(-1)!;
+	const worklet = Worklet.all.at(-1)!;
+	const audio = new Int16Array([1, 2]);
+	const tail = new Int16Array([3]);
+	Worklet.autoFlush = false;
+	await act(async () => {
+		worklet.emit({ type: "audio", buffer: audio, contextStart: 0, sampleRate: 16000 });
+		f.dictation.stop();
+		worklet.emit({ type: "audio", buffer: tail, contextStart: 2 / 16000, sampleRate: 16000 });
+		worklet.emit({ type: "flushed" });
+	});
+	assert.equal(f.dictation.phase, "stopping");
+	assert.equal(socket.readyState, Socket.CONNECTING);
+	await act(async () => socket.open());
+	assert.equal(f.dictation.phase, "stopping", "opening a draining stream must not restart recording");
+	assert.deepEqual(socket.sent, [audio, tail, JSON.stringify({ type: "CloseStream" })]);
+	await act(async () => { socket.final("queued beginning and end"); socket.end(); });
+	assert.deepEqual(f.state.appends, ["queued beginning and end"]);
+});
 
 test("actual practice Send finishes empty-visible deferred speech against its captured problem", async () => {
 	let problem = "old";

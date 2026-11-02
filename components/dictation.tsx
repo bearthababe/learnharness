@@ -29,8 +29,8 @@ export { isDictationActive } from "@/components/dictation-state";
  *     level instead of dropping to silence (60ms tick samples the ref).
  *   - dB mapping floor −50 / ceiling −10: the sweet spot for showing
  *     conversational speech as mid-height bars without pegging.
- *   - stop: mic dies FIRST (no more audio enqueues), then CloseStream,
- *     then a 3s safety net in case Deepgram never closes the socket.
+ *   - stop: seal capture and drain the worklet's partial packet, then
+ *     CloseStream; a 3s safety net bounds teardown, not ASR completeness.
  *   - interim_results=false, endpointing=300: his live-tuned params — no
  *     partial hypotheses, finals commit ~300ms after a pause (owner
  *     round 1: live words are distracting and shift the meter; the
@@ -296,6 +296,9 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 	const genRef = useRef(0); // stale-handler guard (dictate pattern)
 	const safetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const reconnectsRef = useRef(0);
+	const stoppingRef = useRef(false);
+	const captureFlushedRef = useRef(false);
+	const closeSentRef = useRef(false);
 	/** The deferred transcript (owner round 2): finals land here during the
 	 *  run and flush into the primary input once, at teardown. */
 	const bufferRef = useRef<string[]>([]);
@@ -319,6 +322,9 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 	/** Full teardown of one run's machinery. Idempotent; generation-guarded by callers. */
 	const cleanup = useCallback((warmNext = true) => {
 		genRef.current++;
+		stoppingRef.current = false;
+		captureFlushedRef.current = false;
+		closeSentRef.current = false;
 		setDictationActive(false);
 		flush(); // the deferred transcript appears when the run ends (owner round 2)
 		finishingTargetRef.current = null;
@@ -351,6 +357,16 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 		if (warmNext) warmTokens.refresh();
 	}, []);
 
+	// Only the worklet acknowledgment proves that its partial frame was sent.
+	// A connecting socket drains that same queue before CloseStream on open.
+	const closeAfterCapture = useCallback(() => {
+		const ws = wsRef.current;
+		if (!stoppingRef.current || !captureFlushedRef.current || closeSentRef.current || ws?.readyState !== WebSocket.OPEN) return;
+		closeSentRef.current = true;
+		try { ws.send(JSON.stringify({ type: "CloseStream" })); }
+		catch { cleanup(); }
+	}, [cleanup]);
+
 	/** Open the Deepgram socket and wire its messages. `gen` guards staleness. */
 	const openSocket = useCallback(
 		(gen: number, token: string, language: DictationLanguage) => {
@@ -361,16 +377,16 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 			wsRef.current = ws;
 
 			ws.addEventListener("open", () => {
-				if (gen !== genRef.current) return;
+				if (gen !== genRef.current || ws !== wsRef.current) return;
 				// Mitigation A: everything captured during the handshake (or a
 				// reconnect gap) goes out now, in order — Deepgram accepts
 				// faster-than-realtime sends.
 				for (const frame of pendingRef.current) ws.send(frame);
 				pendingRef.current = [];
-				setPhase("recording");
+				if (stoppingRef.current) closeAfterCapture(); else setPhase("recording");
 			});
 			ws.addEventListener("message", (ev) => {
-				if (gen !== genRef.current) return;
+				if (gen !== genRef.current || ws !== wsRef.current) return;
 				let msg: any;
 				try {
 					msg = JSON.parse(ev.data as string);
@@ -386,7 +402,8 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 				}
 			});
 			ws.addEventListener("close", (ev) => {
-				if (gen !== genRef.current) return;
+				if (gen !== genRef.current || ws !== wsRef.current) return;
+				wsRef.current = null; // retire identity before the reconnect token await
 				if (ev.code === 1000) {
 					// Our own CloseStream landing: finalize now — the stop path's
 					// safety net stays as the no-close backstop only.
@@ -413,7 +430,7 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 				}
 			});
 		},
-		[cleanup],
+		[cleanup, closeAfterCapture],
 	);
 
 	const start = useCallback(async () => {
@@ -423,6 +440,9 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 		reconnectsRef.current = 0;
 		bufferRef.current = []; // fresh run, fresh buffer (round 2)
 		pendingRef.current = []; // fresh run, fresh queue (mitigation A)
+		stoppingRef.current = false;
+		captureFlushedRef.current = false;
+		closeSentRef.current = false;
 		const gen = ++genRef.current;
 		let language: DictationLanguage;
 		try {
@@ -465,8 +485,16 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 			const worklet = new AudioWorkletNode(ctx, "pcm-capture");
 			workletRef.current = worklet;
 			worklet.port.onmessage = (e) => {
+				if (gen !== genRef.current || worklet !== workletRef.current) return;
 				const msg = e.data as { type: string; rms?: number; buffer?: ArrayBuffer };
-				if (msg.type === "level") {
+				if (msg.type === "flushed" && stoppingRef.current) {
+					captureFlushedRef.current = true;
+					for (const track of streamRef.current?.getTracks() ?? []) track.stop();
+					streamRef.current = null;
+					sourceRef.current?.disconnect(); sourceRef.current = null;
+					worklet.disconnect(); workletRef.current = null;
+					closeAfterCapture();
+				} else if (msg.type === "level") {
 					levelRef.current = msg.rms ?? 0; // never reset to zero (dictate pattern)
 				} else if (msg.type === "audio") {
 					const ws = wsRef.current;
@@ -511,36 +539,22 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 		// Mitigation B: the handshake fires the moment the graph is live,
 		// overlapping any remaining token wait — mic-gated, never before it.
 		openSocket(gen, token, language);
-	}, [openSocket, cleanup, getLanguage]);
+	}, [openSocket, cleanup, closeAfterCapture, getLanguage]);
 
 	const stop = useCallback(() => {
 		const gen = genRef.current;
-		if (phase !== "recording" && phase !== "connecting") return;
+		if ((phase !== "recording" && phase !== "connecting") || stoppingRef.current) return;
+		stoppingRef.current = true;
 		setPhase("stopping");
-
-		// Mic dies FIRST — no more audio enqueues (dictate pattern). The
-		// per-run nodes die with it; the AudioContext stays (mitigation C).
-		for (const track of streamRef.current?.getTracks() ?? []) track.stop();
-		streamRef.current = null;
-		sourceRef.current?.disconnect();
-		sourceRef.current = null;
-		workletRef.current?.disconnect();
-		workletRef.current = null;
-
-		const ws = wsRef.current;
-		if (ws && ws.readyState === WebSocket.OPEN) {
-			try {
-				ws.send(JSON.stringify({ type: "CloseStream" }));
-			} catch {
-				cleanup();
-				return;
-			}
-			// Deepgram flushes remaining finals then closes; if it never
-			// does, the safety net ends the run anyway (dictate pattern).
+		if (workletRef.current) {
+			// The worklet seals capture and sends its remaining PCM before ack.
+			// Keep its port attached until then; disconnecting first loses the tail.
 			safetyRef.current = setTimeout(() => {
 				if (gen === genRef.current) cleanup();
 			}, 3000);
+			workletRef.current.port.postMessage({ type: "flush" });
 		} else {
+			// Nothing has captured yet; invalidate microphone/token awaits too.
 			cleanup();
 		}
 	}, [phase, cleanup]);
