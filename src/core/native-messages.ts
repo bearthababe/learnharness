@@ -623,6 +623,10 @@ export function toLlmMessages(messages: readonly AgentMessage[]): Message[] {
 		}
 		// Strip app-owned fields: the wire carries the native shape only.
 		const { id: _id, explanation: _explanation, ...native } = m as LhMessage;
+		if (native.role === "toolResult" && (QUESTION_TOOLS as readonly string[]).includes(native.toolName) && native.details && typeof native.details === "object" && !Array.isArray(native.details)) {
+			const { textContent: _text, thinkingContent: _thinking, readingThinkingContent: _reading, ...details } = native.details as Record<string, import("@earendil-works/pi-ai").JsonValue>;
+			native.details = details;
+		}
 		out.push(native as Message);
 		// Repair unanswered calls from completed generations, not calls in
 		// failed generations. Pi filters error/aborted assistants itself;

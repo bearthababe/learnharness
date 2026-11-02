@@ -189,7 +189,7 @@ export async function handleChatInput(
 	if (!record) {
 		return Response.json({ error: "Unknown chat" }, { status: 404 });
 	}
-	if ((input.type === "text" || input.type === "thinking") && input.submission) {
+	if ((input.type === "text" || input.type === "thinking" || input.type === "answer") && input.submission) {
 		try {
 			if (notebookSubmissionAccepted(record, input)) return settledTurnResponse();
 			validateNotebookSubmission(record, input);
@@ -288,7 +288,7 @@ export async function handleChatInput(
 	const compactedRecord = stores.chatStore.getChat(chatId);
 	if (!compactedRecord) return Response.json({ error: "Unknown chat" }, { status: 404 });
 	record = compactedRecord;
-	if ((input.type === "text" || input.type === "thinking") && input.submission) {
+	if ((input.type === "text" || input.type === "thinking" || input.type === "answer") && input.submission) {
 		try {
 			if (notebookSubmissionAccepted(record, input)) return settledTurnResponse();
 			validateNotebookSubmission(record, input);
@@ -342,7 +342,10 @@ export async function handleChatInput(
 	// the composer gates), so adjacency holds by construction.
 	if (input.type === "answer" && danglingQuestionOf([...record.messages, ...appends]) !== null) {
 		const merged = [...record.messages, ...appends];
-		try { stores.chatStore.saveMessages(chatId, merged); }
+		try {
+			if (input.submission) commitNotebookInput(stores.chatStore, chatId, input, appends);
+			else stores.chatStore.saveMessages(chatId, merged);
+		}
 		catch (err) {
 			console.error(`[chat ${chatId}] write-ahead persist failed:`, err);
 			return new Response("Your input could not be saved. Please try again.", { status: 500 });
@@ -375,7 +378,7 @@ export async function handleChatInput(
 	let persistBaseCount = stagedAutomatic ? record.messages.length : agentMessages.length;
 	try {
 		if (!stagedAutomatic) {
-			if ((input.type === "text" || input.type === "thinking") && input.submission) commitNotebookInput(stores.chatStore, chatId, input, appends);
+			if ((input.type === "text" || input.type === "thinking" || input.type === "answer") && input.submission) commitNotebookInput(stores.chatStore, chatId, input, appends);
 			else stores.chatStore.saveMessages(chatId, merged);
 		}
 	} catch (err) {

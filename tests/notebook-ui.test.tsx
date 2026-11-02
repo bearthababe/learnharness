@@ -16,6 +16,7 @@ Object.assign(globalThis, { React, window: dom.window, document: dom.document, E
 Object.defineProperty(document, "oninput", { value: null, configurable: true });
 Object.defineProperty(document, "compatMode", { value: "CSS1Compat", configurable: true });
 const { createRoot } = await import("react-dom/client");
+const { NotebookSavedDrafts } = await import("../components/notebook-saved-drafts.tsx");
 const { NotebookPanel } = await import("../components/notebook-panel.tsx");
 const { Composer } = await import("../components/composer.tsx");
 const { useEnterSubmits } = await import("../components/enter-submits.ts");
@@ -24,6 +25,77 @@ const { PracticeDock } = await import("../components/practice-dock.tsx");
 const { useNotebookDestination } = await import("../components/notebook-destination.ts");
 const { NotebookDraftReview, LearnerExplanation } = await import("../components/learner-explanation.tsx");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+test("old activity drafts are read-only, copy explicitly, and discard durably without changing the current question", async () => {
+	const chat = chatStore.createChat("Saved drafts");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor call expected"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	const old = { kind: "question" as const, toolCallId: "old", channel: "text" as const };
+	const current = { ...old, toolCallId: "current" };
+	session.tutor.updateText(old, "Old unsent answer"); session.tutor.updateText(current, "Current answer"); await session.tutor.idle();
+	let copied = "";
+	const prior = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+	Object.defineProperty(globalThis, "navigator", { configurable: true, value: { clipboard: { writeText: async (text: string) => { copied = text; } } } });
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	try {
+		await act(async () => root.render(<NotebookSavedDrafts session={session} questionId="current" />));
+		assert.match(host.textContent!, /Old unsent answer/); assert.doesNotMatch(host.textContent!, /Current answer/);
+		assert.equal(host.querySelectorAll("textarea,input").length, 0);
+		await act(async () => [...host.querySelectorAll<HTMLButtonElement>("button")].find(e => e.textContent === "Copy text")!.click());
+		assert.equal(copied, "Old unsent answer");
+		await act(async () => { [...host.querySelectorAll<HTMLButtonElement>("button")].find(e => e.textContent === "Discard")!.click(); await session.tutor.idle(); });
+		assert.equal(host.querySelectorAll("[data-saved-draft]").length, 0);
+		assert.equal(service.view(chat.id).tutorDrafts?.length, 1);
+		assert.match(JSON.stringify(service.view(chat.id).tutorDrafts), /Current answer/);
+	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); if (prior) Object.defineProperty(globalThis, "navigator", prior); }
+});
+
+test("mounted written answer accepts working-only content, keeps commitment hidden, and retries its frozen answer", async () => {
+	const chat = chatStore.createChat("Written answer");
+	const editor = createFauxCore({}); editor.setResponses([() => fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"p=F/A"}]}')]);
+	const service = createNotebookService({ chatStore, engine: async () => ({ engine: { model: editor.getModel(), streamFn: editor.streamSimple }, model: "faux:editor" }) });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	const sent: unknown[] = [];
+	try {
+		await act(async () => root.render(<QuestionDock notebook={session} toolName="recall" toolCallId="written" input={{ question: "Pressure?", correctAnswer: "SECRET COMMITMENT" }} expanded onExpand={() => {}} onSubmit={async (answer, _id, fields) => { sent.push({ answer, fields }); return false; }} />));
+		await act(async () => { await session.dispatch({ type: "draft", text: "Make pressure" }); await session.dispatch({ type: "apply" }); await service.settled(chat.id); await session.refresh(); await session.tutor.returnToTutor({ kind: "question", toolCallId: "written", channel: "text" }); });
+		assert.equal(host.querySelectorAll("[data-snapshot-id]").length, 1);
+		assert.doesNotMatch(host.textContent!, /SECRET COMMITMENT/);
+		const button = host.querySelector<HTMLButtonElement>('[data-testid="question-send"]')!;
+		assert.equal(button.disabled, false);
+		await act(async () => { button.closest("form")!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); await session.tutor.idle(); });
+		await act(async () => { button.closest("form")!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); await session.tutor.idle(); });
+		assert.equal(sent.length, 2, host.textContent!); assert.deepEqual(sent[0], sent[1]);
+		assert.match(JSON.stringify(sent), /textContent[\s\S]*p=F\/A/);
+		assert.ok(session.tutor.draft({ kind: "question", toolCallId: "written", channel: "text" }));
+	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); }
+});
+
+test("question selections and confidence reopen with their own notebook thinking draft", async () => {
+	const chat = chatStore.createChat("Question draft");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor call expected"); } });
+	const transport: typeof fetch = async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id);
+	let session = createNotebookSession(chat.id, transport); await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	const host = document.createElement("div"); document.body.append(host); let root = createRoot(host);
+	const render = () => <QuestionDock notebook={session} toolName="probe" toolCallId="q1" input={{ question: "Which unit?", options: [{ label: "Pascal", value: "Pa" }, { label: "Newton", value: "N" }], correctAnswer: "Pa", explanation: "Force per area." }} expanded onExpand={() => {}} onSubmit={() => { throw new Error("Reopen never submits"); }} />;
+	try {
+		await act(async () => root.render(render()));
+		const choice = [...host.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(e => e.textContent?.includes("Pascal"))!;
+		await act(async () => { choice.click(); await session.tutor.idle(); });
+		const key = new window.Event("keydown", { bubbles: true, cancelable: true }); Object.assign(key, { key: "ArrowRight" });
+		await act(async () => { document.dispatchEvent(key); await session.tutor.idle(); });
+		assert.equal(host.querySelector('[data-testid="confidence-value"]')?.textContent, "70%", JSON.stringify(session.tutor.getSnapshot()));
+		await act(async () => root.unmount()); session.dispose();
+		session = createNotebookSession(chat.id, transport); await session.refresh(); root = createRoot(host);
+		await act(async () => root.render(render()));
+		assert.equal([...host.querySelectorAll('[role="radio"]')].find(e => e.textContent?.includes("Pascal"))?.getAttribute("aria-checked"), "true");
+		assert.equal(host.querySelector('[data-testid="confidence-value"]')?.textContent, "70%");
+		assert.equal(chatStore.getChat(chat.id)!.messages.length, 0);
+	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); }
+});
 
 test("practice keeps its existing text draft when Notebook is first opened, without creating Notebook while typing", async () => {
 	const chat = chatStore.createChat("Existing practice draft", "practice");

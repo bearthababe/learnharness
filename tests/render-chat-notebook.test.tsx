@@ -7,7 +7,8 @@ import { parseHTML } from "linkedom";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime.js";
 import { Chat } from "../components/chat.tsx";
 import { ServerEventsProvider } from "../components/server-events.tsx";
-import { newNextMessage, newUserMessage, newThinkingMessage, type LhMessage } from "../src/core/native-messages.ts";
+import { newNextMessage, newUserMessage, newThinkingMessage, newAnswerResult, type LhMessage } from "../src/core/native-messages.ts";
+import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import type { LearnerExplanation } from "../src/core/contracts/notebook.ts";
 
 /** Reopen's real Chat → useChatSession → projectView → transcript branch.
@@ -59,4 +60,20 @@ test("complete Chat renders practice thinking working once under its existing le
 	const document = reopen(JSON.parse(JSON.stringify([newThinkingMessage("problem", "compatibility", parts)])));
 	assert.equal(document.querySelectorAll("[data-snapshot-id]").length, 1);
 	assert.doesNotMatch(document.querySelector('[data-testid="thinking-card"]')!.textContent!, /compatibility/);
+});
+
+test("complete Chat renders reading and answer snapshots in order without compatibility duplicates", () => {
+	const parts = (id: string): LearnerExplanation => [{ id, kind: "working", snapshotId: id, contextId: "context", revision: 1, lines: [{ id: "L1", latex: "p=" }] }];
+	const call = { ...fauxAssistantMessage([fauxToolCall("recall", { question: "Pressure?", correctAnswer: "Force per area" }, { id: "q1" })], { stopReason: "toolUse" }), id: "call" };
+	const answer = newAnswerResult("q1", "recall", { kind: "explain", questionText: "Pressure?", dontKnow: false, answers: [], answeredAt: "now", readingThinking: "READING COMPAT", text: "ANSWER COMPAT", readingThinkingContent: parts("reading"), textContent: parts("answer") });
+	const document = reopen([call, answer]);
+	assert.deepEqual([...document.querySelectorAll("[data-snapshot-id]")].map(e => e.getAttribute("data-snapshot-id")), ["reading", "answer"]);
+	assert.doesNotMatch(document.documentElement.textContent!, /READING COMPAT|ANSWER COMPAT/);
+});
+
+test("empty notebook reading and thinking channels do not add blank transcript headings", () => {
+	const call = { ...fauxAssistantMessage([fauxToolCall("recall", { question: "Pressure?", correctAnswer: "Force per area" }, { id: "empty-q" })], { stopReason: "toolUse" }), id: "empty-call" };
+	const answer = newAnswerResult("empty-q", "recall", { kind: "explain", questionText: "Pressure?", dontKnow: false, answers: [], answeredAt: "now", text: "Force per area", readingThinkingContent: [{ id: "empty-read", kind: "text", text: "" }], thinkingContent: [{ id: "empty-thinking", kind: "text", text: "" }] });
+	const document = reopen([call, answer]);
+	assert.equal(document.querySelectorAll('[data-testid="reading-thinking-block"], [data-testid="your-thinking"]').length, 0);
 });

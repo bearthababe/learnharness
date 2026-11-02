@@ -17,6 +17,7 @@ const commandSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("visibility"), visible: z.boolean() }).strict(),
 	z.object({ type: z.literal("draft"), expectedRevision: z.number().int().nonnegative(), text: z.string() }).strict(),
 	z.object({ type: z.literal("tutor-draft"), expectedRevision: z.number().int().nonnegative(), draft: ownedTutorDraftSchema }).strict(),
+	z.object({ type: z.literal("discard-tutor-draft"), owner: tutorDraftOwnerSchema, draftId: id, expectedRevision: z.number().int().nonnegative() }).strict(),
 	z.object({ type: z.literal("snapshot"), id, owner: tutorDraftOwnerSchema, draftId: id, expectedRevision: z.number().int().nonnegative(), continuationId: id, contextId: id.optional(), workingRevision: z.number().int().nonnegative().optional() }).strict(),
 	z.object({ type: z.literal("apply"), id, contextId: id, draftRevision: z.number().int().nonnegative(), instruction: z.string().refine((s) => s.trim().length > 0), cursorLineId: z.string().nullable().optional() }).strict(),
 	z.object({ type: z.literal("undo"), id, contextId: id }).strict(),
@@ -236,7 +237,7 @@ export function createNotebookService({ chatStore, engine }: {
 			}
 		}
 		const saved = mutate(chatId, (record) => {
-			if (command.type === "tutor-draft" || command.type === "snapshot") { changeNotebookDraft(record, command); return; }
+			if (command.type === "tutor-draft" || command.type === "snapshot" || command.type === "discard-tutor-draft") { changeNotebookDraft(record, command); return; }
 			if (command.type === "visibility") { record.visible = command.visible; return; }
 			if (command.type === "draft") {
 				if (record.notebookDraft.text === command.text && record.notebookDraft.revision === command.expectedRevision + 1) return;

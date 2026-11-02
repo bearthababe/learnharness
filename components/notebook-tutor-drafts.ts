@@ -1,4 +1,4 @@
-import { explanationHasContent, sameDraftOwner, ownedTutorDraftSchema, type ChatInput, type NotebookCommand, type NotebookCommandReceipt, type NotebookView, type OwnedTutorDraft, type TutorDraftOwner } from "@/src/core";
+import { explanationHasContent, sameDraftOwner, ownedTutorDraftSchema, type QuestionAnswerData, type ChatInput, type NotebookCommand, type NotebookCommandReceipt, type NotebookView, type OwnedTutorDraft, type TutorDraftOwner } from "@/src/core";
 
 export type DraftRecoveryStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 type DraftCommand = Extract<NotebookCommand, { type: "tutor-draft" | "snapshot" }>;
@@ -8,7 +8,9 @@ interface Entry {
 	base: OwnedTutorDraft | null;
 	dirty: boolean;
 	wire?: DraftCommand;
-	frozen?: PreparedInput;
+	frozen?: PreparedInput | Extract<ChatInput, { type: "answer" }>;
+	frozenDraft?: OwnedTutorDraft;
+	preparing?: OwnedTutorDraft;
 	conflict?: boolean;
 	capture?: { before: OwnedTutorDraft; command: Extract<DraftCommand, { type: "snapshot" }> };
 }
@@ -18,12 +20,14 @@ export interface TutorDraftSnapshot {
 	saving: boolean;
 	error: string | null;
 }
-const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const canonical = (value: unknown) => JSON.stringify(value, (_key, item) => item && typeof item === "object" && !Array.isArray(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
+const equal = (a: unknown, b: unknown) => canonical(a) === canonical(b);
+const sameContent = (a: OwnedTutorDraft, b: OwnedTutorDraft) => equal(a.parts, b.parts) && equal(a.form, b.form);
 const keyOf = (owner: TutorDraftOwner) => owner.kind === "ordinary" ? "ordinary" : owner.kind === "question" ? `question:${owner.toolCallId}:${owner.channel}` : `practice:${owner.problemCallId}`;
 
 /** Durable learner drafts are an optional notebook adapter, not a replacement
  * for the ordinary text composer. No mutation here authorizes a Tutor send. */
-export function createNotebookTutorDrafts(chatId: string, post: (command: DraftCommand) => Promise<NotebookCommandReceipt>, refresh: () => Promise<void>, storage?: DraftRecoveryStorage) {
+export function createNotebookTutorDrafts(chatId: string, post: (command: DraftCommand | Extract<NotebookCommand, { type: "discard-tutor-draft" }>) => Promise<NotebookCommandReceipt>, refresh: () => Promise<void>, storage?: DraftRecoveryStorage) {
 	const entries = new Map<string, Entry>();
 	const listeners = new Set<() => void>();
 	const storageKey = `lh:notebook-drafts:${chatId}`;
@@ -50,6 +54,7 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 			if (!raw) return;
 			for (const [key, entry] of JSON.parse(raw) as Array<[string, Entry]>) {
 				ownedTutorDraftSchema.parse(entry.draft);
+				entry.preparing = undefined; // no request existed before a frozen input
 				entries.set(key, entry);
 			}
 		} catch { publish("Saved local draft recovery could not be read."); }
@@ -63,18 +68,18 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 			const remote = next.tutorDrafts?.find((draft) => sameDraftOwner(draft.owner, entry.draft.owner)) ?? null;
 			if (entry.frozen && next.submissions?.some((receipt) => receipt.submission.id === entry.frozen!.submission?.id)) {
 				confirmed = true;
-				if (equal(entry.draft.parts, entry.frozen.explanation)) { entries.delete(key); continue; }
-				entry.base = remote; entry.frozen = undefined; entry.wire = undefined; entry.dirty = true;
+				if (entry.frozenDraft ? sameContent(entry.draft, entry.frozenDraft) : entry.frozen.type === "text" && equal(entry.draft.parts, entry.frozen.explanation)) { entries.delete(key); continue; }
+				entry.base = remote; entry.frozen = undefined; entry.frozenDraft = undefined; entry.wire = undefined; entry.dirty = true;
 				void queue(() => flush(entry.draft.owner)).catch(() => {});
 			}
 			if (entry.wire?.type === "tutor-draft" && equal(remote, entry.wire.draft)) {
 				entry.base = remote;
-				entry.dirty = !!entry.capture || !equal(entry.draft.parts, remote!.parts);
+				entry.dirty = !!entry.capture || !sameContent(entry.draft, remote!);
 				if (!entry.dirty) entry.draft = remote!;
 				entry.wire = undefined;
 			}
 			if (entry.wire?.type === "tutor-draft" && !equal(remote, entry.base)) entry.conflict = true;
-			if (!entry.dirty && !entry.wire && !entry.frozen && !entry.capture) {
+			if (!entry.dirty && !entry.wire && !entry.frozen && !entry.capture && !entry.preparing) {
 				if (remote) { entry.draft = remote; entry.base = remote; } else entries.delete(key);
 			} else if (!entry.wire && !equal(remote, entry.base)) {
 				entry.conflict = true;
@@ -106,13 +111,13 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 			const receipt = await post(wire);
 			const remote = receipt.view.tutorDrafts?.find((draft) => sameDraftOwner(draft.owner, owner)) ?? null;
 			entry.base = remote; entry.wire = undefined;
-			if (wire.type === "tutor-draft" && remote && equal(entry.draft.parts, wire.draft.parts)) { entry.draft = remote; entry.dirty = false; }
+			if (wire.type === "tutor-draft" && remote && sameContent(entry.draft, wire.draft)) { entry.draft = remote; entry.dirty = false; }
 			if (wire.type === "snapshot" && remote) captured(entry, remote);
 			stash();
 		}
 		if (entry.capture) {
 			const capture = entry.capture;
-			if (!equal(entry.base?.parts, capture.before.parts)) await save(entry, capture.before);
+			if (!entry.base || !sameContent(entry.base, capture.before)) await save(entry, capture.before);
 			entry.wire = { ...capture.command, expectedRevision: entry.base!.revision };
 			stash();
 			const receipt = await post(entry.wire);
@@ -120,12 +125,13 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 			captured(entry, remote);
 			stash(); publish(null);
 		}
-		if (entry.dirty) await save(entry, entry.draft);
+		const desired = entry.preparing ?? entry.draft;
+		if (!entry.base || !sameContent(entry.base, desired)) await save(entry, desired);
 	}
 	function captured(entry: Entry, remote: OwnedTutorDraft) {
 		entry.base = remote; entry.wire = undefined; entry.capture = undefined;
-		entry.draft = { ...remote, parts: remote.parts.map((part) => part.kind === "text" ? entry.draft.parts.find((local) => local.id === part.id) ?? part : part) };
-		entry.dirty = !equal(entry.draft.parts, remote.parts);
+		entry.draft = { ...remote, ...(entry.draft.form ? { form: entry.draft.form } : {}), parts: remote.parts.map((part) => part.kind === "text" ? entry.draft.parts.find((local) => local.id === part.id) ?? part : part) };
+		entry.dirty = !sameContent(entry.draft, remote);
 	}
 	async function save(entry: Entry, desired: OwnedTutorDraft) {
 		const draft = structuredClone({ ...desired, revision: (entry.base?.revision ?? 0) + 1 });
@@ -134,7 +140,7 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		const receipt = await post(entry.wire);
 		entry.base = receipt.view.tutorDrafts?.find((item) => sameDraftOwner(item.owner, desired.owner)) ?? null;
 		entry.wire = undefined;
-		if (!entry.capture && equal(entry.draft.parts, draft.parts)) { entry.draft = entry.base!; entry.dirty = false; }
+		if (!entry.capture && sameContent(entry.draft, draft)) { entry.draft = entry.base!; entry.dirty = false; }
 		stash(); publish(null);
 	}
 	function updateText(owner: TutorDraftOwner, text: string, partId?: string) {
@@ -174,11 +180,25 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		stash(); publish();
 		return queue(() => flush(owner));
 	}
+	function updateForm(owner: Extract<TutorDraftOwner, { kind: "question" }>, form: NonNullable<OwnedTutorDraft["form"]>) {
+		const text = owner.channel === "text" ? form.text : form.thinking;
+		if (!entries.has(keyOf(owner))) updateText(owner, text);
+		const entry = entries.get(keyOf(owner))!;
+		if (entry.conflict) return;
+		entry.draft = structuredClone({ ...entry.draft, form });
+		const last = entry.draft.parts.at(-1);
+		if (last?.kind === "text") last.text = text;
+		entry.dirty = true; stash(); publish();
+		void queue(() => flush(owner)).catch(() => {});
+	}
 	function prepareSubmission(owner: TutorDraftOwner): Promise<PreparedInput> {
 		return queue(async () => {
 			await refresh();
 			let entry = entries.get(keyOf(owner));
-			if (entry?.frozen) return structuredClone(entry.frozen);
+			if (entry?.frozen) {
+				if (entry.frozen.type !== "text") throw new Error("Confirm the earlier answer before sending this draft");
+				return structuredClone(entry.frozen);
+			}
 			await flush(owner);
 			entry = entries.get(keyOf(owner));
 			if (!entry || !explanationHasContent(entry.draft.parts)) throw new Error("Enter an explanation or notebook working");
@@ -188,11 +208,59 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 			return structuredClone(entry.frozen);
 		});
 	}
+	function prepareAnswer(owner: Extract<TutorDraftOwner, { kind: "question" }>, answer: QuestionAnswerData): Promise<Extract<ChatInput, { type: "answer" }>> {
+		const owners = [owner, ...(owner.channel === "reading-thinking" ? [] : [{ ...owner, channel: "reading-thinking" as const }])];
+		// Reserve exactly the complete fields observed by this Send before queued
+		// autosaves or an awaited refresh give later typing a chance to replace them.
+		for (const owner of owners) {
+			const entry = entries.get(keyOf(owner));
+			if (entry && !entry.frozen && !entry.preparing) entry.preparing = structuredClone(entry.draft);
+		}
+		return queue(async () => {
+			try {
+			await refresh();
+			const frozen = owners.map(owner => entries.get(keyOf(owner))?.frozen).find(Boolean);
+			if (frozen) {
+				if (frozen.type !== "answer") throw new Error("Confirm the earlier submission before sending this answer");
+				return structuredClone(frozen);
+			}
+			for (const owner of owners) await flush(owner);
+			const included = owners.flatMap(owner => { const entry = entries.get(keyOf(owner)); return entry?.base ? [entry] : []; });
+			const input: Extract<ChatInput, { type: "answer" }> = { type: "answer", toolCallId: owner.toolCallId, answer: structuredClone(answer) };
+			if (!included.length) return input;
+			const refs = included.map(entry => ({ draftId: entry.base!.id, draftRevision: entry.base!.revision, owner: entry.base!.owner }));
+			input.submission = { id: crypto.randomUUID(), ...refs[0]!, ...(refs.length > 1 ? { additionalDrafts: refs.slice(1) } : {}) };
+			for (const entry of included) {
+				const draft = entry.base!;
+				if (draft.owner.kind !== "question") throw new Error("Question owner required");
+				const channel = draft.owner.channel;
+				const field = channel === "text" ? "textContent" : channel === "thinking" ? "thinkingContent" : "readingThinkingContent";
+				const compatibility = channel === "reading-thinking" ? "readingThinking" : channel;
+				input.answer[field] = structuredClone(draft.parts);
+				input.answer[compatibility] = draft.parts.filter(part => part.kind === "text").map(part => part.text).filter(Boolean).join("\n\n") || undefined;
+			}
+			for (const entry of included) { entry.frozen = input; entry.frozenDraft = structuredClone(entry.base!); }
+			stash(); publish(null);
+			return structuredClone(input);
+			} finally {
+				for (const owner of owners) { const entry = entries.get(keyOf(owner)); if (entry) entry.preparing = undefined; }
+			}
+		});
+	}
 	return {
 		getSnapshot: () => state,
 		subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
 		draft(owner: TutorDraftOwner) { return entries.get(keyOf(owner))?.draft; },
-		adopt, updateText, returnToTutor, prepareSubmission,
+		adopt, updateText, updateForm, returnToTutor, prepareSubmission, prepareAnswer,
+		discard(owner: TutorDraftOwner) {
+			return queue(async () => {
+				const entry = entries.get(keyOf(owner));
+				if (!entry) return;
+				const base = entry.base;
+				if (base) await post({ type: "discard-tutor-draft", owner, draftId: base.id, expectedRevision: base.revision });
+				entries.delete(keyOf(owner)); stash(); publish(null);
+			});
+		},
 		async reconcile() { await refresh(); },
 		async idle() { await tail; },
 		dispose() { listeners.clear(); },

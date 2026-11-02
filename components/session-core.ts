@@ -693,7 +693,7 @@ export class SessionModel {
 			// The practice submissions (2026-10-04): the marker lands
 			// optimistically — the card renders from its details the
 			// moment the button fires.
-			optimistic.push({ ...newThinkingMessage(input.problemCallId, input.text), id: localId() });
+			optimistic.push({ ...newThinkingMessage(input.problemCallId, input.text, input.explanation), id: input.submission?.id ?? localId() });
 		} else if (input.type === "next") {
 			// The move-on signal (owner round 16): the NEXT PROBLEM line
 			// renders the instant the chip/Enter fires.
@@ -770,7 +770,7 @@ export class SessionModel {
 			// existing setup recovery. A newer send/reattach ALWAYS owns errors
 			// and status instead, even if that request has since been stopped.
 			// Ordinary text and answer teardown behavior stays unchanged.
-			if (input.type === "answer" || (input.type === "text" && input.submission)) {
+			if (input.type === "answer" || ((input.type === "text" || input.type === "thinking") && input.submission)) {
 				const ids = new Set(optimistic.map(m => m.id));
 				this.mutate(() => {
 					this.tail = this.tail.filter(m => !ids.has(m.id));
@@ -830,9 +830,9 @@ export class SessionModel {
 
 	/** The answer path (the dock): the answer IS the question call's tool
 	 *  result (fork 1), riding as its input event. */
-	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData): Promise<void> {
+	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission">): Promise<void> {
 		void tool;
-		return this.send({ type: "answer", toolCallId, answer: output }).then(() => undefined);
+		return this.send({ type: "answer", toolCallId, answer: output, ...fields }).then(() => undefined);
 	}
 
 	/** The dismissal path (owner design 2026-10-03, "A2"): the skipped
@@ -841,7 +841,7 @@ export class SessionModel {
 	 * user's choice; the next plain send is the wake. On failure the
 	 * durable record wins: the error surfaces, the record-changed sync
 	 * (or any later refetch) replaces the optimistic append with truth. */
-	async dismissQuestion(toolCallId: string, answer: QuestionAnswerData): Promise<void> {
+	async dismissQuestion(toolCallId: string, answer: QuestionAnswerData, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission">): Promise<void> {
 		if (!this.readyRef) return;
 		const tool = pendingCallTool([...this.base, ...this.tail], toolCallId) ?? "quiz";
 		this.mutate(() => {
@@ -851,7 +851,7 @@ export class SessionModel {
 			const res = await this.fetch(`/api/chats/${this.chatId}/dismiss`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ input: { type: "dismiss", toolCallId, answer } }),
+				body: JSON.stringify({ input: { type: "dismiss", toolCallId, answer, ...fields } }),
 			});
 			if (!res.ok) throw new Error(`The dismissal failed (${res.status}).`);
 		} catch (err) {

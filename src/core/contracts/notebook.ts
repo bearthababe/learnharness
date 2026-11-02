@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { CallUsage } from "./chat.ts";
 import type { LhMessage } from "../native-messages.ts";
+import type { QuestionFormDraft, QuestionAnswerData } from "../question-core.ts";
 
 export interface NotebookLine { id: string; latex: string }
 export interface NotebookState { lines: NotebookLine[]; undo: NotebookLine[][] }
@@ -79,13 +80,17 @@ export interface NotebookRecord {
 	snapshots?: WorkingSnapshot[];
 	submissions?: NotebookSubmissionReceipt[];
 }
-export interface NotebookSubmission {
-	id: string;
+export interface NotebookDraftReference {
 	draftId: string;
 	draftRevision: number;
 	owner: TutorDraftOwner;
 }
+export interface NotebookSubmission extends NotebookDraftReference {
+	id: string;
+	additionalDrafts?: NotebookDraftReference[];
+}
 export interface NotebookSubmissionReceipt {
+	answer?: QuestionAnswerData;
 	submission: NotebookSubmission;
 	explanation: LearnerExplanation;
 	message: LhMessage;
@@ -112,8 +117,10 @@ export interface OwnedTutorDraft {
 	owner: TutorDraftOwner;
 	revision: number;
 	parts: LearnerExplanation;
+	form?: Omit<QuestionFormDraft, "selection"> & { selection: { selected: number[]; otherSelected: boolean; dontKnow: boolean } };
 }
 export type NotebookCommand =
+	| { type: "discard-tutor-draft"; owner: TutorDraftOwner; draftId: string; expectedRevision: number }
 	| { type: "visibility"; visible: boolean }
 	| { type: "draft"; expectedRevision: number; text: string }
 	| { type: "tutor-draft"; expectedRevision: number; draft: OwnedTutorDraft }

@@ -43,7 +43,7 @@ import {
 } from "./native-messages.ts";
 import { QUESTION_TOOLS, toolQuestionKind } from "./pending.ts";
 import type { LearnerExplanation, NotebookSubmission, TutorDraftOwner } from "./contracts/notebook.ts";
-import { parseNotebookInput } from "./notebook-content.ts";
+import { parseNotebookInput, parseNotebookAnswer } from "./notebook-content.ts";
 export interface NotebookInputFields { explanation?: LearnerExplanation; submission?: NotebookSubmission }
 function notebookFields(input: Record<string, unknown>, owner?: TutorDraftOwner): NotebookInputFields {
 	try { return parseNotebookInput(input, owner); }
@@ -53,7 +53,7 @@ function notebookFields(input: Record<string, unknown>, owner?: TutorDraftOwner)
 /** One client-originated input event (the POST body's `input`). */
 export type ChatInput =
 	| ({ type: "text"; text: string } & NotebookInputFields)
-	| { type: "answer"; toolCallId: string; answer: QuestionAnswerData }
+	| { type: "answer"; toolCallId: string; answer: QuestionAnswerData; submission?: NotebookSubmission }
 	| { type: "continue" }
 	/** The failed-turn retry (issue #110): the banner's Retry button. */
 	| { type: "retry" }
@@ -85,7 +85,7 @@ export type TurnInput = ChatInput | SteerInput;
  *  wake-free. Parallel question calls each get their own dismiss event;
  *  results reference their calls by id, so the appends stay independent. */
 export type DismissInput =
-	| { type: "dismiss"; toolCallId: string; answer: QuestionAnswerData }
+	| { type: "dismiss"; toolCallId: string; answer: QuestionAnswerData; submission?: NotebookSubmission }
 	/** The problem discard (practice, owner 2026-10-04): ask-style — the
 	 *  silent route appends the UI-only marker and wakes nothing; the
 	 *  conclude pair rides the user's NEXT input (inputAppends). */
@@ -112,7 +112,8 @@ export function parseDismissInput(input: unknown): DismissInput {
 	if (answer.dismissed !== true) {
 		throw new ChatInputError("dismiss input's answer must be a dismissal (dismissed: true)");
 	}
-	return { type: "dismiss", toolCallId: i.toolCallId, answer };
+	try { return { type: "dismiss", toolCallId: i.toolCallId, answer, ...parseNotebookAnswer(answer, i.submission, i.toolCallId) }; }
+	catch { throw new ChatInputError("Invalid notebook dismissal or submission"); }
 }
 
 /** A mid-turn steer (owner arc 2026-10-03): the learner's composer message
@@ -182,7 +183,8 @@ export function parseChatInput(input: unknown): ChatInput {
 			if (typeof i.answer !== "object" || i.answer === null) {
 				throw new ChatInputError("answer input requires the graded answer object");
 			}
-			return { type: "answer", toolCallId: i.toolCallId, answer: i.answer as QuestionAnswerData };
+			try { return { type: "answer", toolCallId: i.toolCallId, answer: i.answer as QuestionAnswerData, ...parseNotebookAnswer(i.answer as QuestionAnswerData, i.submission, i.toolCallId) }; }
+			catch { throw new ChatInputError("Invalid notebook answer or submission"); }
 		case "continue":
 			return { type: "continue" };
 		case "retry":

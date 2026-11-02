@@ -4,7 +4,7 @@ import { useEffect, type RefObject } from "react";
 import type { NotebookSession } from "./notebook-session";
 
 /** Active destination follows explicit focus/click, not component mount order. */
-export function useNotebookDestination(rootRef: RefObject<HTMLElement | null>, session: NotebookSession, visible: boolean, onReturn?: () => void) {
+export function useNotebookDestination(rootRef: RefObject<HTMLElement | null>, session: NotebookSession, visible: boolean, onReturn?: (target: HTMLElement) => void) {
 	useEffect(() => {
 		const root = rootRef.current;
 		if (!root) return;
@@ -14,7 +14,7 @@ export function useNotebookDestination(rootRef: RefObject<HTMLElement | null>, s
 			if (owner) {
 				const returning = root.dataset.sessionDestination === "notebook" && owner === "tutor";
 				root.dataset.sessionDestination = owner;
-				if (returning) onReturn?.();
+				if (returning) onReturn?.(event.target as HTMLElement);
 			}
 		};
 		const key = (event: KeyboardEvent) => {

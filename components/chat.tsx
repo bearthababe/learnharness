@@ -30,6 +30,7 @@ import { useNotebookSession } from "@/components/use-notebook-session";
 import type { NotebookSession } from "@/components/notebook-session";
 import type { NotebookInputFields } from "@/src/core";
 import { NotebookPanel } from "@/components/notebook-panel";
+import { NotebookSavedDrafts } from "@/components/notebook-saved-drafts";
 import { useNotebookDestination } from "@/components/notebook-destination";
 import { useSessionInputViewport } from "@/components/session-input-viewport";
 import { blurAfterPointerClick } from "@/components/focus-hygiene";
@@ -423,14 +424,18 @@ export function Chat({
 			const p = pendingRef.current;
 			if (p) {
 				const question = (p.input as { question?: string } | null)?.question ?? "";
-				const reading = readingThinkingRef.current.trim() || undefined;
-				clearReadingThinking();
-				const answer = dismissedAnswer(toolQuestionKind(p.tool), question);
-				void dismissQuestion(
-					p.toolCallId,
-					reading ? { ...answer, readingThinking: reading } : answer,
-				);
-				if (busyRef.current) abortInFlightTurn();
+				void (async () => {
+					await finishDictation();
+					if (pendingRef.current?.toolCallId !== p.toolCallId) return;
+					const reading = readingThinkingRef.current.trim() || undefined;
+					const answer = { ...dismissedAnswer(toolQuestionKind(p.tool), question), ...(reading ? { readingThinking: reading } : {}) };
+					const prepared = notebook.session.getSnapshot().view?.contextId ? await notebook.session.tutor.prepareAnswer({ kind: "question", toolCallId: p.toolCallId, channel: "reading-thinking" }, answer) : undefined;
+					if (pendingRef.current?.toolCallId !== p.toolCallId) return;
+					const dismissed = dismissQuestion(p.toolCallId, prepared?.answer ?? answer, prepared ? { submission: prepared.submission } : undefined);
+					if (busyRef.current) abortInFlightTurn();
+					await dismissed;
+					if (prepared) await notebook.session.tutor.reconcile();
+				})().catch(() => {}); // shared notebook recovery retains the draft
 				return;
 			}
 			// The practice discard (owner, 2026-10-04): ask-style — the
@@ -443,7 +448,7 @@ export function Chat({
 				if (busyRef.current) abortInFlightTurn();
 			}
 		},
-		[abortInFlightTurn, dismissQuestion, dismissProblem],
+		[abortInFlightTurn, dismissQuestion, dismissProblem, notebook.session],
 	);
 	// Mount continuation: if the stored transcript ends with a fulfilled tool
 	// (a job result landed while no client was open), resume the lesson — the
@@ -545,10 +550,6 @@ export function Chat({
 		readingThinkingRef.current = v;
 		setReadingThinking(v);
 	}, []);
-	const clearReadingThinking = useCallback(() => {
-		readingThinkingRef.current = "";
-		setReadingThinking("");
-	}, []);
 	const pendingQuestionId = pending?.toolCallId ?? null;
 	useEffect(() => {
 		// Different calls never share a draft; a failed submission of THIS
@@ -581,8 +582,16 @@ export function Chat({
 		textRef.current = value;
 		setText(value);
 	}, [ordinaryDraft, notebook.view?.contextId]);
-	const returnToOrdinary = useCallback(() => {
-		if (pending) return;
+	const returnToOrdinary = useCallback((target?: HTMLElement) => {
+		if (pending) {
+			const channel = target?.closest<HTMLElement>("[data-notebook-channel]")?.dataset.notebookChannel;
+			const reading = channel === "reading-thinking" || (!channel && !!workspaceRef.current?.querySelector('[data-reading-claim="true"]'));
+			const input = pending.input as { options?: unknown[] };
+			const owner = { kind: "question" as const, toolCallId: pending.toolCallId, channel: reading ? "reading-thinking" as const : channel === "text" || (pending.tool !== "quiz" && pending.tool !== "probe" && !input.options?.length) ? "text" as const : "thinking" as const };
+			if (!notebook.session.tutor.draft(owner)) notebook.session.tutor.updateText(owner, reading ? readingThinkingRef.current : "");
+			void notebook.session.tutor.returnToTutor(owner).catch(() => {});
+			return;
+		}
 		if (activeProblem) {
 			const owner = { kind: "practice" as const, problemCallId: activeProblem.toolCallId };
 			if (!notebook.session.tutor.draft(owner)) notebook.session.tutor.updateText(owner, "");
@@ -1725,6 +1734,7 @@ export function Chat({
 						    the overlay — the flow-space replacement for the old
 						    sticky dock. Zero only pre-measurement (the first layout
 						    effect reports before paint). */}
+						<NotebookSavedDrafts session={notebook.session} questionId={pending?.toolCallId} problemId={activeProblem?.toolCallId} messages={nativeMessages} />
 						<div aria-hidden data-testid="dock-spacer" style={{ height: dockReserve }} />
 				</ConversationContent>
 				{/* The dock: an overlay sibling of the scroller (the
@@ -1805,8 +1815,9 @@ export function Chat({
 						/>
 						</div>
 					}
-					onSubmitAnswer={(output) => {
-						if (!pending) return;
+					onSubmitAnswer={async (output, toolCallId, fields) => {
+						const pending = pendingRef.current;
+						if (!pending || pending.toolCallId !== toolCallId) return false;
 						// THE ANSWER IS THE QUESTION CALL'S TOOL RESULT (fork 1, owner
 						// 2026-09-26): one input event, one turn — the hook appends
 						// the optimistic graded result (the AnsweredCard shows at
@@ -1819,7 +1830,7 @@ export function Chat({
 						const reading = readingThinkingRef.current.trim() || undefined;
 						// The pending-id effect clears this only when the question
 						// actually leaves. An offline preflight keeps the draft visible.
-						submitAnswer(pending.tool, pending.toolCallId, reading ? { ...output, readingThinking: reading } : output);
+						await submitAnswer(pending.tool, toolCallId, reading && !fields?.submission ? { ...output, readingThinking: reading } : output, fields);
 					}}
 				/>
 				</Conversation>
@@ -2028,7 +2039,7 @@ function DockOverlay({
 	contextTokens: number | null;
 	pricing?: SessionPricing;
 	composer: React.ReactNode;
-	onSubmitAnswer: (output: QuestionAnswerData) => void;
+	onSubmitAnswer: React.ComponentProps<typeof QuestionDock>["onSubmit"];
 	/** The model control's pass-through (the stats bar hosts it). */
 	chatId: string;
 	onModelChange: (model: string | undefined) => void;
@@ -2418,6 +2429,9 @@ function DockOverlay({
 					    (the dock reclaims then). Rides the check answer on submit. */}
 					{pending && requiresReveal && (
 						<ReadingThinkingField
+							key={pending.toolCallId}
+							notebook={notebook}
+							toolCallId={pending.toolCallId}
 							value={readingThinking}
 							onChange={onReadingThinking}
 							onEscape={dictationCancel}
@@ -2442,7 +2456,8 @@ function DockOverlay({
 							className={mode === initialModeRef.current ? "flow-root" : "flow-root dock-variant"}
 						>
 							{pending ? (
-								<QuestionDock
+							<QuestionDock
+								notebook={notebook}
 									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall"}
 									toolCallId={pending.toolCallId}
 									input={pending.input as never}

@@ -30,6 +30,7 @@ import {
 	userFacingTextOf,
 } from "./native-messages.ts";
 import type { ToolResultMessage } from "@earendil-works/pi-ai";
+import { hasNotebookAnswer, serializeLearnerExplanation } from "./notebook-content.ts";
 
 /** The practice join context (owner-approved, 2026-10-06 export round):
  *  practice tool RESULTS are acks — the statement, outcome, and verdict
@@ -71,6 +72,26 @@ function outcomeLabel(outcome: string): string {
 
 /** One tool result's learner-visible outcome, rendered as body lines. */
 function toolResultBody(result: ToolResultMessage, ctx?: MarkdownContext): { heading: string; body: string[] } {
+	if (hasNotebookAnswer(result.details)) {
+		const answer = result.details;
+		const body: string[] = [];
+		if (answer.readingThinkingContent) body.push(`**Thinking while reading:**\n${serializeLearnerExplanation(answer.readingThinkingContent)}`);
+		else if (answer.readingThinking) body.push(`**Thinking while reading:** ${answer.readingThinking}`);
+		body.push(`**Q:** ${answer.questionText}`);
+		if (answer.dismissed) body.push("The learner skipped this question.");
+		else {
+			if (answer.dontKnow) body.push("The learner did not know.");
+			else if (answer.correct !== undefined) body.push(`The learner answered ${answer.correct ? "correctly" : "incorrectly"}.`);
+			if (answer.answers.length) body.push(`The learner chose: ${answer.answers.map(a => a.label).join(", ")}`);
+			if (answer.other) body.push(`The learner answered: ${answer.other}`);
+			if (answer.textContent) body.push(`**Answer:**\n${serializeLearnerExplanation(answer.textContent)}`);
+			else if (answer.text) body.push(`The learner answered: ${answer.text}`);
+			if (answer.thinkingContent) body.push(`**Thinking:**\n${serializeLearnerExplanation(answer.thinkingContent)}`);
+			else if (answer.thinking ?? answer.note) body.push(`**Thinking:** ${answer.thinking ?? answer.note}`);
+			if (answer.confidence !== undefined) body.push(`**Confidence:** ${answer.confidence}%`);
+		}
+		return { heading: result.toolName === "quiz" ? "Quiz" : result.toolName === "probe" ? "Probe" : result.toolName === "recall" ? "Recall" : result.toolName === "explain" ? "Recall check" : "Question", body };
+	}
 	const out = result.details as
 		| Partial<{
 				questionText: string;

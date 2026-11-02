@@ -329,7 +329,7 @@ export function serializeForSummary(messages: readonly LhMessage[]): string {
 				.join("\n");
 			lines.push(
 				`[RESULT for ${result.toolName}${result.isError ? " (error)" : ""}] ${
-					text.length > SUMMARY_TOOL_RESULT_TRUNCATE ? `${text.slice(0, SUMMARY_TOOL_RESULT_TRUNCATE)}…[truncated]` : text
+					!hasNotebookAnswer(result.details) && text.length > SUMMARY_TOOL_RESULT_TRUNCATE ? `${text.slice(0, SUMMARY_TOOL_RESULT_TRUNCATE)}…[truncated]` : text
 				}`,
 			);
 		} else if (role === "custom") {
@@ -412,4 +412,4 @@ TRANSCRIPT TO SUMMARIZE:
 
 ${input.spanText}`;
 }
-import { serializeLearnerExplanation } from "./notebook-content.ts";
+import { serializeLearnerExplanation, hasNotebookAnswer } from "./notebook-content.ts";

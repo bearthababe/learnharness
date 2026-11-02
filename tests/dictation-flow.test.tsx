@@ -8,6 +8,7 @@ import { useDictationLanguage } from "../components/dictation-preference.ts";
 import { isDictationActive, useDictationActive } from "../components/dictation-state.ts";
 import type { UserSettings } from "../src/core/index.ts";
 import { PracticeDock } from "../components/practice-dock.tsx";
+import { QuestionDock } from "../components/question-dock.tsx";
 
 function deferred<T>() {
 	let resolve!: (value: T) => void;
@@ -146,6 +147,25 @@ test("actual practice Send finishes empty-visible deferred speech against its ca
 	problem = "new"; await f.mount();
 	await act(async () => { socket.end(); });
 	assert.deepEqual(sent, [["My deferred reasoning", "old"]]);
+	assert.equal(document.querySelector<HTMLTextAreaElement>("textarea")!.value, "");
+});
+
+test("actual written answer finishes empty-visible speech for its captured question across a question transition", async () => {
+	let question = "old";
+	const sent: Array<[string | undefined, string]> = [];
+	const f = await fixture("en", undefined, () => <QuestionDock toolName="recall" toolCallId={question} input={{ question, correctAnswer: "hidden" }} expanded onExpand={() => {}} onSubmit={(answer, id) => { sent.push([answer.text, id]); }} />);
+	await f.mount();
+	await act(async () => { f.dictation.toggle(); });
+	const socket = Socket.all.at(-1)!;
+	await act(async () => { socket.open(); socket.final("My deferred answer"); });
+	assert.equal(document.querySelector<HTMLTextAreaElement>("textarea")!.value, "");
+	const send = document.querySelector<HTMLButtonElement>('[data-testid="question-send"]')!;
+	assert.equal(send.disabled, false);
+	await act(async () => { send.closest("form")!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); });
+	assert.equal(f.dictation.phase, "stopping");
+	question = "new"; await f.mount();
+	await act(async () => { socket.end(); });
+	assert.deepEqual(sent, [["My deferred answer", "old"]]);
 	assert.equal(document.querySelector<HTMLTextAreaElement>("textarea")!.value, "");
 });
 
