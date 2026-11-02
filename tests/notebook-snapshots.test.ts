@@ -216,6 +216,7 @@ test("an atomic submission write failure preserves the complete draft and cannot
 });
 
 test("working-only live steering reaches the scripted external model in its native user role, including settle-race fallback", async () => {
+	const { POST: steer } = await import("../app/api/chats/[id]/steer/route.ts");
 	process.env.OPENROUTER_API_KEY = "test-key";
 	const { createNotebookSession } = await import("../components/notebook-session.ts");
 	const { SessionModel } = await import("../components/session-core.ts");
@@ -248,15 +249,24 @@ test("working-only live steering reaches the scripted external model in its nati
 		const factory: Parameters<typeof handleChatRequest>[1] = (opts) => createTeacherAgent(undefined, { engine: { model: tutor.getModel(), streamFn: tutor.streamSimple }, messages: opts.messages });
 		if (!race) assert.equal((await handleChatRequest(new Request("http://test/api/chat", { method: "POST", body: JSON.stringify({ chatId: chat.id, input: { type: "text", text: "Discuss pressure" } }) }), factory)).status, 200);
 		if (!race) await started;
+		const responses: Array<{ status: number; body: string }> = [];
 		const model = new SessionModel({ chatId: chat.id, initialMessages: [], fetch: async (url, init) => {
-			if (String(url).endsWith("/steer")) return submitNotebookSteer(chat.id, JSON.parse(String(init?.body)).input);
+			if (String(url).endsWith("/steer")) {
+				const response = await steer(new Request(`http://test${url}`, init), { params: Promise.resolve({ id: chat.id }) }).catch(error => {
+					responses.push({ status: 0, body: String(error) }); throw error;
+				});
+				responses.push({ status: response.status, body: await response.clone().text() });
+				return response;
+			}
 			if (init?.method === "POST") return handleChatRequest(new Request("http://test/api/chat", init), factory);
 			if (String(url).endsWith("/stream")) return new Response(runningTurn(chat.id)?.subscribe() ?? "");
 			return Response.json({ ...chatStore.getChat(chat.id), turnInFlight: !!runningTurn(chat.id) });
 		} });
-		assert.equal(await model.steer(input.text, input), true);
-		release();
+		let accepted: boolean;
+		try { accepted = await model.steer(input.text, input); }
+		finally { release(); }
 		const turn = runningTurn(chat.id); if (turn) await new Response(turn.subscribe()).text();
+		assert.equal(accepted, true, JSON.stringify(responses));
 		assert.equal(contexts.length, 1);
 		assert.match(contexts[0]!, /Notebook-assisted working[\s\S]*p=F\/A/);
 		assert.doesNotMatch(contexts[0]!, /EDITOR WORDS|snapshotId|draftRevision|"explanation":/);

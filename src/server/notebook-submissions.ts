@@ -4,7 +4,7 @@ import type { LhMessage } from "../core/native-messages.ts";
 import type { ChatStore } from "../core/ports.ts";
 import { sameDraftOwner, sameLearnerExplanation, questionChannelContent } from "../core/notebook-content.ts";
 import type { QuestionAnswerData } from "../core/question-core.ts";
-import { NotebookDraftConflict, verifyNotebookExplanation } from "./notebook-drafts.ts";
+import { NotebookDraftConflict, verifyNotebookExplanation } from "../core/notebook-drafts.ts";
 
 /** Reconcile logical submission before model gates and again after their awaits. */
 type SubmissionInput = NotebookInputFields & { answer?: QuestionAnswerData };

@@ -81,7 +81,7 @@ import type {CallUsage} from "../core/contracts.ts";
  */
 
 import { commitNotebookInput, notebookSubmissionAccepted, validateNotebookSubmission } from "./notebook-submissions.ts";
-import { NotebookDraftConflict } from "./notebook-drafts.ts";
+import { NotebookDraftConflict } from "../core/notebook-drafts.ts";
 
 function settlementErrorText(error: unknown): string {
 	return error instanceof TurnPersistenceError ? error.message : "An error occurred.";

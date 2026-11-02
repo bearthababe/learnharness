@@ -28,7 +28,7 @@
 import { ChatInputError, dismissAppends, emit } from "../core";
 import type { ChatStore } from "../core/ports.ts";
 import { commitNotebookInput, notebookSubmissionAccepted } from "./notebook-submissions.ts";
-import { NotebookDraftConflict } from "./notebook-drafts.ts";
+import { NotebookDraftConflict } from "../core/notebook-drafts.ts";
 import { parseDismissInput } from "../core/input-events.ts";
 
 /** The parked dismissal body — exactly the parsed input the dismiss route

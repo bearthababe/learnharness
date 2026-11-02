@@ -10,6 +10,49 @@ const { createNotebookService } = await import("../src/server/notebook.ts");
 const { createNotebookSession } = await import("../components/notebook-session.ts");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
+test("a direct snapshot cannot treat an Apply awaiting transcription as settled working", async () => {
+	const chat = chatStore.createChat("Pending transcript snapshot");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("Transcript is not ready"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	const owner = { kind: "ordinary" as const }; session.tutor.updateText(owner, "My explanation"); await session.tutor.idle();
+	session.speech.choose({ kind: "notebook" }); let time = 0;
+	await session.speech.begin({ id: "pending", now: () => time }); time = 2; session.speech.apply(); await session.idle();
+	const view = service.view(chat.id); const draft = view.tutorDrafts![0]!;
+	const response = await service.handle(new Request("http://test/notebook", { method: "POST", body: JSON.stringify({ type: "snapshot", id: "snapshot", owner, draftId: draft.id, expectedRevision: draft.revision, continuationId: "after", contextId: view.contextId, workingRevision: view.workingRevision }) }), chat.id);
+	assert.equal(response.status, 409);
+	assert.match(await response.text(), /pending/);
+	assert.deepEqual(service.view(chat.id).snapshots, []); session.dispose();
+});
+
+for (const laterWordsFirst of [false, true]) test(`delayed spoken Apply after a focus roundtrip preserves the next draft (${laterWordsFirst ? "later words first" : "command first"})`, async () => {
+	const chat = chatStore.createChat("Delayed ownership"); const editor = createFauxCore({});
+	const instructions: string[] = [];
+	editor.setResponses([context => {
+		instructions.push(JSON.parse(JSON.stringify(context.messages))[0].content.split("CURRENT INSTRUCTION\n\n").at(-1));
+		return fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"p="}]}');
+	}]);
+	const service = createNotebookService({ chatStore, engine: async () => ({ engine: { model: editor.getModel(), streamFn: editor.streamSimple }, model: "faux:editor" }) });
+	const transport: typeof fetch = async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id);
+	const session = createNotebookSession(chat.id, transport);
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true }); session.speech.choose({ kind: "notebook" });
+	let time = 0; const capture = await session.speech.begin({ id: "late", now: () => time });
+	const say = (id: string, text: string, start: number, end: number) => capture.final({ id, text, start, end, words: [{ text, start, end: end - 0.1 }], speechFinal: true });
+	say("instruction", "Write p=", 0, 1);
+	time = 2.5; session.speech.choose({ kind: "tutor", owner: { kind: "ordinary" } });
+	time = 3; session.speech.choose({ kind: "notebook" });
+	if (laterWordsFirst) say("later", "Keep these later words.", 3, 4);
+	say("apply", "Apply changes", 1, 2);
+	if (!laterWordsFirst) say("later", "Keep these later words.", 3, 4);
+	await session.idle(); await session.speech.idle(); await service.settled(chat.id); await capture.end("stop");
+	assert.deepEqual(instructions, ["Write p="]);
+	assert.equal(service.view(chat.id).draft.text, "Keep these later words.");
+	assert.deepEqual(service.view(chat.id).speechRuns?.flatMap(run => run.unplaced ?? []), []);
+	session.dispose(); const reopened = createNotebookSession(chat.id, transport); await reopened.refresh();
+	assert.equal(reopened.getSnapshot().draftText, "Keep these later words.");
+	assert.equal(service.view(chat.id).usage.calls, 1); reopened.dispose();
+});
+
 for (const complete of [false, true]) test(`reload of a ${complete ? "completed" : "gapped"} clicked prefix preserves later words without an extra editor call`, async () => {
 	const chat = chatStore.createChat("Clicked recovery"); const faux = createFauxCore({});
 	faux.setResponses([() => fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"p="}]}')]);

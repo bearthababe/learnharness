@@ -801,6 +801,7 @@ export class SessionModel {
 	async steer(text: string, notebook?: Pick<Extract<ChatInput, { type: "text" }>, "explanation" | "submission">): Promise<boolean> {
 		const t = text.trim();
 		if (!t && !notebook?.explanation) return false;
+		const fields = { explanation: notebook?.explanation, submission: notebook?.submission };
 		const id = notebook?.submission?.id ?? `steer_${localId()}`;
 		if (!this.steerQueueValue.some((entry) => entry.id === id)) this.steerQueueValue = [...this.steerQueueValue, { id, text: t || "Notebook-assisted working" }];
 		this.onChange?.();
@@ -812,12 +813,12 @@ export class SessionModel {
 			const res = await this.fetch(`/api/chats/${this.chatId}/steer`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ input: { type: "steer", id, text: t, ...notebook } }),
+				body: JSON.stringify({ input: { type: "steer", id, text: t, ...fields } }),
 			});
 			if (res.ok) return true; // parked or delivered — the stream lands the card
 			if (res.status === 409) {
 				dropSteer();
-				return this.send({ type: "text", text: t, ...notebook }); // preserve notebook identity through the settle race
+				return this.send({ type: "text", text: t, ...fields }); // preserve notebook identity through the settle race
 			}
 			dropSteer();
 			this.setError((await res.text()) || `The steer failed (${res.status}).`);

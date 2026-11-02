@@ -277,7 +277,7 @@ test("return after a completed failure includes its notice even when working has
 	const tutor = createFauxCore({}); let seen = ""; let calls = 0;
 	tutor.setResponses([context => { calls++; seen = JSON.stringify(context.messages.filter(message => message.role === "user")); return fauxAssistantMessage("Let's clarify your intended working."); }]);
 	const factory: Parameters<typeof handleChatRequest>[1] = options => createTeacherAgent(undefined, { engine: { model: tutor.getModel(), streamFn: tutor.streamSimple }, messages: options.messages });
-	const send = () => handleChatRequest(new Request("http://test/api/chat", { method: "POST", body: JSON.stringify({ chatId: chat.id, input }) }), factory);
+	const send = () => handleChatRequest(new Request("http://test/api/chat", { method: "POST", body: JSON.stringify({ chatId: chat.id, input: { type: "text", ...input } }) }), factory);
 	const response = await send(); assert.equal(response.status, 200, await response.clone().text());
 	const running = runningTurn(chat.id); if (running) await new Response(running.subscribe()).text();
 	assert.equal((await send()).status, 200);

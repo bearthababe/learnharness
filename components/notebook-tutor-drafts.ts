@@ -1,14 +1,16 @@
-import { explanationHasContent, sameDraftOwner, ownedTutorDraftSchema, type QuestionAnswerData, type ChatInput, type NotebookCommand, type NotebookCommandReceipt, type NotebookView, type OwnedTutorDraft, type TutorDraftOwner } from "@/src/core";
+import { explanationHasContent, sameDraftOwner, ownedTutorDraftSchema, type QuestionAnswerData, type NotebookInputFields, type NotebookCommand, type NotebookCommandReceipt, type NotebookView, type OwnedTutorDraft, type TutorDraftOwner } from "@/src/core";
 
 export type DraftRecoveryStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 type DraftCommand = Extract<NotebookCommand, { type: "tutor-draft" | "snapshot" }>;
-type PreparedInput = Extract<ChatInput, { type: "text" }>;
+export type PreparedNotebookContent = { text: string } & Required<NotebookInputFields>;
+export type PreparedNotebookAnswer = { answer: QuestionAnswerData } & Pick<NotebookInputFields, "submission">;
+type FrozenContent = { kind: "content"; content: PreparedNotebookContent } | { kind: "answer"; content: PreparedNotebookAnswer };
 interface Entry {
 	draft: OwnedTutorDraft;
 	base: OwnedTutorDraft | null;
 	dirty: boolean;
 	wire?: DraftCommand;
-	frozen?: PreparedInput | Extract<ChatInput, { type: "answer" }>;
+	frozen?: FrozenContent;
 	frozenDraft?: OwnedTutorDraft;
 	preparing?: OwnedTutorDraft;
 	conflict?: boolean;
@@ -57,8 +59,14 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		try {
 			const raw = storage?.getItem(storageKey);
 			if (!raw) return;
-			for (const [key, entry] of JSON.parse(raw) as Array<[string, Entry]>) {
-				ownedTutorDraftSchema.parse(entry.draft);
+			for (const [key, saved] of JSON.parse(raw) as Array<[string, Omit<Entry, "frozen"> & { frozen?: FrozenContent | ({ type: "text" } & PreparedNotebookContent) | ({ type: "answer"; toolCallId: string } & PreparedNotebookAnswer) }]>) {
+				ownedTutorDraftSchema.parse(saved.draft);
+				// Older recovery stored native-shaped requests. Keep their content and
+				// receipt exactly, but let the current Tutor adapter choose its action.
+				const frozen = saved.frozen;
+				const entry: Entry = { ...saved, frozen: !frozen || "kind" in frozen ? frozen : frozen.type === "text"
+						? { kind: "content", content: { text: frozen.text, explanation: frozen.explanation, submission: frozen.submission } }
+						: { kind: "answer", content: { answer: frozen.answer, submission: frozen.submission } } };
 				entry.preparing = undefined; // no request existed before a frozen input
 				entries.set(key, entry);
 			}
@@ -88,9 +96,9 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 					if (entry.wire?.type === "tutor-draft") entry.wire = { type: "tutor-draft", expectedRevision: remote.revision, draft: { ...resolved(entry.wire.draft), revision: remote.revision + 1 } };
 				}
 			}
-			if (entry.frozen && next.submissions?.some((receipt) => receipt.submission.id === entry.frozen!.submission?.id)) {
+			if (entry.frozen && next.submissions?.some((receipt) => receipt.submission.id === entry.frozen!.content.submission?.id)) {
 				confirmed = true;
-				if (entry.frozenDraft ? sameContent(entry.draft, entry.frozenDraft) : entry.frozen.type === "text" && equal(entry.draft.parts, entry.frozen.explanation)) { entries.delete(key); continue; }
+				if (entry.frozenDraft ? sameContent(entry.draft, entry.frozenDraft) : entry.frozen.kind === "content" && equal(entry.draft.parts, entry.frozen.content.explanation)) { entries.delete(key); continue; }
 				entry.base = remote; entry.frozen = undefined; entry.frozenDraft = undefined; entry.wire = undefined; entry.dirty = true;
 				void queue(() => flush(entry.draft.owner)).catch(() => {});
 			}
@@ -228,7 +236,7 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		entry.dirty = true; stash(); publish();
 		void queue(() => flush(owner)).catch(() => {});
 	}
-	function prepareSubmission(owner: TutorDraftOwner): Promise<PreparedInput> {
+	function prepareSubmission(owner: TutorDraftOwner): Promise<PreparedNotebookContent> {
 		const reserving = entries.get(keyOf(owner));
 		if (reserving && !reserving.frozen && !reserving.preparing) reserving.preparing = structuredClone(reserving.draft);
 		return queue(async () => {
@@ -236,17 +244,17 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 			await refresh();
 			let entry = entries.get(keyOf(owner));
 			if (entry?.frozen) {
-				if (entry.frozen.type !== "text") throw new Error("Confirm the earlier answer before sending this draft");
-				return structuredClone(entry.frozen);
+				if (entry.frozen.kind !== "content") throw new Error("Confirm the earlier answer before sending this draft");
+				return structuredClone(entry.frozen.content);
 			}
 			await flush(owner);
 			await waitForWorking([owner]);
 			entry = entries.get(keyOf(owner));
 			if (!entry || !explanationHasContent(entry.draft.parts)) throw new Error("Enter an explanation or notebook working");
 			const draft = entry.base!;
-			entry.frozen = { type: "text", text: draft.parts.filter((part) => part.kind === "text").map((part) => part.text).filter(Boolean).join("\n\n"), explanation: structuredClone(draft.parts), submission: { id: crypto.randomUUID(), draftId: draft.id, draftRevision: draft.revision, owner } };
+			entry.frozen = { kind: "content", content: { text: draft.parts.filter((part) => part.kind === "text").map((part) => part.text).filter(Boolean).join("\n\n"), explanation: structuredClone(draft.parts), submission: { id: crypto.randomUUID(), draftId: draft.id, draftRevision: draft.revision, owner } } };
 			stash(); publish(null);
-			return structuredClone(entry.frozen);
+			return structuredClone(entry.frozen.content);
 			} finally { const entry = entries.get(keyOf(owner)); if (entry) entry.preparing = undefined; }
 		});
 	}
@@ -270,7 +278,7 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 			});
 		} finally { waitingForWorking--; publish(); }
 	}
-	function prepareAnswer(owner: Extract<TutorDraftOwner, { kind: "question" }>, answer: QuestionAnswerData): Promise<Extract<ChatInput, { type: "answer" }>> {
+	function prepareAnswer(owner: Extract<TutorDraftOwner, { kind: "question" }>, answer: QuestionAnswerData): Promise<PreparedNotebookAnswer> {
 		const owners = [owner, ...(owner.channel === "reading-thinking" ? [] : [{ ...owner, channel: "reading-thinking" as const }])];
 		// Reserve exactly the complete fields observed by this Send before queued
 		// autosaves or an awaited refresh give later typing a chance to replace them.
@@ -283,13 +291,13 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 			await refresh();
 			const frozen = owners.map(owner => entries.get(keyOf(owner))?.frozen).find(Boolean);
 			if (frozen) {
-				if (frozen.type !== "answer") throw new Error("Confirm the earlier submission before sending this answer");
-				return structuredClone(frozen);
+				if (frozen.kind !== "answer") throw new Error("Confirm the earlier submission before sending this answer");
+				return structuredClone(frozen.content);
 			}
 			for (const owner of owners) await flush(owner);
 			await waitForWorking(owners);
 			const included = owners.flatMap(owner => { const entry = entries.get(keyOf(owner)); return entry?.base ? [entry] : []; });
-			const input: Extract<ChatInput, { type: "answer" }> = { type: "answer", toolCallId: owner.toolCallId, answer: structuredClone(answer) };
+			const input: PreparedNotebookAnswer = { answer: structuredClone(answer) };
 			if (!included.length) return input;
 			const refs = included.map(entry => ({ draftId: entry.base!.id, draftRevision: entry.base!.revision, owner: entry.base!.owner }));
 			input.submission = { id: crypto.randomUUID(), ...refs[0]!, ...(refs.length > 1 ? { additionalDrafts: refs.slice(1) } : {}) };
@@ -302,7 +310,7 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 				input.answer[field] = structuredClone(draft.parts);
 				input.answer[compatibility] = draft.parts.filter(part => part.kind === "text").map(part => part.text).filter(Boolean).join("\n\n") || undefined;
 			}
-			for (const entry of included) { entry.frozen = input; entry.frozenDraft = structuredClone(entry.base!); }
+			for (const entry of included) { entry.frozen = { kind: "answer", content: input }; entry.frozenDraft = structuredClone(entry.base!); }
 			stash(); publish(null);
 			return structuredClone(input);
 			} finally {

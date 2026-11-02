@@ -16,6 +16,9 @@ A separate conversation exercising retrieval and application through varied prob
 **Problem**:
 An exercise the learner works on within practice or a drill, with discussion and assistance as needed. Its conclusion records the outcome of that attempt.
 
+**Notebook**:
+The learner's continuing mathematical working within a teaching or practice session, distinct from the Tutor conversation. It can span multiple questions and topics; snapshots of its working can be shared with the Tutor.
+
 **Proposition**:
 A statement represented in the knowledge graph as subject knowledge. Its presence does not establish that the learner understands it or that the statement is correct.
 

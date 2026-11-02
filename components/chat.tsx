@@ -517,7 +517,7 @@ export function Chat({
 		(text: string, problemCallId: string, fields?: NotebookInputFields) => {
 			const problem = activeProblemRef.current;
 			if (!problem || problem.toolCallId !== problemCallId) return Promise.resolve(false);
-			return send({ type: "thinking", problemCallId, text, ...fields });
+			return send({ type: "thinking", problemCallId, text, explanation: fields?.explanation, submission: fields?.submission });
 		},
 		[send],
 	);
@@ -1284,7 +1284,7 @@ export function Chat({
 			if (selectedModelUnavailable(catalog, selectedModel)) { openModelPicker(); return; }
 			void notebook.session.tutor.prepareSubmission({ kind: "ordinary" }).then(async (input) => {
 				// Explicit Send is the only authority; switching and autosaves never enter here.
-				if (busy) await steer(input.text, input); else await send(input);
+				if (busy) await steer(input.text, input); else await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission });
 				await notebook.session.tutor.reconcile();
 			}).catch(() => {});
 			return;

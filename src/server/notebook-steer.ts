@@ -3,7 +3,7 @@ import { newUserSteer } from "../core/native-messages.ts";
 import { stores } from "./stores.ts";
 import { steerLiveChat } from "./jobs.ts";
 import { commitNotebookInput, notebookSubmissionAccepted, validateNotebookSubmission } from "./notebook-submissions.ts";
-import { NotebookDraftConflict } from "./notebook-drafts.ts";
+import { NotebookDraftConflict } from "../core/notebook-drafts.ts";
 
 export function submitNotebookSteer(chatId: string, input: UserSteerInput): Response {
 	try {

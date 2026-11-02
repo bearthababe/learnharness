@@ -89,13 +89,22 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		}
 		return body;
 	}
-	async function refresh() {
-		try {
-			const response = await fetcher(url, { cache: "no-store" });
-			const body = await response.json();
-			if (!response.ok) throw new Error(body.error ?? "Notebook unavailable");
-			adopt(body);
-		} catch (error) { publish({ error: error instanceof Error ? error.message : "Notebook unavailable" }); }
+	let refreshing: Promise<void> | undefined;
+	let refreshAgain = false;
+	function refresh(): Promise<void> {
+		if (refreshing) { refreshAgain = true; return refreshing; }
+		refreshing = (async () => {
+			do {
+				refreshAgain = false;
+				try {
+					const response = await fetcher(url, { cache: "no-store" });
+					const body = await response.json();
+					if (!response.ok) throw new Error(body.error ?? "Notebook unavailable");
+					adopt(body);
+				} catch (error) { publish({ error: error instanceof Error ? error.message : "Notebook unavailable" }); }
+			} while (refreshAgain);
+		})().finally(() => { refreshing = undefined; });
+		return refreshing;
 	}
 	function dispatch(command: NotebookSessionCommand, replay?: SpeechRequest): Promise<NotebookCommandReceipt> {
 		const prefix = command.type === "apply" && command.speech ? command.speech.prefix : state.draftText;

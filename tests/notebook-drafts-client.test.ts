@@ -12,6 +12,72 @@ const { createNotebookSession } = await import("../components/notebook-session.t
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
 const owner = { kind: "ordinary" as const };
 
+test("refreshes during an in-flight read coalesce and still fetch changes made after that read began", async () => {
+	const chat = chatStore.createChat("Refresh ordering");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor calls"); } });
+	let release!: () => void;
+	const gate = new Promise<void>(resolve => { release = resolve; });
+	let reads = 0;
+	const session = createNotebookSession(chat.id, async (_url, init) => {
+		const response = await service.handle(new Request("http://test/notebook", init), chat.id);
+		if (!init?.method && ++reads === 1) await gate;
+		return response;
+	});
+	const first = session.refresh();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	service.dispatch(chat.id, { type: "visibility", visible: true });
+	const more = [session.refresh(), session.refresh(), session.refresh()];
+	try { assert.equal(reads, 1, "only one read may be in flight"); }
+	finally { release(); await Promise.all([first, ...more]); }
+	assert.equal(reads, 2, "one trailing read observes the invalidation");
+	assert.equal(session.getSnapshot().view?.visible, true);
+	session.dispose();
+});
+
+test("legacy frozen content reopens with the same receipt and supplies content rather than a Tutor action", async () => {
+	const chat = chatStore.createChat("Legacy frozen send");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor calls"); } });
+	const fetcher: typeof fetch = async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id);
+	const first = createNotebookSession(chat.id, fetcher);
+	await first.refresh(); first.tutor.updateText(owner, "Keep the original explanation."); await first.tutor.idle();
+	const draft = service.view(chat.id).tutorDrafts![0]!;
+	const legacy = { type: "text", text: "Keep the original explanation.", explanation: draft.parts, submission: { id: "original-send", draftId: draft.id, draftRevision: draft.revision, owner } };
+	const memory = new Map([[`lh:notebook-drafts:${chat.id}`, JSON.stringify([["ordinary", { draft, base: draft, dirty: false, frozen: legacy }]])]]);
+	first.dispose();
+	const restored = createNotebookSession(chat.id, fetcher, { getItem: key => memory.get(key) ?? null, setItem: (key, value) => { memory.set(key, value); }, removeItem: key => { memory.delete(key); } });
+	await restored.refresh();
+	const prepared = await restored.tutor.prepareSubmission(owner);
+	assert.equal("type" in prepared, false);
+	assert.equal(prepared.submission?.id, "original-send");
+	assert.deepEqual(prepared.explanation, draft.parts);
+	assert.deepEqual(await restored.tutor.prepareSubmission(owner), prepared);
+	assert.deepEqual(chatStore.getChat(chat.id)!.messages, []);
+	restored.dispose();
+});
+
+test("a legacy frozen answer retains both question channels and its original answer on retry", async () => {
+	const chat = chatStore.createChat("Legacy answer");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor calls"); } });
+	const fetcher: typeof fetch = async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id);
+	const first = createNotebookSession(chat.id, fetcher);
+	const answerOwner = { kind: "question" as const, toolCallId: "question", channel: "text" as const };
+	const readingOwner = { ...answerOwner, channel: "reading-thinking" as const };
+	await first.refresh(); first.tutor.updateText(answerOwner, "Original answer"); first.tutor.updateText(readingOwner, "Original reading"); await first.tutor.idle();
+	const answer = { kind: "explain" as const, questionText: "Pressure?", answers: [], dontKnow: false, answeredAt: "original-time", text: "Original answer" };
+	const content = await first.tutor.prepareAnswer(answerOwner, answer);
+	const legacy = { type: "answer", toolCallId: "question", ...content };
+	const entries = service.view(chat.id).tutorDrafts!.map(draft => [`question:question:${draft.owner.kind === "question" ? draft.owner.channel : ""}`, { draft, base: draft, dirty: false, frozen: legacy, frozenDraft: draft }]);
+	const memory = new Map([[`lh:notebook-drafts:${chat.id}`, JSON.stringify(entries)]]); first.dispose();
+	const restored = createNotebookSession(chat.id, fetcher, { getItem: key => memory.get(key) ?? null, setItem: (key, value) => { memory.set(key, value); }, removeItem: key => { memory.delete(key); } });
+	await restored.refresh();
+	const retry = await restored.tutor.prepareAnswer(answerOwner, { ...answer, text: "New answer", answeredAt: "later-time" });
+	assert.deepEqual(retry, content);
+	assert.equal(retry.submission?.additionalDrafts?.length, 1);
+	assert.match(JSON.stringify(retry.answer.readingThinkingContent), /Original reading/);
+	assert.equal("type" in retry, false); assert.equal("toolCallId" in retry, false);
+	assert.deepEqual(chatStore.getChat(chat.id)!.messages, []); restored.dispose();
+});
+
 test("per-change saves recover a lost draft ACK across remount without waking Tutor or overwriting newer typing", async () => {
 	const chat = chatStore.createChat("Durable draft");
 	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No model calls"); } });
@@ -91,13 +157,13 @@ test("failed notebook sends retain the complete draft; lost send ACK reconciles 
 		assert.equal(response.status, 200);
 		throw new Error("Lost send ACK");
 	} });
-	assert.equal(await model.send(frozen), false);
+	assert.equal(await model.send({ type: "text", ...frozen }), false);
 	assert.deepEqual(session.tutor.draft(owner)!.parts, frozen.explanation);
 	assert.deepEqual(chatStore.getChat(chat.id)!.messages, []);
 	const retry = await session.tutor.prepareSubmission(owner);
 	assert.deepEqual(retry, frozen);
 	fail = false;
-	assert.equal(await model.send(retry), false);
+	assert.equal(await model.send({ type: "text", ...retry }), false);
 	const turn = runningTurn(chat.id); if (turn) await new Response(turn.subscribe()).text();
 	session.tutor.updateText(owner, "New words after Send.");
 	await session.tutor.reconcile(); await session.tutor.idle();

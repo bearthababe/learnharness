@@ -1,9 +1,10 @@
 import { notebookSpeechRunSchema, sameDraftOwner, type DictationCaptureAdapter, type DictationFinal, type NotebookSpeechApply, type NotebookSpeechRun, type NotebookSpeechTarget, type NotebookView, type TutorDraftOwner } from "@/src/core";
 import type { DraftRecoveryStorage } from "./notebook-tutor-drafts";
 import type { NotebookSession } from "./notebook-session";
+import { notebookSpeechTargetAt, type NotebookSpeechDestination } from "@/src/core";
 
 export type NotebookSpeechInput = { kind: "notebook" } | { kind: "tutor"; owner: TutorDraftOwner; text?: string; partId?: string };
-type Boundary = { at: number; target: NotebookSpeechTarget; manual: boolean; tutor: Extract<NotebookSpeechInput, { kind: "tutor" }> };
+type Boundary = { at: number; target: NotebookSpeechDestination; manual: boolean; tutor: Extract<NotebookSpeechInput, { kind: "tutor" }> };
 type SpeechCommand = { type: "speech-run"; expectedRevision: number; run: NotebookSpeechRun };
 
 /** Source-owned hidden speech. The session's existing save rail is the only
@@ -19,7 +20,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 	const listeners = new Set<() => void>();
 	let state = { active: false, destination: "tutor" as "tutor" | "notebook", error: null as string | null };
 	function publish(error = state.error) { state = { active: active !== null, destination: selected?.kind ?? "tutor", error }; for (const listener of listeners) listener(); }
-	let active: { run: NotebookSpeechRun; now: () => number; boundaries: Boundary[]; results: Map<string, DictationFinal>; consumed: Set<string>; utterance: string[]; notebookDraftId: string; captureStart: number; audioStarted?: boolean; intents: Array<{ id: string; clicked: boolean; speech: NotebookSpeechApply; cursorLineId?: string | null }> } | null = null;
+	let active: { run: NotebookSpeechRun; now: () => number; boundaries: Boundary[]; results: Map<string, DictationFinal>; consumed: Set<string>; utterance: string[]; initialDraftId: string; captureStart: number; audioStarted?: boolean; intents: Array<{ id: string; clicked: boolean; speech: NotebookSpeechApply; cursorLineId?: string | null }> } | null = null;
 	function stash() {
 		try { if (pending.length) storage?.setItem(key, JSON.stringify(pending)); else storage?.removeItem(key); }
 		catch { publish("Local dictation recovery could not be saved. Keep this page open until the server save succeeds."); }
@@ -63,14 +64,14 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		}
 		if (hydrating && pending.length) tail = tail.then(flush).catch(() => {});
 	}
-	function target(input: NotebookSpeechInput): NotebookSpeechTarget {
-		if (input.kind === "notebook") return { kind: "notebook", draftId: active?.notebookDraftId ?? session.getSnapshot().view!.draft.id };
+	function target(input: NotebookSpeechInput): NotebookSpeechDestination {
+		if (input.kind === "notebook") return { kind: "notebook" };
 		let draft = session.tutor.draft(input.owner);
 		if (!draft) { session.tutor.updateText(input.owner, input.text ?? ""); draft = session.tutor.draft(input.owner)!; }
 		return { kind: "tutor", owner: input.owner, draftId: draft.id, partId: input.partId ?? draft.parts.at(-1)!.id };
 	}
-	function at(boundaries: Boundary[], time: number): NotebookSpeechTarget | null {
-		return boundaries.findLast(boundary => boundary.at <= time)?.target ?? null;
+	function at(time: number): NotebookSpeechTarget | null {
+		return active ? notebookSpeechTargetAt(active.initialDraftId, active.boundaries, active.intents.map(intent => intent.speech), time) : null;
 	}
 	function rebuild() {
 		if (!active) return;
@@ -82,7 +83,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 			}
 			const groups: NotebookSpeechRun["fragments"] = [];
 			for (const word of result.words) {
-				const owner = at(active!.boundaries, word.start);
+				const owner = at(word.start);
 				const last = groups.at(-1);
 				if (last && JSON.stringify(last.target) === JSON.stringify(owner)) { last.text += ` ${word.text}`; last.end = word.end; }
 				else groups.push({ id: `${result.id}:${groups.length}`, start: word.start, end: word.end, text: word.text, target: owner });
@@ -100,7 +101,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		if (current) selected = input;
 		if (!active) return;
 		if (manual) active.utterance = [];
-		const before = at(active.boundaries, time);
+		const before = at(time);
 		if (before?.kind === "notebook" && input.kind === "tutor") {
 			target(input);
 			void session.tutor.returnToTutor(input.owner).catch(() => {});
@@ -108,7 +109,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		}
 		const next = target(input);
 		const tutor = input.kind === "tutor" ? input : config.tutor();
-		if (!manual && JSON.stringify(before) === JSON.stringify(next) && JSON.stringify(active.boundaries.at(-1)?.tutor.owner) === JSON.stringify(tutor.owner)) return;
+		if (!manual && JSON.stringify(active.boundaries.findLast(boundary => boundary.at <= time)?.target) === JSON.stringify(next) && JSON.stringify(active.boundaries.at(-1)?.tutor.owner) === JSON.stringify(tutor.owner)) return;
 		active.boundaries.push({ at: time, target: next, manual, tutor }); active.boundaries.sort((a, b) => a.at - b.at);
 		if (!manual && current) config.select(input);
 		publish(); rebuild(); void save(active.run).catch(() => {});
@@ -123,11 +124,11 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		const first = words[0]!.start; const last = words.at(-1)!.start;
 		if (active.boundaries.some(boundary => boundary.manual && boundary.at > first && boundary.at <= last)) return false;
 		if (text === "apply changes") {
-			const boundary = active.boundaries.findLast(boundary => boundary.at <= first);
-			if (boundary?.target.kind !== "notebook") return false;
+			const owner = at(first);
+			if (owner?.kind !== "notebook") return false;
 			for (const id of ids) active.consumed.add(id);
 			rebuild();
-			const covered = active.intents.find(intent => intent.clicked && intent.speech.draftId === boundary.target.draftId && intent.speech.cutoff > last);
+			const covered = active.intents.find(intent => intent.clicked && intent.speech.draftId === owner.draftId && intent.speech.cutoff > last);
 			if (covered) {
 				covered.speech = { ...covered.speech, commandIds: [...covered.speech.commandIds, ...ids] };
 				updateIntents(covered.id); return true;
@@ -142,15 +143,12 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 	}
 	function reserveApply(cutoff: number, commandIds: string[]) {
 		if (!active) return false;
-		const boundary = active.boundaries.findLast(boundary => boundary.at <= cutoff);
-		if (boundary?.target.kind !== "notebook") return false;
-		const draftId = boundary.target.draftId;
+		const owner = at(cutoff);
+		if (owner?.kind !== "notebook") return false;
+		const draftId = owner.draftId;
 		const nextDraftId = crypto.randomUUID();
-		active.boundaries.push({ ...boundary, at: cutoff, target: { kind: "notebook", draftId: nextDraftId }, manual: false });
-		active.boundaries.sort((a, b) => a.at - b.at); rebuild();
-		active.notebookDraftId = nextDraftId;
 		const intent = { id: crypto.randomUUID(), clicked: commandIds.length === 0, cursorLineId: session.getSnapshot().cursorLineId, speech: { runId: active.run.id, draftId, nextDraftId, fragmentIds: [], text: "", prefix: session.getSnapshot().draftText, commandIds, cutoff, ready: false, resolves: session.getSnapshot().view?.problem?.operationId } };
-		active.intents.push(intent); updateIntents(intent.id);
+		active.intents.push(intent); rebuild(); updateIntents(intent.id);
 		return true;
 	}
 	function updateIntents(created?: string) {
@@ -184,7 +182,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		if (!session.getSnapshot().view?.contextId) await session.dispatch({ type: "visibility", visible: false });
 		selected = initial;
 		const run: NotebookSpeechRun = { id: clock.id, revision: 0, status: "recording", incomplete: false, fragments: [] };
-		active = { run, now: clock.now, boundaries: [{ at: clock.now(), target: target(initial), manual: true, tutor: initial.kind === "tutor" ? initial : config.tutor() }], results: new Map(), consumed: new Set(), utterance: [], notebookDraftId: session.getSnapshot().view!.draft.id, captureStart: clock.now(), intents: [] };
+		active = { run, now: clock.now, boundaries: [{ at: clock.now(), target: target(initial), manual: true, tutor: initial.kind === "tutor" ? initial : config.tutor() }], results: new Map(), consumed: new Set(), utterance: [], initialDraftId: session.getSnapshot().view!.draft.id, captureStart: clock.now(), intents: [] };
 		publish();
 		try { await save(run); }
 		catch (error) {

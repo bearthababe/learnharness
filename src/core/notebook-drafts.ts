@@ -1,27 +1,10 @@
 /** Notebook-owned draft/snapshot rules; existing input architecture only calls
  * these at the explicit save/return/submission boundaries. */
-import type { NotebookCommand, NotebookRecord, LearnerExplanation, TutorDraftOwner, WorkingSnapshot } from "../core/contracts/notebook.ts";
-import { sameDraftOwner, questionChannelContent, NOTEBOOK_FAILURE } from "../core/notebook-content.ts";
+import type { NotebookCommand, NotebookRecord, LearnerExplanation, TutorDraftOwner, WorkingSnapshot } from "./contracts/notebook.ts";
+import { sameDraftOwner, questionChannelContent, NOTEBOOK_FAILURE, snapshotPart } from "./notebook-content.ts";
+import { notebookOperationPending } from "./notebook-operations.ts";
 
 export class NotebookDraftConflict extends Error {}
-function snapshotPart(snapshot: WorkingSnapshot): Extract<LearnerExplanation[number], { kind: "working" }> {
-	return { id: snapshot.id, kind: "working", snapshotId: snapshot.id, contextId: snapshot.contextId, revision: snapshot.revision, lines: structuredClone(snapshot.lines),
-		...(snapshot.status === "pending" ? { pending: true } : {}), ...(snapshot.failure ? { failure: snapshot.failure } : {}) };
-}
-export function resolveNotebookSnapshots(record: NotebookRecord, operationId: string) {
-	const operation = record.operations.find(op => op.id === operationId)!;
-	if (!operation.completedWorking) return;
-	for (const snapshot of record.snapshots ?? []) {
-		if (snapshot.status !== "pending" || snapshot.throughOperationId !== operationId) continue;
-		snapshot.status = operation.status === "applied" ? "resolved" : "failed";
-		if (snapshot.status === "failed") snapshot.failure = NOTEBOOK_FAILURE;
-		snapshot.revision = operation.completedWorking.revision;
-		snapshot.lines = structuredClone(operation.completedWorking.lines);
-		const draft = record.tutorDrafts?.find(draft => draft.id === snapshot.draftId);
-		const index = draft?.parts.findIndex(part => part.id === snapshot.id) ?? -1;
-		if (draft && index >= 0) { draft.parts[index] = snapshotPart(snapshot); draft.revision++; }
-	}
-}
 export function verifyNotebookExplanation(record: NotebookRecord, owner: TutorDraftOwner, draftId: string, parts: LearnerExplanation) {
 	for (const part of parts) {
 		if (part.kind !== "working") continue;
@@ -73,7 +56,7 @@ export function changeNotebookDraft(record: NotebookRecord, command: Extract<Not
 		return;
 	}
 	if ((command.contextId !== undefined && command.contextId !== record.current.id) || (command.workingRevision !== undefined && command.workingRevision !== record.current.revision)) throw new NotebookDraftConflict("Working changed before the snapshot could be saved; retain this draft for review");
-	if (record.operations.some((op) => ["queued", "running", "result-ready"].includes(op.status))) throw new NotebookDraftConflict("Notebook edit is pending");
+	if (record.operations.some(notebookOperationPending)) throw new NotebookDraftConflict("Notebook edit is pending");
 	const last = current.parts.filter((part) => part.kind === "working").at(-1);
 	if (!record.current.state.lines.length || (last?.kind === "working" && last.contextId === record.current.id && last.revision === record.current.revision)) return;
 	if (current.parts.some((part) => part.id === command.id || part.id === command.continuationId)) throw new NotebookDraftConflict("Part identity already used");

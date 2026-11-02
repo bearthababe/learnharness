@@ -1,8 +1,12 @@
 import { z } from "zod";
-import type { LearnerExplanation, TutorDraftOwner } from "./contracts/notebook.ts";
+import type { LearnerExplanation, TutorDraftOwner, WorkingSnapshot } from "./contracts/notebook.ts";
 import type { QuestionAnswerData } from "./question-core.ts";
 
 const id = z.string().min(1);
+export function snapshotPart(snapshot: WorkingSnapshot): Extract<LearnerExplanation[number], { kind: "working" }> {
+	return { id: snapshot.id, kind: "working", snapshotId: snapshot.id, contextId: snapshot.contextId, revision: snapshot.revision, lines: structuredClone(snapshot.lines),
+		...(snapshot.status === "pending" ? { pending: true } : {}), ...(snapshot.failure ? { failure: snapshot.failure } : {}) };
+}
 export function hasNotebookAnswer(value: unknown): value is QuestionAnswerData {
 	return !!value && typeof value === "object" && ["textContent", "thinkingContent", "readingThinkingContent"].some(key => Array.isArray((value as Record<string, unknown>)[key]));
 }

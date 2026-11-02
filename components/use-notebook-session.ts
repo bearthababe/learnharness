@@ -9,10 +9,15 @@ export function useNotebookSession(chatId: string) {
 	const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
 	const hub = useNotifyHub();
 	useEffect(() => {
-		void session.refresh();
-		const off = hub?.subscribe("notebook-changed", (event) => { if (event.chatId === chatId) void session.refresh(); });
-		const resync = hub?.onResync(() => { void session.refresh(); });
-		return () => { off?.(); resync?.(); session.dispose(); };
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const refresh = () => { clearTimeout(timer); timer = undefined; void session.refresh(); };
+		refresh();
+		const off = hub?.subscribe("notebook-changed", event => {
+			if (event.chatId !== chatId) return;
+			clearTimeout(timer); timer = setTimeout(refresh, 250);
+		});
+		const resync = hub?.onResync(refresh);
+		return () => { clearTimeout(timer); off?.(); resync?.(); session.dispose(); };
 	}, [session, hub, chatId]);
 	return { session, ...state };
 }

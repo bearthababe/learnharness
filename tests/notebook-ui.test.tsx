@@ -26,6 +26,37 @@ const { useNotebookDestination } = await import("../components/notebook-destinat
 const { NotebookDraftReview, LearnerExplanation } = await import("../components/learner-explanation.tsx");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
+test("Notebook notifications coalesce, reconnect refreshes immediately, and unmount cancels scheduled reads", async t => {
+	const { useNotebookSession } = await import("../components/use-notebook-session.ts");
+	const { ServerEventsProvider } = await import("../components/server-events.tsx");
+	const chat = chatStore.createChat("Notification bursts");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No model calls"); } });
+	const previous = globalThis.fetch; let reads = 0;
+	globalThis.fetch = async (_url, init) => { reads++; return service.handle(new Request("http://test/notebook", init), chat.id); };
+	const events = new Map<string, (data: string) => void>(); let open!: () => void;
+	const connect = () => ({ onEvent(name: string, callback: (data: string) => void) { events.set(name, callback); }, onOpen(callback: () => void) { open = callback; }, close() {} });
+	function View() { const state = useNotebookSession(chat.id); return <output>{String(state.view?.visible)}</output>; }
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	t.mock.timers.enable({ apis: ["setTimeout"] });
+	const notify = () => events.get("notebook-changed")!(JSON.stringify({ chatId: chat.id }));
+	try {
+		await act(async () => root.render(<ServerEventsProvider connect={connect}><View /></ServerEventsProvider>));
+		assert.equal(reads, 1);
+		service.dispatch(chat.id, { type: "visibility", visible: true });
+		await act(async () => { for (let i = 0; i < 20; i++) notify(); t.mock.timers.tick(249); });
+		assert.equal(reads, 1);
+		await act(async () => { t.mock.timers.tick(1); });
+		assert.equal(reads, 2); assert.equal(host.textContent, "true");
+		await act(async () => { notify(); open(); });
+		assert.equal(reads, 3);
+		await act(async () => { t.mock.timers.tick(250); });
+		assert.equal(reads, 3, "reconnect absorbs the queued refresh");
+		notify();
+	} finally { await act(async () => root.unmount()); host.remove(); globalThis.fetch = previous; }
+	t.mock.timers.tick(250);
+	assert.equal(reads, 3);
+});
+
 test("spoken Apply captures the same selected whole line as the Notebook button", async () => {
 	const chat = chatStore.createChat("Spoken selection"); const faux = createFauxCore({}); let prompt = "";
 	faux.setResponses([

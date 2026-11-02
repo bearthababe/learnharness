@@ -85,6 +85,29 @@ output is not shared with another running app.
 
 ## Stamps
 
+### Notebook capture — 2026-11-02
+
+`chats/chat_mvzf8k96_6f85b903.json` was captured with
+`mise x node -- node --import tsx scripts/capture-notebook-golden.ts` under the
+owner-approved #28 correction plan. It uses an isolated `LH_DATA_DIR` and
+`LH_AUTH_FILE`, production Notebook command handling, native Tutor request
+parsing, normal teacher construction, and production persistence. Two scripted
+editor responses and one scripted Tutor response supply the external model
+boundary; network fetches are blocked. No live calls or credentials were used.
+
+The script copies the application's JSON bytes unchanged and checks equality.
+The record contains unfinished and completed working, Undo, two submitted
+snapshots interleaved with explanation, a submission receipt, and unsent Tutor
+and Notebook drafts. This is scripted-provider persistence evidence, not live
+provider or physical-phone acceptance. SHA-256:
+
+`cc3bc8ee2936ab4485431ad864fe53caf15e2a82eae6480d768e1ab0ce142e5c`
+
+Re-running captures an additional record with new IDs/timestamps. Replace the
+intended capture deliberately and update provenance; preserve legacy fixtures.
+
+### Legacy stamps
+
 These files are deliberately the UNSTAMPED legacy shape (schema-stamp wave,
 2026-10-10): lazy v1 means absence reads as current-valid, so this set pins
 the pre-stamp read path forever. Stamped writes (chat `version: 1`, the

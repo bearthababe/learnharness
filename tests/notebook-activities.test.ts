@@ -41,7 +41,7 @@ for (const parked of [false, true]) test(`${parked ? "parked" : "silent"} dismis
 	session.tutor.updateText(reading, "I do not understand yet"); session.tutor.updateText(answer, "UNSENT ANSWER"); await session.tutor.idle();
 	await session.dispatch({ type: "draft", text: "EDITOR ONLY" }); await session.dispatch({ type: "apply" }); await service.settled(chat.id); await session.refresh(); await session.tutor.returnToTutor(reading);
 	const prepared = await session.tutor.prepareAnswer(reading, { kind: "ask", questionText: "Ready?", answers: [], dontKnow: false, dismissed: true, answeredAt: "now" });
-	const input = { ...prepared, type: "dismiss" };
+	const input = { ...prepared, type: "dismiss", toolCallId: "skip" };
 	if (parked) {
 		const { beginTurn, endTurn } = await import("../src/server/turn-liveness.ts");
 		const { applyParkedDismissal } = await import("../src/server/dismissal-park.ts");
@@ -97,7 +97,7 @@ test("teaching sends separate reading and written working atomically, retaining 
 	session.tutor.updateText(reading, "My reading thought." + " Long reasoning.".repeat(180)); session.tutor.updateText(owner, ""); await session.tutor.idle();
 	await session.dispatch({ type: "draft", text: "EDITOR ONLY" }); await session.dispatch({ type: "apply" }); await service.settled(chat.id); await session.refresh();
 	await session.tutor.returnToTutor(reading); await session.tutor.returnToTutor(owner);
-	const input = await session.tutor.prepareAnswer(owner, { kind: "explain", questionText: "Define pressure.", answers: [], dontKnow: false, answeredAt: new Date().toISOString() });
+	const input = { type: "answer", toolCallId: owner.toolCallId, ...await session.tutor.prepareAnswer(owner, { kind: "explain", questionText: "Define pressure.", answers: [], dontKnow: false, answeredAt: new Date().toISOString() }) };
 	const beforeFailure = chatStore.getChat(chat.id);
 	const rename = fs.renameSync;
 	try {
@@ -155,7 +155,7 @@ test("parallel selection answers keep native grading and confidence, save the fi
 		session.tutor.updateForm(owner, { selection: { selected: [0], otherSelected: false, dontKnow: false }, thinking: "I compare units", text: "", other: "", confidenceIndex: 3 });
 		await session.tutor.idle(); await session.tutor.returnToTutor(owner);
 		const answer = buildAnswer({ id: toolCallId, kind: "quiz", question: "Unit?", options: question.options, mode: "single-select", correctIndices: [1], createdAt: "now" }, { values: ["Pa"], confidence: 70 });
-		const input = await session.tutor.prepareAnswer(owner, answer);
+		const input = { type: "answer", toolCallId, ...await session.tutor.prepareAnswer(owner, answer) };
 		if (toolCallId === "q1") {
 			assert.equal((await post({ ...input, submission: { ...input.submission, draftRevision: 999 } })).status, 409);
 			assert.equal(service.view(chat.id).tutorDrafts?.length, 1);
