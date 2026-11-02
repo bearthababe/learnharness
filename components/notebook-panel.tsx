@@ -5,10 +5,8 @@ import type { NotebookSession } from "./notebook-session";
 import { NotebookWorking } from "./notebook-working";
 
 export function NotebookPanel({ session }: { session: NotebookSession }) {
-	const { view, draftText, saving, error } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
-	const [selected, setSelected] = useState<{ contextId: string | null; lineId: string } | null>(null);
+	const { view, draftText, saving, error, cursorLineId } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
 	const [historyOpen, setHistoryOpen] = useState(false);
-	const cursorLineId = selected && selected.contextId === view?.contextId && view?.lines.some((line) => line.id === selected.lineId) ? selected.lineId : null;
 	const applyWaiting = view?.pending?.kind === "edit" || !!view?.startFreshPending && !view.problem;
 	const apply = () => {
 		if (!draftText.trim() || applyWaiting) return;
@@ -31,13 +29,13 @@ export function NotebookPanel({ session }: { session: NotebookSession }) {
 				<button type="button" aria-expanded={historyOpen} aria-controls="notebook-history" onClick={() => setHistoryOpen(!historyOpen)} className="rounded border border-border px-3 py-1.5 text-sm">History</button>
 				{saving && <span className="text-xs text-muted-foreground" role="status">Saving…</span>}
 			</div>
-			{view?.pending && view.pending.kind !== "start-fresh" && <p role="status" className="text-sm">{view.problem ? "Waiting for correction" : view.pending.kind === "undo" ? "Undo waiting" : "Applying changes…"}</p>}
+			{view?.pending && view.pending.kind !== "start-fresh" && <p role="status" className="text-sm">{view.problem ? "Waiting for correction" : view.pending.status === "awaiting-transcript" ? "Working pending…" : view.pending.kind === "undo" ? "Undo waiting" : "Applying changes…"}</p>}
 			{view?.startFreshPending && <p role="status" className="text-sm">{view.problem ? "Start fresh waiting for correction" : "Start fresh waiting for earlier operations"}</p>}
 			{view?.problem && <p role="status" className="text-sm">{view.problem.message}</p>}
 			{error && <p role="alert" className="text-sm text-destructive">Not saved: {error} <button type="button" className="underline" onClick={() => { void session.refresh(); }}>Refresh</button></p>}
 		</form>
 		<div data-notebook-scroll="" className="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
-			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} onSelect={(lineId) => setSelected({ contextId: view?.contextId ?? null, lineId })} />
+			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} onSelect={session.selectLine} />
 			{view?.lines.length === 0 && <p className="text-sm text-muted-foreground">Your working appears here.</p>}
 			{historyOpen && <section id="notebook-history" aria-label="Notebook history" className="mt-4 space-y-4 border-t border-border pt-3">
 				<h3 className="text-sm font-medium">History</h3>

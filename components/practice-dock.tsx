@@ -143,7 +143,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 
 			{/* The learner's half: Enter SENDS (owner round 2, 2026-10-05);
 			    Shift+Enter makes a newline — less to decide about. */}
-			<NotebookDraftReview draft={owned.draft} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
+			<NotebookDraftReview draft={owned.draft} waiting={owned.state.waitingForWorking} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
 			<div
 				data-testid="practice-thinking-field"
 				className="m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"

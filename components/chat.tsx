@@ -1796,7 +1796,7 @@ export function Chat({
 					}
 					composer={
 						<div>
-						<NotebookDraftReview draft={ordinaryDraft} onTextChange={(id, value) => notebook.session.tutor.updateText({ kind: "ordinary" }, value, id)} />
+						<NotebookDraftReview draft={ordinaryDraft} waiting={tutorDraftState.waitingForWorking} onTextChange={(id, value) => notebook.session.tutor.updateText({ kind: "ordinary" }, value, id)} />
 						{tutorDraftState.error && <p role="alert" className="px-3 text-xs text-destructive">Unsent draft: {tutorDraftState.error}</p>}
 						{tutorDraftState.saving && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
 						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}

@@ -1,4 +1,4 @@
-import { notebookSpeechRunSchema, sameDraftOwner, type DictationCaptureAdapter, type DictationFinal, type NotebookSpeechRun, type NotebookSpeechTarget, type NotebookView, type TutorDraftOwner } from "@/src/core";
+import { notebookSpeechRunSchema, sameDraftOwner, type DictationCaptureAdapter, type DictationFinal, type NotebookSpeechApply, type NotebookSpeechRun, type NotebookSpeechTarget, type NotebookView, type TutorDraftOwner } from "@/src/core";
 import type { DraftRecoveryStorage } from "./notebook-tutor-drafts";
 import type { NotebookSession } from "./notebook-session";
 
@@ -19,7 +19,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 	const listeners = new Set<() => void>();
 	let state = { active: false, destination: "tutor" as "tutor" | "notebook", error: null as string | null };
 	function publish(error = state.error) { state = { active: active !== null, destination: selected?.kind ?? "tutor", error }; for (const listener of listeners) listener(); }
-	let active: { run: NotebookSpeechRun; now: () => number; boundaries: Boundary[]; results: Map<string, DictationFinal>; consumed: Set<string>; utterance: string[] } | null = null;
+	let active: { run: NotebookSpeechRun; now: () => number; boundaries: Boundary[]; results: Map<string, DictationFinal>; consumed: Set<string>; utterance: string[]; notebookDraftId: string; captureStart: number; audioStarted?: boolean; intents: Array<{ id: string; speech: NotebookSpeechApply; cursorLineId?: string | null }> } | null = null;
 	function stash() {
 		try { if (pending.length) storage?.setItem(key, JSON.stringify(pending)); else storage?.removeItem(key); }
 		catch { publish("Local dictation recovery could not be saved. Keep this page open until the server save succeeds."); }
@@ -49,7 +49,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 			const raw = storage?.getItem(key);
 			if (raw) {
 				pending = JSON.parse(raw) as SpeechCommand[];
-				for (const command of pending) { notebookSpeechRunSchema.parse(command.run); runs.set(command.run.id, command.run); }
+				for (const command of pending) { notebookSpeechRunSchema.parse(command.run); runs.set(command.run.id, structuredClone(command.run)); }
 			}
 		}
 		for (const remote of view.speechRuns ?? []) {
@@ -64,7 +64,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		if (hydrating && pending.length) tail = tail.then(flush).catch(() => {});
 	}
 	function target(input: NotebookSpeechInput): NotebookSpeechTarget {
-		if (input.kind === "notebook") return { kind: "notebook", draftId: session.getSnapshot().view!.draft.id };
+		if (input.kind === "notebook") return { kind: "notebook", draftId: active?.notebookDraftId ?? session.getSnapshot().view!.draft.id };
 		let draft = session.tutor.draft(input.owner);
 		if (!draft) { session.tutor.updateText(input.owner, input.text ?? ""); draft = session.tutor.draft(input.owner)!; }
 		return { kind: "tutor", owner: input.owner, draftId: draft.id, partId: input.partId ?? draft.parts.at(-1)!.id };
@@ -117,15 +117,47 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		if (!active) return false;
 		const results = ids.map(id => active!.results.get(id)!);
 		const text = results.map(result => result.text).join(" ").toLowerCase().replace(/[.,!?;:]/g, "").replace(/\s+/g, " ").trim();
-		if (text !== "switch to notebook" && text !== "switch to tutor") return false;
+		if (text !== "switch to notebook" && text !== "switch to tutor" && text !== "apply changes") return false;
 		const words = results.flatMap(result => result.words);
 		if (!words.length || results.some(result => result.text.trim() && !result.words.length)) return false;
 		const first = words[0]!.start; const last = words.at(-1)!.start;
 		if (active.boundaries.some(boundary => boundary.manual && boundary.at > first && boundary.at <= last)) return false;
+		if (text === "apply changes") {
+			const boundary = active.boundaries.findLast(boundary => boundary.at <= first);
+			if (boundary?.target.kind !== "notebook") return false;
+			for (const id of ids) active.consumed.add(id);
+			rebuild();
+			const draftId = boundary.target.draftId;
+			const nextDraftId = crypto.randomUUID();
+			active.boundaries.push({ ...boundary, at: last, target: { kind: "notebook", draftId: nextDraftId }, manual: false });
+			active.boundaries.sort((a, b) => a.at - b.at); rebuild();
+			active.notebookDraftId = nextDraftId;
+			const intent = { id: crypto.randomUUID(), cursorLineId: session.getSnapshot().cursorLineId, speech: { runId: active.run.id, draftId, nextDraftId, fragmentIds: [], text: "", prefix: session.getSnapshot().draftText, commandIds: ids, cutoff: last, ready: false, resolves: session.getSnapshot().view?.problem?.operationId } };
+			active.intents.push(intent); updateIntents(intent.id);
+			return true;
+		}
 		for (const id of ids) active.consumed.add(id);
 		const tutor = active.boundaries.findLast(boundary => boundary.at <= first)?.tutor ?? config.tutor();
 		choose(text === "switch to notebook" ? { kind: "notebook" } : tutor, last, false);
 		return true;
+	}
+	function updateIntents(created?: string) {
+		if (!active) return;
+		let through = active.captureStart;
+		for (const result of [...active.results.values()].sort((a, b) => (a.start ?? Infinity) - (b.start ?? Infinity))) {
+			if (result.start === null || result.end === null || result.start > through + 1 / 16000) break;
+			through = Math.max(through, result.end);
+		}
+		for (const intent of active.intents) {
+			if (intent.speech.ready) continue;
+			const fragments = active.run.fragments.filter(fragment => fragment.target?.kind === "notebook" && fragment.target.draftId === intent.speech.draftId).sort((a, b) => (a.start ?? Infinity) - (b.start ?? Infinity));
+			const speech = { ...intent.speech, fragmentIds: fragments.map(fragment => fragment.id), text: fragments.map(fragment => fragment.text).join(" "),
+				ready: !active.run.incomplete && through >= Math.max(intent.speech.cutoff, ...fragments.map(fragment => fragment.end ?? Infinity)) };
+			if (created === intent.id || JSON.stringify(speech) !== JSON.stringify(intent.speech)) {
+				intent.speech = speech;
+				void session.dispatch({ type: "apply", id: intent.id, cursorLineId: intent.cursorLineId, speech }).catch(() => {});
+			}
+		}
 	}
 	const begin: DictationCaptureAdapter["begin"] = async clock => {
 		// Reserve existing visible text before initializing Notebook can mount its
@@ -140,7 +172,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		if (!session.getSnapshot().view?.contextId) await session.dispatch({ type: "visibility", visible: false });
 		selected = initial;
 		const run: NotebookSpeechRun = { id: clock.id, revision: 0, status: "recording", incomplete: false, fragments: [] };
-		active = { run, now: clock.now, boundaries: [{ at: clock.now(), target: target(initial), manual: true, tutor: initial.kind === "tutor" ? initial : config.tutor() }], results: new Map(), consumed: new Set(), utterance: [] };
+		active = { run, now: clock.now, boundaries: [{ at: clock.now(), target: target(initial), manual: true, tutor: initial.kind === "tutor" ? initial : config.tutor() }], results: new Map(), consumed: new Set(), utterance: [], notebookDraftId: session.getSnapshot().view!.draft.id, captureStart: clock.now(), intents: [] };
 		publish();
 		try { await save(run); }
 		catch (error) {
@@ -149,6 +181,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 			throw error;
 		}
 		return {
+			audio(start) { if (active?.run === run && !active.audioStarted) { active.captureStart = start; active.audioStarted = true; } },
 			final(result) {
 				if (active?.run !== run || active.results.has(result.id)) return;
 				active.results.set(result.id, result);
@@ -157,11 +190,12 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 					active.utterance.push(result.id);
 					if (result.speechFinal) { command(active.utterance); active.utterance = []; }
 				}
-				rebuild(); void save(run).catch(() => {});
+				rebuild(); updateIntents(); void save(run).catch(() => {});
 			},
 			incomplete() { if (active?.run === run) { run.incomplete = true; void save(run).catch(() => {}); } },
 			async end(reason) {
 				if (active?.run !== run) return;
+				if (active.intents.some(intent => !intent.speech.ready)) run.incomplete = true;
 				active = null;
 				publish();
 				run.status = reason === "cancel" ? "cancelled" : reason === "interrupted" || run.incomplete ? "interrupted" : "revealed";

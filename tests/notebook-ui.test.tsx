@@ -26,6 +26,56 @@ const { useNotebookDestination } = await import("../components/notebook-destinat
 const { NotebookDraftReview, LearnerExplanation } = await import("../components/learner-explanation.tsx");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
+test("spoken Apply captures the same selected whole line as the Notebook button", async () => {
+	const chat = chatStore.createChat("Spoken selection"); const faux = createFauxCore({}); let prompt = "";
+	faux.setResponses([
+		() => fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"p="},{"op":"insert","after":"L1","id":"L2","latex":"F="}]}'),
+		context => { prompt = JSON.stringify(context.messages); return fauxAssistantMessage('{"action":"edit","operations":[{"op":"replace","id":"L2","latex":"F=ma"}]}'); },
+	]);
+	const service = createNotebookService({ chatStore, engine: async () => ({ engine: { model: faux.getModel(), streamFn: faux.streamSimple }, model: "faux:editor" }) });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true }); await session.dispatch({ type: "draft", text: "Write p= and F=" }); await session.dispatch({ type: "apply" }); await service.settled(chat.id); await session.refresh();
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	try {
+		await act(async () => root.render(<NotebookPanel session={session} />));
+		await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Select line 2"]')!.click());
+		session.speech.choose({ kind: "notebook" });
+		await act(async () => {
+			const capture = await session.speech.begin({ id: "selection", now: () => 0 });
+			capture.final({ id: "words", text: "Complete this line with mass times acceleration", start: 0, end: 1, words: [{ text: "Complete this line with mass times acceleration", start: 0, end: 0.8 }], speechFinal: true });
+			capture.final({ id: "apply", text: "Apply changes", start: 1, end: 2, words: [{ text: "Apply changes", start: 1, end: 1.8 }], speechFinal: true });
+			await session.idle(); await session.speech.idle(); await service.settled(chat.id); await capture.end("stop");
+		});
+		assert.match(JSON.parse(prompt)[0].content, /"cursorLineId":"L2"/);
+	} finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+test("mounted practice Send waits visibly for pending working and submits only its completed snapshot", async () => {
+	const chat = chatStore.createChat("Pending practice");
+	let release!: () => void; const gate = new Promise<void>(done => { release = done; });
+	const editor = createFauxCore({}); editor.setResponses([async () => { await gate; return fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"p=F/A"}]}'); }]);
+	const service = createNotebookService({ chatStore, engine: async () => ({ engine: { model: editor.getModel(), streamFn: editor.streamSimple }, model: "faux:editor" }) });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	const owner = { kind: "practice" as const, problemCallId: "p" }; session.tutor.updateText(owner, ""); await session.tutor.idle();
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	const sent: unknown[] = [];
+	try {
+		await act(async () => root.render(<PracticeDock notebook={session} problemCallId="p" input={{ statement: "Pressure?" }} expanded onExpand={() => {}} onSubmit={async (...args) => { sent.push(args); return false; }} />));
+		await act(async () => { await session.dispatch({ type: "draft", text: "Write pressure" }); await session.dispatch({ type: "apply" }); await session.tutor.returnToTutor(owner); });
+		assert.match(host.textContent!, /Working pending/);
+		const send = host.querySelector<HTMLButtonElement>('[data-testid="practice-send"]')!;
+		assert.equal(send.disabled, false);
+		await act(async () => { send.click(); });
+		assert.equal(sent.length, 0);
+		assert.match(host.textContent!, /Waiting for notebook working/);
+		await act(async () => { release(); await service.settled(chat.id); await session.refresh(); await session.tutor.idle(); });
+		assert.equal(sent.length, 1);
+		assert.match(JSON.stringify(sent), /p=F\/A/);
+		assert.doesNotMatch(JSON.stringify(sent), /"pending":true/);
+	} finally { release(); await service.settled(chat.id); await act(async () => root.unmount()); session.dispose(); host.remove(); }
+});
+
 test("old activity drafts are read-only, copy explicitly, and discard durably without changing the current question", async () => {
 	const chat = chatStore.createChat("Saved drafts");
 	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor call expected"); } });

@@ -11,11 +11,14 @@ export const tutorDraftOwnerSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("question"), toolCallId: id, channel: z.enum(["text", "thinking", "reading-thinking"]) }).strict(),
 	z.object({ kind: z.literal("practice"), problemCallId: id }).strict(),
 ]);
+const textPartSchema = z.object({ id, kind: z.literal("text"), text: z.string() }).strict();
+const workingPartSchema = z.object({ id, kind: z.literal("working"), snapshotId: id, contextId: id, revision: z.number().int().nonnegative(), lines: z.array(z.object({ id, latex: z.string() }).strict()), failure: z.string().optional() }).strict();
 export const learnerExplanationSchema = z.array(z.discriminatedUnion("kind", [
-	z.object({ id, kind: z.literal("text"), text: z.string() }).strict(),
-	z.object({ id, kind: z.literal("working"), snapshotId: id, contextId: id, revision: z.number().int().nonnegative(), lines: z.array(z.object({ id, latex: z.string() }).strict()) }).strict(),
+	textPartSchema, workingPartSchema,
 ])).refine((parts) => new Set(parts.map((part) => part.id)).size === parts.length, "Part identities must be unique");
-export const ownedTutorDraftSchema = z.object({ id, owner: tutorDraftOwnerSchema, revision: z.number().int().nonnegative(), parts: learnerExplanationSchema, form: z.object({
+const draftExplanationSchema = z.array(z.discriminatedUnion("kind", [textPartSchema, workingPartSchema.extend({ pending: z.literal(true).optional() })]))
+	.refine(parts => new Set(parts.map(part => part.id)).size === parts.length, "Part identities must be unique");
+export const ownedTutorDraftSchema = z.object({ id, owner: tutorDraftOwnerSchema, revision: z.number().int().nonnegative(), parts: draftExplanationSchema, form: z.object({
 	selection: z.object({ selected: z.array(z.number().int().nonnegative()), otherSelected: z.boolean(), dontKnow: z.boolean() }).strict(),
 	thinking: z.string(), other: z.string(), text: z.string(), confidenceIndex: z.number().int().min(0).max(5),
 }).strict().optional() }).strict();
@@ -52,11 +55,13 @@ export function sameDraftOwner(a: TutorDraftOwner, b: TutorDraftOwner): boolean 
 	return a.kind === b.kind && (a.kind === "ordinary" || (a.kind === "question" && b.kind === "question" && a.toolCallId === b.toolCallId && a.channel === b.channel) || (a.kind === "practice" && b.kind === "practice" && a.problemCallId === b.problemCallId));
 }
 export const NOTEBOOK_ASSISTANCE = "This working was edited with assistance; it is not by itself evidence of independent reasoning.";
+export const NOTEBOOK_FAILURE = "Some notebook edits failed. Showing the last completed working.";
 export function serializeLearnerExplanation(parts: LearnerExplanation): string {
-	return parts.map((part) => part.kind === "text" ? part.text : `Notebook-assisted working\n${NOTEBOOK_ASSISTANCE}\n${part.lines.map((line, index) => `${index + 1}. ${line.latex}`).join("\n")}`).filter(Boolean).join("\n\n");
+	if (parts.some(part => part.kind === "working" && part.pending)) throw new Error("Notebook working is still pending");
+	return parts.map((part) => part.kind === "text" ? part.text : `Notebook-assisted working\n${NOTEBOOK_ASSISTANCE}\n${part.failure ? `${part.failure}\n` : ""}${part.lines.map((line, index) => `${index + 1}. ${line.latex}`).join("\n")}`).filter(Boolean).join("\n\n");
 }
 export function explanationHasContent(parts: LearnerExplanation): boolean {
-	return parts.some((part) => part.kind === "text" ? !!part.text.trim() : part.lines.length > 0);
+	return parts.some((part) => part.kind === "text" ? !!part.text.trim() : part.pending || part.lines.length > 0);
 }
 export function sameLearnerExplanation(a: LearnerExplanation, b: LearnerExplanation): boolean {
 	return JSON.stringify(learnerExplanationSchema.parse(a)) === JSON.stringify(learnerExplanationSchema.parse(b));

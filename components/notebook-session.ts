@@ -1,11 +1,11 @@
-import type { NotebookCommand, NotebookCommandReceipt, NotebookView } from "@/src/core";
+import { notebookSpeechApplySchema, type NotebookCommand, type NotebookCommandReceipt, type NotebookView, type NotebookSpeechApply } from "@/src/core";
 import { createNotebookTutorDrafts, type DraftRecoveryStorage } from "./notebook-tutor-drafts";
 import { createNotebookSpeech } from "./notebook-speech";
 
 export type NotebookSessionCommand =
 	| { type: "visibility"; visible: boolean }
 	| { type: "draft"; text: string }
-	| { type: "apply"; cursorLineId?: string | null }
+	| { type: "apply"; cursorLineId?: string | null; id?: string; speech?: NotebookSpeechApply }
 	| Extract<NotebookCommand, { type: "tutor-draft" | "snapshot" | "discard-tutor-draft" | "speech-run" | "discard-speech" }>
 	| { type: "undo" | "start-fresh" };
 export interface NotebookSessionSnapshot {
@@ -13,6 +13,7 @@ export interface NotebookSessionSnapshot {
 	draftText: string;
 	saving: boolean;
 	error: string | null;
+	cursorLineId?: string | null;
 }
 
 /** One session-lifetime observable. Serialized saves never overwrite newer text;
@@ -27,6 +28,33 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	let requests = 0;
 	let uncertain: Extract<NotebookCommand, { type: "apply" | "undo" | "start-fresh" }> | null = null;
 	let uncertainRevision = 0;
+	const requested: Array<{ id: string; contextId: string }> = [];
+	const requestOrder = new Map<string, number>();
+	type SpeechRequest = { command: Extract<NotebookSessionCommand, { type: "apply" }>; contextId: string; wire?: Extract<NotebookCommand, { type: "apply" }> };
+	let speechRequests: SpeechRequest[] = [];
+	let requestsLoaded = false;
+	const requestsKey = `lh:notebook-applies:${chatId}`;
+	function stashRequests() {
+		try { if (speechRequests.length) storage?.setItem(requestsKey, JSON.stringify(speechRequests)); else storage?.removeItem(requestsKey); }
+		catch { publish({ error: "Local Apply recovery could not be saved. Keep this page open until the server save succeeds." }); }
+	}
+	function recoverRequests(view: NotebookView) {
+		if (requestsLoaded) return;
+		requestsLoaded = true;
+		try {
+			const raw = storage?.getItem(requestsKey);
+			if (!raw) return;
+			speechRequests = JSON.parse(raw) as SpeechRequest[];
+			for (const request of speechRequests) {
+				notebookSpeechApplySchema.parse(request.command.speech);
+				if (!request.command.id || !request.contextId) throw new Error("Invalid saved Apply identity");
+			}
+			// Reserve the save rail before interrupted speech is restored. The exact
+			// accepted request is idempotent even if its acknowledgment was lost.
+			publish({ view });
+			for (const request of speechRequests) void dispatch(request.command, request).catch(() => {});
+		} catch { publish({ error: "Saved Apply recovery could not be read. Retained dictation is available for review." }); }
+	}
 	const recovered = new Set<string>();
 	const recoveryPrefixes: string[] = [];
 	const prepend = (prefixes: string[], text: string) => [...prefixes, text].filter(Boolean).join("\n\n");
@@ -37,6 +65,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	function adopt(view: NotebookView) {
 		if (state.view && view.revision < state.view.revision) return;
 		tutor.adopt(view);
+		recoverRequests(view);
 		speech.adopt(view);
 		if (view.problem && !recovered.has(view.problem.operationId)) {
 			recovered.add(view.problem.operationId);
@@ -47,7 +76,8 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 				if (savedLocalRevision !== localRevision) publish({ draftText: prepend([view.problem.instruction], state.draftText) });
 			}
 		}
-		publish({ view, ...(savedLocalRevision === localRevision ? { draftText: view.draft.text } : {}) });
+		const cursorLineId = state.view?.contextId === view.contextId && view.lines.some(line => line.id === state.cursorLineId) ? state.cursorLineId : null;
+		publish({ view, cursorLineId, ...(savedLocalRevision === localRevision ? { draftText: view.draft.text } : {}) });
 	}
 	async function post(command: NotebookCommand): Promise<NotebookCommandReceipt> {
 		const response = await fetcher(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
@@ -67,11 +97,23 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 			adopt(body);
 		} catch (error) { publish({ error: error instanceof Error ? error.message : "Notebook unavailable" }); }
 	}
-	function dispatch(command: NotebookSessionCommand): Promise<NotebookCommandReceipt> {
-		const instruction = state.draftText;
+	function dispatch(command: NotebookSessionCommand, replay?: SpeechRequest): Promise<NotebookCommandReceipt> {
+		const prefix = command.type === "apply" && command.speech ? command.speech.prefix : state.draftText;
+		const instruction = command.type === "apply" && command.speech ? [prefix.trimEnd(), command.speech.text].filter(Boolean).join(" ") : prefix;
 		const recoveryEpoch = recoveryPrefixes.length;
 		if (command.type === "draft") { localRevision++; publish({ draftText: command.text }); }
+		const completing = command.type === "apply" && command.speech && command.speech.draftId !== state.view?.draft.id;
+		if (command.type === "apply" && command.speech && !completing) { localRevision++; publish({ draftText: "" }); }
 		const revision = localRevision;
+		const operationId = command.type === "apply" || command.type === "undo" || command.type === "start-fresh"
+			? command.type === "apply" && command.id ? command.id : uncertain && command.type === uncertain.type && (command.type !== "apply" || revision === uncertainRevision) ? uncertain.id : crypto.randomUUID() : undefined;
+		const request = operationId && state.view?.contextId && command.type !== "start-fresh" ? { id: operationId, contextId: state.view.contextId } : undefined;
+		if (request) {
+			if (!requestOrder.has(request.id)) requestOrder.set(request.id, requestOrder.size);
+			if (!replay || command.type !== "apply" || command.speech?.draftId === state.view?.draft.id) requested.push(request);
+		}
+		const speechRequest = replay ?? (command.type === "apply" && command.speech && request ? { command: { ...command, id: operationId! }, contextId: request.contextId } : undefined);
+		if (speechRequest && !replay) { speechRequests.push(speechRequest); stashRequests(); }
 		requests++; publish({ saving: true });
 		const task = tail.then(async () => {
 			if (!state.view) await refresh();
@@ -83,26 +125,28 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 				if (!state.view.contextId) throw new Error("Open Notebook before editing");
 				if (uncertain) {
 					// First reconcile the exact earlier request, never mint a duplicate.
-					const isRetry = command.type === uncertain.type && (command.type !== "apply" || revision === uncertainRevision);
+					const isRetry = command.type === uncertain.type && (command.type !== "apply" || operationId === uncertain.id && revision === uncertainRevision && JSON.stringify(command.speech) === JSON.stringify(uncertain.type === "apply" ? uncertain.speech : undefined));
 					const receipt = await post(uncertain);
 					uncertain = null;
 					if (isRetry) savedLocalRevision = revision;
 					adopt(receipt.view);
 					publish({ error: null });
-					if (isRetry) return receipt;
+					if (isRetry) { if (speechRequest) { speechRequests = speechRequests.filter(item => item !== speechRequest); stashRequests(); } return receipt; }
 				}
 				if (command.type === "apply") {
-					if (!instruction.trim()) throw new Error("Enter a notebook instruction");
-					if (state.view.draft.text !== instruction) {
-						const saved = await post({ type: "draft", text: instruction, expectedRevision: state.view.draft.revision });
+					if (!instruction.trim() && !command.speech) throw new Error("Enter a notebook instruction");
+					if (!command.speech && state.view.draft.text !== prefix) {
+						const saved = await post({ type: "draft", text: prefix, expectedRevision: state.view.draft.revision });
 						adopt(saved.view);
 					}
-					wire = { type: "apply", id: crypto.randomUUID(), contextId: state.view.contextId!, draftRevision: state.view.draft.revision, instruction, cursorLineId: command.cursorLineId };
-				} else wire = { type: command.type, id: crypto.randomUUID(), contextId: state.view.contextId };
+					wire = speechRequest?.wire ?? { type: "apply", id: operationId!, contextId: speechRequest?.contextId ?? state.view.contextId!, draftRevision: state.view.draft.revision, instruction, cursorLineId: command.cursorLineId, ...(command.speech ? { speech: command.speech } : {}) };
+					if (speechRequest) { speechRequest.wire = wire; stashRequests(); }
+				} else wire = { type: command.type, id: operationId!, contextId: state.view.contextId };
 				uncertain = wire;
 				uncertainRevision = revision;
 			}
 			const receipt = await post(wire);
+			if (speechRequest) { speechRequests = speechRequests.filter(item => item !== speechRequest); stashRequests(); }
 			if ("id" in wire && wire.id === uncertain?.id) uncertain = null;
 			if (command.type === "draft" || command.type === "apply") savedLocalRevision = revision;
 			adopt(receipt.view); publish({ error: null });
@@ -110,19 +154,24 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		}).catch((error: unknown) => {
 			publish({ error: error instanceof Error ? error.message : "Notebook save failed" });
 			throw error;
-		}).finally(() => { requests--; publish({ saving: requests > 0 }); });
+		}).finally(() => { if (request && requested.includes(request)) requested.splice(requested.indexOf(request), 1); requests--; publish({ saving: requests > 0 }); });
 		tail = task.catch(() => {});
 		return task;
 	}
 	let storage = recoveryStorage;
 	try { storage ??= typeof window === "undefined" ? undefined : window.localStorage; } catch { /* server saves still work */ }
-	const tutor = createNotebookTutorDrafts(chatId, dispatch, refresh, storage);
+	const tutor = createNotebookTutorDrafts(chatId, dispatch, refresh, storage, () => {
+		const latest = requested.reduce<typeof requested[number] | undefined>((last, item) => !last || requestOrder.get(item.id)! > requestOrder.get(last.id)! ? item : last, undefined);
+		const saved = state.view?.lastOperationId;
+		return latest && (!saved || (requestOrder.get(saved) ?? -1) <= requestOrder.get(latest.id)!) ? latest : undefined;
+	});
 	const speech = createNotebookSpeech(chatId, { tutor, dispatch, getSnapshot: () => state }, storage);
 	return {
 		tutor, speech,
 		getSnapshot: () => state,
 		subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
 		dispatch, refresh,
+		selectLine(cursorLineId: string) { if (state.view?.lines.some(line => line.id === cursorLineId)) publish({ cursorLineId }); },
 		async idle() { await tail; },
 		dispose() { listeners.clear(); tutor.dispose(); },
 	};

@@ -401,6 +401,7 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 			const timeline = createDictationTimeline(crypto.randomUUID());
 			const sendAudio = (packet: DictationAudioPacket) => {
 				if (!timeline.sent(packet)) captureRef.current?.incomplete();
+				if (packet.contextStart !== undefined) captureRef.current?.audio?.(packet.contextStart, packet.contextStart + packet.buffer.byteLength / 32000);
 				ws.send(packet.buffer);
 			};
 			sendAudioRef.current = sendAudio;

@@ -8,6 +8,7 @@ export interface DictationFinal {
 	speechFinal: boolean;
 }
 export interface DictationCaptureRun {
+	audio?(start: number, end: number): void;
 	final(result: DictationFinal): void;
 	incomplete(): void;
 	end(reason: "stop" | "interrupted" | "cancel"): Promise<void>;

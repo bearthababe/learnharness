@@ -2,6 +2,7 @@ import { z } from "zod";
 import { tutorDraftOwnerSchema } from "./notebook-content.ts";
 
 const id = z.string().min(1);
+export const notebookSpeechApplySchema = z.object({ runId: id, draftId: id, nextDraftId: id, fragmentIds: z.array(id), text: z.string(), prefix: z.string(), commandIds: z.array(id), cutoff: z.number().nonnegative(), ready: z.boolean(), resolves: id.optional() }).strict();
 export const notebookSpeechTargetSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("notebook"), draftId: id }).strict(),
 	z.object({ kind: z.literal("tutor"), owner: tutorDraftOwnerSchema, draftId: id, partId: id }).strict(),
