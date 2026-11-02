@@ -6,10 +6,13 @@ import { NotebookWorking } from "./notebook-working";
 
 export function NotebookPanel({ session }: { session: NotebookSession }) {
 	const { view, draftText, saving, error, cursorLineId } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+	const speech = useSyncExternalStore(session.speech.subscribe, session.speech.getSnapshot, session.speech.getSnapshot);
 	const [historyOpen, setHistoryOpen] = useState(false);
-	const applyWaiting = view?.pending?.kind === "edit" || !!view?.startFreshPending && !view.problem;
+	const applyWaiting = !speech.active && view?.pending?.kind === "edit" || !!view?.startFreshPending && !view.problem;
 	const apply = () => {
-		if (!draftText.trim() || applyWaiting) return;
+		if (applyWaiting) return;
+		if (session.speech.apply()) return;
+		if (!draftText.trim()) return;
 		void session.dispatch({ type: "apply", cursorLineId }).catch(() => {});
 	};
 	return <section aria-label="Notebook" data-input-owner="notebook" className="notebook-panel flex min-h-0 min-w-0 flex-col border-border bg-background">
@@ -23,7 +26,7 @@ export function NotebookPanel({ session }: { session: NotebookSession }) {
 					if (event.key === "Tab") event.stopPropagation();
 				}} />
 			<div className="flex flex-wrap items-center gap-2">
-				<button type="submit" disabled={!draftText.trim() || applyWaiting} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">Apply changes</button>
+				<button type="submit" disabled={!speech.active && !draftText.trim() || applyWaiting} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">Apply changes</button>
 				<button type="button" disabled={view?.startFreshPending || !view?.canUndo && !view?.pending} onClick={() => { void session.dispatch({ type: "undo" }).catch(() => {}); }} className="rounded border border-border px-3 py-1.5 text-sm disabled:opacity-50">Undo</button>
 				<button type="button" disabled={!view?.contextId || view.startFreshPending} onClick={() => { void session.dispatch({ type: "start-fresh" }).catch(() => {}); }} className="rounded border border-border px-3 py-1.5 text-sm disabled:opacity-50">Start fresh</button>
 				<button type="button" aria-expanded={historyOpen} aria-controls="notebook-history" onClick={() => setHistoryOpen(!historyOpen)} className="rounded border border-border px-3 py-1.5 text-sm">History</button>

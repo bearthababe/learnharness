@@ -259,7 +259,7 @@ export function createNotebookService({ chatStore, engine }: {
 			const duplicate = previous?.operations.find((op) => op.id === command.id);
 			if (duplicate) {
 				if (command.type === "apply" && command.speech && duplicate.speech) {
-					const source = (speech: NonNullable<NotebookOperation["speech"]>) => JSON.stringify([speech.runId, speech.draftId, speech.nextDraftId, speech.prefix, speech.commandIds, speech.cutoff, speech.resolves]);
+					const source = (speech: NonNullable<NotebookOperation["speech"]>) => JSON.stringify([speech.runId, speech.draftId, speech.nextDraftId, speech.prefix, speech.cutoff, speech.resolves]);
 					if (duplicate.contextId !== command.contextId || source(duplicate.speech) !== source(command.speech)) throw new NotebookRefusal("Operation identity already used for different work", 409);
 					if (duplicate.status === "recovered") {
 						const blocked = previous?.operations.find(op => paused(op) && op.recovery?.operationIds?.includes(duplicate.id));

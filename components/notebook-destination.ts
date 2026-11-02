@@ -35,6 +35,8 @@ export function useNotebookDestination(rootRef: RefObject<HTMLElement | null>, s
 			if (event.key !== "Enter" || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
 			event.preventDefault(); event.stopPropagation();
 			const state = session.getSnapshot();
+			if (state.view?.startFreshPending && !state.view.problem) return;
+			if (session.speech.apply()) return;
 			if (state.draftText.trim() && !state.view?.pending) void session.dispatch({ type: "apply" }).catch(() => {});
 		};
 		root.addEventListener("focusin", choose);
