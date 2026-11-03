@@ -45,8 +45,8 @@ import { QUESTION_TOOLS, toolQuestionKind } from "./pending.ts";
 
 /** One client-originated input event (the POST body's `input`). */
 export type ChatInput =
-	| { type: "text"; text: string }
-	| { type: "answer"; toolCallId: string; answer: QuestionAnswerData }
+	| { type: "text"; text: string; writingIds?: string[] }
+	| { type: "answer"; toolCallId: string; answer: QuestionAnswerData; writingIds?: string[] }
 	| { type: "continue" }
 	/** The failed-turn retry (issue #110): the banner's Retry button. */
 	| { type: "retry" }
@@ -54,7 +54,7 @@ export type ChatInput =
 	 *  thinking on the ACTIVE problem — one lane (owner 2026-10-05):
 	 *  whether it claims an answer is read from the text. One
 	 *  problem may carry many submissions; each is its own turn. */
-	| { type: "thinking"; problemCallId: string; text: string }
+	| { type: "thinking"; problemCallId: string; text: string; writingIds?: string[] }
 	/** The practice move-on signal (owner round 16): the learner's
 	 *  explicit go-ahead during the between-problems pause — the Next
 	 *  chip or Enter on an empty composer. Practice sessions only, and
@@ -155,16 +155,28 @@ export function dismissAppends(record: { messages: LhMessage[] }, input: Dismiss
 /** A malformed input event (the honest 400 — the orphan-trap discipline). */
 export class ChatInputError extends Error {}
 
+function parseWritingIds(raw: unknown): { writingIds?: string[] } {
+	if (raw === undefined) return {};
+	if (!Array.isArray(raw) || raw.some((id) => typeof id !== "string" || !/^writing_[A-Za-z0-9_-]+$/.test(id)) || new Set(raw).size !== raw.length) {
+		throw new ChatInputError("writingIds must contain unique shared-writing ids");
+	}
+	return raw.length ? { writingIds: raw } : {};
+}
+
 /** Parse and validate an input event off a request body. */
 export function parseChatInput(input: unknown): ChatInput {
 	if (typeof input !== "object" || input === null) throw new ChatInputError("input must be an object");
 	const i = input as Record<string, unknown>;
+	const writing = parseWritingIds(i.writingIds);
+	if (writing.writingIds && !["text", "answer", "thinking"].includes(String(i.type))) {
+		throw new ChatInputError("Shared writing requires a learner submission");
+	}
 	switch (i.type) {
 		case "text":
-			if (typeof i.text !== "string" || (i.text as string).trim().length === 0) {
+			if (typeof i.text !== "string" || (!i.text.trim() && !writing.writingIds)) {
 				throw new ChatInputError("text input requires non-empty text");
 			}
-			return { type: "text", text: i.text };
+			return { type: "text", text: i.text, ...writing };
 		case "answer":
 			if (typeof i.toolCallId !== "string" || i.toolCallId.length === 0) {
 				throw new ChatInputError("answer input requires toolCallId");
@@ -172,7 +184,7 @@ export function parseChatInput(input: unknown): ChatInput {
 			if (typeof i.answer !== "object" || i.answer === null) {
 				throw new ChatInputError("answer input requires the graded answer object");
 			}
-			return { type: "answer", toolCallId: i.toolCallId, answer: i.answer as QuestionAnswerData };
+			return { type: "answer", toolCallId: i.toolCallId, answer: i.answer as QuestionAnswerData, ...writing };
 		case "continue":
 			return { type: "continue" };
 		case "retry":
@@ -181,10 +193,10 @@ export function parseChatInput(input: unknown): ChatInput {
 			if (typeof i.problemCallId !== "string" || i.problemCallId.length === 0) {
 				throw new ChatInputError("thinking input requires problemCallId");
 			}
-			if (typeof i.text !== "string" || i.text.trim().length === 0) {
+			if (typeof i.text !== "string" || (!i.text.trim() && !writing.writingIds)) {
 				throw new ChatInputError("thinking input requires non-empty text");
 			}
-			return { type: "thinking", problemCallId: i.problemCallId, text: i.text };
+			return { type: "thinking", problemCallId: i.problemCallId, text: i.text, ...writing };
 		case "next":
 			return { type: "next" };
 		default:

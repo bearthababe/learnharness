@@ -1,4 +1,7 @@
 "use client";
+import { SharedWritingImages, SharedWritingPanel, useSharedWriting } from "@/components/shared-writing";
+import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
+import type { SharedWriting } from "@/src/core";
 
 import { createContext, Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useChatSession } from "@/components/session";
@@ -256,9 +259,13 @@ export function Chat({
 	// turn stream is the VERBATIM AgentEvent passthrough the server emits.
 	const { messages, nativeMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, resumeStream, setReattachSettled } =
 		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight });
+	const sharedWriting = useSharedWriting(chatId, nativeMessages);
+	const hasSharedWriting = sharedWriting.pending.length > 0;
 
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
+	const mobileChatRef = useRef<HTMLDivElement | null>(null);
+	useMobileChatFocus(mobileChatRef, scrollContextRef);
 	const sourceTextParts = useMemo(() => firstSourceTextParts(messages), [messages]);
 
 	// The reattach settled terminal → the sync-and-continue seam (below).
@@ -496,9 +503,9 @@ export function Chat({
 		(text: string) => {
 			const problem = activeProblemRef.current;
 			if (!problem) return;
-			void send({ type: "thinking", problemCallId: problem.toolCallId, text });
+			void send({ type: "thinking", problemCallId: problem.toolCallId, text, ...(hasSharedWriting ? { writingIds: sharedWriting.ids() } : {}) });
 		},
-		[send],
+		[send, hasSharedWriting, sharedWriting],
 	);
 
 	// Teach-phase check (W5, vision §2): a pending QUIZ that lands once a
@@ -743,7 +750,7 @@ export function Chat({
 	const retryable = (status === "ready" || status === "error") && !busy && !compacting && endsInFailedTurn(nativeMessages);
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
 	const canSend =
-		(text.trim().length > 0 || dictation.active) && !pending && !activeProblem && !compacting;
+		(text.trim().length > 0 || dictation.active || hasSharedWriting) && !pending && !activeProblem && !compacting && !(hasSharedWriting && busy);
 
 	/* THE PRACTICE PAUSE (owner round 16): between problems — practice
 	 * kind, nothing active, nothing in flight, and at least one problem
@@ -751,6 +758,7 @@ export function Chat({
 	 * the move-on). Enter-on-empty and the Next chip both key on it. */
 	const nextReady =
 		kind === "practice" &&
+		!hasSharedWriting &&
 		!pending &&
 		!activeProblem &&
 		!compacting &&
@@ -1205,7 +1213,7 @@ export function Chat({
 	const doSend = () => {
 		if (busy || pending || compacting) return;
 		const t = textRef.current.trim();
-		if (!t) return;
+		if (!t && !hasSharedWriting) return;
 		if (zeroKeys) {
 			setSetupOpen(true);
 			return;
@@ -1220,7 +1228,7 @@ export function Chat({
 		}
 		draftRef.current = t; // the refusal flow's preserve-and-replay seam
 		applyText("");
-		void send({ type: "text", text: t });
+		void send({ type: "text", text: t, ...(hasSharedWriting ? { writingIds: sharedWriting.ids() } : {}) });
 	};
 
 	/* STEER VS SEND (owner arc 2026-10-03): a send while a turn runs steers
@@ -1234,6 +1242,7 @@ export function Chat({
 	 * plain send; a raced settle 409s and falls back to exactly that. */
 	const doSteerOrSend = () => {
 		if (pending || compacting) return;
+		if (hasSharedWriting) { if (!busy) doSend(); return; }
 		const t = textRef.current.trim();
 		if (!t) return;
 		if (busy) {
@@ -1268,7 +1277,7 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div className="flex h-dvh">
+		<div ref={mobileChatRef} className="flex h-dvh overflow-hidden">
 			<div className="flex min-w-0 flex-1 flex-col">
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its
@@ -1429,7 +1438,9 @@ export function Chat({
 								// EMPTY bubble (owner report, 2026-10-04).
 								<Fragment key={m.id || `m-${mi}`}>
 									{m.parts.map((part, pi) => {
-										switch (part.type) {
+											switch (part.type) {
+												case "data-shared-writing":
+													return <SharedWritingImages key={pi} chatId={chatId} writing={part.data as SharedWriting[]} />;
 											case "data-graph-context":
 												return <GraphContextCard key={pi} data={part.data as GraphContextData} />;
 											case "data-compaction":
@@ -1511,6 +1522,7 @@ export function Chat({
 												<div className="lh-prose whitespace-pre-wrap text-foreground">
 													{m.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n")}
 												</div>
+												{m.parts.filter((p) => p.type === "data-shared-writing").map((p, i) => <SharedWritingImages key={i} chatId={chatId} writing={p.data as SharedWriting[]} />)}
 											</div>
 									) : (
 									<Message from="assistant" className="max-w-full">
@@ -1545,6 +1557,8 @@ export function Chat({
 													);
 												}
 												switch (part.type) {
+													case "data-shared-writing":
+														return <SharedWritingImages key={pi} chatId={chatId} writing={part.data as SharedWriting[]} />;
 													case "text": {
 														const sourceId = textPartMessageId(part.id);
 														const anchor = sourceId && sourceTextParts.get(sourceId) === part.id ? messageAnchorId(sourceId) : undefined;
@@ -1676,11 +1690,13 @@ export function Chat({
 				    height morph (typing, a question growing the band, the
 				    fold) and NEVER overlaps the composer. */}
 				<DockOverlay
+					sharedWritingSlot={<SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} />}
+					hasSharedWriting={hasSharedWriting}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.toolCallId)?.form : undefined}
 					onSaveQuestionDraft={(form) => { if (pending) saveQuestionDraft(pending.toolCallId, { form }); }}
 					practice={activeProblem}
-					compactionRunning={compacting}
+					compactionRunning={compacting || (hasSharedWriting && busy)}
 					onSubmitThinking={submitThinking}
 					chatId={chatId}
 					onModelChange={setSelectedModel}
@@ -1751,7 +1767,7 @@ export function Chat({
 						const reading = readingThinkingRef.current.trim() || undefined;
 						// The pending-id effect clears this only when the question
 						// actually leaves. An offline preflight keeps the draft visible.
-						submitAnswer(pending.tool, pending.toolCallId, reading ? { ...output, readingThinking: reading } : output);
+						submitAnswer(pending.tool, pending.toolCallId, reading ? { ...output, readingThinking: reading } : output, hasSharedWriting && !output.dismissed ? sharedWriting.ids() : undefined);
 					}}
 				/>
 				</Conversation>
@@ -1906,6 +1922,8 @@ export function shouldStampGeometryMute(nextH: number, prevH: number, pending: b
 }
 
 function DockOverlay({
+	sharedWritingSlot,
+	hasSharedWriting,
 	pending,
 	initialQuestionDraft,
 	onSaveQuestionDraft,
@@ -1931,6 +1949,8 @@ function DockOverlay({
 	setupCta,
 	queuedSteers,
 }: {
+	sharedWritingSlot?: React.ReactNode;
+	hasSharedWriting?: boolean;
 	pending: ReturnType<typeof findPendingToolCall>;
 	initialQuestionDraft?: QuestionFormDraft;
 	onSaveQuestionDraft: (draft: QuestionFormDraft) => void;
@@ -2333,6 +2353,7 @@ function DockOverlay({
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
 					<div ref={bodyRef}>
 					{setupCta}
+					{sharedWritingSlot}
 					{/* The queued-steer indicator (owner spec 2026-10-03): quiet
 					    one-liners above the shell - right-aligned to where its corner
 					    rounding starts, truncated, no background, no container. A
@@ -2369,6 +2390,7 @@ function DockOverlay({
 						>
 							{pending ? (
 								<QuestionDock
+									hasSharedWriting={hasSharedWriting}
 									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall"}
 									toolCallId={pending.toolCallId}
 									input={pending.input as never}
@@ -2385,6 +2407,7 @@ function DockOverlay({
 								/>
 							) : practice ? (
 								<PracticeDock
+									hasSharedWriting={hasSharedWriting}
 									problemCallId={practice.toolCallId}
 									input={practice.input as { statement: string }}
 									expanded={expanded}

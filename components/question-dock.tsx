@@ -59,6 +59,7 @@ import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-
  */
 
 export interface QuestionDockProps {
+	hasSharedWriting?: boolean;
 	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall";
 	toolCallId: string;
 	input: QuizToolInput | AskToolInput | ExplainToolInput;
@@ -98,6 +99,7 @@ export interface QuestionDockProps {
 }
 
 export function QuestionDock({
+	hasSharedWriting = false,
 	toolName,
 	toolCallId,
 	input,
@@ -156,6 +158,7 @@ export function QuestionDock({
 			)}
 			<div className={expanded ? "dock-variant" : "invisible h-0 overflow-hidden"}>
 				<QuestionDockForm
+					hasSharedWriting={hasSharedWriting}
 					toolName={toolName}
 					toolCallId={toolCallId}
 					input={parsed}
@@ -253,6 +256,7 @@ export function QuestionDockBar({
 
 /** The expanded question: label, question, options, and the unified bottom row. */
 function QuestionDockForm({
+	hasSharedWriting = false,
 	toolName,
 	toolCallId,
 	input,
@@ -372,7 +376,7 @@ function QuestionDockForm({
 
 	const canSubmit =
 		qd.mode === "text"
-			? text.trim().length > 0
+			? text.trim().length > 0 || hasSharedWriting
 			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0;
 
 	const submit = () => {

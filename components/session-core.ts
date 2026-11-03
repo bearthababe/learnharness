@@ -828,9 +828,9 @@ export class SessionModel {
 
 	/** The answer path (the dock): the answer IS the question call's tool
 	 *  result (fork 1), riding as its input event. */
-	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData): Promise<void> {
+	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, writingIds?: string[]): Promise<void> {
 		void tool;
-		return this.send({ type: "answer", toolCallId, answer: output }).then(() => undefined);
+		return this.send({ type: "answer", toolCallId, answer: output, ...(writingIds?.length ? { writingIds } : {}) }).then(() => undefined);
 	}
 
 	/** The dismissal path (owner design 2026-10-03, "A2"): the skipped

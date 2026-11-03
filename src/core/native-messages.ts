@@ -44,6 +44,7 @@ import {
 } from "./contracts/chat.ts";
 import { compactAnswerForModel, type QuestionAnswerData } from "./question-core.ts";
 import { activeCompactionOf, keptIndexFor } from "./compaction.ts";
+import { sharedWritingContext, type SharedWritingReference } from "./shared-writing.ts";
 
 /** The hard-invariant wording for an aborted turn's unanswered calls —
  *  carried over verbatim from the pre-native era so the model's view
@@ -90,7 +91,7 @@ declare module "@earendil-works/pi-agent-core" {
 }
 
 /** A record message: a native pi message (or our marker) plus the record id. */
-export type LhMessage = (UserMessage | AssistantMessage | ToolResultMessage | LhMarkerMessage) & { id: string };
+export type LhMessage = (UserMessage | AssistantMessage | ToolResultMessage | LhMarkerMessage) & { id: string; sharedWriting?: SharedWritingReference[] };
 
 /** A record message list is assignable to the agent's context — that IS
  *  the replay (ui-stream/chat-handler assign it to initialState.messages). */
@@ -612,13 +613,20 @@ export function toLlmMessages(messages: readonly AgentMessage[]): Message[] {
 			if (marker.customType === "compaction" && head !== null) continue;
 			out.push({
 				role: "user",
-				content: [{ type: "text", text: marker.content }],
+				content: [{ type: "text", text: marker.content },
+					...((m as LhMessage).sharedWriting?.length ? [{ type: "text" as const, text: sharedWritingContext((m as LhMessage).sharedWriting!) }] : [])],
 			timestamp: marker.timestamp,
 			});
 			continue;
 		}
 		// Strip the record id: the wire carries the native shape only.
-		const { id: _id, ...native } = m as LhMessage;
+		const { id: _id, sharedWriting, ...native } = m as LhMessage;
+		if (sharedWriting?.length && (native.role === "user" || native.role === "toolResult")) {
+			native.content = [
+				...(typeof native.content === "string" ? [{ type: "text" as const, text: native.content }] : native.content),
+				{ type: "text", text: sharedWritingContext(sharedWriting) },
+			];
+		}
 		out.push(native as Message);
 		// Repair unanswered calls from completed generations, not calls in
 		// failed generations. Pi filters error/aborted assistants itself;

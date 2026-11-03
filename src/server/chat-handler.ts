@@ -60,6 +60,7 @@ import {
 } from "../core/input-events.ts";
 import { steerDelivered } from "../core/contracts.ts";
 import type {CallUsage} from "../core/contracts.ts";
+import { resolveSharedWriting } from "./shared-writing.ts";
 
 /**
  * One chat turn over the server-owned native record. Framework-free (plain
@@ -298,10 +299,12 @@ export async function handleChatInput(
 	// follow-up queue and never builds an input event at all.
 	let appends;
 	try {
+		const writing = resolveSharedWriting(chatId, input, record.messages);
 		appends =
 			input.type === "steers"
 				? input.steers.filter((s) => !steerDelivered(record.messages, s.id))
 				: inputAppends(record, input);
+		if (writing.length && appends.length) appends[appends.length - 1]!.sharedWriting = writing;
 	} catch (err) {
 		if (err instanceof ChatInputError) {
 			return Response.json({ error: err.message }, { status: 400 });

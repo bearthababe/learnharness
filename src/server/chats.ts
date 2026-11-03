@@ -127,6 +127,7 @@ export async function deleteChatSession(chatId: string, mode: ChatDeleteMode): P
 	const stats = deleteChatTraces(stores.graphStore, chatId, mode);
 	const jobsRemoved = stores.jobStore.deleteJobsForChat(chatId);
 	if (stores.chatStore.deleteChat(chatId)) {
+		stores.sharedWritingStore.deleteChat(chatId);
 		discardChatDeliveries(chatId);
 		clearTurnFailure(chatId);
 	}
