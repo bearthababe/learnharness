@@ -20,6 +20,7 @@ const configPath = path.join(dir, "next.config.ts");
 await writeFile(configPath, (await readFile(configPath, "utf8")).replace("const nextConfig: NextConfig = {", 'const nextConfig: NextConfig = { turbopack: { root: "/" },'));
 await rm(path.join(dir, "data"), { recursive: true, force: true });
 await mkdir(path.join(dir, "data/chats"), { recursive: true });
+await writeFile(path.join(dir, "auth.json"), "{}\n", { mode: 0o600 });
 const now = new Date().toISOString();
 const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
 const assistant = (content, id = "assistant") => ({ role: "assistant", content, id, api: "openai-completions", provider: "openrouter", model: "z-ai/glm-5.3-flash", usage, stopReason: "stop", timestamp: Date.now() });
@@ -33,13 +34,14 @@ const teaching = [
 	call("plan_create", {}, "plan"), result("plan_create", { tree: { nodes: [{ id: "pressure", title: "Pressure and area", description: "Relate force, area and pressure." }], edges: [] } }, "plan"),
 	assistant([{ type: "text", text: Array(25).fill("Pressure relates force to the area over which it acts. Consider the same force on two different areas.").join("\n\n") }], "lesson"),
 ];
+await writeFile(path.join(dir, "data/chats/mobile_panels.json"), JSON.stringify({ ...conversation, id: "mobile_panels", title: "Conversation with plan and usage", messages: teaching, turns: Array.from({ length: 24 }, (_, i) => ({ id: `usage_${i}`, messageId: "lesson", at: now, model: "openrouter:z-ai/glm-5.3-flash", steps: [{ inputTokens: 100, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0 }] })) }));
 for (const [id, tool, question] of [
 	["mobile_teaching", "explain", { question: "Explain pressure and area.", correctAnswer: "Pressure is force divided by area.", nodeId: "pressure", type: "check" }],
 	["mobile_selection", "quiz", { question: "Which change doubles pressure?", options: [{ label: "Halve the area", value: "half" }, { label: "Double the area", value: "double" }], correctAnswer: "half", explanation: "The same force over half the area doubles pressure.", nodeId: "pressure", type: "check" }],
-]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, messages: [...teaching, call(tool, question, "question")] }));
-await writeFile(path.join(dir, "data/chats/mobile_other_answer.json"), JSON.stringify({ ...conversation, id: "mobile_other_answer", messages: [call("ask_user_question", { question: "Which approach would you use?", options: [{ label: "Start with force", value: "force" }, { label: "Start with area", value: "area" }], multiSelect: true }, "question")] }));
+]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, title: id, messages: [...teaching, call(tool, question, "question")] }));
+await writeFile(path.join(dir, "data/chats/mobile_other_answer.json"), JSON.stringify({ ...conversation, id: "mobile_other_answer", title: "Other answer fixture", messages: [call("ask_user_question", { question: "Which approach would you use?", options: [{ label: "Start with force", value: "force" }, { label: "Start with area", value: "area" }], multiSelect: true }, "question")] }));
 const problem = { statement: "Calculate pressure for a 100 N force on 2 square metres.", mode: "apply", target: ["pressure"], modelSolution: "50 Pa." };
-for (const id of ["mobile_practice", "mobile_drill"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, kind: "practice", ...(id === "mobile_drill" ? { practiceMode: "drill" } : {}), messages: [call("problem", problem, "problem"), result("problem", null, "problem")] }));
+for (const id of ["mobile_practice", "mobile_drill"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, title: id, kind: "practice", ...(id === "mobile_drill" ? { practiceMode: "drill" } : {}), messages: [call("problem", problem, "problem"), result("problem", null, "problem")] }));
 await writeFile(path.join(dir, "data/settings.json"), JSON.stringify({ version: 1, models: { strong: { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } }, cheap: { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } } } }));
 // Only the disposable app substitutes the external model. The actual request
 // handler, stores, submission validation and transcript projections still run.
@@ -51,6 +53,38 @@ export async function POST(req: Request) {
  const faux = createFauxCore({});
  faux.setResponses([fauxAssistantMessage([fauxText("Scripted tutor received your working.")])]);
  return handleChatRequest(req, opts => createTeacherAgent(undefined, { messages: opts.messages, engine: { model: faux.getModel(), streamFn: faux.streamSimple } }));
+}
+`);
+// Fault injection only in the disposable route: retain the real event handler
+// and native browser EventSource, but let the second client cut the transport.
+await writeFile(path.join(dir, "app/api/events/route.ts"), `
+import { eventsResponse } from "@/src/server";
+export const dynamic = "force-dynamic";
+let blocked = false;
+const connections = new Set<() => void>();
+export async function POST(req: Request) {
+ blocked = (await req.json()).blocked;
+ if (blocked) for (const close of connections) close();
+ return Response.json({ blocked });
+}
+export function GET() {
+ if (blocked) return new Response("Test notification outage", { status: 503 });
+ const response = eventsResponse();
+ const reader = response.body!.getReader();
+ let closed = false;
+ let close: () => void;
+ return new Response(new ReadableStream({
+  start(controller) {
+   close = () => { if (closed) return; closed = true; connections.delete(close); controller.close(); void reader.cancel(); };
+   connections.add(close);
+  },
+  async pull(controller) {
+   const chunk = await reader.read();
+   if (closed) return;
+   if (chunk.done) close(); else controller.enqueue(chunk.value);
+  },
+  cancel() { closed = true; connections.delete(close); return reader.cancel(); },
+ }), { headers: response.headers });
 }
 `);
 const port = Number(process.env.LH_MOBILE_TEST_PORT ?? 3109);
@@ -76,16 +110,27 @@ try {
 	page.on("pageerror", error => errors.push(error.message));
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	await page.setRequestInterception(true);
+	let missingSpeechKey = false;
 	page.on("request", request => {
-		if (new URL(request.url()).pathname === "/api/stt/token") void request.respond({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "browser-test-token" }) });
+		if (new URL(request.url()).pathname === "/api/stt/token") void request.respond({ status: missingSpeechKey ? 503 : 200, contentType: "application/json", body: JSON.stringify(missingSpeechKey ? { error: "Missing Deepgram key" } : { token: "browser-test-token" }) });
 		else void request.continue();
 	});
 	await page.evaluateOnNewDocument(() => {
 		localStorage.setItem("lh:sidebar-open", "0");
+		const NativeEventSource = window.EventSource;
+		window.notificationOpens = 0;
+		window.EventSource = class extends NativeEventSource {
+			constructor(...args) {
+				super(...args);
+				window.notifications = this;
+				this.addEventListener("open", () => window.notificationOpens++);
+			}
+		};
 		const NativeSocket = window.WebSocket;
 		const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 		navigator.mediaDevices.getUserMedia = async constraints => {
 			if (window.denyMicrophone) throw new DOMException("Test permission denied", "NotAllowedError");
+			if (window.holdPermission) await new Promise(resolve => { window.releasePermission = resolve; });
 			const stream = await getUserMedia(constraints);
 			window.captureTracks = stream.getTracks();
 			return stream;
@@ -145,6 +190,42 @@ try {
 	const input = '[data-testid="composer"] textarea';
 	const mic = '[data-testid="compact-dictation-toggle"]';
 	const longDraft = Array.from({ length: 20 }, (_, i) => `Line ${i}: my reasoning stays here.`).join("\n");
+	const hitTargets = async (selectors, label) => {
+		const targets = await page.evaluate(selectors => selectors.map(selector => {
+			const button = document.querySelector(selector);
+			if (!button) return { selector, missing: true };
+			const r = button.getBoundingClientRect();
+			const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+			return { selector, width: r.width, height: r.height, fits: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, hit: button === hit || button.contains(hit) };
+		}), selectors);
+		assert.ok(targets.every(r => r.width >= 44 && r.height >= 44 && r.fits && r.hit), `${label}: ${JSON.stringify(targets)}`);
+	};
+	const send = '[data-testid="composer"] [aria-label="Send"]';
+	for (const width of [320, 375, 430]) for (const height of [550, 350]) for (const enlarged of [false, true]) {
+		await page.setViewport({ width, height, isMobile: true, hasTouch: true });
+		const textStyle = await page.addStyleTag({ content: enlarged ? 'html { font-size: 125% !important; } [data-testid="composer"] textarea { font-size: 24px !important; }' : '/* normal text */' });
+		await fill(input, longDraft);
+		await page.waitForFunction(selector => { const r = document.querySelector(selector).getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }, {}, input);
+		assert.ok(await page.$eval(input, e => e.scrollHeight > e.clientHeight), "Long conversation draft scrolls internally");
+		const label = `${width}×${height}, ${enlarged ? "enlarged" : "normal"} text`;
+		await hitTargets([mic, send], `Idle ${label}`);
+		const grown = await page.$eval(input, e => e.getBoundingClientRect().height);
+		await page.click(mic);
+		await page.waitForFunction(() => window.speech?.readyState === 1);
+		await page.waitForSelector('[aria-label="Cancel dictation"]');
+		await hitTargets(['[aria-label="Cancel dictation"]', '[aria-label="Stop dictation"]', send], `Recording ${label}`);
+		assert.equal(await page.$eval(input, e => e.getBoundingClientRect().height), grown, `Stable grown field ${label}`);
+		await page.click('[aria-label="Stop dictation"]');
+		await page.waitForFunction(() => window.speech.finishing);
+		await hitTargets(['[aria-label="Cancel dictation"]', '[aria-label="Stop dictation"]', send], `Finalizing ${label}`);
+		assert.match(await page.$eval('.lh-compact-recording [role="status"]', e => e.textContent), /Finishing/);
+		await page.click('[aria-label="Cancel dictation"]');
+		assert.equal(await page.$eval(input, e => e.value), longDraft, `Draft retained ${label}`);
+		await textStyle.evaluate(e => e.remove());
+		await textStyle.dispose();
+		console.log(`PASS: conversation geometry ${label}`);
+	}
+	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	await fill(input, longDraft);
 	const beforeCapture = await page.$eval(input, field => {
 		field.setSelectionRange(8, 20); field.scrollTop = 70;
@@ -154,6 +235,9 @@ try {
 	await page.waitForFunction(() => window.speech?.readyState === 1);
 	await page.waitForSelector('[aria-label="Cancel dictation"]');
 	assert.equal(await page.$eval(input, e => e.getBoundingClientRect().height), beforeCapture.height, "Recording preserves the grown editor height");
+	await page.waitForFunction(() => [...document.querySelectorAll('.lh-compact-meter > span')].some(e => e.getBoundingClientRect().height > 2));
+	await page.waitForFunction(() => { const time = document.querySelector('.lh-compact-timer')?.textContent; return !!time && time !== "0:00"; });
+	assert.match(await page.$eval('.lh-compact-recording [role="status"]', e => e.textContent), /Recording/);
 	await page.evaluate(() => window.speech.final("Discard this capture."));
 	await page.click('[aria-label="Stop dictation"]');
 	await page.waitForFunction(() => window.speech.finishing);
@@ -161,6 +245,18 @@ try {
 	await page.click('[aria-label="Cancel dictation"]');
 	await page.evaluate(() => window.speech.final("Late cancelled words."));
 	assert.deepEqual(await page.$eval(input, e => ({ value: e.value, start: e.selectionStart, end: e.selectionEnd, scroll: e.scrollTop })), { value: longDraft, start: 8, end: 20, scroll: beforeCapture.scroll }, "Cancel during finalization restores earlier draft, selection and internal scroll");
+	await fill(input, "Review before sending.");
+	await page.click(mic);
+	await page.waitForFunction(() => window.speech.readyState === 1);
+	await page.evaluate(() => window.speech.final("Spoken working."));
+	await page.click('[aria-label="Stop dictation"]');
+	await page.waitForFunction(() => window.speech.finishing);
+	await page.evaluate(() => { window.speech.final("Final reviewed words."); window.speech.close(); });
+	await page.waitForSelector(mic);
+	assert.equal(await page.$eval(input, e => e.value), "Review before sending. Spoken working. Final reviewed words.", "Stop appends early and late finals once into the editable conversation draft");
+	await page.evaluate(() => { window.speech.final("After close."); window.speech.close(); });
+	assert.equal(await page.$eval(input, e => e.value), "Review before sending. Spoken working. Final reviewed words.");
+	assert.equal((await (await fetch(`${origin}/api/chats/mobile_conversation`)).json()).messages.filter(m => m.role === "user").length, 0, "Dictation Stop does not submit or start a tutor turn");
 	await fill(input, "Typed first.");
 	await page.click(mic);
 	await page.waitForFunction(() => window.speech.readyState === 1);
@@ -186,6 +282,81 @@ try {
 	await page.click('.lh-compact-error button');
 	await page.waitForFunction(() => window.speech.readyState === 1);
 	await page.click('[aria-label="Cancel dictation"]');
+	// Empty conversation drafts retain the inherited active-dictation Send gate.
+	await fill(input, "");
+	assert.equal(await page.$eval(send, e => e.disabled), true);
+	await page.click(mic);
+	await page.waitForFunction(() => window.speech.readyState === 1);
+	assert.equal(await page.$eval(send, e => e.disabled), false, "Active speech enables Send before any text is flushed");
+	await page.evaluate(() => window.speech.final("Speech only."));
+	await page.click(send);
+	await page.waitForFunction(() => window.speech.finishing);
+	assert.equal((await (await fetch(`${origin}/api/chats/mobile_conversation`)).json()).messages.filter(m => m.role === "user").length, 1, "Send waits for speech finalization before submitting");
+	await page.evaluate(() => { window.speech.final("Final words."); window.speech.close(); });
+	await page.waitForFunction(() => document.body.textContent.includes("Speech only. Final words."));
+	await page.waitForSelector('[data-testid="composer"] [aria-label="Send"]');
+	const spoken = await (await fetch(`${origin}/api/chats/mobile_conversation`)).json();
+	assert.equal(spoken.messages.filter(m => m.role === "user" && JSON.stringify(m.content).includes("Speech only. Final words.")).length, 1);
+	console.log("PASS: empty-draft active-dictation finish-before-send persists once");
+	missingSpeechKey = true;
+	await page.reload({ waitUntil: "networkidle2" }); // also discards the previous document's warm speech token
+	await fill(input, "Settings recovery retains my draft.");
+	await page.click(mic);
+	await page.waitForSelector('.lh-compact-error');
+	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /Dictation needs a Deepgram key.*Settings/);
+	await page.click('.lh-compact-error button');
+	await page.waitForSelector('[data-testid="settings-dialog"]');
+	await page.waitForSelector('[data-testid="key-deepgram_api_key-input"]');
+	await fill('[data-testid="key-deepgram_api_key-input"]', "scripted-speech-key-not-real");
+	await page.click('[data-testid="key-deepgram_api_key-save"]');
+	await page.waitForSelector('[data-testid="key-deepgram_api_key-input"]', { hidden: true });
+	missingSpeechKey = false;
+	await page.click('[data-testid="settings-close"]');
+	assert.equal(await page.$eval(input, e => e.value), "Settings recovery retains my draft.");
+	await page.click(mic);
+	await page.waitForFunction(() => window.speech?.readyState === 1);
+	await page.click('[aria-label="Cancel dictation"]');
+	console.log("PASS: missing-key Settings round trip and subsequent capture");
+	const navigateSession = async title => {
+		await page.click('button[aria-label="Open sidebar"]');
+		await page.waitForSelector('[data-testid="session-search"]', { visible: true });
+		await fill('[data-testid="session-search"]', title);
+		const row = await page.waitForFunction(title => [...document.querySelectorAll('[data-testid="session-list"] button')].find(e => e.textContent.includes(title)), {}, title);
+		await row.asElement().click();
+		await row.dispose();
+		await page.waitForSelector(input, { visible: true });
+	};
+	for (const phase of ["permission", "connecting", "recording", "finishing"]) {
+		console.log(`CHECK: navigation during ${phase}`);
+		await fill(input, "Original session draft.");
+		await page.evaluate(phase => { window.holdPermission = phase === "permission"; window.holdConnection = phase === "connecting"; window.speech = null; window.captureTracks = null; }, phase);
+		await page.click(mic);
+		if (phase === "permission") await page.waitForFunction(() => typeof window.releasePermission === "function");
+		else {
+			await page.waitForFunction(phase => window.speech?.readyState === (phase === "connecting" ? 0 : 1), {}, phase);
+			if (phase !== "connecting") await page.evaluate(() => window.speech.final("Abandoned words."));
+			if (phase === "finishing") {
+				await page.click('[aria-label="Stop dictation"]');
+				await page.waitForFunction(() => window.speech.finishing);
+			}
+		}
+		await navigateSession("Other isolated session");
+		await page.waitForFunction(() => location.pathname.endsWith("mobile_other"));
+		await fill(input, "Destination draft.");
+		if (phase === "permission") {
+			await page.evaluate(() => window.releasePermission());
+			await page.waitForFunction(() => window.captureTracks?.every(track => track.readyState === "ended"));
+		} else {
+			assert.ok(await page.evaluate(() => window.captureTracks.every(track => track.readyState === "ended")), `Navigation ends capture during ${phase}`);
+			await page.evaluate(() => { window.speech.open(); window.speech.final("Late abandoned words."); window.speech.close(); });
+		}
+		assert.equal(await page.$eval(input, e => e.value), "Destination draft.", `Late ${phase} result cannot enter the new session`);
+		assert.equal((await (await fetch(`${origin}/api/chats/mobile_other`)).json()).messages.filter(m => m.role === "user").length, 0);
+		await page.evaluate(() => { window.holdPermission = false; window.holdConnection = false; });
+		await navigateSession("Mobile browser conversation");
+		await page.waitForFunction(() => location.pathname.endsWith("mobile_conversation"));
+		console.log(`PASS: navigation cancels ${phase} without cross-session leakage`);
+	}
 	for (const width of [320, 375, 430]) {
 		await page.setViewport({ width, height: 550, isMobile: true, hasTouch: true });
 		await fill(input, "Panel round trip keeps this draft.");
@@ -207,7 +378,36 @@ try {
 	assert.equal(await page.$('[data-testid="shared-writing-images"]'), null, "Another session's uploaded image stays out of this draft");
 	assert.equal((await upload("mobile_conversation")).status, 201);
 	await page.waitForSelector('[aria-label="Open handwritten working 1"]');
-	assert.equal((await (await fetch(`${origin}/api/chats/mobile_conversation`)).json()).messages.filter(m => m.role === "user").length, 1, "Image arrival does not submit a tutor turn");
+	assert.equal((await (await fetch(`${origin}/api/chats/mobile_conversation`)).json()).messages.filter(m => m.role === "user").length, 2, "Image arrival does not submit a tutor turn");
+	const previews = '.lh-shared-writing [data-testid="shared-writing-images"] button';
+	const notifications = async blocked => assert.equal((await fetch(`${origin}/api/events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ blocked }) })).status, 200);
+	const opens = await page.evaluate(() => window.notificationOpens);
+	await notifications(true);
+	await page.waitForFunction(() => window.notifications.readyState !== EventSource.OPEN, { polling: 100 });
+	assert.equal((await upload("mobile_conversation")).status, 201);
+	assert.equal((await page.$$(previews)).length, 1, "Disconnected browser genuinely missed the second arrival");
+	await notifications(false);
+	await page.waitForFunction(previous => window.notificationOpens > previous, {}, opens);
+	await page.waitForFunction(selector => document.querySelectorAll(selector).length === 2, {}, previews);
+	console.log("PASS: real EventSource reconnect recovers missed upload without manual refresh");
+	// Keep notifications unavailable on return so this recovery must come from
+	// the browser's actual foreground/focus events rather than an SSE reopen.
+	const otherTab = await browser.newPage();
+	await otherTab.bringToFront();
+	await page.waitForFunction(() => document.hidden, { polling: 100 });
+	await notifications(true);
+	await page.waitForFunction(() => window.notifications.readyState !== EventSource.OPEN, { polling: 100 });
+	assert.equal((await upload("mobile_conversation")).status, 201);
+	assert.equal((await page.$$(previews)).length, 2, "Background browser missed the third arrival");
+	const foregroundRefresh = page.waitForResponse(response => new URL(response.url()).pathname === "/api/chats/mobile_conversation/writing" && response.ok());
+	await page.bringToFront();
+	await foregroundRefresh;
+	await page.waitForFunction(selector => document.querySelectorAll(selector).length === 3, {}, previews);
+	assert.notEqual(await page.evaluate(() => window.notifications.readyState), 1, "Foreground recovery works while notifications are still unavailable");
+	await notifications(false);
+	await otherTab.close();
+	assert.equal((await (await fetch(`${origin}/api/chats/mobile_conversation`)).json()).messages.filter(m => m.role === "user").length, 2, "Reconnect and foreground recovery do not submit tutor turns");
+	console.log("PASS: real tab foreground recovers missed upload independently of notifications");
 	await page.click('[aria-label="Open handwritten working 1"]');
 	await page.waitForSelector('[data-testid="shared-writing-viewer"]');
 	await page.click('[aria-label="Close handwritten working"]');
@@ -215,7 +415,104 @@ try {
 	await page.waitForFunction(() => !document.querySelector('.lh-shared-writing [data-testid="shared-writing-images"]'));
 	const withImage = await (await fetch(`${origin}/api/chats/mobile_conversation`)).json();
 	assert.equal(withImage.messages.filter(m => m.sharedWriting?.length).length, 1, "Deliberate Send persists the reviewed image once");
+	assert.equal(withImage.messages.find(m => m.sharedWriting?.length).sharedWriting.length, 3, "Deliberate Send includes all three recovered pending images");
 	assert.ok(!await page.evaluate(() => [...document.querySelectorAll('button')].some(e => /Attach handwriting|Choose from app|Take photo/.test(e.textContent))), "Deferred image actions are not advertised");
+	await page.goto(`${origin}/chat/mobile_panels`, { waitUntil: "networkidle2" });
+	await page.waitForSelector(input);
+	const catalog = await (await fetch(`${origin}/api/models`)).json();
+	const longModel = catalog.models.filter(m => m.supportedLevels.length > 1).sort((a, b) => b.name.length - a.name.length)[0];
+	assert.ok(longModel, "Installed catalog supplies a long-label model with thinking options");
+	const fitPanel = async selector => {
+		const bounds = await page.$eval(selector, e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: innerWidth, height: innerHeight }; });
+		assert.ok(bounds.left >= 0 && bounds.right <= bounds.width && bounds.top >= 0 && bounds.bottom <= bounds.height, `${selector} fits: ${JSON.stringify(bounds)}`);
+	};
+	const history = '[data-smoke-panel-history="true"]';
+	await page.evaluate(() => {
+		const log = document.querySelector('[role="log"]');
+		[...log.querySelectorAll('div')].find(e => /auto|scroll/.test(getComputedStyle(e).overflowY)).dataset.smokePanelHistory = "true";
+	});
+	const scrollHistoryBack = async () => {
+		const point = await page.$eval(history, e => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 30 }; });
+		await page.mouse.move(point.x, point.y);
+		await page.mouse.wheel({ deltaY: -300 });
+		await page.waitForFunction(selector => { const e = document.querySelector(selector); return e.scrollTop < e.scrollHeight - e.clientHeight - 80; }, {}, history);
+		return page.$eval(history, async e => { await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); return e.scrollTop; });
+	};
+	for (const width of [320, 375, 430]) {
+		await page.setViewport({ width, height: 350, isMobile: true, hasTouch: true });
+		await fill(input, "Panel review keeps my draft and reading position.");
+		await page.waitForFunction(() => getComputedStyle(document.body).position === "fixed");
+		const readingPosition = await scrollHistoryBack();
+		const assertReading = async label => assert.ok(Math.abs(await page.$eval(history, e => e.scrollTop) - readingPosition) <= 1, `${label}: reading position ${readingPosition} → ${await page.$eval(history, e => e.scrollTop)}`);
+		assert.ok(readingPosition > 0, "Panel review starts partway through scrollable history");
+		await page.click('[data-testid="stats-model"]');
+		await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
+		await fitPanel('[data-testid="model-menu"]');
+		await page.waitForFunction(count => document.querySelectorAll('[data-testid="model-list"] button').length === count, {}, catalog.models.length);
+		await fill('[data-testid="model-search"]', longModel.id);
+		const modelRow = `[data-testid="model-option-${longModel.id.replace(/[^a-z0-9-]/gi, "_")}"]`;
+		await page.waitForSelector(modelRow);
+		assert.ok((await page.$eval(modelRow, e => e.textContent)).includes(longModel.name), "Long model label and identity retained in the real menu");
+		await page.$eval(modelRow, e => e.scrollIntoView({ block: "nearest" }));
+		await fitPanel('[data-testid="model-menu"]');
+		const pickedModel = page.waitForResponse(r => new URL(r.url()).pathname === "/api/chats/mobile_panels/settings" && r.request().method() === "PUT" && r.ok());
+		await page.click(modelRow);
+		await pickedModel;
+		await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
+		await assertReading("Model selection");
+		await page.click('[data-testid="stats-thinking"]');
+		await page.waitForSelector('[data-testid="thinking-menu"]', { visible: true });
+		await fitPanel('[data-testid="thinking-menu"]');
+		assert.deepEqual(await page.$$eval('[data-testid="thinking-menu"] button', buttons => buttons.map(e => e.querySelector('span').textContent)), longModel.supportedLevels, "Every supported thinking level is retained");
+		const level = longModel.supportedLevels.at(-1);
+		const pickedLevel = page.waitForResponse(r => new URL(r.url()).pathname === "/api/chats/mobile_panels/settings" && r.request().method() === "PUT" && r.ok());
+		await page.locator(`[data-testid="thinking-option-${level}"]`).click();
+		await pickedLevel;
+		const settings = (await (await fetch(`${origin}/api/chats/mobile_panels`)).json()).settings;
+		assert.equal(settings.model.id, longModel.id);
+		assert.equal(settings.thinkingLevel, level, "Real model/thinking choices persist through the session API");
+		await assertReading("Thinking selection");
+		await page.focus(input);
+		await page.click('[data-testid="stats-summary"]');
+		await page.waitForSelector('[data-testid="stats-detail"]');
+		await fitPanel('[data-testid="stats-detail"]');
+		assert.equal((await page.$$('[data-testid="stats-detail"] li')).length, 24, "Usage retains every turn");
+		await page.$eval('[data-testid="stats-detail"] li:last-child', e => e.scrollIntoView({ block: "nearest" }));
+		const lastUsageVisible = await page.$eval('[data-testid="stats-detail"] li:last-child', e => { const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return e.contains(hit) && r.bottom <= innerHeight; });
+		assert.ok(lastUsageVisible, "Usage's overflowed final turn is reachable and visible");
+		await page.keyboard.press("Escape");
+		await assertReading("Usage dismissal");
+		await page.focus(input);
+		await page.click('.lh-phone-plan');
+		await page.waitForSelector('[data-testid="plan-popup"]');
+		await fitPanel('[data-testid="plan-popup"]');
+		assert.match(await page.$eval('[data-testid="plan-popup"]', e => e.textContent), /Pressure and area/);
+		await page.click('[data-testid="plan-popup-fit"]');
+		await page.keyboard.press("Escape");
+		assert.equal(await page.$eval(input, e => e.value), "Panel review keeps my draft and reading position.");
+		await assertReading("Plan dismissal");
+		await page.$eval(input, e => e.blur());
+		await page.waitForFunction(() => getComputedStyle(document.body).position !== "fixed");
+		console.log(`PASS: complete Model/Thinking/Usage/Plan capabilities and focus release at ${width}×350`);
+	}
+	// Native image modal must retain its own background lock after input blur.
+	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
+	assert.equal((await upload("mobile_panels")).status, 201);
+	await page.waitForSelector('.lh-shared-writing [aria-label="Open handwritten working 1"]');
+	await fill(input, "Image review retains this unsent draft.");
+	const imageReadingPosition = await scrollHistoryBack();
+	await page.click('.lh-shared-writing [aria-label="Open handwritten working 1"]');
+	await page.waitForSelector('[data-testid="shared-writing-viewer"]');
+	await page.waitForFunction(() => getComputedStyle(document.body).position !== "fixed");
+	assert.equal(await page.evaluate(() => getComputedStyle(document.body).overflow), "hidden", "Image modal keeps its background lock after the focus lock releases");
+	assert.ok(await page.$eval('[data-testid="shared-writing-viewer"]', e => e.matches(':modal') && e.contains(document.activeElement)), "Native image modal owns focus and makes the background inert");
+	await page.keyboard.press("Escape");
+	await page.waitForSelector('[data-testid="shared-writing-viewer"]', { hidden: true });
+	assert.equal(await page.evaluate(() => document.body.style.overflow), "", "Image modal releases its own lock on dismissal");
+	assert.equal(await page.$eval(input, e => e.value), "Image review retains this unsent draft.");
+	assert.ok(Math.abs(await page.$eval(history, e => e.scrollTop) - imageReadingPosition) <= 1, "Image modal dismissal retains reading position");
+	assert.equal((await (await fetch(`${origin}/api/chats/mobile_panels`)).json()).messages.filter(m => m.role === "user").length, 0, "Reviewing panels/images never submits a tutor turn");
+	console.log("PASS: focused composer → native image modal → dismissal preserves draft/reading and lock ownership");
 	await page.goto(`${origin}/chat/mobile_teaching`, { waitUntil: "networkidle2" });
 	const reading = '[data-testid="reading-thinking-field"] textarea';
 	await page.waitForSelector('[data-testid="teach-check-reveal"]', { visible: true });
