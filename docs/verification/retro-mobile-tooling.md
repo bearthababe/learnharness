@@ -62,7 +62,7 @@ Local detailed logs are under `~/.cache/opencode/retro-mobile-37/` unless noted.
 | Runner failure/cleanup | Directory preservation, failure propagation and SIGINT/SIGTERM/SIGHUP cleanup passed, including interruption during real UI execution (`harness-lifecycle.log`, `runner-signal.log`, `failure-probe.log`). |
 | Preview command | Disposable real-app root/session launch and Reload passed; missing-session failure cleaned up; all three command tests covering required URL, HTTP failure and hanging headers/body passed. Evidence: `/tmp/opencode/retro-mobile-37-preview/`. |
 | Real HTTPS preview | The new command passed against the intended 8446 app: metadata, root manifest, decoded PNG and actual Reload/draft reset; two non-read requests were blocked (`https-preview.log`). The optional session check was skipped in this HTTPS run. |
-| Combined repository | Full suite: **2,549 passed, zero failed**; typecheck, targeted lint, script syntax and workflow-policy checks passed (`integration-verification.md` and linked logs). Remote CI was not run. |
+| Combined repository at `f58bf39` | Full suite: **2,549 passed, zero failed**; typecheck, targeted lint, script syntax and workflow-policy checks passed (`integration-verification.md` and linked logs). The subsequent cleanup correction has the focused follow-up evidence below. Remote CI was not run. |
 | Integration helper | Temporary Git histories reject missing commits, accept integrated commits without changing user work, distinguish invalid arguments, and report mixed delivery sets. `bash ~/.agents/tests/integration-check.sh` passes. |
 | Command PATH | Original minimal PATH fails with all three missing tools identified. A transient user service using the final PATH resolves Node 26.7.0, npm 11.19.0 and gh 2.103.0. Unit and Bash syntax checks pass. |
 | Global instructions | Original preview rules compared byte-for-byte after the heading; links and global changes independently reviewed with no actionable Standards/Spec findings. |
@@ -94,6 +94,14 @@ Follow-up evidence is retained in `/tmp/opencode/retro-mobile-37-preview/`:
 - `cleanup-real-ui-failure.log`: missing session produced the expected HTTP 404 and
   exit 1 after the real root/Reload checks. Script/regression syntax and diff checks
   also passed. Public previews, learner data and services were untouched.
+
+### Final independent review
+
+Follow-up review through `0b549f3` resolved the cleanup finding. **Standards: zero
+documented violations or actionable advisories. Spec: zero open findings; one P2
+resolved.** The global-only review also has zero actionable findings. Reports are
+retained as `standards-review.md`, `spec-review.md` and `global-review.md` under
+`~/.cache/opencode/retro-mobile-37/`.
 
 Browser checks remain simulated/controlled evidence. The earlier owner-confirmed
 two-recording iPhone retry stands; the remaining physical-device acceptance stays
