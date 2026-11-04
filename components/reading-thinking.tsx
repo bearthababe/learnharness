@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback } from "react";
-import { joinDictation, useDictationTarget } from "@/components/dictation";
+import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+import { CompactLearningInput } from "@/components/compact-learning-input";
+import { ChevronRightIcon } from "lucide-react";
 
 /**
  * The reading-thinking field (owner design 2026-10-03, "two questions per
@@ -24,6 +26,7 @@ export function ReadingThinkingField({
 	onEscape,
 	onOpen,
 	claim,
+	dictation,
 }: {
 	value: string;
 	onChange: (v: string) => void;
@@ -36,6 +39,7 @@ export function ReadingThinkingField({
 	onOpen?: () => void;
 	/** Primary dictation claim — true while the check is behind its reveal. */
 	claim: boolean;
+	dictation?: Dictation;
 }) {
 	useDictationTarget(
 		useCallback(
@@ -49,12 +53,13 @@ export function ReadingThinkingField({
 	return (
 		<div
 			data-testid="reading-thinking-field"
-			className="pointer-events-auto mb-2 rounded-2xl border bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50"
+			className="lh-reading-input pointer-events-auto mb-2 rounded-2xl border bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50"
 		>
 			<div className="pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 				Thinking while reading
 			</div>
-			<textarea
+			<div className="lh-compact-row"><CompactLearningInput dictation={claim ? dictation : undefined}><textarea
+				aria-label="Thinking while reading"
 				value={value}
 				onChange={(e) => onChange(e.target.value)}
 				/* py-0.5 (owner round, 2026-10-07): the scrollbar fix. Source
@@ -97,7 +102,9 @@ export function ReadingThinkingField({
 				placeholder="Whatever comes to mind as you read."
 				rows={1}
 				className="field-sizing-content lh-input max-h-40 w-full resize-none bg-transparent py-0.5 outline-none placeholder:text-muted-foreground/70"
-			/>
+			/></CompactLearningInput>
+			{claim && onOpen && <button type="button" className="lh-phone-reveal bg-primary text-primary-foreground" aria-label="Check your understanding" data-testid="teach-check-reveal" onClick={onOpen}><ChevronRightIcon size={20} /></button>}
+			</div>
 		</div>
 	);
 }

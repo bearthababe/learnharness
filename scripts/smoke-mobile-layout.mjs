@@ -86,7 +86,8 @@ try {
 	check(initiallyClosed, "Phone sessions panel starts closed despite desktop preference");
 	if (!initiallyClosed) await page.click('button[aria-label="Close sidebar"]');
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getBoundingClientRect().width === 0);
-	const mic = await rect('[data-testid="dictation-toggle"]');
+	const micSelector = await page.$('[data-testid="compact-dictation-toggle"]') ? '[data-testid="compact-dictation-toggle"]' : '[data-testid="dictation-toggle"]';
+	const mic = await rect(micSelector);
 	check(mic.width >= 44 && mic.height >= 44 && mic.x >= 0 && mic.right <= 375 && mic.y >= 0 && mic.bottom <= 667, "Dictation has a visible 44px touch target inside phone viewport");
 	check(await page.evaluate(() => [...document.querySelectorAll("summary")].filter(e => e.textContent.includes("Share from Concepts")).every(e => e.getBoundingClientRect().height === 0)), "Concepts setup is absent from phone composer");
 	check(await page.evaluate(() => [...document.querySelectorAll("nextjs-portal")].every(e => !e.shadowRoot?.querySelector('[data-nextjs-dev-tools-button]'))), "Next development indicator is disabled");
@@ -170,7 +171,7 @@ try {
 		Object.defineProperty(window.visualViewport, "height", { configurable: true, value: 367 });
 		window.visualViewport.dispatchEvent(new Event("resize"));
 	});
-	await page.waitForFunction(() => document.querySelector('[data-testid="dictation-toggle"]').getBoundingClientRect().bottom <= 367);
+	await page.waitForFunction(selector => document.querySelector(selector).getBoundingClientRect().bottom <= 367, {}, micSelector);
 	check((await rect("textarea")).bottom <= 367, "Composer and dictation stay above a simulated keyboard");
 	await page.evaluate(() => {
 		delete window.visualViewport.height;
@@ -180,8 +181,8 @@ try {
 	await page.waitForFunction(() => getComputedStyle(document.body).position !== "fixed");
 	check(await page.$eval("textarea", e => e.value.includes("Mobile layout draft check")), "Blur releases focus lock and preserves draft");
 	check(!await gesture('[data-smoke-history]', "middle", -30), "History remains scrollable after composer dismissal");
-	await page.click('[data-testid="dictation-toggle"]');
-	await page.waitForSelector('[data-testid="dictation-bar"]');
+	await page.click(micSelector);
+	await page.waitForSelector(micSelector.includes("compact") ? '.lh-compact-recording' : '[data-testid="dictation-bar"]');
 	await page.waitForFunction(() => window.__lhSmokeAudioFrames > 0);
 	const stop = await rect('button[aria-label="Stop dictation"]');
 	check(stop.width >= 44 && stop.height >= 44 && stop.bottom <= 667, "Recording keeps a visible touch-sized Stop control");

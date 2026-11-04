@@ -32,7 +32,7 @@ import { dockStateKey } from "@/components/dock-state-key";
 import { clearOpeningPrompt, readOpeningPromptEntry, stashOpeningPrompt, OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { forwardDockWheel, useDockHeight } from "@/components/dock-height";
 import { QueuedSteersBody, type QueuedSteerLine } from "@/components/queued-steers";
-import { DictationBar, finishDictation, joinDictation, useDictation } from "@/components/dictation";
+import { DictationBar, finishDictation, joinDictation, useDictation, type Dictation } from "@/components/dictation";
 import { useFieldCycle } from "@/components/field-cycle";
 import { JobsContext } from "@/components/jobs-context";
 import { StatsBar } from "@/components/stats-bar";
@@ -1711,6 +1711,7 @@ export function Chat({
 					pricing={pricing}
 					onReserve={setDockReserve}
 					dictationSlot={<DictationBar dictation={dictation} />}
+					dictation={dictation}
 					dictationCancel={dictation.cancel}
 					queuedSteers={visibleQueuedSteers(steerQueue, nativeMessages)}
 					setupCta={
@@ -1733,6 +1734,7 @@ export function Chat({
 					}
 					composer={
 						<Composer
+							dictation={dictation}
 							// Stop aborts ANY in-flight turn (stream-reattach wave): the
 							// square renders while a reattached/wake turn runs too — the
 							// abort channel kills it server-side; stop() alone would
@@ -1945,6 +1947,7 @@ function DockOverlay({
 	plan,
 	onOpenPlan,
 	dictationSlot,
+	dictation,
 	dictationCancel,
 	setupCta,
 	queuedSteers,
@@ -1991,6 +1994,7 @@ function DockOverlay({
 	/** The dictation strip (STT wave): rendered in the stats bar's middle
 	 *  slot — the mic button + live meter (components/dictation.tsx). */
 	dictationSlot?: React.ReactNode;
+	dictation?: Dictation;
 	/** Esc in a pending question's field stops dictation (the strip is the
 	 *  stats bar's; the stop belongs to the page-owned hook, threaded down). */
 	dictationCancel?: () => void;
@@ -2365,6 +2369,7 @@ function DockOverlay({
 					    (the dock reclaims then). Rides the check answer on submit. */}
 					{pending && requiresReveal && (
 						<ReadingThinkingField
+							dictation={dictation}
 							value={readingThinking}
 							onChange={onReadingThinking}
 							onEscape={dictationCancel}
@@ -2390,6 +2395,7 @@ function DockOverlay({
 						>
 							{pending ? (
 								<QuestionDock
+									dictation={dictation}
 									hasSharedWriting={hasSharedWriting}
 									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall"}
 									toolCallId={pending.toolCallId}
@@ -2413,6 +2419,7 @@ function DockOverlay({
 								/>
 							) : practice ? (
 								<PracticeDock
+									dictation={dictation}
 									hasSharedWriting={hasSharedWriting}
 									problemCallId={practice.toolCallId}
 									input={practice.input as { statement: string }}
@@ -2440,6 +2447,8 @@ function DockOverlay({
 						contextTokens={contextTokens}
 						pricing={pricing}
 						dictationSlot={dictationSlot}
+						compactInput={!practice || expanded}
+						phonePlan={plan ? <button type="button" className="lh-phone-plan" onClick={onOpenPlan}>Plan</button> : undefined}
 						chatId={chatId}
 						onModelChange={onModelChange}
 					/>

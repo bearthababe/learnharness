@@ -3,9 +3,26 @@
 Published specification: [GitHub issue #37](https://github.com/bearthababe/learnharness/issues/37).
 
 **Owner-confirmed scope and verification approach: 2026-11-04.**
-This specification records the agreed first mobile input update. Implementation
-remains explicitly paused; publishing a ready-for-agent spec does not authorize
-coding. The separately approved Reveal/dictation correction is already implemented.
+This specification records the agreed first mobile input update. The owner
+authorized implementation of #39–41 on 2026-11-04 and approved the implementation
+sequence and real-UI verification boundary. Physical-iPhone acceptance remains #42.
+
+**Later owner revisions (2026-11-04) supersede conflicting details below:**
+
+- Omit the plus/attachment menu for this delivery. Photo upload remains #5;
+  file/PDF upload remains #36. An app-image library has no established use case
+  for this update. Preserve automatic uploaded-image review, enlargement and
+  deliberate Send, including existing session-local canvas snapshots.
+- Keep the compact text field, in-field microphone and separate applicable action.
+  The former plus sizing/menu stories below are historical, not acceptance gates.
+- Constrain the existing Model and Usage panels to fit the phone viewport while
+  retaining all their content/options. The owner explicitly approved these fit
+  corrections after the real model panel overflowed at 320px.
+- Preserve and commit the accepted mobile groundwork as the prerequisite baseline;
+  keep the separate iPad prototype and research work outside these commits.
+
+Decision record: [implementation authorization and attachment scope](https://github.com/bearthababe/learnharness/issues/37#issuecomment-6629353085).
+The separately approved Reveal/dictation correction is already implemented.
 
 ## Problem Statement
 

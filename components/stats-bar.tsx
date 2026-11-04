@@ -35,6 +35,8 @@ export function StatsBar({
 	chatId,
 	leadingSlot,
 	onModelChange,
+	compactInput = false,
+	phonePlan,
 }: {
 	turns: TurnUsage[];
 	contextTokens?: number | null;
@@ -55,6 +57,8 @@ export function StatsBar({
 	 *  composer's teach | practice switch rides here — before the session
 	 *  data (which renders nothing pre-chat on that surface). */
 	leadingSlot?: ReactNode;
+	compactInput?: boolean;
+	phonePlan?: ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
 	const [selectedModel, setSelectedModel] = useState<string | undefined>();
@@ -106,7 +110,7 @@ export function StatsBar({
 			// (so its transparent gradient area never blocks scrolling) — this row
 			// must re-enable events or every control on it is dead (the model-
 			// control wave caught this live: buttons rendered, clicks never landed).
-			className="lh-stats-bar pointer-events-auto relative flex items-center justify-between gap-3 px-3 pt-2 text-xs text-muted-foreground"
+			className={`lh-stats-bar ${compactInput ? "lh-compact-stats" : ""} pointer-events-auto relative flex items-center justify-between gap-3 px-3 pt-2 text-xs text-muted-foreground`}
 		>
 			{/* The summary button + its popover: the popover anchors to this
 			    wrapper, CENTERED over the button itself (owner, stats round 2)
@@ -117,10 +121,11 @@ export function StatsBar({
 			{/* The leading slot (2026-10-04): the leftmost control surface —
 			    the home composer's mode switch. */}
 			{leadingSlot}
+			{phonePlan}
 			{/* The left side: the session-data summary — only once a session
 			    exists (turns). Pre-chat renders nothing (see the header). */}
 			{(chatId || turns.length > 0) && (
-			<div ref={barRef} className="relative">
+			<div ref={barRef} className="lh-usage relative">
 				{/* No tooltip — the numbers describe themselves and the popover
 			    speaks on click (owner, subtlety round 2026-09-25). */}
 			<button
@@ -128,13 +133,16 @@ export function StatsBar({
 				onClick={() => setOpen((o) => !o)}
 				aria-expanded={open}
 				data-testid="stats-summary"
+				aria-label="Usage"
 				className="flex items-center gap-1.5 tabular-nums transition-colors hover:text-foreground"
 			>
-				<span data-testid="stats-context">
+				<span className="lh-phone-usage-label">Usage</span>
+				<span className="lh-usage-numbers contents"><span data-testid="stats-context">
 					{contextLabel}
 				</span>
 				<span aria-hidden>·</span>
 				<span data-testid="stats-cost">{costLabel}</span>
+				</span>
 			</button>
 				{open && (
 					<div

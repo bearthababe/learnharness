@@ -20,6 +20,11 @@ export function useMobileChatFocus(rootRef: RefObject<HTMLDivElement | null>, hi
 			if (!unlock || (view && view.scale !== 1)) return;
 			root.style.height = phone.matches ? `calc(${view?.height ?? innerHeight}px - var(--lh-safe-top) - var(--lh-safe-bottom))` : `${view?.height ?? innerHeight}px`;
 			root.style.top = phone.matches ? `calc(${view?.offsetTop ?? 0}px + var(--lh-safe-top))` : `${view?.offsetTop ?? 0}px`;
+			// A phone rotation/resize must not keep the width captured at focus.
+			if (phone.matches) {
+				root.style.left = "0px";
+				root.style.width = `${document.documentElement.clientWidth}px`;
+			}
 		};
 		const update = () => {
 			const focused = document.activeElement;

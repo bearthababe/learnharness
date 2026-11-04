@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon, CornerDownLeftIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
-import { joinDictation, useDictationTarget } from "@/components/dictation";
+import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+import { CompactLearningInput } from "@/components/compact-learning-input";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ import { cn } from "@/lib/utils";
  */
 
 export interface PracticeDockProps {
+	dictation?: Dictation;
 	hasSharedWriting?: boolean;
 	/** The active problem's tool-call id (submissions target it). */
 	problemCallId: string;
@@ -49,7 +51,7 @@ export interface PracticeDockProps {
 	compactionRunning?: boolean;
 }
 
-export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmit, onEscape, compactionRunning = false, hasSharedWriting = false }: PracticeDockProps) {
+export function PracticeDock({ dictation, problemCallId, input, expanded, onExpand, onSubmit, onEscape, compactionRunning = false, hasSharedWriting = false }: PracticeDockProps) {
 	const [thinking, setThinking] = useState("");
 	// Ref MIRRORS the field ("nothing gets lost", the question-dock
 	// discipline): a submit resuming after `await finishDictation()` reads
@@ -117,12 +119,13 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 			    Shift+Enter makes a newline — less to decide about. */}
 			<div
 				data-testid="practice-thinking-field"
-				className="m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
+				className="lh-question-input m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
 			>
-				<div className="px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+				<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					YOUR THINKING
 				</div>
-				<textarea
+				<CompactLearningInput dictation={dictation}><textarea
+					aria-label="Your thinking"
 					value={thinking}
 					onChange={(e) => {
 						thinkingRef.current = e.target.value;
@@ -149,23 +152,24 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 					className={cn(
 						"field-sizing-content lh-input max-h-64 min-h-16 w-full resize-none bg-transparent px-2.5 pb-2 outline-none placeholder:text-muted-foreground",
 					)}
-				/>
+				/></CompactLearningInput>
 				{/* The submit row (owner round 4, 2026-10-05): IDENTICAL to the
 				    question dock's — hint left, the SAME Button (h-9, px-3.5),
 				    one p-1 row. Corner radii concentric: shell 16 − m-1.5 (6) =
 				    field 10 − p-1 (4) = button 6. */}
-				<div className="flex items-center justify-between gap-2 p-1">
+				<div className="lh-question-submit flex items-center justify-between gap-2 p-1">
 					<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
 						{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 					</span>
 					<Button
 						type="button"
 						data-testid="practice-send"
+						aria-label="Submit thinking"
 						disabled={(thinking.trim().length === 0 && !hasSharedWriting) || compactionRunning}
 						onClick={() => submit()}
 						className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 					>
-						Submit thinking
+						<span className="lh-wide-submit-label">Submit thinking</span><CornerDownLeftIcon className="lh-phone-submit-icon" size={20} />
 					</Button>
 				</div>
 			</div>

@@ -1,8 +1,11 @@
 # Mobile learning UI — accepted direction and integration plan
 
-**2026-11-04 · B accepted as a first prototype iteration; Q1–Q7 and the combined
-mobile-input scope confirmed. Owner requested a specification; implementation
-remains paused.** See the [mobile input spec](mobile-learning-ui-spec.md).
+**2026-11-04 · Implementation authorized for #39–41; #42 retains physical-iPhone
+acceptance.** The owner subsequently deferred the plus menu/photo/file uploads
+and app-image chooser, preserving existing image review/Send. They approved
+phone-fitting the real supporting panels and committing the accepted mobile
+groundwork. These later decisions supersede the historical pause/menu wording
+in the interview below. See the [mobile input spec](mobile-learning-ui-spec.md).
 Published as [spec issue #37](https://github.com/bearthababe/learnharness/issues/37).
 
 ## Goal

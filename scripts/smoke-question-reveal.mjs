@@ -63,7 +63,7 @@ try {
 	await page.goto(`${origin}/chat/${chatId}`, { waitUntil: "networkidle2" });
 	await page.waitForSelector(reveal, { visible: true });
 	await page.locator(reading).fill("Existing reading thoughts.");
-	await page.click('[data-testid="dictation-toggle"]');
+	await page.click('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
 	await page.waitForFunction(() => window.__revealFrames > 0);
 	await page.evaluate(() => window.__revealSpeech.final("First spoken thought."));
 	assert.equal(await page.$eval(reading, e => e.value), "Existing reading thoughts.", "Speech stays buffered until recording finishes");
