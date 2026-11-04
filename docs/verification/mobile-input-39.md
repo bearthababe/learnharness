@@ -26,7 +26,7 @@ The browser script owns a disposable app on `127.0.0.1:3109`, closes its browser
 
 ## Browser acceptance additions
 
-**PASS:** complete expanded browser run in `panels-native-scroll.log` (2026-11-04), including the existing teaching/reveal, question, practice/drill and wide-layout regressions. These additions close verification gaps in an already-implemented baseline; no production correction was justified by the observed results.
+**PASS:** complete expanded browser runs in `panels-native-scroll.log` and `final-browser.log` (2026-11-04), including the existing teaching/reveal, question, practice/drill and wide-layout regressions. The final run covers the script committed in `08f55c2`. These additions close verification gaps in an already-implemented baseline; no production correction was justified by the observed results.
 
 | #39 boundary | Observable acceptance |
 | --- | --- |
@@ -53,3 +53,5 @@ Tests were extended and run in successive geometry, speech/navigation, upload-re
 ## Remaining external acceptance
 
 The coordinating session completed [HTTPS page/manifest/icon and actual Tools → Reload preview checks](mobile-input-39-https.md), then restored the prior slot-2 app. This implementation work never used either public preview slot. Physical iPhone keyboard clearance, safe areas, rubber-band containment, actual pinch zoom, VoiceOver, live microphone and a real-tutor learning walkthrough remain owner acceptance under #42. Chromium touch/keyboard-size simulation is not physical iOS acceptance.
+
+Integration commit `e9b13bd` was merged into this branch as `ead364b`. Final cleanup confirmed no listener on the fixture port `3109`; the test-owned browser/server exited. The worktree remains `/tmp/opencode/issue39/implement` on `implement/mobile-input-39`.
