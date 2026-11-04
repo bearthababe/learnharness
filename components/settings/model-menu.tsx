@@ -39,6 +39,7 @@ export function ModelMenuList({
 	effectiveProvider,
 	onPick,
 	footer,
+	focusSearch = true,
 }: {
 	/** The full catalog — undefined while it loads. */
 	models: ModelCatalogEntry[] | undefined;
@@ -53,10 +54,12 @@ export function ModelMenuList({
 	onPick: (entry: ModelCatalogEntry) => void;
 	/** Quiet footer note under the list (context-specific). */
 	footer?: string;
+	focusSearch?: boolean;
 }) {
 	return (
 		<>
 			<SearchMenuList
+				focusSearch={focusSearch}
 				items={models}
 				itemKey={(m) => `${m.provider}/${m.id}`}
 				searchTerms={(m) => [m.provider, m.id, m.name]}

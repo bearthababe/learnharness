@@ -30,6 +30,19 @@ The separately approved Reveal/dictation correction is already implemented.
 
 ### Phone supporting panels — owner-selected acceptance correction
 
+**Superseding owner revision (2026-11-04):** after trying the implementation,
+the owner rejected the Usage/Model sheets and approved **“Do both”**: restore
+Usage's earlier smaller anchored popup and give Model the compact floating-menu
+presentation used by the reasoning/thinking-level control. Reuse the inherited
+rounded border, card background, padding, shadow and model rows. On phones,
+Model opens with search unfocused; an explicit search tap opens the keyboard.
+Fit the popup and its scrollable results to the visual viewport, including offset
+changes, so search and options remain reachable. Retain outside-tap, trigger and
+Escape dismissal, real settings semantics, drafts and reading position. Desktop
+search focus remains inherited. Plan retains the full-screen/touch direction.
+The sheet description below records the previous selection, superseded for
+Usage/Model by this revision. Physical-iPhone acceptance is still required.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),

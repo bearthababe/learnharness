@@ -7,7 +7,6 @@ import { prettyModel } from "@/components/usage-format";
 import { ModelMenuList, ThinkingMenuList } from "@/components/settings/model-menu";
 import { composeSlotModel } from "@/components/settings/agent-section";
 import { MenuShell } from "@/components/menu-shell";
-import { PhonePanel } from "@/components/phone-panel";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { Hint } from "@/components/ui/hint";
 import { notifySettingsSaved, useSettingsSaved } from "@/components/settings-signal";
@@ -125,7 +124,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	// it a row's pointerdown counts as outside and eats the pick —
 	// live-caught in the fix wave, broken since the MenuShell migration).
 	useEffect(() => {
-		if (open === null || (phone && open === "model")) return;
+		if (open === null) return;
 		const onPointerDown = (e: PointerEvent) => {
 			const t = e.target as Element;
 			if (t instanceof Element && t.closest("[data-lh-menu]")) return;
@@ -147,7 +146,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			document.removeEventListener("pointerdown", onPointerDown);
 			document.removeEventListener("keydown", onKeyDown);
 		};
-	}, [open, phone]);
+	}, [open]);
 
 	// One write seam: composeSlotModel preserves the cheap/vision siblings
 	// (replace-whole-section discipline) and the per-field independence of
@@ -280,7 +279,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 
 	const modelMenu = <>
 		{error && <div className="mb-1.5 text-destructive">{error}</div>}
-		<ModelMenuList models={catalog?.models} effectiveId={effectiveId} effectiveProvider={effectiveProvider} onPick={pickModel}
+		<ModelMenuList models={catalog?.models} effectiveId={effectiveId} effectiveProvider={effectiveProvider} onPick={pickModel} focusSearch={!phone}
 			footer={catalog && catalog.models.length === 0 ? "No models — add a provider key in Keys" : chatId ? "This session's model" : "Strong tier — the default for new sessions"} />
 	</>;
 	return (
@@ -342,10 +341,11 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			    settings' slot selects and the setup dialog use the exact same
 			    one. */}
 			{open === "model" && (
-				phone ? <PhonePanel title="Model" testid="model-menu" onClose={() => setOpen(null)}>{modelMenu}</PhonePanel> :
 				<MenuShell
 					anchorRef={containerRef}
 					testid="model-menu"
+					focusSearch={!phone}
+					fitVisualViewport={phone}
 					preferredSide="up"
 					menuClass="flex w-[22rem] flex-col rounded-xl border bg-card p-2 text-xs shadow-xl"
 				>

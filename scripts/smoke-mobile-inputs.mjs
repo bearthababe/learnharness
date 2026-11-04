@@ -402,6 +402,7 @@ try {
 		await fill(input, "Panel round trip keeps this draft.");
 		await page.click('[data-testid="stats-model"]');
 		await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
+		assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Phone Model opens without search focus");
 		const menu = await page.$eval('[data-testid="model-menu"]', e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; });
 		assert.ok(menu.left >= 0 && menu.right <= width && menu.top >= 0 && menu.bottom <= 550, `Real model options fit ${width}px`);
 		await page.keyboard.press("Escape");
@@ -541,7 +542,11 @@ try {
 	await fill(input, "Keyboard-aware panels preserve this draft.");
 	const keyboardReading = await scrollHistoryBack();
 	await page.click('[data-testid="stats-model"]');
-	await page.waitForSelector('[data-testid="model-menu-dialog"]');
+	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
+	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Opening Model does not request a keyboard");
+	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0, "Model uses the compact floating menu");
+	await page.click('[data-testid="model-search"]');
+	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), true, "Explicit search tap receives focus");
 	await page.evaluate(async () => {
 		Object.defineProperty(visualViewport, "height", { configurable: true, get: () => 350 });
 		Object.defineProperty(visualViewport, "offsetTop", { configurable: true, get: () => 36 });
@@ -554,15 +559,13 @@ try {
 		const r = e.getBoundingClientRect(), v = visualViewport;
 		return { top: r.top, bottom: r.bottom, height: r.height, width: r.width, visibleTop: v.offsetTop, visibleBottom: v.offsetTop + v.height };
 	});
-	for (const selector of ['[data-testid="model-menu"]', '[data-testid="model-search"]', '[data-testid="model-list"]', '[data-testid="model-menu-close"]']) {
+	for (const selector of ['[data-testid="model-menu"]', '[data-testid="model-search"]', '[data-testid="model-list"]']) {
 		const r = await visibleBounds(selector);
 		assert.ok(r.top >= r.visibleTop && r.bottom <= r.visibleBottom, `${selector} clears keyboard: ${JSON.stringify(r)}`);
 	}
-	const sheet = await visibleBounds('[data-testid="model-menu"]');
-	assert.ok(Math.abs(sheet.bottom - sheet.visibleBottom) <= 1, "Model sheet is attached to the keyboard, without a toolbar gap");
-	assert.equal(await page.$eval('[data-testid="model-menu-dialog"]', e => e.matches(":modal")), true, "Lesson is inert under the native sheet");
-	const closeTarget = await visibleBounds('[data-testid="model-menu-close"]');
-	assert.ok(closeTarget.width >= 44 && closeTarget.height >= 44, "Close has a phone-sized target");
+	const compactModel = await visibleBounds('[data-testid="model-menu"]');
+	assert.ok(compactModel.height <= 350 * .6 && compactModel.width < 375, "Model keeps the compact menu cap and edge spacing");
+	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), true, "Viewport movement does not steal deliberate search focus");
 	assert.ok(await page.$eval('[data-testid="model-search"]', e => parseFloat(getComputedStyle(e).fontSize) >= 16), "Search avoids iOS focus autozoom");
 	await page.$eval('[data-testid="model-list"]', e => { e.scrollTop = e.scrollHeight; });
 	assert.ok(await page.$eval('[data-testid="model-list"] li:last-child button', e => {
@@ -585,10 +588,12 @@ try {
 		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 	});
 	await page.click('[data-testid="stats-summary"]');
-	await page.waitForSelector('[data-testid="stats-detail-dialog"]');
-	const usageSheet = await visibleBounds('[data-testid="stats-detail"]');
-	assert.ok(usageSheet.top > 0 && Math.abs(usageSheet.bottom - usageSheet.visibleBottom) <= 1, "Usage is a tall bottom sheet");
-	await page.click('[data-testid="stats-detail-close"]');
+	await page.waitForSelector('[data-testid="stats-detail"]');
+	const usagePopup = await visibleBounds('[data-testid="stats-detail"]');
+	assert.ok(usagePopup.height <= 700 * .6 && usagePopup.bottom < usagePopup.visibleBottom, "Usage restores its smaller anchored popup");
+	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0);
+	await page.click('[data-testid="stats-summary"]');
+	await page.waitForSelector('[data-testid="stats-detail"]', { hidden: true });
 	await page.click('.lh-phone-plan');
 	await page.waitForSelector('[data-testid="plan-popup-dialog"]');
 	const fullPlan = await visibleBounds('[data-testid="plan-popup"]');
@@ -631,17 +636,19 @@ try {
 	await page.click('[data-testid="plan-popup-close"]');
 	assert.equal(await page.$eval(input, e => e.value), "Keyboard-aware panels preserve this draft.");
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0, "Closing panels releases native modal ownership");
-	// A responsive transition must release the phone's modal and restore the
-	// inherited desktop popup rather than leaving the rest of the app inert.
+	// Compact menus retain the inherited desktop placement across the breakpoint.
 	await page.click('[data-testid="stats-model"]');
 	await page.setViewport({ width: 1100, height: 800, isMobile: true, hasTouch: true });
-	await page.waitForSelector('[data-testid="model-menu-dialog"]', { hidden: true });
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	await fitPanel('[data-testid="model-menu"]');
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0);
 	await page.keyboard.press("Escape");
 	assert.equal(await page.evaluate(() => document.body.style.overflow), "", "Phone modal releases its background lock on desktop");
-	console.log("PASS: keyboard-attached Model, tall Usage, full-screen Plan pinch/pan, drafts and responsive modal cleanup");
+	// A fresh desktop open retains the inherited search-focus behavior.
+	await page.click('[data-testid="stats-model"]');
+	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
+	await page.keyboard.press("Escape");
+	console.log("PASS: compact Model/Usage, deliberate phone search focus, visual-only keyboard clearance, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	assert.equal((await upload("mobile_panels")).status, 201);

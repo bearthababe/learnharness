@@ -98,6 +98,30 @@ export function computeMenuPlacement(
 	return { side, style: { ...horizontal, ...vertical }, maxHeight };
 }
 
+/** Phone keyboards can cover the anchor without resizing the layout viewport.
+ * Clamp that anchor into the visible area and never apply the desktop overflow
+ * floor. Keep the same compact cap, gap and side preference. */
+export function computeVisibleMenuPlacement(
+	rect: { top: number; bottom: number; left: number; right: number },
+	viewport: { width: number; height: number; offsetTop: number; offsetLeft: number },
+	contentHeight: number, menuWidth: number, preferredSide: MenuSide, align: MenuAlign,
+): MenuPlacement {
+	const clampY = (y: number) => Math.max(EDGE, Math.min(viewport.height - EDGE, y - viewport.offsetTop));
+	const local = { ...rect, top: clampY(rect.top), bottom: clampY(rect.bottom) };
+	const { side } = computeMenuPlacement(local, viewport, contentHeight, preferredSide, align);
+	const edge = side === "up" ? Math.max(EDGE, local.top - GAP) : Math.min(viewport.height - EDGE, local.bottom + GAP);
+	const room = side === "up" ? edge - EDGE : viewport.height - EDGE - edge;
+	const width = Math.min(menuWidth, Math.max(0, viewport.width - 2 * EDGE));
+	const wantedLeft = (align === "right" ? rect.right - width : rect.left) - viewport.offsetLeft;
+	const left = Math.max(EDGE, Math.min(viewport.width - EDGE - width, wantedLeft));
+	return {
+		side,
+		maxHeight: Math.max(0, Math.min(CAP_VH * viewport.height, room)),
+		style: { left: viewport.offsetLeft + left, top: viewport.offsetTop + edge,
+			maxWidth: Math.max(0, viewport.width - 2 * EDGE), transform: side === "up" ? "translateY(-100%)" : "none" },
+	};
+}
+
 /** The shared shell. Exactly one anchor seam: pass `anchorRef` (a live
  *  element ref) or `anchorTestid` (the settings section's pattern — the
  *  trigger is queried by testid at place time). */
@@ -109,6 +133,8 @@ export function MenuShell({
 	align = "right",
 	menuClass,
 	children,
+	focusSearch = true,
+	fitVisualViewport = false,
 }: {
 	anchorRef?: RefObject<HTMLElement | null>;
 	anchorTestid?: string;
@@ -122,6 +148,9 @@ export function MenuShell({
 	 *  shell adds position, z-index, the height cap, and scrolling. */
 	menuClass: string;
 	children: ReactNode;
+	/** Phone Model opens on the body; search focus requires an explicit tap. */
+	focusSearch?: boolean;
+	fitVisualViewport?: boolean;
 }) {
 	const menuRef = useRef<HTMLDivElement>(null);
 	const [placed, setPlaced] = useState<MenuPlacement | null>(null);
@@ -147,9 +176,9 @@ export function MenuShell({
 		focusedOnceRef.current = true;
 		const el = menuRef.current;
 		if (!el) return;
-		const input = el.querySelector<HTMLElement>("input");
-		(input ?? el).focus();
-	}, [placed]);
+		const input = focusSearch ? el.querySelector<HTMLElement>("input") : null;
+		(input ?? el).focus({ preventScroll: true });
+	}, [placed, focusSearch]);
 
 	// The standard arrow machine for menus WITHOUT a search (owner: when a
 	// dropdown is expanded, the arrow keys cycle the options and never
@@ -195,10 +224,17 @@ export function MenuShell({
 	// after the content changes shape (a search filtering the list).
 	useLayoutEffect(() => {
 		let raf = 0;
+		const viewport = window.visualViewport;
 		const place = () => {
 			const el = anchor();
 			if (!el || !menuRef.current) return;
-			const p = computeMenuPlacement(
+			if (fitVisualViewport && viewport && viewport.scale !== 1) return;
+			const p = fitVisualViewport ? computeVisibleMenuPlacement(
+				el.getBoundingClientRect(),
+				{ width: viewport?.width ?? innerWidth, height: viewport?.height ?? innerHeight,
+					offsetTop: viewport?.offsetTop ?? 0, offsetLeft: viewport?.offsetLeft ?? 0 },
+				menuRef.current.scrollHeight, menuRef.current.getBoundingClientRect().width, preferredSide, align,
+			) : computeMenuPlacement(
 				el.getBoundingClientRect(),
 				{ width: window.innerWidth, height: window.innerHeight },
 				menuRef.current.scrollHeight,
@@ -214,12 +250,18 @@ export function MenuShell({
 		};
 		window.addEventListener("scroll", rePlace, true);
 		window.addEventListener("resize", rePlace);
+		if (fitVisualViewport) {
+			viewport?.addEventListener("resize", rePlace);
+			viewport?.addEventListener("scroll", rePlace);
+		}
 		return () => {
 			cancelAnimationFrame(raf);
 			window.removeEventListener("scroll", rePlace, true);
 			window.removeEventListener("resize", rePlace);
+			viewport?.removeEventListener("resize", rePlace);
+			viewport?.removeEventListener("scroll", rePlace);
 		};
-	}, [anchorRef, anchorTestid, preferredSide, align]);
+	}, [anchorRef, anchorTestid, preferredSide, align, fitVisualViewport]);
 
 	// First pass: mounted hidden at the viewport's top-left so the layout
 	// effect can measure the real content height before anything is seen.

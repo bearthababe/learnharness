@@ -85,6 +85,15 @@
 	.lh-compact-stats [data-testid="model-control"] button { min-height: 44px; min-width: 44px; padding-inline: 6px; }
 	.lh-compact-stats [data-testid="stats-model"] { min-width: 0; }
 	.lh-compact-stats [data-testid="stats-model"] span:first-child { overflow-wrap: anywhere; }
+	.lh-compact-stats [data-testid="stats-detail"] {
+		--tw-translate-x: 0;
+		left: 0; right: 0; transform: none; translate: none; width: 100%;
+		max-height: calc(var(--lh-phone-height, 100dvh) * .6);
+		overflow-y: auto; overscroll-behavior: contain;
+	}
+	[data-testid="model-menu"] { overscroll-behavior: contain; }
+	[data-testid="model-menu"] [data-testid="model-search"] { flex-shrink: 0; font-size: 16px; }
+	[data-testid="model-menu"] [data-testid="model-list"] { min-height: 0; overscroll-behavior: contain; }
 }
 
 /* Mounted only at the shared phone breakpoint. Native dialog owns the top layer;
