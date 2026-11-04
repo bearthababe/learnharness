@@ -19,6 +19,14 @@ it("migrates the shipped journal without losing editable ink or Redo, and new ed
 	assert.equal(replayHandwriting(edited).canRedo, false);
 });
 
+it("large background base64 fields within the source cap validate without recursive regexp overflow", () => {
+	const backgroundId = "a".repeat(64), data = Buffer.alloc(4 * 1024 * 1024).toString("base64");
+	const graph = { version: 2, pageId: "page_initial", head: "import", events: { import: { id: "import", parent: null, kind: "import-background", backgroundId } }, backgrounds: { [backgroundId]: { mediaType: "image/png", width: 1400, height: 1800, data } } };
+	// This is the structural graph guard. PNG bytes/hash are independently
+	// verified at import/upload, before any such graph can become a capture.
+	assert.equal(handwritingSchema.safeParse(graph).success, true);
+});
+
 it("independent PNG backgrounds survive Restore/Undo/Redo, repeated Restore stays linear, and copies keep their native Redo", async () => {
 	const png = new Resvg('<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1800"><rect width="1400" height="1800" fill="red"/></svg>').render().asPng();
 	const background = { mediaType: "image/png" as const, width: 1400 as const, height: 1800 as const, data: png.toString("base64") };

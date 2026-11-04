@@ -82,7 +82,7 @@ try {
 		if (i > 90) throw new Error(`Server did not start: ${log}`);
 		await new Promise(resolve => setTimeout(resolve, 500));
 	}
-	browser = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-features=BackForwardCache", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
+	browser = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", userDataDir: `${dir}-chromium-profile`, headless: true, args: ["--no-sandbox", "--disable-features=BackForwardCache", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
 	const page = await browser.newPage();
 	const errors = [];
 	page.on("pageerror", error => errors.push(error.message));
@@ -122,6 +122,8 @@ try {
 	});
 	await page.goto(`${origin}/chat/mobile_conversation`, { waitUntil: "networkidle2", timeout: 240_000 });
 	await page.waitForSelector('[data-testid="composer"] textarea');
+	const database = await page.evaluate(() => new Promise(resolve => { const request = indexedDB.open("lh-handwriting-transfer", 1); request.onsuccess = () => { request.result.close(); resolve("opened"); }; request.onerror = () => resolve(`${request.error?.name}: ${request.error?.message}`); }));
+	assert.equal(database, "opened", "Native device recovery opens before exercising image-bearing inputs");
 	const fill = async (selector, text) => {
 		await page.focus(selector);
 		await page.keyboard.down("Control"); await page.keyboard.press("KeyA"); await page.keyboard.up("Control");
@@ -285,6 +287,7 @@ try {
 	assert.ok(JSON.stringify(answerRecord).includes("Answer draft. Spoken answer."));
 	assert.ok(JSON.stringify(answerRecord).includes("Reading thought. Before reveal. Late reading thought."));
 	assert.ok(answerRecord.writingSubmission && answerRecord.sharedWriting.length === 1, "Actual free-text adapter carries receipt and image");
+	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Saved answer"));
 	await page.goto(`${origin}/chat/mobile_selection`, { waitUntil: "networkidle2" });
 	await page.click('[data-testid="reading-thinking-field"] [data-testid="teach-check-reveal"]');
 	await page.waitForSelector('[data-testid="thinking-field"] textarea', { visible: true });
@@ -303,6 +306,7 @@ try {
 	assert.ok(JSON.stringify(selectionRecord).includes("The force stays the same."));
 	assert.equal(selectionRecord.details.confidence, 50, "Untouched confidence retains its existing meaning");
 	assert.ok(selectionRecord.writingSubmission && selectionRecord.sharedWriting.length === 1);
+	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Saved answer"));
 	await page.goto(`${origin}/chat/mobile_other_answer`, { waitUntil: "networkidle2" });
 	await page.waitForSelector('[data-testid="other-option"] input');
 	await page.locator('[role="checkbox"]').filter(button => button.textContent.includes("Start with force")).click();
@@ -314,6 +318,7 @@ try {
 	const otherRecord = (await (await fetch(`${origin}/api/chats/mobile_other_answer`)).json()).messages.find(m => m.role === "toolResult" && m.toolCallId === "question");
 	assert.ok(JSON.stringify(otherRecord).includes("Compare both areas.") && JSON.stringify(otherRecord).includes("Start with force") && JSON.stringify(otherRecord).includes("My custom reasoning."), "Multi-select, Other and thinking survive the real answer contract together");
 	assert.ok(otherRecord.writingSubmission && otherRecord.sharedWriting.length === 1);
+	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Saved answer"));
 	for (const id of ["mobile_practice", "mobile_drill"]) {
 		await page.goto(`${origin}/chat/${id}`, { waitUntil: "networkidle2" });
 		const thinking = '[data-testid="practice-thinking-field"] textarea';

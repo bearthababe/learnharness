@@ -35,7 +35,7 @@ import { dockStateKey } from "@/components/dock-state-key";
 import { clearOpeningPrompt, readOpeningPromptEntry, stashOpeningPrompt, OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { forwardDockWheel, useDockHeight } from "@/components/dock-height";
 import { QueuedSteersBody, type QueuedSteerLine } from "@/components/queued-steers";
-import { DictationBar, finishDictation, joinDictation, useDictation, type Dictation } from "@/components/dictation";
+import { DictationBar, dictationCheckpoint, finishDictation, joinDictation, useDictation, type Dictation } from "@/components/dictation";
 import { useFieldCycle } from "@/components/field-cycle";
 import { JobsContext } from "@/components/jobs-context";
 import { StatsBar } from "@/components/stats-bar";
@@ -1208,6 +1208,7 @@ export function Chat({
 	const onSend = () => {
 		if (pending || compacting || handwritingSubmission.blocked()) return;
 		const reviewed = handwritingSubmission.reviewed();
+		const field = handwritingSubmission.activeField(), validSpeech = dictationCheckpoint();
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): a learner who keeps
 		 * talking right through Enter must not lose the tail — stop the run,
 		 * let the last finals land in the composer, then send the REF value
@@ -1216,12 +1217,12 @@ export function Chat({
 			doSteerOrSend(reviewed);
 			return;
 		}
-		void dictation.finish().then(() => doSteerOrSend(reviewed));
+		void dictation.finish().then(() => { if (validSpeech() && handwritingSubmission.activeField() === field) doSteerOrSend(reviewed); });
 	};
 	const doSend = (reviewed = handwritingSubmission.reviewed()) => {
 		if (busy || pending || compacting || handwritingSubmission.blocked()) return;
 		const t = textRef.current.trim();
-		if (!t && !hasSharedWriting) return;
+		if (!t && !reviewed.length) return;
 		if (zeroKeys) {
 			setSetupOpen(true);
 			return;
@@ -1241,7 +1242,7 @@ export function Chat({
 		}
 		draftRef.current = t; // the refusal flow's preserve-and-replay seam
 		applyText("");
-		void send({ type: "text", text: t, ...(hasSharedWriting ? { writingIds: sharedWriting.ids() } : {}) });
+		void send({ type: "text", text: t });
 	};
 
 	/* STEER VS SEND (owner arc 2026-10-03): a send while a turn runs steers

@@ -41,7 +41,7 @@ const historyEvent = z.discriminatedUnion("kind", [
 	z.object({ ...common, kind: z.literal("import-background"), backgroundId: z.string().regex(/^[0-9a-f]{64}$/) }).strict(),
 	z.object({ ...common, kind: z.literal("restore"), sourceHead: id.nullable() }).strict(),
 ]);
-const backgroundPixelsSchema = z.object({ mediaType: z.literal("image/png"), width: z.literal(1400), height: z.literal(1800), data: z.string().regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/) }).strict();
+const backgroundPixelsSchema = z.object({ mediaType: z.literal("image/png"), width: z.literal(1400), height: z.literal(1800), data: z.string().regex(/^[A-Za-z0-9+/]*={0,2}$/).refine(data => data.length % 4 === 0, "Invalid base64 length") }).strict();
 export type BackgroundPixels = z.infer<typeof backgroundPixelsSchema>;
 export type HistoryEvent = z.infer<typeof historyEvent>;
 const graphSchema = z.object({ version: z.literal(2), pageId: notebookPageIdSchema, head: id.nullable(), events: z.record(id, historyEvent), backgrounds: z.record(z.string().regex(/^[0-9a-f]{64}$/), backgroundPixelsSchema) }).strict();

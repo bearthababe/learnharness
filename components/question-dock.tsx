@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+import { dictationCheckpoint, finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { CompactLearningInput } from "@/components/compact-learning-input";
 import { CornerDownLeftIcon } from "lucide-react";
 import { useEnterSubmits } from "@/components/enter-submits";
@@ -408,6 +408,7 @@ function QuestionDockForm({
 	const submit = () => {
 		if (!canSubmit || compactionRunning || transfer?.blocked() || submitting.current) return;
 		const reviewed = transfer?.reviewed();
+		const validSpeech = dictationCheckpoint();
 		submitting.current = true;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): Enter may arrive while
 		 * a run is live with reasoning still in Deepgram's hands. Stop the
@@ -419,7 +420,7 @@ function QuestionDockForm({
 			doSubmit(reviewed); submitting.current = false;
 			return;
 		}
-		void finishDictation().then(() => doSubmit(reviewed)).finally(() => { submitting.current = false; });
+		void finishDictation().then(() => { if (validSpeech()) doSubmit(reviewed); }).finally(() => { submitting.current = false; });
 	};
 	const doSubmit = (reviewed?: SharedWriting[]) => {
 		if (!alive.current || latest.current.compactionRunning || !latest.current.dictationClaim || transfer?.blocked()) return;

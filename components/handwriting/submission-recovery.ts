@@ -31,6 +31,11 @@ export class HandwritingSubmission {
 			}
 			if (saved.submissions.length > 1) throw new Error("Conflicting saved attempts");
 			this.attempt = saved.submissions[0];
+			if (this.attempt?.state === "prepared") {
+				await this.retireUnsent();
+				this.update("Couldn’t save this answer on this device. Nothing was sent.");
+				return;
+			}
 			this.update(this.attempt ? "Couldn’t confirm delivery. Your saved answer is kept on this device." : null);
 			if (this.attempt) await this.check();
 		} catch { this.generation = null; this.update("Couldn’t read answer recovery on this device. Keep this page open."); }
@@ -82,15 +87,15 @@ export class HandwritingSubmission {
 	private async dispatch(send: ImageSend, original: boolean) {
 		if (!this.attempt || this.generation === null || this.deleted) return;
 		const attempt: SubmissionAttempt = { ...this.attempt, state: "sending" };
-		await this.deps.device.saveSubmission(this.chatId, this.generation, attempt);
+		try { await this.deps.device.saveSubmission(this.chatId, this.generation, attempt); }
+		catch (error) { if (original) await this.retireUnsent(); throw error; }
 		this.attempt = attempt;
 		let outcome: WritingInputOutcome = { disposition: "unknown", original };
 		try { await send(attempt.input, value => { outcome = { ...value, original: original && value.original }; }); }
 		catch { /* unknown delivery is kept, never inferred from a thrown POST */ }
 		if (this.deleted) return;
 		if (outcome.disposition === "not_accepted" && outcome.original) {
-			try { await this.retire(false); }
-			catch { this.rejectedCleanup = attempt; this.attempt = undefined; this.canRetry = false; }
+			await this.retireUnsent();
 			this.update("Your answer wasn’t sent. You can edit it and submit again.");
 			await this.deps.review().catch(() => {});
 			return;
@@ -99,6 +104,11 @@ export class HandwritingSubmission {
 		await this.deps.device.saveSubmission(this.chatId, this.generation, this.attempt);
 		this.update("Couldn’t confirm delivery. Your saved answer is kept on this device.");
 		await this.check();
+	}
+	private async retireUnsent() {
+		const attempt = this.attempt;
+		try { await this.retire(false); }
+		catch { this.rejectedCleanup = attempt; this.attempt = undefined; this.canRetry = false; }
 	}
 	private async retire(accepted: boolean) {
 		const attempt = this.attempt;

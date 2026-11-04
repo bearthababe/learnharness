@@ -4,9 +4,10 @@ import { canonicalHandwriting } from "./handwriting.ts";
 
 export type WritingSubmissionReceipt = { id: string; inputSha256: string };
 export function canonicalWritingInput(input: TurnInput): string {
-	if (!("submissionId" in input)) return canonicalHandwriting(input);
-	const { submissionId: _identity, ...payload } = input;
-	return canonicalHandwriting(payload);
+	const { submissionId: _identity, ...payload } = input as TurnInput & { submissionId?: string };
+	// Browser answer builders include optional undefined fields; JSON transport
+	// omits them. Hash the exact wire value on both sides of the receipt check.
+	return canonicalHandwriting(JSON.parse(JSON.stringify(payload)));
 }
 export function matchWritingSubmission(messages: readonly LhMessage[], receipt: WritingSubmissionReceipt): "accepted" | "conflict" | "absent" {
 	const existing = messages.find(message => message.writingSubmission?.id === receipt.id)?.writingSubmission;

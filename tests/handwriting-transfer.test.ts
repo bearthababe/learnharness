@@ -4,6 +4,8 @@ import { HandwritingAttachment } from "../components/handwriting/attachment.ts";
 import { HandwritingSubmission } from "../components/handwriting/submission-recovery.ts";
 import type { TransferDevice, TransferSnapshot, CaptureRecord, DurableDraft, SubmissionAttempt, CaptureReceipt } from "../components/handwriting/transfer-device.ts";
 import { notebookSource, emptyHandwriting } from "../src/core/handwriting.ts";
+import { writingSubmissionReceipt } from "../src/server/writing-submission.ts";
+import { parseChatInput } from "../src/core/input-events.ts";
 
 function device(): TransferDevice {
 	const saved: TransferSnapshot = { captures: [], drafts: [], submissions: [], captureReceipts: [] };
@@ -51,4 +53,30 @@ it("a rejected retry cannot erase uncertainty about a delayed original; newer pa
 	assert.deepEqual(calls, ["heads", "record"]);
 	assert.equal(recovery.attempt, undefined);
 	assert.equal(recovery.draft("composer")!.editor.text, "newer edit");
+});
+
+it("canonical acceptance retires a real answer shape whose optional fields disappear on the JSON wire", async () => {
+	const local = device(), writing = { id: "writing_original", createdAt: "2026-11-04" };
+	let messages: import("../src/core/native-messages.ts").LhMessage[] = [];
+	const recovery = new HandwritingSubmission("chat", { device: local, changed: () => {}, fetch: async () => Response.json({ messages, turnInFlight: false }), review: async () => ({ pending: [writing], pageAttachments: {} }) });
+	await recovery.open();
+	const draft = recovery.edit("question:first", { text: "Answer" });
+	await recovery.submit({ type: "answer", toolCallId: "first", writingIds: [writing.id], answer: { kind: "ask", questionText: "Question", questionType: undefined, thinking: undefined, readingThinking: undefined, dontKnow: false, answers: [], text: "Answer", answeredAt: "2026-11-04T00:00:00.000Z" } }, [writing], draft, async (input, outcome) => {
+		const receipt = writingSubmissionReceipt(parseChatInput(JSON.parse(JSON.stringify(input))));
+		messages = [{ role: "user", id: "accepted", content: "Answer", timestamp: 1, writingSubmission: receipt }];
+		outcome({ disposition: "accepted", original: true });
+	});
+	assert.equal(recovery.attempt, undefined, "Accepted answer must not remain permanently uncertain");
+});
+
+it("failure to persist sending never dispatches or traps a definitely-unsent answer in uncertainty", async () => {
+	const local = device(), save = local.saveSubmission, writing = { id: "writing_original", createdAt: "2026-11-04" };
+	local.saveSubmission = async (chat, generation, attempt, draft) => { if (attempt.state === "sending") throw new Error("Quota abort"); await save(chat, generation, attempt, draft); };
+	const recovery = new HandwritingSubmission("chat", { device: local, changed: () => {}, fetch: async () => { throw new Error("No acceptance lookup needed"); }, review: async () => ({ pending: [writing], pageAttachments: {} }) });
+	await recovery.open(); let sends = 0;
+	const draft = recovery.edit("composer", { text: "Still editable" });
+	assert.equal(await recovery.submit({ type: "text", text: "Still editable", writingIds: [writing.id] }, [writing], draft, async () => { sends++; }), false);
+	assert.equal(sends, 0); assert.equal(recovery.attempt, undefined);
+	assert.equal(recovery.draft("composer")!.editor.text, "Still editable");
+	assert.match(recovery.notice!, /Nothing was sent/);
 });

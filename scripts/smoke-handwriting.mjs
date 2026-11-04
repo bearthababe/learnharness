@@ -15,7 +15,7 @@ await mkdir(path.join(dir, "data/chats"), { recursive: true });
 const now = new Date().toISOString();
 const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
 const assistant = content => ({ role: "assistant", content, id: "question", api: "openai-completions", provider: "openrouter", model: "test", usage, stopReason: "stop", timestamp: Date.now() });
-for (const id of ["handwriting_teach", "handwriting_practice", "handwriting_drill", "handwriting_ack_0", "handwriting_ack_1", "handwriting_ack_2", "handwriting_read_race"]) {
+for (const id of ["handwriting_teach", "handwriting_practice", "handwriting_drill", "handwriting_ack_0", "handwriting_ack_1", "handwriting_ack_2", "handwriting_read_race", "handwriting_background"]) {
 	const practice = id === "handwriting_practice" || id === "handwriting_drill";
 	const messages = [assistant([{ type: "text", text: "Work out pressure = force / area.\n\n".repeat(35) }, { type: "toolCall", name: practice ? "problem" : "ask_user_question", id: "problem-one", arguments: practice ? { statement: "Find the pressure for 100 N on 2 m².", mode: "apply", target: ["pressure"], modelSolution: "50 Pa" } : { question: "Explain how force and area affect pressure.", mode: "text" } }])];
 	if (practice) messages.push({ role: "toolResult", id: "result", toolName: "problem", toolCallId: "problem-one", content: [{ type: "text", text: "Ready" }], details: null, isError: false, timestamp: Date.now() });
@@ -33,7 +33,7 @@ for (const stream of [server.stdout, server.stderr]) stream.on("data", data => {
 console.log(`Disposable handwriting app: ${dir}`);
 try {
 	for (let i = 0; !log.includes("Ready in"); i++) { if (server.exitCode !== null || i > 120) throw new Error(log); await new Promise(resolve => setTimeout(resolve, 500)); }
-	browser = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-features=BackForwardCache"] });
+	browser = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", userDataDir: `${dir}-chromium-profile`, headless: true, args: ["--no-sandbox", "--disable-features=BackForwardCache"] });
 	page = await browser.newPage();
 	const errors = [], turns = [];
 	page.on("pageerror", error => { errors.push(error.message); console.error("Browser error:", error.message); });
@@ -378,6 +378,33 @@ try {
 		assert.deepEqual(await page.evaluate(() => ({ ink: localStorage.getItem("lh:handwriting:v1:handwriting_teach"), visibility: localStorage.getItem("lh:handwriting:open:handwriting_teach") })), kept);
 	}
 	console.log("PASS real sidebar deletion/retry cleans only deleted-session device journals and visibility");
+	const background = await page.evaluate(async () => {
+		const canvas = document.createElement("canvas"); canvas.width = 1400; canvas.height = 1800;
+		const context = canvas.getContext("2d"); context.fillStyle = "#ff0000"; context.fillRect(0, 0, 1400, 1800);
+		const data = canvas.toDataURL("image/png").split(",")[1], bytes = Uint8Array.from(atob(data), char => char.charCodeAt(0));
+		const hash = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(byte => byte.toString(16).padStart(2, "0")).join("");
+		const journal = { version: 2, pageId: "page_initial", head: "import", events: { import: { id: "import", parent: null, kind: "import-background", backgroundId: hash } }, backgrounds: { [hash]: { mediaType: "image/png", width: 1400, height: 1800, data } } };
+		const response = await fetch("/api/chats/handwriting_background/handwriting", { method: "PUT", body: JSON.stringify(journal) });
+		if (!response.ok) throw new Error(`Background fixture refused: ${response.status}`);
+		return journal.backgrounds;
+	});
+	await page.goto(`${origin}/chat/handwriting_background`, { waitUntil: "networkidle2" });
+	await page.click('[data-testid="open-notebook"]'); await ready();
+	await draw(); await action("Eraser"); await draw();
+	const backgroundCapture = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/writing") && response.status() === 201);
+	await page.click('[data-testid="notebook-attach"]');
+	const imageId = (await (await backgroundCapture).json()).writing.id;
+	const pixels = await page.evaluate(async imageId => {
+		const image = new Image(); image.src = `/api/chats/handwriting_background/writing/${imageId}`; await image.decode();
+		const canvas = document.createElement("canvas"); canvas.width = 1400; canvas.height = 1800;
+		const context = canvas.getContext("2d"); context.drawImage(image, 0, 0);
+		return [[100, 110], [1300, 1700]].map(([x, y]) => [...context.getImageData(x, y, 1, 1).data]);
+	}, imageId);
+	assert.deepEqual(pixels, [[255, 0, 0, 255], [255, 0, 0, 255]], "Eraser affects ink only; exported PNG contains the offscreen background");
+	const editable = await (await fetch(`${origin}/api/chats/handwriting_background/writing/${imageId}/source`)).json();
+	assert.deepEqual(editable.journal.backgrounds, background);
+	await page.reload({ waitUntil: "networkidle2" }); await ready();
+	console.log("PASS independent background decode/reopen, erasable foreground and full-page offscreen PNG export");
 	assert.deepEqual(turns, []); assert.deepEqual(errors, []);
 	console.log("PASS teaching/practice/drill isolation, Tools reload, no tutor calls or submission actions");
 } catch (error) {
