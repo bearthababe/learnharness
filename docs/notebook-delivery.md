@@ -11,7 +11,26 @@ Stop never applies or sends; #27 was closed as not planned. The #28 settled
 handoffs below supersede the earlier overlapping-action delivery notes.
 Current mobile limitations do not authorize redesigning the app-wide sidebar.
 
-## Latest: continuation interpretation corrected (2026-11-04)
+## Latest: menu-only attachment review and toolbar toggle (2026-11-05)
+
+The owner approved removing inline previews and moving **Review attached working**
+into Notebook ⋯. It shows the current activity's ordered frozen equations and
+editable explanation (including current continuation and all question channels).
+The open/close Notebook icon now sits directly below the active Tutor input.
+
+Source **`dedc04f`**, build **`-z6WGr6Dicog2N6G3hDO1`**, is live at
+**https://thinkpad.tailfd9bf6.ts.net:8444/**. Use **Reload preview** in the existing
+app. Final 135 affected tests, type/lint, scripted-browser checks, build/payload,
+Electron smoke and actual HTTPS/Reload passed. See the
+[canonical verification record](notebook-mobile-verification.md) for the broader
+suite/browser results, corrected test-harness/focus issues and deployment receipt.
+
+Latest latency findings are recorded there: 20.7 seconds inside the slow model
+call, no retry; provider waiting versus generation cannot be distinguished.
+This follow-up made zero new live model calls. Owner learning/device acceptance
+remains pending; #28/#18 stay open.
+
+## Earlier: continuation interpretation corrected (2026-11-04)
 
 Owner accepted the compact controls for now, then reported DeepSeek removing an
 earlier expression instead of appending an equality and over-clarifying the line

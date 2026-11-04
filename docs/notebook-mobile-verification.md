@@ -1,17 +1,20 @@
-# Notebook + mobile acceptance — 2026-11-04
+# Notebook + mobile acceptance — 2026-11-05
 
 Authoritative combined verification record for #28/#18. Review baseline:
 `d161c0d707e605e2a6ea5761b4f40bbd78dc0c58`. Notebook checkpoint: `2d43b41`.
 
-**Continuation correction verified and deployed.** Application source `0370c06`,
-production build `bPCDlh2I36j3OP5uQhKBA`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
+**Menu review and input-toolbar toggle verified and deployed.** Source `dedc04f`,
+production build `-z6WGr6Dicog2N6G3hDO1`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
 The current fork's native Electron app remains open; use **Reload preview** to
 load the update. Physical phone and owner-learning acceptance are still pending.
 
-Current tracker receipt: [#28 continuation fix](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6643703927),
+Current tracker receipt: [#28 menu review](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6644717383),
+linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6644720461).
+
+Earlier tracker receipt: [#28 continuation fix](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6643703927),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6643706613).
 
-## Menu review and input-toolbar follow-up — implemented, verification in progress
+## Menu review and input-toolbar follow-up — verified and deployed
 
 Owner approved removal of inline previews, menu-only **Review attached working**,
 editable explanation text (including current continuation), immutable ordered
@@ -36,6 +39,12 @@ tests passed; application code did not change for that correction. Logs:
 `/tmp/opencode/notebook-integration/`. Browser checks also verify actual textarea
 values and reload, rather than relying on the DOM emulator.
 
+Final affected checks on source `dedc04f`: **135 tests / 3 suites passed**,
+including Notebook UI/history/speech/activities, viewport locking, menu placement
+and reading-thinking; **typecheck and lint passed**. Logs:
+`check-28-review-final-targeted.log`, `check-28-review-types.log`,
+`check-28-review-lint.log`. This follow-up made **zero live provider calls**.
+
 Full scripted-browser run passed ordinary conversation, reading/reveal,
 free-text/selection/Other answers, practice/drills, persisted submissions, speech
 recovery, images/panels, phone focus/gesture checks, and the combined Notebook
@@ -43,12 +52,42 @@ flow including recording handoff into an earlier review field. Its final layout
 check caught review dismissal refocusing the composer and retaining the keyboard
 lock. The dismissal now updates future speech ownership without restoring input
 focus; the browser regression explicitly requires release on Escape. Final
-Notebook/layout re-verification follows in `check-28-review-browser-final.log`.
+Notebook/layout re-verification **passed** in `check-28-review-browser-final.log`:
+toolbar placement, no inline snapshots, earlier/current text editing and newline,
+ordered explicit submission, reload, recording retained in its original Notebook
+instruction when selecting review prose, no new capture/implicit Send, phone review
+viewport/gestures, Escape release, tablet/wide layouts and retained split/scroll.
+Artifacts: `/home/bjorn/.cache/opencode/mobile-input-browser-notebook-28-20261105/`,
+including `notebook-phone-attachment-review.png` and `notebook-phone-split.png`.
+These are Chromium touch/keyboard emulation, not physical iOS acceptance.
 
 Self-review against the approved follow-up and `docs/architecture.md`: UI changes
 reuse the existing draft writer and speech handoff; no server/schema/model changes.
 Review scope is current activity, snapshot order/source stay immutable, and the
 shared menu's keyboard viewport option is opt-in for this editable review.
+
+### Current deployment receipt
+
+- Feature `ecb2afb`, focus correction **`dedc04f`**, build **`-z6WGr6Dicog2N6G3hDO1`**.
+  Built from exact committed source in
+  `/home/bjorn/.cache/opencode/notebook-28-build-dedc04f`; serves its standalone
+  payload on the existing **3000/8444** slot. Prior builds retained.
+- Production build, payload and Electron bundled-Node smoke passed:
+  `check-28-review-build-final.log`, `check-28-review-payload.log`,
+  `check-28-review-electron-smoke.log` under `/tmp/opencode/notebook-integration/`.
+- Actual local/HTTPS build identity, single toolbar icon, menu-only review/empty
+  state, actual **Reload preview** restoring fixture model/draft, manifest/icons,
+  phone keyboard/gestures and desktop/blur release passed with **zero owner writes**:
+  `check-28-combined-preview.json`, `check-28-review-preview.log`.
+- Observed server PID **3638595**, task `sh_1a8d798bc001z04ZoQ0MDIOrkO`, log
+  `notebook-menu-review-production.log`. Same existing data/auth paths. Native
+  current-fork Electron PID **3540725** retained. Other slot PIDs **3484369** and
+  **3458594**, all Tailscale mappings and the Home Screen identity retained.
+  Recheck process identities before any lifecycle action.
+- Verification command:
+  `env LH_NOTEBOOK_BUILD_DIR=/home/bjorn/.cache/opencode/notebook-28-build-dedc04f node /tmp/opencode/notebook-integration/check-28-combined-preview.mjs`.
+- Use **Reload preview** in the existing app. Physical-device and owner-learning
+  acceptance remain pending; #28/#18 remain open.
 
 ### Latest saved latency evidence
 
@@ -122,7 +161,7 @@ baseline: **Standards 0 findings; Spec 0 findings.** Review confirmed the two
 paragraphs match the approved wording exactly, expected evaluation answers never
 enter the production prompt, and no routing/state behavior changed.
 
-### Current deployment receipt
+### Earlier continuation deployment receipt
 
 - Build **`bPCDlh2I36j3OP5uQhKBA`**, source **`0370c06`**, staged from exact
   committed source in `/home/bjorn/.cache/opencode/notebook-28-build-0370c06`.
