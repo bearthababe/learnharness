@@ -1,7 +1,8 @@
 # Conversational notebook — integration delivery
 
 Spec: [#18](https://github.com/bearthababe/learnharness/issues/18).
-Branch: `integration/conversational-notebook`, based on `f65d108` (#19).
+Current branch: `notebook/28-acceptance`; original integration started from
+`f65d108` (#19) on `integration/conversational-notebook`.
 The owner requested the complete spec through `/implement-spec`, subject to
 keeping notebook behavior isolated and app integration as non-intrusive as possible.
 
@@ -20,14 +21,23 @@ before submission; Stop alone never applies or sends. Compact Notebook microphon
 controls sit inside its instruction input. The comparison prototype is archived
 at `prototype/notebook-send-comparison-v1` (`63d0cc2`); no further decision is pending.
 
-The full suite passed **2,692 tests / 499 suites**, plus typecheck, lint, production
-build and payload curation. Baseline mobile browser checks passed. Combined
-Notebook browser verification and Electron bundled-Node smoke also passed.
-Review against `d161c0d` found two corrected submission issues; 30 targeted tests,
-typecheck and lint passed after correction. The owner then requested adapting
-the accepted iPad notebook's overall page design, with Notebook below Tutor and
-split/full-page views. Exact session handoff and a concrete layout plan precede
-implementation. The combined build is **not deployed yet**. The authoritative combined acceptance
+Owner subsequently approved the [iPad layout adaptation](notebook-ipad-layout-plan.md).
+The exact handoff came from the #45 implementation session at source `329677b`.
+Implemented in `f3d1c63`, with a Close/reopen reading-position correction in
+`19e80dc`. Presentation follows the iPad structure to ease later common extraction:
+rounded card/gaps, below-Tutor phone/tablet split, available-width wide split,
+adjustable divider and Expand/Back/Close, retaining equation-specific behavior.
+
+The full suite passed **2,693 tests / 499 suites**, plus typecheck and lint.
+Baseline and combined Notebook browser checks passed. New layout checks passed
+geometry, divider, full/split/close, retained editors/reading positions, keyboard
+and touch containment. Review corrections, final production build/payload and
+Electron bundled-Node smoke passed. The combined build is **deployed and ready
+for owner review** at **https://thinkpad.tailfd9bf6.ts.net:8444/**, source
+`19e80dc`, build `P8NS9Q-Wp6wmWMML-2LhS`. Actual HTTPS identity, Home Screen assets
+and Reload passed; the current fork's native Electron window is open. Saved
+data/auth paths and other previews are retained. Physical-phone and owner-learning
+acceptance remain pending. The authoritative combined acceptance
 record is [notebook-mobile-verification.md](notebook-mobile-verification.md).
 
 **Owner acceptance resumed (2026-11-04):** the owner confirmed the mobile interface
@@ -62,7 +72,9 @@ dynamic-trace build warnings remain; payload checks passed. No new paid calls:
 cumulative live verification stays **512 editor dispatch attempts (510 reached
 providers), 5 Tutor calls, at most 930.968 speech seconds**.
 
-Owner subsequently approved **Deploy and launch**. Slot 1 now serves this
+### Earlier Notebook-only deployment (superseded by combined delivery above)
+
+Owner then approved **Deploy and launch**. Slot 1 served this
 checkout's verified standalone production build **`zPmtJgWVuIviq4AnjA6kv`** on
 127.0.0.1:3000 (PID 3313959), at
 **https://thinkpad.tailfd9bf6.ts.net:8444/**. It retains the previous slot's

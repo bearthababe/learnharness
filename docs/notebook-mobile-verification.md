@@ -3,6 +3,14 @@
 Authoritative combined verification record for #28/#18. Review baseline:
 `d161c0d707e605e2a6ea5761b4f40bbd78dc0c58`. Notebook checkpoint: `2d43b41`.
 
+**Software ready and deployed.** Application source `19e80dc`, production build
+`P8NS9Q-Wp6wmWMML-2LhS`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
+The current fork's native Electron app is open. Physical phone and owner-learning
+acceptance are still pending.
+
+Tracker receipt: [#28 delivery](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6642418525),
+linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6642420593).
+
 ## Approved behavior
 
 - Tutor Send A: finalize its recording, then submit once.
@@ -24,10 +32,10 @@ Logs below are under `/tmp/opencode/notebook-integration/`.
 | Standalone payload curation | PASS | `check-28-layout-payload.log` |
 | Baseline mobile browser flows | PASS under new layout integration | `check-28-layout-browser.log` |
 | Combined Notebook browser flow | PASS under new layout integration | `check-28-layout-browser.log` |
-| iPad-style layout geometry/transitions | Behavior passed; iframe test setup corrected, final run pending | `check-28-layout-geometry.log` |
+| iPad-style layout geometry/transitions | PASS, including corrected Close/reopen scroll regression | `check-28-layout-geometry.log` |
 | Electron bundled-Node standalone smoke | PASS, including offline provider initialization | `check-28-layout-electron-smoke.log` |
-| Standards/spec review against mobile baseline | Completed; corrections being verified | Findings below |
-| Combined slot 1 deployment and HTTPS/reload verification | Pending | — |
+| Standards/spec review against mobile baseline | Complete; all concrete findings corrected and verified | Findings below |
+| Combined slot 1 deployment and HTTPS/reload verification | PASS | `check-28-combined-preview.json` |
 
 Browser checks use disposable data and scripted providers. Baseline coverage:
 conversation, teaching/reading/reveal, free-text/selection/Other answers, practice
@@ -62,9 +70,9 @@ tests, typecheck and lint passed: `check-28-review-tests.log`,
 No substantiated scope-creep findings. Physical-device and learning acceptance
 remain separate open gates.
 
-Review totals: Standards 1 boundary violation + 1 judgment call; Spec 1 defect.
-The corrections and requested layout adaptation supersede the previously built
-payload; rebuild and deployment verification remain required.
+Initial review totals: Standards 1 boundary violation + 1 judgment call; Spec 1
+defect. These and the later reading-position defect are resolved. The corrected
+production payload has been rebuilt and deployment verification passed.
 
 Follow-up Standards review through `f3d1c63`: clean. Earlier attachment copying
 and touch coverage findings are resolved. Separate presentation follows the
@@ -75,6 +83,8 @@ position after Close hid the card. Corrected to capture outgoing positions while
 visible and never overwrite them from hidden cleanup. The real-browser suite now
 explicitly asserts the 300px reading position survives Close/reopen; prior checks
 already covered independent split/full positions and mounted editor identity.
+The regression passed, and the Spec reviewer confirmed the correction in
+`19e80dc`: no concrete remaining flaw. **Final open findings: Standards 0; Spec 0.**
 
 ## Approved iPad-style layout adaptation
 
@@ -87,11 +97,41 @@ Notebook now has the rounded card and 16px gaps, below-Tutor layout until 980px
 available workspace width, adjustable divider, and Expand/Back/Close without
 remounting either editor. Starting proportions and focused-phone allocation
 remain as approved. Touch focus protection includes 768–979px. The complete
-automated suite, typecheck/lint and production build/payload passed. Full combined
-browser checks and final layout review are running. This supersedes the earlier
-pending layout decision. Existing Apply/Stop/return/Send browser checks already
-passed under the new layout; extra layout checks cover actual frame geometry,
-divider, mounted identity, reading positions, keyboard and available-width rules.
+automated suite, typecheck/lint, production build/payload, full baseline and
+combined browser flows, targeted layout checks and final review passed. The
+isolated browser harness required two setup corrections: retain viewport
+emulation flags during width transitions, and seed localStorage only in the app's
+top frame. Extra layout checks cover actual frame geometry, divider, mounted
+identity, reading positions, keyboard and available-width rules. Browser screenshots
+are in `/home/bjorn/.cache/opencode/mobile-input-browser-notebook-28-20261104/`
+as `notebook-{phone-split,phone-full,tablet-split,wide-split}.png`.
+
+## Deployment receipt
+
+- Slot 1: localhost **3000** / HTTPS **8444**. Build identity confirmed in both
+  local and HTTPS responses; `check-28-combined-preview.json` records all checks.
+- Source `19e80dc`; build `P8NS9Q-Wp6wmWMML-2LhS`. Server observed PID **3540268**;
+  shell task `sh_1a86d6776001IwvWoMIzkGinpz`. Log `notebook-combined-production.log`.
+- Existing `/home/bjorn/repo/teach/learnharness/data` and `auth.json` paths retained.
+  Automated production UI checks block owner writes and use in-memory Notebook
+  responses. No credentials or saved learning data were copied/reset.
+- Native current-fork Electron observed PID **3540725**, mapped `learnharness`
+  window. Executable and working directory resolve to this checkout. Launch log
+  `notebook-combined-electron.log` confirms `window open: http://127.0.0.1:3000`.
+  Shell task `sh_1a86e3425001C2Op7x6lk0Izph` owns the launch.
+- Actual Reload preview restores the fixture's saved model/draft. Page, manifest,
+  icons and Apple metadata passed. Stable manifest identity `/notebook-integration`,
+  root start/scope, standalone mode and original touch icon remain intact.
+- HTTPS phone emulation passed instruction visibility and history/edge/header/input
+  gesture containment, then lock release on blur/desktop transition. This is not
+  physical iOS acceptance.
+- Other preview processes remained: slot 2 PID **3484369**, slot 3 PID **3458594**.
+  All existing Tailscale mappings, including 443/8443/8445/8446/8447, were retained.
+
+Existing installed icon: use **Reload preview** (also available under Tools).
+First installation: Safari → Share → Add to Home Screen → Open as Web App → Add,
+then launch the icon. Reload restores saved working/drafts and interrupts active
+recording; no offline service worker is added.
 
 ## Acceptance boundary
 
