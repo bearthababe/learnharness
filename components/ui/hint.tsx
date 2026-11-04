@@ -29,6 +29,8 @@ interface HintProps {
 	 *  submits the form the button belongs to). */
 	binding?: string
 	side?: "top" | "bottom" | "left" | "right"
+	/** Labelled mobile controls do not need hover/keyboard-shortcut hints. */
+	disabled?: boolean
 	children: React.ReactElement
 }
 
@@ -43,7 +45,8 @@ export function hintText(label: string, action?: KeyAction, binding?: string): s
 	return live ? `${label} (${live})` : label
 }
 
-export function Hint({ label, action, binding, side = "top", children }: HintProps) {
+export function Hint({ label, action, binding, side = "top", disabled = false, children }: HintProps) {
+	if (disabled) return children
 	return (
 		<TooltipProvider>
 			<Tooltip>

@@ -25,6 +25,7 @@
 /** The full event vocabulary — fixed from day one (slice plan, 2026-10-02). */
 export interface ServerEvents {
 	"notebook-changed": { chatId: string };
+	"writing-changed": { chatId: string };
 	/** A teach turn began server-side (beginTurn) — client-initiated sends,
 	 *  wake turns, other-tab turns: every origin rides the same event. */
 	"turn-started": { chatId: string };
@@ -60,6 +61,7 @@ export type ServerEventType = keyof ServerEvents;
  *  what the SSE channel can carry). */
 export const SERVER_EVENT_TYPES = [
 	"notebook-changed",
+	"writing-changed",
 	"turn-started",
 	"turn-settled",
 	"jobs-changed",

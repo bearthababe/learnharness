@@ -3,10 +3,10 @@
 import { useEffect, type RefObject } from "react";
 
 /** Focus owns only an attribute/CSS lock, never another overlay's body styles. */
-export function useSessionInputViewport(rootRef: RefObject<HTMLElement | null>) {
+export function useSessionInputViewport(rootRef: RefObject<HTMLElement | null>, enabled = true) {
 	useEffect(() => {
 		const root = rootRef.current;
-		if (!root) return;
+		if (!root || !enabled) return;
 		let locked = false;
 		let scrollX = 0, scrollY = 0;
 		let x = 0, y = 0;
@@ -38,6 +38,7 @@ export function useSessionInputViewport(rootRef: RefObject<HTMLElement | null>) 
 				document.documentElement.setAttribute("data-session-input-locked", "");
 			}
 			const viewport = window.visualViewport;
+			if ((viewport?.scale ?? 1) !== 1) return;
 			if (root.dataset.inputFocused !== pane) root.dataset.inputFocused = pane;
 			const keyboard = String((viewport?.height ?? window.innerHeight) < window.innerHeight - 100);
 			if (root.dataset.keyboardOpen !== keyboard) root.dataset.keyboardOpen = keyboard;
@@ -50,7 +51,7 @@ export function useSessionInputViewport(rootRef: RefObject<HTMLElement | null>) 
 			x = event.touches[0]!.clientX; y = event.touches[0]!.clientY;
 		};
 		const move = (event: TouchEvent) => {
-			if (!locked || event.touches.length !== 1) return; // preserve pinch zoom
+			if (!locked || event.touches.length !== 1 || (window.visualViewport?.scale ?? 1) !== 1) return; // preserve pinch zoom
 			const dx = event.touches[0]!.clientX - x, dy = event.touches[0]!.clientY - y;
 			x = event.touches[0]!.clientX; y = event.touches[0]!.clientY;
 			const horizontal = Math.abs(dx) > Math.abs(dy);
@@ -87,5 +88,5 @@ export function useSessionInputViewport(rootRef: RefObject<HTMLElement | null>) 
 			window.removeEventListener("resize", sync);
 			window.visualViewport?.removeEventListener("resize", sync); window.visualViewport?.removeEventListener("scroll", sync);
 		};
-	}, [rootRef]);
+	}, [rootRef, enabled]);
 }

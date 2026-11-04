@@ -49,6 +49,7 @@ export type { NotebookSpeechApply } from "./contracts/notebook.ts";
 export type { LearnerExplanation, LearnerExplanationPart, OwnedTutorDraft, TutorDraftOwner, WorkingSnapshot, NotebookSubmission, NotebookSubmissionReceipt } from "./contracts/notebook.ts";
 export * from "./compaction.ts";
 export * from "./input-events.ts";
+export * from "./shared-writing.ts";
 // Wave D (owner-approved 2026-09-26): the client view model — the grouping
 // canon (one continuous assistant document, step separators) ported from
 // the deleted server projection to the client side. Pure, browser-safe.

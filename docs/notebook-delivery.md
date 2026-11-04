@@ -12,12 +12,25 @@ Current mobile limitations do not authorize redesigning the app-wide sidebar.
 
 ## Notebook candidate picker and prompt adoption (2026-11-04)
 
+**Combined-build progress:** owner approved checkpointing Notebook (`2d43b41`),
+integrating mobile baseline `d161c0d`, checking and redeploying slot 1 before their
+learning walkthrough. Owner then chose **A**: explicit Tutor Send finalizes its
+recording and submits once. Notebook recording, Apply and handoffs must settle
+before submission; Stop alone never applies or sends. Compact Notebook microphone
+controls sit inside its instruction input. The comparison prototype is archived
+at `prototype/notebook-send-comparison-v1` (`63d0cc2`); no further decision is pending.
+
+The full suite passed **2,692 tests / 499 suites**, plus typecheck, lint, production
+build and payload curation. Baseline mobile browser checks passed. Combined
+Notebook browser verification and review against `d161c0d` are in progress;
+the combined build is **not deployed yet**. The authoritative combined acceptance
+record is [notebook-mobile-verification.md](notebook-mobile-verification.md).
+
 **Owner acceptance resumed (2026-11-04):** the owner confirmed the mobile interface
 works well enough and explicitly selected **Yes, resume** for Notebook real-learning
-acceptance. The earlier mobile-usability pause is lifted. The deployed Notebook
-build still lacks the separate mobile branch's fixes through `d161c0d`; integration
-handoff and an approved combined-build plan are needed before claiming the accepted
-mobile experience is present in Notebook. Physical-phone and owner-learning
+acceptance. The earlier mobile-usability pause is lifted. The combined-build plan
+and handoff are approved; verification and deployment precede the walkthrough.
+Physical-phone and owner-learning
 acceptance remain incomplete.
 
 Owner approved the [picker implementation plan](notebook-model-picker-plan.md):

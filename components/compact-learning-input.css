@@ -1,0 +1,106 @@
+.lh-compact-field { display: contents; }
+.lh-practice-collapsed { display: none; }
+.lh-compact-speech, .lh-compact-error, .lh-phone-plan, .lh-phone-usage-label, .lh-phone-reveal, .lh-phone-submit-icon { display: none; }
+
+@media (max-width: 767px) {
+	.lh-reading-input { padding: 6px; }
+	.lh-reading-input > div:first-child { padding: 0 4px 4px; }
+	.lh-compact-row > .lh-phone-reveal { display: inline-flex; }
+	.lh-question-reveal { display: none; }
+	.lh-question-collapsed { visibility: visible; height: auto; overflow: visible; }
+	.lh-question-collapsed [data-dock-scroll-area], .lh-question-collapsed .lh-question-confidence { display: none; }
+	.lh-question-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px; border: 0; background: none; }
+	.lh-input-label { grid-column: 1 / -1; padding: 0 4px; }
+	.lh-question-submit { display: contents; }
+	.lh-question-submit > span, .lh-wide-submit-label { display: none; }
+	.lh-phone-submit-icon { display: block; }
+	.lh-question-submit > button { min-width: 44px; min-height: 44px; padding: 0; margin-bottom: 5px; }
+	.lh-compact-row {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: end;
+		gap: 6px;
+	}
+	.lh-compact-field {
+		display: flex;
+		position: relative;
+		min-width: 0;
+		min-height: 54px;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--background);
+	}
+	.lh-compact-field:focus-within { border-color: var(--primary); }
+	.lh-compact-field > textarea {
+		width: 100%;
+		min-width: 0;
+		min-height: 52px;
+		max-height: max(54px, min(130px, calc(var(--lh-phone-height, 100dvh) * .28)));
+		padding: 14px 10px;
+		line-height: 24px;
+		field-sizing: content;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+	/* Placeholder painting can extend into textarea padding. Reserve a real
+	   control lane so neither placeholder nor draft can paint under the mic. */
+	.lh-compact-field[data-has-mic] > textarea { flex: 0 1 auto; width: calc(100% - 48px); padding-right: 0; }
+	.lh-compact-field > textarea:placeholder-shown { white-space: nowrap; text-overflow: ellipsis; }
+	.lh-compact-field[data-recording] > textarea {
+		visibility: hidden;
+		height: var(--lh-capture-height);
+		min-height: var(--lh-capture-height, 52px);
+	}
+	.lh-compact-speech { display: block; position: absolute; right: 3px; bottom: 3px; }
+	.lh-compact-field[data-recording] .lh-compact-speech { left: 3px; }
+	.lh-compact-speech button, .lh-compact-row > button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 44px;
+		min-height: 44px;
+		flex-shrink: 0;
+		border-radius: 9px;
+	}
+	.lh-compact-row > button { margin-bottom: 5px; }
+	.lh-compact-speech button:disabled { opacity: .4; }
+	.lh-compact-speech button:focus-visible { outline: 2px solid var(--primary); }
+	.lh-compact-recording { display: flex; align-items: center; min-width: 0; }
+	.lh-compact-feedback { display: flex; align-items: center; gap: 5px; min-width: 0; flex: 1; padding-left: 5px; }
+	.lh-compact-timer { font-size: 12px; font-variant-numeric: tabular-nums; }
+	.lh-compact-meter { display: flex; align-items: center; height: 24px; flex: 1; min-width: 0; gap: 2px; overflow: hidden; }
+	.lh-compact-meter > span { flex: 1; min-width: 1px; background: var(--foreground); border-radius: 2px; }
+	.lh-compact-status { display: flex; align-items: center; gap: 4px; font-size: 12px; overflow-wrap: anywhere; }
+	.lh-compact-error { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; color: var(--destructive); font-size: 14px; overflow-wrap: anywhere; }
+	.lh-compact-error > span { flex: 1; min-width: 0; }
+	.lh-compact-error button { min-height: 44px; min-width: 44px; text-decoration: underline; }
+	.lh-compact-stats .lh-dictation-slot { display: none; }
+	.lh-compact-stats { flex-wrap: nowrap; gap: 6px; padding-inline: 6px; padding-top: 2px; }
+	.lh-compact-stats .lh-phone-plan { display: block; min-width: 44px; min-height: 44px; }
+	.lh-compact-stats .lh-usage { position: static; order: 3; flex-shrink: 0; }
+	.lh-compact-stats .lh-usage-numbers { display: none; }
+	.lh-compact-stats .lh-phone-usage-label { display: inline; }
+	.lh-compact-stats [data-testid="stats-summary"] { min-height: 44px; min-width: 44px; justify-content: center; }
+	.lh-compact-stats [data-testid="model-control"] { flex: 1; min-width: 0; justify-content: center; gap: 2px; }
+	.lh-compact-stats [data-testid="model-control"] button { min-height: 44px; min-width: 44px; padding-inline: 6px; }
+	.lh-compact-stats [data-testid="stats-model"] { min-width: 0; }
+	.lh-compact-stats [data-testid="stats-model"] span:first-child { overflow-wrap: anywhere; }
+	.lh-compact-stats [data-testid="stats-detail"] {
+		--tw-translate-x: 0;
+		left: 0;
+		right: 0;
+		transform: none;
+		translate: none;
+		width: 100%;
+		max-height: calc(var(--lh-phone-height, 100dvh) * .6);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+	[data-testid="model-menu"] {
+		left: 8px !important;
+		right: 8px !important;
+		width: auto;
+		max-width: calc(100vw - 16px);
+		overscroll-behavior: contain;
+	}
+}

@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { joinDictation, useDictationTarget } from "@/components/dictation";
+import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import type { NotebookSession } from "./notebook-session";
 import { useNotebookActivityDraft } from "./notebook-activity-draft";
 import { NotebookDraftReview } from "./learner-explanation";
+import { CompactLearningInput } from "@/components/compact-learning-input";
+import { ChevronRightIcon } from "lucide-react";
 
 /**
  * The reading-thinking field (owner design 2026-10-03, "two questions per
@@ -29,6 +31,7 @@ export function ReadingThinkingField({
 	onEscape,
 	onOpen,
 	claim,
+	dictation,
 }: {
 	notebook?: NotebookSession;
 	toolCallId?: string;
@@ -43,6 +46,7 @@ export function ReadingThinkingField({
 	onOpen?: () => void;
 	/** Primary dictation claim — true while the check is behind its reveal. */
 	claim: boolean;
+	dictation?: Dictation;
 }) {
 	const owner = { kind: "question" as const, toolCallId, channel: "reading-thinking" as const };
 	const owned = useNotebookActivityDraft(notebook, owner);
@@ -77,14 +81,15 @@ export function ReadingThinkingField({
 			data-notebook-channel="reading-thinking"
 			data-reading-claim={claim}
 			data-testid="reading-thinking-field"
-			className="pointer-events-auto mb-2 rounded-2xl border bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50"
+			className="lh-reading-input pointer-events-auto mb-2 rounded-2xl border bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50"
 		>
 			<div className="pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 				Thinking while reading
 			</div>
 			<NotebookDraftReview draft={owned.draft} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
 			{owned.state.error && <p role="alert" className="text-xs text-destructive">{owned.state.error}</p>}
-			<textarea
+			<div className="lh-compact-row"><CompactLearningInput dictation={claim ? dictation : undefined}><textarea
+				aria-label="Thinking while reading"
 				value={text}
 				onChange={(e) => change(e.target.value)}
 				/* py-0.5 (owner round, 2026-10-07): the scrollbar fix. Source
@@ -127,7 +132,9 @@ export function ReadingThinkingField({
 				placeholder="Whatever comes to mind as you read."
 				rows={1}
 				className="field-sizing-content lh-input max-h-40 w-full resize-none bg-transparent py-0.5 outline-none placeholder:text-muted-foreground/70"
-			/>
+			/></CompactLearningInput>
+			{claim && onOpen && <button type="button" className="lh-phone-reveal bg-primary text-primary-foreground" aria-label="Check your understanding" data-testid="teach-check-reveal" onClick={onOpen}><ChevronRightIcon size={20} /></button>}
+			</div>
 		</div>
 	);
 }

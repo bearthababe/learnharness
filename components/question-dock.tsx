@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { finishDictation, isDictationActive, joinDictation, useDictationTarget } from "@/components/dictation";
-import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
+import { finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+	import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
+import { CompactLearningInput } from "@/components/compact-learning-input";
+import { CornerDownLeftIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
 import {
@@ -63,6 +65,8 @@ import { NotebookDraftReview } from "./learner-explanation";
 
 export interface QuestionDockProps {
 	notebook?: NotebookSession;
+	dictation?: Dictation;
+	hasSharedWriting?: boolean;
 	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall";
 	toolCallId: string;
 	input: QuizToolInput | AskToolInput | ExplainToolInput;
@@ -103,6 +107,8 @@ export interface QuestionDockProps {
 
 export function QuestionDock({
 	notebook,
+	dictation,
+	hasSharedWriting = false,
 	toolName,
 	toolCallId,
 	input,
@@ -159,10 +165,12 @@ export function QuestionDock({
 					}
 				/>
 			)}
-			<div className={expanded ? "dock-variant" : "invisible h-0 overflow-hidden"}>
+			<div className={expanded ? "dock-variant" : `${reveal ? "" : "lh-question-collapsed "}invisible h-0 overflow-hidden`}>
 				<QuestionDockForm
 					key={toolCallId}
 					notebook={notebook}
+					dictation={dictation}
+					hasSharedWriting={hasSharedWriting}
 					toolName={toolName}
 					toolCallId={toolCallId}
 					input={parsed}
@@ -223,7 +231,7 @@ export function QuestionDockBar({
 				type="button"
 				data-testid="teach-check-reveal"
 				onClick={onExpand}
-				className="dock-variant flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40"
+				className="lh-question-reveal dock-variant flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40"
 			>
 				<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
 					<PlayIcon className="size-3.5" />
@@ -261,6 +269,8 @@ export function QuestionDockBar({
 /** The expanded question: label, question, options, and the unified bottom row. */
 function QuestionDockForm({
 	notebook,
+	dictation,
+	hasSharedWriting = false,
 	toolName,
 	toolCallId,
 	input,
@@ -387,7 +397,7 @@ function QuestionDockForm({
 
 	const canSubmit =
 		qd.mode === "text"
-			? text.trim().length > 0 || explanationHasContent(owned.draft?.parts ?? [])
+			? text.trim().length > 0 || explanationHasContent(owned.draft?.parts ?? []) || hasSharedWriting
 			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0;
 
 	const submit = () => {
@@ -410,7 +420,7 @@ function QuestionDockForm({
 	const doSubmit = async () => {
 		const { selection: sel, other, confidenceIndex: confIdx } = owned.current.current;
 		const hasWorking = explanationHasContent(notebook?.tutor.draft(owner)?.parts ?? []);
-		if (qd.mode === "text" ? !answerTextRef.current.trim() && !hasWorking : !(sel.dontKnow || (sel.otherSelected && other.trim()) || sel.selected.size)) return;
+		if (qd.mode === "text" ? !answerTextRef.current.trim() && !hasWorking && !hasSharedWriting : !(sel.dontKnow || (sel.otherSelected && other.trim()) || sel.selected.size)) return;
 		const req: AnswerRequest = {
 			dontKnow: sel.dontKnow,
 			values: [...sel.selected].map((i) => qd.options[i]!.value),
@@ -779,7 +789,7 @@ function QuestionDockForm({
 				GRAYS it out — the layout holds, no value is sent, the IDK
 				signal stands alone. */}
 			{kind === "quiz" && (
-				<div className="border-t border-border/60 px-4 py-2.5">
+				<div className="lh-question-confidence border-t border-border/60 px-4 py-2.5">
 					<div className="flex items-center gap-3">
 						<span
 							className={cn(
@@ -873,13 +883,14 @@ function QuestionDockForm({
 			>
 				<div
 					data-testid={qd.mode === "text" ? "answer-field" : "thinking-field"}
-					className="rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
+					className="lh-question-input rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
 				>
-					<div className="px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+					<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 						{qd.mode === "text" ? "Your answer" : "YOUR THINKING"}
 					</div>
-					{qd.mode === "text" ? (
+					<CompactLearningInput dictation={dictationClaim ? dictation : undefined}>{qd.mode === "text" ? (
 						<textarea
+							aria-label="Your answer"
 							value={text}
 							onChange={(e) => {
 								answerTextRef.current = e.target.value;
@@ -909,6 +920,7 @@ function QuestionDockForm({
 					) : (
 						<textarea
 							ref={thinkingRef}
+							aria-label="Your thinking"
 							value={thinking}
 							onChange={(e) => {
 								thinkingTextRef.current = e.target.value;
@@ -941,8 +953,8 @@ function QuestionDockForm({
 								phase === "teach" ? "min-h-[4.5rem]" : "min-h-10",
 							)}
 						/>
-					)}
-					<div className="flex items-center justify-between gap-2 p-1">
+					)}</CompactLearningInput>
+					<div className="lh-question-submit flex items-center justify-between gap-2 p-1">
 						<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
 								{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 						</span>
@@ -950,9 +962,10 @@ function QuestionDockForm({
 							type="submit"
 							data-testid="question-send"
 							disabled={owned.blocked || (!canSubmit && !isDictationActive()) || compactionRunning}
+							aria-label="Submit answer"
 							className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 						>
-							Submit answer
+							<span className="lh-wide-submit-label">Submit answer</span><CornerDownLeftIcon className="lh-phone-submit-icon" size={20} />
 						</Button>
 					</div>
 				</div>

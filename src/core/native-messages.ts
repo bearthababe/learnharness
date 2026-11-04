@@ -47,6 +47,7 @@ import { compactAnswerForModel, type QuestionAnswerData } from "./question-core.
 import { activeCompactionOf, keptIndexFor } from "./compaction.ts";
 import type { LearnerExplanation } from "./contracts/notebook.ts";
 import { serializeLearnerExplanation } from "./notebook-content.ts";
+import { sharedWritingContext, type SharedWritingReference } from "./shared-writing.ts";
 
 /** The hard-invariant wording for an aborted turn's unanswered calls —
  *  carried over verbatim from the pre-native era so the model's view
@@ -93,7 +94,7 @@ declare module "@earendil-works/pi-agent-core" {
 }
 
 /** A record message: a native pi message (or our marker) plus the record id. */
-export type LhMessage = (UserMessage | AssistantMessage | ToolResultMessage | LhMarkerMessage) & { id: string; explanation?: LearnerExplanation };
+export type LhMessage = (UserMessage | AssistantMessage | ToolResultMessage | LhMarkerMessage) & { id: string; explanation?: LearnerExplanation; sharedWriting?: SharedWritingReference[] };
 
 /** A record message list is assignable to the agent's context — that IS
  *  the replay (ui-stream/chat-handler assign it to initialState.messages). */
@@ -616,16 +617,23 @@ export function toLlmMessages(messages: readonly AgentMessage[]): Message[] {
 			if (marker.customType === "compaction" && head !== null) continue;
 			out.push({
 				role: "user",
-				content: [{ type: "text", text: marker.content }],
+				content: [{ type: "text", text: marker.content },
+					...((m as LhMessage).sharedWriting?.length ? [{ type: "text" as const, text: sharedWritingContext((m as LhMessage).sharedWriting!) }] : [])],
 			timestamp: marker.timestamp,
 			});
 			continue;
 		}
 		// Strip app-owned fields: the wire carries the native shape only.
-		const { id: _id, explanation: _explanation, ...native } = m as LhMessage;
+		const { id: _id, explanation: _explanation, sharedWriting, ...native } = m as LhMessage;
 		if (native.role === "toolResult" && (QUESTION_TOOLS as readonly string[]).includes(native.toolName) && native.details && typeof native.details === "object" && !Array.isArray(native.details)) {
 			const { textContent: _text, thinkingContent: _thinking, readingThinkingContent: _reading, ...details } = native.details as Record<string, import("@earendil-works/pi-ai").JsonValue>;
 			native.details = details;
+		}
+		if (sharedWriting?.length && (native.role === "user" || native.role === "toolResult")) {
+			native.content = [
+				...(typeof native.content === "string" ? [{ type: "text" as const, text: native.content }] : native.content),
+				{ type: "text", text: sharedWritingContext(sharedWriting) },
+			];
 		}
 		out.push(native as Message);
 		// Repair unanswered calls from completed generations, not calls in

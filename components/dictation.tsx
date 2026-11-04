@@ -528,7 +528,9 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 			// per-run costs (context creation, module fetch) are gone.
 			const { ctx, module } = ensureAudioGraph();
 			await module;
-			if (ctx.state === "suspended") await ctx.resume();
+			// Safari can leave the persistent graph interrupted between captures.
+			// Opening a socket alone must not leave the next run without audio.
+			if (ctx.state === "suspended" || ctx.state === "interrupted") await ctx.resume();
 			if (gen !== genRef.current) return;
 			if (adapter) {
 				const observer = await adapter.begin({ id: crypto.randomUUID(), now: () => ctx.currentTime,

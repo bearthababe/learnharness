@@ -14,7 +14,7 @@ const originalFetch = globalThis.fetch;
 globalThis.fetch = async () => { throw new Error("Unexpected network call"); };
 after(() => { globalThis.fetch = originalFetch; fs.rmSync(dir, { recursive: true, force: true }); });
 
-test("ordinary send reaches the actual model once, keeps exact native/view/export content on reopen, and retries a lost ACK idempotently", async () => {
+test("ordinary send combines Notebook snapshots and reviewed handwriting once, and retries a lost ACK idempotently", async () => {
 	process.env.OPENROUTER_API_KEY = "test-key";
 	const { handleChatRequest } = await import("../src/server/chat-handler.ts");
 	const { createTeacherAgent } = await import("../src/agent/teacher-agent.ts");
@@ -36,7 +36,12 @@ test("ordinary send reaches the actual model once, keeps exact native/view/expor
 	const end = draft.parts[2]!;
 	if (end.kind === "text") end.text = "Twice the area halves pressure.";
 	service.dispatch(chat.id, { type: "tutor-draft", expectedRevision: 2, draft });
-	const input = { type: "text", text: "Same force.\n\nTwice the area halves pressure.", explanation: draft.parts, submission: { id: "submission", draftId: draft.id, draftRevision: draft.revision, owner: draft.owner } };
+	const { sharedWritingResponse } = await import("../src/server/shared-writing.ts");
+	const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=", "base64");
+	const upload = await sharedWritingResponse(new Request("http://test/writing", { method: "POST", body: png }), chat.id);
+	assert.equal(upload.status, 201);
+	const { writing } = await upload.json();
+	const input = { type: "text", text: "Same force.\n\nTwice the area halves pressure.", explanation: draft.parts, writingIds: [writing.id], submission: { id: "submission", draftId: draft.id, draftRevision: draft.revision, owner: draft.owner } };
 	let calls = 0;
 	let seen = "";
 	const tutor = createFauxCore({});
@@ -46,6 +51,7 @@ test("ordinary send reaches the actual model once, keeps exact native/view/expor
 		seen = wire;
 		assert.match(wire, /Same force\.[\s\S]*Notebook-assisted working[\s\S]*p=F\/A[\s\S]*Twice the area/);
 		assert.match(wire, /not by itself evidence of independent reasoning/);
+		assert.match(wire, /Shared handwritten working/);
 		assert.doesNotMatch(wire, /Write formula|snapshotId|draftRevision|explanation/);
 		return fauxAssistantMessage("Let's check that reasoning.");
 	}]);
@@ -64,6 +70,9 @@ test("ordinary send reaches the actual model once, keeps exact native/view/expor
 	const saved = chatStore.getChat(chat.id)!;
 	assert.equal(saved.messages.filter((message) => message.role === "user").length, 1);
 	assert.match(JSON.stringify(projectView(saved.messages)), /p=F\/A/);
+	assert.equal(saved.messages.filter(message => message.sharedWriting?.length).length, 1);
+	assert.ok(projectView(saved.messages).some(message => message.parts.some(part => part.type === "data-shared-writing")));
+	assert.deepEqual((await (await sharedWritingResponse(new Request("http://test/writing"), chat.id)).json()).pending, []);
 	assert.deepEqual(service.view(chat.id).tutorDrafts, [], "only accepted draft consumed");
 });
 

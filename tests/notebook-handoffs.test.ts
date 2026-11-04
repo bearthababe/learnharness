@@ -10,13 +10,14 @@ const { createNotebookService } = await import("../src/server/notebook.ts");
 const { createNotebookSession } = await import("../components/notebook-session.ts");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-test("Send is refused during recording and holds its draft fixed until the result is reconciled", async () => {
+test("Tutor Send can request finishing, but submission waits for finalization and holds its draft fixed", async () => {
 	const chat = chatStore.createChat("Explicit Send");
 	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No edit requested"); } });
 	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
 	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
 	const owner = { kind: "ordinary" as const }; session.tutor.updateText(owner, "Before."); await session.tutor.idle();
 	const capture = await session.speech.begin({ id: "send-recording", now: () => 0 });
+	assert.equal(session.getSnapshot().sendBlocked, false, "explicit Tutor Send may request finalization");
 	await assert.rejects(session.tutor.prepareSubmission(owner), /Finish dictation/);
 	await capture.end("stop");
 	const prepared = await session.tutor.prepareSubmission(owner);
@@ -29,6 +30,20 @@ test("Send is refused during recording and holds its draft fixed until the resul
 	await session.tutor.reconcile();
 	assert.equal(session.tutor.getSnapshot().locked, false);
 	assert.deepEqual(await session.tutor.prepareSubmission(owner), prepared, "uncertain delivery keeps its exact retry identity");
+	session.dispose();
+});
+
+test("Notebook capture still blocks Tutor Send until it settles", async () => {
+	const chat = chatStore.createChat("Notebook Send gate");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No edit requested"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	await session.speech.choose({ kind: "notebook" });
+	const capture = await session.speech.begin({ id: "notebook-recording", now: () => 0 });
+	assert.equal(session.getSnapshot().sendBlocked, true);
+	await capture.end("stop");
+	assert.equal(session.getSnapshot().sendBlocked, false);
+	assert.deepEqual(service.view(chat.id).submissions, []);
 	session.dispose();
 });
 

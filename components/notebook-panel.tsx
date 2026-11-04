@@ -4,8 +4,10 @@ import { useState, useSyncExternalStore } from "react";
 import type { NotebookSession } from "./notebook-session";
 import { NotebookWorking } from "./notebook-working";
 import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, notebookCandidateSchema } from "@/src/core";
+import { CompactLearningInput } from "./compact-learning-input";
+import type { Dictation } from "./dictation";
 
-export function NotebookPanel({ session }: { session: NotebookSession }) {
+export function NotebookPanel({ session, dictation }: { session: NotebookSession; dictation?: Dictation }) {
 	const { view, draftText, saving, editing, inputLocked, error, cursorLineId } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
 	const speech = useSyncExternalStore(session.speech.subscribe, session.speech.getSnapshot, session.speech.getSnapshot);
 	const [historyOpen, setHistoryOpen] = useState(false);
@@ -27,6 +29,7 @@ export function NotebookPanel({ session }: { session: NotebookSession }) {
 				</select>
 			</label>
 			<label className="block text-sm font-medium" htmlFor="notebook-instruction">Notebook instruction</label>
+			<CompactLearningInput dictation={!dictation?.active || speech.destination === "notebook" ? dictation : undefined}>
 			<textarea id="notebook-instruction" aria-label="Notebook instruction" value={draftText} rows={2}
 				className="lh-input w-full resize-none rounded border border-border bg-transparent p-2 text-base" style={{ maxHeight: "min(8rem, 20dvh)", overflowY: "auto" }}
 				onChange={(event) => { void session.dispatch({ type: "draft", text: event.target.value }).catch(() => {}); }}
@@ -34,6 +37,7 @@ export function NotebookPanel({ session }: { session: NotebookSession }) {
 					if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.stopPropagation(); apply(); }
 					if (event.key === "Tab") event.stopPropagation();
 				}} />
+			</CompactLearningInput>
 			<div className="flex flex-wrap items-center gap-2">
 				<button type="submit" disabled={!speech.active && !draftText.trim() || applyWaiting} className="rounded bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">Apply changes</button>
 				<button type="button" disabled={applyWaiting || !!view?.pending || !view?.canUndo} onClick={() => { void session.dispatch({ type: "undo" }).catch(() => {}); }} className="rounded border border-border px-3 py-1.5 text-sm disabled:opacity-50">Undo</button>

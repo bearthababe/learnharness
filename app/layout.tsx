@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Source_Sans_3 } from "next/font/google";
 import "katex/dist/katex.min.css";
 import "./globals.css";
+import "@/components/compact-learning-input.css";
 import { AppShell, SidebarProvider } from "@/components/sidebar";
 import { ActivityProvider } from "@/components/activity-dock";
 import { ServerEventsProvider } from "@/components/server-events";
@@ -17,11 +18,20 @@ const prose = Source_Sans_3({ subsets: ["latin"], variable: "--font-sans3" });
 export const metadata: Metadata = {
 	title: "Learning Harness",
 	description: "A teacher agent with a memory — sessions, quizzes, and a knowledge graph of what you know.",
+	manifest: "/manifest.webmanifest",
+	appleWebApp: { capable: true, title: "LearnHarness", statusBarStyle: "default" },
+	icons: { apple: "/writing-touch-icon.png" },
 	...(process.env.LH_NOTEBOOK_PREVIEW === "1" ? {
 		manifest: "/notebook-preview/manifest.webmanifest",
 		appleWebApp: { capable: true, title: "Notebook preview", statusBarStyle: "default" as const },
 		icons: { apple: "/notebook-preview/apple-touch-icon.png" },
 	} : {}),
+};
+
+export const viewport: Viewport = {
+	width: "device-width",
+	initialScale: 1,
+	viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

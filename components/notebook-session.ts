@@ -69,7 +69,9 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		state = { ...state, ...patch };
 		state.editing = requested.length > 0 || !!state.view?.pending && !state.view.problem;
 		state.inputLocked = selectingCandidate || speech.getSnapshot().switching || !!tutor.getSnapshot().locked;
-		state.sendBlocked = !!state.view?.pending || state.editing || state.inputLocked || speech.isActive();
+		// Explicit Tutor Send may finish its own recording before preparing a
+		// submission. Notebook capture and edits must already be settled.
+		state.sendBlocked = !!state.view?.pending || state.editing || state.inputLocked || (speech.isActive() && speech.getSnapshot().destination === "notebook");
 		for (const listener of listeners) listener();
 	};
 	function adopt(view: NotebookView) {

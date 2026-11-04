@@ -831,7 +831,7 @@ export class SessionModel {
 
 	/** The answer path (the dock): the answer IS the question call's tool
 	 *  result (fork 1), riding as its input event. */
-	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission">): Promise<void> {
+	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission" | "writingIds">): Promise<void> {
 		void tool;
 		return this.send({ type: "answer", toolCallId, answer: output, ...fields }).then(() => undefined);
 	}

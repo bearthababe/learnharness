@@ -6,6 +6,13 @@ Scope: correct the integrated Notebook delivered through #26, then finish #28 ac
 
 ## Agreed design
 
+### Tutor Send A (owner approved 2026-11-04)
+
+Explicit Tutor Send finishes/finalizes its own recording and submits once. This
+supersedes the Stop-first submission gate for Tutor recordings below. Notebook
+recording, Apply and handoffs still settle before submission; repeated Send during
+finalization accepts once. Stop alone never applies or sends.
+
 ### Apply latency follow-up (owner approved 2026-11-03)
 
 Two owner-trial edits returned top-level `action: insert`, triggering format

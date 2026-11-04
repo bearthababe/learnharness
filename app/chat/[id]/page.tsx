@@ -1,9 +1,21 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { Chat } from "@/components/chat";
 import { slotsConfigured } from "@/src/core";
 import { compactionInFlight, getChat, isTurnRunning, readSettingsRecord, turnFailure } from "@/src/server";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+	// Retain the installed Notebook preview's stable root identity.
+	if (process.env.LH_NOTEBOOK_PREVIEW === "1") return {};
+	const { id } = await params;
+	return {
+		manifest: `/chat/${encodeURIComponent(id)}/manifest.webmanifest`,
+		appleWebApp: { capable: true, title: "LearnHarness", statusBarStyle: "default" },
+		icons: { apple: "/writing-touch-icon.png" },
+	};
+}
 
 export default async function ChatPage({
 	params,

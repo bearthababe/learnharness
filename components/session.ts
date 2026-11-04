@@ -106,7 +106,7 @@ export function useChatSession({ chatId, initialMessages, initialError, initiall
 	const continueIfOwed = useCallback((record: readonly LhMessage[]) => void model.continueIfOwed(record), [model]);
 	const steer = useCallback((text: string, notebook?: Parameters<SessionModel["steer"]>[1]) => model.steer(text, notebook), [model]);
 	const submitAnswer = useCallback(
-		(tool: string, toolCallId: string, output: QuestionAnswerData, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission">) =>
+		(tool: string, toolCallId: string, output: QuestionAnswerData, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission" | "writingIds">) =>
 			model.submitAnswer(tool, toolCallId, output, fields),
 		[model],
 	);

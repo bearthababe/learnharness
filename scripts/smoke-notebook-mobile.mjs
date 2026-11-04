@@ -1,0 +1,96 @@
+import assert from "node:assert/strict";
+
+/** Combined real mobile UI + Notebook service in the disposable smoke app.
+ * Speech transport and editor/tutor responses are scripted; no live calls. */
+export async function verifyNotebookMobile(browser, origin) {
+	const page = await browser.newPage();
+	const errors = [];
+	page.on("pageerror", error => errors.push(error.message));
+	await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+	await page.evaluateOnNewDocument(() => {
+		if (window !== window.top) return;
+		localStorage.setItem("lh:sidebar-open", "0");
+		const d = window.notebookSmoke = { time: 10, captures: 0, sockets: [], closes: 0, sends: [] };
+		const fetch = window.fetch.bind(window);
+		window.fetch = (url, init) => {
+			if (String(url).endsWith("/api/stt/token")) return Promise.resolve(Response.json({ token: "scripted-test" }));
+			if (String(url) === "/api/chat" && init?.method === "POST") d.sends.push(JSON.parse(init.body));
+			return fetch(url, init);
+		};
+		const NativeSocket = window.WebSocket;
+		window.WebSocket = class extends EventTarget {
+			static OPEN = 1; static CONNECTING = 0; readyState = 0;
+			constructor(url, protocols) {
+				super();
+				if (new URL(url).hostname !== "api.deepgram.com") return new NativeSocket(url, protocols);
+				d.sockets.push(this);
+				queueMicrotask(() => { this.readyState = 1; this.dispatchEvent(new Event("open")); });
+			}
+			send(value) { if (typeof value === "string" && JSON.parse(value).type === "CloseStream") d.closes++; }
+			close() { this.readyState = 3; }
+		};
+		window.AudioContext = class {
+			get currentTime() { return d.time; }
+			state = "running"; destination = {}; audioWorklet = { addModule: async () => {} };
+			createMediaStreamSource() { return { connect() {}, disconnect() {} }; }
+		};
+		window.AudioWorkletNode = class {
+			constructor() { d.worklet = this; this.port = { onmessage: null, postMessage: () => queueMicrotask(() => this.port.onmessage?.({ data: { type: "flushed" } })) }; }
+			connect() {} disconnect() {}
+		};
+		navigator.mediaDevices.getUserMedia = async () => { d.captures++; return { getTracks: () => [{ stop() {} }] }; };
+		d.audio = () => d.worklet.port.onmessage({ data: { type: "audio", buffer: new Int16Array(64000), contextStart: 10, sampleRate: 16000 } });
+		d.final = text => d.sockets.at(-1).dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "Results", is_final: true, speech_final: true, start: 0, duration: 4, channel: { alternatives: [{ transcript: text, words: [{ word: text, punctuated_word: text, start: 0, end: 3.9 }] }] } }) }));
+		d.end = () => { const socket = d.sockets.at(-1); socket.readyState = 3; socket.dispatchEvent(new CloseEvent("close", { code: 1000 })); };
+	});
+	await page.goto(`${origin}/chat/mobile_other`, { waitUntil: "networkidle2", timeout: 240_000 });
+	const tutor = '[data-testid="composer"] textarea';
+	await page.type(tutor, "My explanation before working.");
+	await page.locator('button[data-input-owner="notebook"][aria-expanded]').click();
+	await page.waitForSelector("#notebook-instruction", { visible: true });
+	await page.waitForFunction(() => !document.querySelector("#notebook-model").disabled);
+	await page.select("#notebook-model", "terra-off");
+	await page.waitForFunction(() => !document.querySelector("#notebook-model").disabled && document.querySelector("#notebook-model").value === "terra-off");
+	const before = await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json();
+	assert.equal(before.candidate, "terra-off", "Picker choice is saved before Apply");
+	assert.equal(before.usage.calls, 0, "Changing candidates never applies");
+	await page.type("#notebook-instruction", "Write pressure equals force over area.");
+	await page.locator('.notebook-panel button[type="submit"]').click();
+	await page.waitForSelector('[data-notebook-scroll] [aria-label="Select line 1"]');
+	await page.waitForFunction(() => !document.querySelector("#notebook-model").disabled);
+	assert.deepEqual((await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json()).lines, [{ id: "L1", latex: "p=F/A" }]);
+	const mic = '.notebook-panel [aria-label="Start dictation"]';
+	await page.click(mic);
+	await page.waitForFunction(() => notebookSmoke.sockets.length === 1 && notebookSmoke.worklet);
+	assert.equal(await page.$('[data-testid="composer"] [aria-label="Stop dictation"]'), null, "Tutor does not display another destination's recording controls");
+	await page.evaluate(() => { notebookSmoke.audio(); notebookSmoke.time = 14; notebookSmoke.final("Keep this unfinished instruction."); });
+	await page.click('.notebook-panel [aria-label="Stop dictation"]');
+	await page.waitForFunction(() => notebookSmoke.closes === 1);
+	await page.evaluate(() => notebookSmoke.end());
+	await page.waitForSelector(mic, { visible: true });
+	assert.equal(await page.$eval("#notebook-instruction", e => e.value), "Keep this unfinished instruction.");
+	assert.equal((await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json()).usage.calls, 1, "Stop does not Apply");
+	await page.click(tutor);
+	await page.waitForFunction(() => !document.querySelector(".session-workspace").inert && document.querySelector(".session-workspace").dataset.sessionDestination === "tutor");
+	assert.equal(await page.evaluate(() => notebookSmoke.captures), 1, "Return never starts another recording");
+	assert.deepEqual(await page.evaluate(() => notebookSmoke.sends), [], "Apply/Stop/return never Send");
+	await page.type(tutor, " My explanation after working.");
+	await page.waitForFunction(() => !document.querySelector(".session-workspace").inert);
+	const savedDraft = await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json();
+	assert.equal(savedDraft.snapshots.length, 1);
+	await page.reload({ waitUntil: "networkidle2" });
+	await page.waitForSelector("#notebook-instruction", { visible: true });
+	assert.equal(await page.$eval("#notebook-instruction", e => e.value), "Keep this unfinished instruction.");
+	assert.equal(await page.$eval("#notebook-model", e => e.value), "terra-off");
+	assert.ok(await page.$eval(tutor, e => e.value.includes("after working")), "Reload restores the independent Tutor continuation");
+	await page.click('[data-testid="composer"] [aria-label="Send"]');
+	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
+	const saved = await (await fetch(`${origin}/api/chats/mobile_other`)).json();
+	const submitted = saved.messages.filter(m => m.role === "user");
+	assert.equal(submitted.length, 1);
+	assert.match(JSON.stringify(submitted), /before working[\s\S]*p=F\/A[\s\S]*after working/);
+	assert.doesNotMatch(JSON.stringify(submitted), /unfinished instruction|Write pressure/);
+	assert.deepEqual(errors, []);
+	console.log("PASS: combined phone Notebook picker, Apply, destination-owned microphone, Stop without Apply/Send, settled return, immutable snapshot, independent drafts, reload and explicit Tutor submission.");
+	await page.close();
+}
