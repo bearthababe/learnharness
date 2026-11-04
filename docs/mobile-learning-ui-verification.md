@@ -110,7 +110,13 @@ reassign this third slot while its Home Screen installation is in use.
 for 8444 still open that slot's app. Reload resets unsent local work; saved history
 persists. No service worker/offline caching was added.
 
-#42 remains open for the physical-iPhone retry and acceptance: actual
-keyboard/safe areas, edge gestures, pinch zoom, VoiceOver, live microphone,
-foreground/reconnect image recovery and a seated learning session with a real
-tutor response. The owner has not accepted those physical-device checks yet.
+**Subsequent owner retry, 2026-11-04:** the owner confirmed two consecutive
+reading-thought recordings work on the iPhone after being asked to reload the
+8446 preview: both show live levels and append text once after Stop.
+
+#42 remains open for the other physical-device acceptance checks: actual
+keyboard/safe areas, edge gestures, pinch zoom, VoiceOver, remaining microphone
+paths, foreground/reconnect image recovery and a seated learning session with a
+real tutor response. The specific recording retry does not establish those checks.
+See the [final integration and phone handoff](verification/mobile-input-37-handoff.md)
+for review results, HTTPS/reload verification and remaining acceptance scope.
