@@ -3,7 +3,7 @@
 // Corner arc selectively carried forward from c663dcecd22a. Drawing values and
 // the shared Pencil release-inside activation path belong to the notebook.
 import { useState, type ButtonHTMLAttributes, type CSSProperties } from "react";
-import { EllipsisIcon, Undo2Icon, XIcon } from "lucide-react";
+import { EllipsisIcon, Undo2Icon, Redo2Icon, XIcon } from "lucide-react";
 import { HANDWRITING_HIGHLIGHT_COLOUR } from "@/src/core";
 
 type Tool = "pen" | "highlighter" | "eraser";
@@ -13,7 +13,7 @@ type Props = {
 	sizes: readonly { name: string; value: number }[]; size: number; dimPaper: boolean;
 	disabled: boolean; handlers: ToolHandlers;
 	selectTool: (tool: Tool) => void; selectColour: (colour: string) => void; selectSize: (size: number) => void;
-	undo: () => void; clear: () => void; togglePaper: () => void;
+	undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean; clear: () => void; togglePaper: () => void;
 };
 const TOOLS = [{ id: "pen", label: "Pen" }, { id: "highlighter", label: "Highlighter" }, { id: "eraser", label: "Eraser" }] as const;
 function ToolGlyph({ tool, colour, dim }: { tool: Tool; colour: string; dim: boolean }) {
@@ -48,7 +48,7 @@ export function HandwritingToolbar(p: Props) {
 				{...p.handlers(tool.label, () => { p.selectTool(tool.id); setExpanded(p.tool !== tool.id || !expanded); })}>
 				<ToolGlyph tool={tool.id} colour={tool.id === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.colour} dim={p.dimPaper} /><span className="hw-toolName">{tool.label}</span>
 			</button>)}
-			<div className="hw-arcUndo"><button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} /></button></div>
+			<div className="hw-arcUndo"><button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled || !p.canUndo} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} /></button><button type="button" className="hw-iconButton" aria-label="Redo" title="Redo" disabled={p.disabled || !p.canRedo} {...p.handlers("Redo", p.redo)}><Redo2Icon size={19} /></button></div>
 			{expanded && <div className="hw-arcInspector">
 				<div className="hw-inspectorTitle"><span>{label}</span><button type="button" aria-label="Close tool settings" {...p.handlers("Close tool settings", () => setExpanded(false))}><XIcon size={16} /></button></div>
 				<div role="group" aria-label={`${label} size`} className="hw-sizes">{p.sizes.map((item, index) => <button key={`${p.tool}-${item.name}`} type="button" className="hw-sizeChoice" aria-label={`${item.name} ${p.tool}`} aria-pressed={p.size === item.value} disabled={p.disabled}

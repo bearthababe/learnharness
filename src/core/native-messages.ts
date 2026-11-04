@@ -91,7 +91,7 @@ declare module "@earendil-works/pi-agent-core" {
 }
 
 /** A record message: a native pi message (or our marker) plus the record id. */
-export type LhMessage = (UserMessage | AssistantMessage | ToolResultMessage | LhMarkerMessage) & { id: string; sharedWriting?: SharedWritingReference[] };
+export type LhMessage = (UserMessage | AssistantMessage | ToolResultMessage | LhMarkerMessage) & { id: string; sharedWriting?: SharedWritingReference[]; writingSubmission?: { id: string; inputSha256: string } };
 
 /** A record message list is assignable to the agent's context — that IS
  *  the replay (ui-stream/chat-handler assign it to initialState.messages). */
@@ -620,7 +620,7 @@ export function toLlmMessages(messages: readonly AgentMessage[]): Message[] {
 			continue;
 		}
 		// Strip the record id: the wire carries the native shape only.
-		const { id: _id, sharedWriting, ...native } = m as LhMessage;
+		const { id: _id, sharedWriting, writingSubmission: _receipt, ...native } = m as LhMessage;
 		if (sharedWriting?.length && (native.role === "user" || native.role === "toolResult")) {
 			native.content = [
 				...(typeof native.content === "string" ? [{ type: "text" as const, text: native.content }] : native.content),

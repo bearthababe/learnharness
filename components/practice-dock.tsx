@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRightIcon, CornerDownLeftIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
-import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+import { finishDictation, dictationCheckpoint, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+import { useHandwritingEditor } from "./handwriting/submission";
+import type { SharedWriting } from "@/src/core";
 import { CompactLearningInput } from "@/components/compact-learning-input";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { cn } from "@/lib/utils";
@@ -41,7 +43,7 @@ export interface PracticeDockProps {
 	expanded: boolean;
 	onExpand: () => void;
 	/** text — POST {type:"thinking"} (one lane; the register is read from the text). */
-	onSubmit: (text: string) => void;
+	onSubmit: (text: string, reviewed?: SharedWriting[]) => void;
 	/** Escape in the thinking field stops dictation (threaded from the page). */
 	onEscape?: () => void;
 	/** Compaction is running for this chat (owner round 14): the thinking
@@ -57,6 +59,9 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 	// discipline): a submit resuming after `await finishDictation()` reads
 	// the tail, never a stale closure.
 	const thinkingRef = useRef("");
+	const alive = useRef(true), submitting = useRef(false), current = useRef({ problemCallId, compactionRunning, hasSharedWriting }); current.current = { problemCallId, compactionRunning, hasSharedWriting };
+	useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+	const transfer = useHandwritingEditor(`problem:${problemCallId}`, () => ({ thinking: thinkingRef.current }), draft => { thinkingRef.current = draft.thinking ?? ""; setThinking(thinkingRef.current); }, true);
 
 	useDictationTarget(
 		useCallback(
@@ -70,13 +75,18 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 		true,
 	);
 
-	const submit = () => {
-		if (compactionRunning) return;
-		const text = thinkingRef.current.trim();
-		if (text.length === 0 && !hasSharedWriting) return;
-		thinkingRef.current = "";
-		setThinking("");
-		onSubmit(text);
+	const submit = async () => {
+		if (compactionRunning || submitting.current || transfer?.blocked()) return;
+		const reviewed = transfer?.reviewed(), valid = dictationCheckpoint(), target = problemCallId;
+		submitting.current = true;
+		try {
+			await finishDictation();
+			if (!alive.current || current.current.problemCallId !== target || current.current.compactionRunning || !valid() || transfer?.blocked()) return;
+			const text = thinkingRef.current.trim();
+			if (!text && !(reviewed?.length ?? current.current.hasSharedWriting)) return;
+			if (!reviewed?.length) { thinkingRef.current = ""; setThinking(""); }
+			onSubmit(text, reviewed);
+		} finally { submitting.current = false; }
 	};
 
 	/* ENTER SUBMITS FROM ANYWHERE (owner round 6, 2026-10-05): dictation

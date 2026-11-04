@@ -2,6 +2,7 @@
 import { SharedWritingImages, SharedWritingPanel, useSharedWriting } from "@/components/shared-writing";
 import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
 import { HandwritingNotebook } from "@/components/handwriting/notebook";
+import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
 import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
 import type { SharedWriting } from "@/src/core";
 
@@ -264,6 +265,7 @@ export function Chat({
 		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight });
 	const sharedWriting = useSharedWriting(chatId, nativeMessages);
 	const hasSharedWriting = sharedWriting.pending.length > 0;
+	const handwritingSubmission = useHandwritingSubmission(chatId, sharedWriting.refresh, send, sharedWriting.pending);
 
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
@@ -503,12 +505,14 @@ export function Chat({
 	// the dock stays mounted (the problem is still active until the agent
 	// concludes).
 	const submitThinking = useCallback(
-		(text: string) => {
+		(text: string, reviewed?: SharedWriting[]) => {
 			const problem = activeProblemRef.current;
 			if (!problem) return;
-			void send({ type: "thinking", problemCallId: problem.toolCallId, text, ...(hasSharedWriting ? { writingIds: sharedWriting.ids() } : {}) });
+			const images = reviewed ?? sharedWriting.pending;
+			if (images.length) void handwritingSubmission.submit({ type: "thinking", problemCallId: problem.toolCallId, text, writingIds: images.map(image => image.id) }, images, `problem:${problem.toolCallId}`);
+			else if (!handwritingSubmission.blocked()) void send({ type: "thinking", problemCallId: problem.toolCallId, text });
 		},
-		[send, hasSharedWriting, sharedWriting],
+		[send, handwritingSubmission, sharedWriting],
 	);
 
 	// Teach-phase check (W5, vision §2): a pending QUIZ that lands once a
@@ -1202,19 +1206,20 @@ export function Chat({
 	});
 
 	const onSend = () => {
-		if (pending || compacting) return;
+		if (pending || compacting || handwritingSubmission.blocked()) return;
+		const reviewed = handwritingSubmission.reviewed();
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): a learner who keeps
 		 * talking right through Enter must not lose the tail — stop the run,
 		 * let the last finals land in the composer, then send the REF value
 		 * (the flush lands via setState, invisible to this closure). */
 		if (!dictation.active) {
-			doSteerOrSend();
+			doSteerOrSend(reviewed);
 			return;
 		}
-		void dictation.finish().then(doSteerOrSend);
+		void dictation.finish().then(() => doSteerOrSend(reviewed));
 	};
-	const doSend = () => {
-		if (busy || pending || compacting) return;
+	const doSend = (reviewed = handwritingSubmission.reviewed()) => {
+		if (busy || pending || compacting || handwritingSubmission.blocked()) return;
 		const t = textRef.current.trim();
 		if (!t && !hasSharedWriting) return;
 		if (zeroKeys) {
@@ -1227,6 +1232,11 @@ export function Chat({
 		}
 		if (openingDraftRef.current !== null) {
 			deliverOpeningPrompt(t);
+			return;
+		}
+		if (reviewed.length) {
+			draftRef.current = null;
+			void handwritingSubmission.submit({ type: "text", text: t, writingIds: reviewed.map(image => image.id) }, reviewed, "composer");
 			return;
 		}
 		draftRef.current = t; // the refusal flow's preserve-and-replay seam
@@ -1243,9 +1253,9 @@ export function Chat({
 	 * own stream AND foreign/wake turns — both have a live agent by the
 	 * time the send's POST resolved, so the steer lands. Idle takes the
 	 * plain send; a raced settle 409s and falls back to exactly that. */
-	const doSteerOrSend = () => {
-		if (pending || compacting) return;
-		if (hasSharedWriting) { if (!busy) doSend(); return; }
+	const doSteerOrSend = (reviewed = handwritingSubmission.reviewed()) => {
+		if (pending || compacting || handwritingSubmission.blocked()) return;
+		if (reviewed.length) { if (!busy) doSend(reviewed); return; }
 		const t = textRef.current.trim();
 		if (!t) return;
 		if (busy) {
@@ -1253,10 +1263,12 @@ export function Chat({
 			void steer(t);
 			return;
 		}
-		doSend();
+		doSend(reviewed);
 	};
+	useHandwritingEditor("composer", () => ({ text: textRef.current }), draft => applyText(draft.text ?? ""), !pending && !activeProblemRef.current, handwritingSubmission);
 
 	return (
+		<HandwritingSubmissionContext.Provider value={handwritingSubmission}>
 		<ChatActionsContext.Provider
 			value={{
 				chatId,
@@ -1696,7 +1708,7 @@ export function Chat({
 				    fold) and NEVER overlaps the composer. */}
 				<DockOverlay
 					fullQuestionWidth={handwriting.open}
-					sharedWritingSlot={<SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} />}
+					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} /></>}
 					hasSharedWriting={hasSharedWriting}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.toolCallId)?.form : undefined}
@@ -1761,7 +1773,7 @@ export function Chat({
 							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : undefined}
 						/>
 					}
-					onSubmitAnswer={(output) => {
+					onSubmitAnswer={(output, reviewed) => {
 						if (!pending) return;
 						// THE ANSWER IS THE QUESTION CALL'S TOOL RESULT (fork 1, owner
 						// 2026-09-26): one input event, one turn — the hook appends
@@ -1775,7 +1787,9 @@ export function Chat({
 						const reading = readingThinkingRef.current.trim() || undefined;
 						// The pending-id effect clears this only when the question
 						// actually leaves. An offline preflight keeps the draft visible.
-						submitAnswer(pending.tool, pending.toolCallId, reading ? { ...output, readingThinking: reading } : output, hasSharedWriting && !output.dismissed ? sharedWriting.ids() : undefined);
+						const images = reviewed ?? sharedWriting.pending, answer = reading ? { ...output, readingThinking: reading } : output;
+						if (images.length && !output.dismissed) void handwritingSubmission.submit({ type: "answer", toolCallId: pending.toolCallId, answer, writingIds: images.map(image => image.id) }, images, `question:${pending.toolCallId}`, { readingThinking: readingThinkingRef.current });
+						else if (!handwritingSubmission.blocked()) submitAnswer(pending.tool, pending.toolCallId, answer);
 					}}
 				/>
 				</Conversation>
@@ -1799,7 +1813,7 @@ export function Chat({
 				</div>
 			</div>
 			{handwriting.mounted && <HandwritingSplit hidden={!handwriting.open} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
-			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} />}
+			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
 		</div>
 		</div>
 		</JobsContext.Provider>
@@ -1820,6 +1834,7 @@ export function Chat({
 			}}
 		/>
 		</ChatActionsContext.Provider>
+		</HandwritingSubmissionContext.Provider>
 	);
 }
 
@@ -1977,7 +1992,7 @@ function DockOverlay({
 	 *  question (the composer is replaced); null in teaching sessions. */
 	practice: { toolCallId: string; input: unknown } | null;
 	/** (commit, text) — the practice dock's two submit lanes. */
-	onSubmitThinking: (text: string) => void;
+	onSubmitThinking: (text: string, reviewed?: SharedWriting[]) => void;
 	/** Teach-phase pending question: arrives collapsed behind the reveal button (W5). */
 	requiresReveal: boolean;
 	/** The reading-thinking draft (owner 2026-10-03) — owned by ChatView so
@@ -1991,7 +2006,7 @@ function DockOverlay({
 	contextTokens: number | null;
 	pricing?: SessionPricing;
 	composer: React.ReactNode;
-	onSubmitAnswer: (output: QuestionAnswerData) => void;
+	onSubmitAnswer: (output: QuestionAnswerData, reviewed?: SharedWriting[]) => void;
 	/** The model control's pass-through (the stats bar hosts it). */
 	chatId: string;
 	onModelChange: (model: string | undefined) => void;
@@ -2382,6 +2397,7 @@ function DockOverlay({
 					    (the dock reclaims then). Rides the check answer on submit. */}
 					{pending && requiresReveal && (
 						<ReadingThinkingField
+							targetKey={`question:${pending.toolCallId}:reading`}
 							dictation={dictation}
 							value={readingThinking}
 							onChange={onReadingThinking}
@@ -2408,6 +2424,8 @@ function DockOverlay({
 						>
 							{pending ? (
 								<QuestionDock
+									readingThinking={readingThinking}
+									onRestoreReadingThinking={onReadingThinking}
 									dictation={dictation}
 									hasSharedWriting={hasSharedWriting}
 									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall"}

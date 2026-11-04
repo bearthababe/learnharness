@@ -30,6 +30,18 @@ import { dismissedAnswer } from "../src/core/question-core.ts";
 import { buildAnswer, type QuestionData } from "../src/core/question-core.ts";
 
 const realFetch = globalThis.fetch;
+it("image transport distinguishes proven refusal from unknown delivery and removes only its rejected optimistic append", async () => {
+	for (const disposition of ["not_accepted", "unknown"] as const) {
+		const model = new SessionModel({ chatId: "chat_x", initialMessages: [], fetch: async () => {
+			if (disposition === "unknown") throw new Error("Lost response");
+			return Response.json({ error: "Correct the input", inputDisposition: "not_accepted" }, { status: 400 });
+		} });
+		let observed: unknown;
+		await model.send({ type: "text", text: "explanation", writingIds: ["writing_test"], submissionId: `submission_${crypto.randomUUID()}` }, undefined, outcome => { observed = outcome; });
+		assert.deepEqual(observed, { disposition, original: true });
+		if (disposition === "not_accepted") assert.equal(model.getState().nativeMessages.length, 0);
+	}
+});
 afterEach(() => {
 	globalThis.fetch = realFetch;
 });

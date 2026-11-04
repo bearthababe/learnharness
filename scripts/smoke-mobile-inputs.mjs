@@ -7,6 +7,8 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
+import { checkHandwritingTransfers } from "./handwriting-transfer-checks.mjs";
+import { checkTransferDevice } from "./handwriting-device-checks.mjs";
 
 const root = process.cwd();
 const dir = process.env.LH_MOBILE_TEST_DIR ?? await mkdtemp("/tmp/opencode/mobile-input-browser-");
@@ -26,6 +28,7 @@ const assistant = (content, id = "assistant") => ({ role: "assistant", content, 
 const conversation = { id: "mobile_conversation", title: "Mobile browser conversation", createdAt: now, updatedAt: now, messages: [assistant([{ type: "text", text: "Explain how pressure changes with area." }])] };
 await writeFile(path.join(dir, "data/chats/mobile_conversation.json"), JSON.stringify(conversation));
 await writeFile(path.join(dir, "data/chats/mobile_other.json"), JSON.stringify({ ...conversation, id: "mobile_other", title: "Other isolated session" }));
+for (const id of ["mobile_transfer_capture", "mobile_transfer_unknown", "mobile_transfer_accepted"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id }));
 const call = (name, args, id) => assistant([{ type: "toolCall", name, arguments: args, id }], `assistant_${id}`);
 const result = (name, details, id) => ({ role: "toolResult", toolName: name, toolCallId: id, id: `result_${id}`, content: [{ type: "text", text: "Ready." }], details, isError: false, timestamp: Date.now() });
 const teaching = [
@@ -38,6 +41,7 @@ for (const [id, tool, question] of [
 	["mobile_selection", "quiz", { question: "Which change doubles pressure?", options: [{ label: "Halve the area", value: "half" }, { label: "Double the area", value: "double" }], correctAnswer: "half", explanation: "The same force over half the area doubles pressure.", nodeId: "pressure", type: "check" }],
 ]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, messages: [...teaching, call(tool, question, "question")] }));
 await writeFile(path.join(dir, "data/chats/mobile_other_answer.json"), JSON.stringify({ ...conversation, id: "mobile_other_answer", messages: [call("ask_user_question", { question: "Which approach would you use?", options: [{ label: "Start with force", value: "force" }, { label: "Start with area", value: "area" }], multiSelect: true }, "question")] }));
+await writeFile(path.join(dir, "data/chats/mobile_transfer_reject.json"), JSON.stringify({ ...conversation, id: "mobile_transfer_reject", messages: [call("ask_user_question", { question: "Which approach would you use?", options: [{ label: "Start with force", value: "force" }, { label: "Start with area", value: "area" }], multiSelect: true }, "question")] }));
 const problem = { statement: "Calculate pressure for a 100 N force on 2 square metres.", mode: "apply", target: ["pressure"], modelSolution: "50 Pa." };
 for (const id of ["mobile_practice", "mobile_drill"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, kind: "practice", ...(id === "mobile_drill" ? { practiceMode: "drill" } : {}), messages: [call("problem", problem, "problem"), result("problem", null, "problem")] }));
 await writeFile(path.join(dir, "data/settings.json"), JSON.stringify({ version: 1, models: { strong: { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } }, cheap: { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } } } }));
@@ -53,6 +57,14 @@ export async function POST(req: Request) {
  return handleChatRequest(req, opts => createTeacherAgent(undefined, { messages: opts.messages, engine: { model: faux.getModel(), streamFn: faux.streamSimple } }));
 }
 `);
+await mkdir(path.join(dir, "app/transfer-fixture"), { recursive: true });
+await writeFile(path.join(dir, "app/transfer-fixture/page.tsx"), `"use client";
+import { useEffect } from "react";
+import { IndexedTransferDevice } from "@/components/handwriting/transfer-device";
+export default function Fixture() {
+ useEffect(() => { Object.assign(window, { transferDevice: new IndexedTransferDevice() }); }, []);
+ return <p>Isolated native IndexedDB adapter fixture</p>;
+}`);
 const port = Number(process.env.LH_MOBILE_TEST_PORT ?? 3109);
 const origin = `http://127.0.0.1:${port}`;
 const server = spawn(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(port)], {
@@ -76,7 +88,9 @@ try {
 	page.on("pageerror", error => errors.push(error.message));
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	await page.setRequestInterception(true);
+	const transferFaults = { handle: null };
 	page.on("request", request => {
+		if (transferFaults.handle?.(request)) return;
 		if (new URL(request.url()).pathname === "/api/stt/token") void request.respond({ status: 200, contentType: "application/json", body: JSON.stringify({ token: "browser-test-token" }) });
 		else void request.continue();
 	});
@@ -211,10 +225,15 @@ try {
 	await page.click('[aria-label="Open handwritten working 1"]');
 	await page.waitForSelector('[data-testid="shared-writing-viewer"]');
 	await page.click('[aria-label="Close handwritten working"]');
+	await page.click(mic); await page.waitForFunction(() => window.speech?.readyState === 1);
+	await page.evaluate(() => window.speech.final("With the reviewed image."));
 	await page.click('[data-testid="composer"] [aria-label="Send"]');
+	await page.waitForFunction(() => window.speech.finishing);
+	await page.evaluate(() => { window.speech.final("Final image explanation."); window.speech.close(); });
 	await page.waitForFunction(() => !document.querySelector('.lh-shared-writing [data-testid="shared-writing-images"]'));
 	const withImage = await (await fetch(`${origin}/api/chats/mobile_conversation`)).json();
 	assert.equal(withImage.messages.filter(m => m.sharedWriting?.length).length, 1, "Deliberate Send persists the reviewed image once");
+	assert.ok(withImage.messages.some(m => m.writingSubmission && JSON.stringify(m.content).includes("Final image explanation.")), "Image-bearing conversation uses receipt and finalized speech");
 	assert.ok(!await page.evaluate(() => [...document.querySelectorAll('button')].some(e => /Attach handwriting|Choose from app|Take photo/.test(e.textContent))), "Deferred image actions are not advertised");
 	await page.goto(`${origin}/chat/mobile_teaching`, { waitUntil: "networkidle2" });
 	const reading = '[data-testid="reading-thinking-field"] textarea';
@@ -253,6 +272,7 @@ try {
 	assert.equal(await page.$eval(answer, e => e.value), "Answer draft.");
 	await page.click('[data-testid="question-dock-bar"]');
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { hidden: true });
+	await upload("mobile_teaching"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="answer-field"] [aria-label="Start dictation"]');
 	await page.waitForFunction(() => window.speech.readyState === 1);
 	await page.evaluate(() => window.speech.final("Spoken answer."));
@@ -264,6 +284,7 @@ try {
 	const answerRecord = answered.messages.find(m => m.role === "toolResult" && m.toolCallId === "question");
 	assert.ok(JSON.stringify(answerRecord).includes("Answer draft. Spoken answer."));
 	assert.ok(JSON.stringify(answerRecord).includes("Reading thought. Before reveal. Late reading thought."));
+	assert.ok(answerRecord.writingSubmission && answerRecord.sharedWriting.length === 1, "Actual free-text adapter carries receipt and image");
 	await page.goto(`${origin}/chat/mobile_selection`, { waitUntil: "networkidle2" });
 	await page.click('[data-testid="reading-thinking-field"] [data-testid="teach-check-reveal"]');
 	await page.waitForSelector('[data-testid="thinking-field"] textarea', { visible: true });
@@ -274,21 +295,25 @@ try {
 	await page.waitForSelector('[data-testid="plan-popup"]');
 	await page.keyboard.press("Escape");
 	assert.equal(await page.$eval('[data-testid="thinking-field"] textarea', e => e.value), "The force stays the same.", "Real Plan dismissal preserves the question draft");
+	await upload("mobile_selection"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
 	const selected = await (await fetch(`${origin}/api/chats/mobile_selection`)).json();
 	const selectionRecord = selected.messages.find(m => m.role === "toolResult" && m.toolCallId === "question");
 	assert.ok(JSON.stringify(selectionRecord).includes("The force stays the same."));
 	assert.equal(selectionRecord.details.confidence, 50, "Untouched confidence retains its existing meaning");
+	assert.ok(selectionRecord.writingSubmission && selectionRecord.sharedWriting.length === 1);
 	await page.goto(`${origin}/chat/mobile_other_answer`, { waitUntil: "networkidle2" });
 	await page.waitForSelector('[data-testid="other-option"] input');
 	await page.locator('[role="checkbox"]').filter(button => button.textContent.includes("Start with force")).click();
 	await fill('[data-testid="other-option"] input', "Compare both areas.");
 	await fill('[data-testid="thinking-field"] textarea', "My custom reasoning.");
+	await upload("mobile_other_answer"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
 	const otherRecord = (await (await fetch(`${origin}/api/chats/mobile_other_answer`)).json()).messages.find(m => m.role === "toolResult" && m.toolCallId === "question");
 	assert.ok(JSON.stringify(otherRecord).includes("Compare both areas.") && JSON.stringify(otherRecord).includes("Start with force") && JSON.stringify(otherRecord).includes("My custom reasoning."), "Multi-select, Other and thinking survive the real answer contract together");
+	assert.ok(otherRecord.writingSubmission && otherRecord.sharedWriting.length === 1);
 	for (const id of ["mobile_practice", "mobile_drill"]) {
 		await page.goto(`${origin}/chat/${id}`, { waitUntil: "networkidle2" });
 		const thinking = '[data-testid="practice-thinking-field"] textarea';
@@ -296,18 +321,20 @@ try {
 		assert.ok(await page.$('[data-testid="practice-thinking-field"] [aria-label="Start dictation"]'), "Practice/drill thinking owns the same in-field microphone");
 		await checkPhoneInput(thinking);
 		await fill(thinking, "100 divided by 2.");
+		await upload(id); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 		await page.locator('[data-testid="practice-thinking-field"] [aria-label="Start dictation"]').click();
 		await page.waitForFunction(() => window.speech?.readyState === 1);
 		await page.evaluate(() => window.speech.final("So pressure is 50 Pa."));
-		await page.click('[aria-label="Stop dictation"]');
-		await page.waitForFunction(() => window.speech.finishing);
-		await page.evaluate(() => window.speech.close());
-		assert.equal(await page.$eval(thinking, e => e.value), "100 divided by 2. So pressure is 50 Pa.");
 		await page.click('[data-testid="practice-send"]');
+		await page.waitForFunction(() => window.speech.finishing);
+		await page.evaluate(() => { window.speech.final("Late reasoning."); window.speech.close(); });
 		await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
 		const record = await (await fetch(`${origin}/api/chats/${id}`)).json();
-		assert.ok(JSON.stringify(record.messages).includes("100 divided by 2. So pressure is 50 Pa."), "Practice/drill uses its actual persisted thinking submission");
+		assert.ok(JSON.stringify(record.messages).includes("100 divided by 2. So pressure is 50 Pa. Late reasoning."), "Practice/drill Submit finishes late speech without needing Stop first");
+		assert.ok(record.messages.some(message => message.writingSubmission && message.sharedWriting?.length === 1));
 	}
+	await checkHandwritingTransfers({ page, origin, transferFaults });
+	await checkTransferDevice({ page, origin });
 	await page.goto(`${origin}/chat/mobile_teaching`, { waitUntil: "networkidle2" });
 	await fill(input, longDraft);
 	await page.waitForFunction(() => getComputedStyle(document.body).position === "fixed");

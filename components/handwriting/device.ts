@@ -1,4 +1,5 @@
 /** Device keys and the small successful-session-deletion lifecycle hook. */
+import { handwritingTransferDevice } from "./transfer-device.ts";
 export const handwritingKey = (id: string) => `lh:handwriting:v1:${id}`;
 export const handwritingRecoveryKey = (id: string) => `lh:handwriting:recovery:v1:${id}`;
 export const handwritingVisibilityKey = (id: string) => `lh:handwriting:open:${id}`;
@@ -15,4 +16,5 @@ export function clearHandwritingDevice(chatId: string, storage: () => Pick<Stora
 export function forgetHandwritingOnDevice(chatId: string) {
 	clearHandwritingDevice(chatId, () => localStorage);
 	window.dispatchEvent(new CustomEvent(HANDWRITING_DELETED_EVENT, { detail: chatId }));
+	void handwritingTransferDevice.deleteChat(chatId).catch(() => { /* Retain failed cleanup; the server still refuses transfer to the deleted session. */ });
 }

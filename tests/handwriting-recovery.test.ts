@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { HandwritingRecovery } from "../components/handwriting/recovery.ts";
 import { handwritingKey, handwritingRecoveryKey } from "../components/handwriting/recovery.ts";
 import { handwritingVisibilityKey } from "../components/handwriting/device.ts";
+import { normalizeHandwriting } from "../src/core/handwriting.ts";
 
 const data = mkdtempSync("/tmp/opencode/handwriting-recovery-");
 process.env.LH_DATA_DIR = data;
@@ -16,6 +17,17 @@ function device() {
 	return { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); }, removeItem: (key: string) => { values.delete(key); } };
 }
 const transport = (id: string) => (url: string, init?: RequestInit) => handwritingResponse(new Request(`http://test${url}`, init), id);
+
+it("Redo survives device and server reopen and a new completed stroke abandons its branch", async () => {
+	const chat = stores.chatStore.createChat("Persistent Redo"), storage = device();
+	const first = new HandwritingRecovery(chat.id, { storage: () => storage, fetch: transport(chat.id) });
+	await first.open(); first.draw(stroke); first.clear(); first.undo(); first.undo(); await first.retry(); first.dispose();
+	const reopened = new HandwritingRecovery(chat.id, { storage: () => storage, fetch: transport(chat.id) });
+	await reopened.open(); reopened.redo(); assert.deepEqual(reopened.page(), [stroke]);
+	reopened.redo(); assert.deepEqual(reopened.page(), []);
+	reopened.undo(); reopened.draw(stroke); reopened.redo(); assert.deepEqual(reopened.page(), [stroke, stroke]);
+	await reopened.retry(); reopened.dispose();
+});
 
 it("completed ink and Clear recover before held saves arrive, with Undo still editable after remount", async () => {
 	const chat = stores.chatStore.createChat("Recover on leave");
@@ -63,12 +75,12 @@ it("an older ACK cannot clear the newer device journal, and a lost ACK retries o
 	while (!release) await new Promise(resolve => setTimeout(resolve, 0));
 	recovery.clear(); release();
 	await recovery.retry();
-	assert.equal(JSON.parse(storage.getItem(handwritingKey(chat.id))!).operations.length, 2);
+	assert.equal(Object.keys(normalizeHandwriting(JSON.parse(storage.getItem(handwritingKey(chat.id))!)).events).length, 2);
 	assert.match(recovery.getSnapshot().notice!, /Saved on this device/);
 	recovery.dispose();
 	const reopened = new HandwritingRecovery(chat.id, { storage: () => storage, fetch: transport(chat.id) });
 	await reopened.open();
-	assert.equal(reopened.getSnapshot().working.operations.length, 2);
+	assert.equal(Object.keys(normalizeHandwriting(reopened.getSnapshot().working).events).length, 2);
 	reopened.undo(); await reopened.retry();
 	assert.deepEqual(reopened.page(), [stroke]); reopened.dispose();
 });
@@ -119,7 +131,7 @@ it("a failed read never autosaves blank; corrupt/newer device records and diverg
 	assert.equal(storage.getItem(handwritingKey(chat.id)), divergent); conflict.dispose();
 });
 
-it("deleted sessions cannot be resurrected by device recovery; another session's copy remains", async () => {
+it("an unavailable session cannot be resurrected, and a generic 404 keeps device recovery", async () => {
 	const chat = stores.chatStore.createChat("Deleted");
 	const storage = device();
 	const copy = JSON.stringify({ version: 1, operations: [{ kind: "stroke", id: "pending", stroke }] });
@@ -127,7 +139,7 @@ it("deleted sessions cannot be resurrected by device recovery; another session's
 	stores.chatStore.deleteChat(chat.id);
 	const recovery = new HandwritingRecovery(chat.id, { storage: () => storage, fetch: transport(chat.id) });
 	await recovery.open(); recovery.draw(stroke); await recovery.retry();
-	assert.equal(storage.getItem(handwritingKey(chat.id)), null);
+	assert.equal(storage.getItem(handwritingKey(chat.id)), copy);
 	assert.equal(storage.getItem(handwritingKey("other")), copy);
 	assert.equal(recovery.getSnapshot().ready, false); recovery.dispose();
 });
@@ -209,7 +221,7 @@ it("an admitted stroke is kept when a blocking ACK and failed recovery write occ
 	failBackup = false; storage.setItem(handwritingKey(chat.id), acknowledged);
 	await recovery.retry();
 	assert.equal(recovery.getSnapshot().ready, true);
-	assert.equal((await (await transport(chat.id)("/handwriting")).json()).operations.length, 2);
+	assert.equal(Object.keys(normalizeHandwriting(await (await transport(chat.id)("/handwriting")).json()).events).length, 2);
 	recovery.dispose();
 	const reopened = new HandwritingRecovery(chat.id, { storage: () => storage, fetch: transport(chat.id) });
 	await reopened.open(); assert.deepEqual(reopened.page(), [stroke, second]);

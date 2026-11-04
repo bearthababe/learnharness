@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { sharedWritingImageUrl, type LhMessage, type SharedWriting } from "@/src/core";
+import { sharedWritingImageUrl, type LhMessage, type SharedWriting, type PageAttachments } from "@/src/core";
 import { useServerEvent, useServerResync } from "@/components/server-events";
 
 export function useSharedWriting(chatId: string, messages: readonly LhMessage[]) {
 	const submittedKey = messages.flatMap((m) => m.sharedWriting?.map((w) => w.id) ?? []).join(",");
 	const [pending, setPending] = useState<SharedWriting[]>([]);
+	const [pageAttachments, setPageAttachments] = useState<PageAttachments | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const generation = useRef(0);
 	const refresh = useCallback(async () => {
@@ -14,20 +15,24 @@ export function useSharedWriting(chatId: string, messages: readonly LhMessage[])
 		try {
 			const response = await fetch(`/api/chats/${encodeURIComponent(chatId)}/writing`, { cache: "no-store" });
 			if (!response.ok) throw new Error("Could not check for shared writing. Try again.");
-			const result = await response.json() as { pending: SharedWriting[] };
-			if (run !== generation.current) return;
+			const result = await response.json() as { pending: SharedWriting[]; pageAttachments: PageAttachments };
+			if (!Array.isArray(result.pending) || !result.pageAttachments) throw new Error("Could not check shared writing.");
+			if (run !== generation.current) return result;
 			setPending(result.pending);
+			setPageAttachments(result.pageAttachments);
 			setError(null);
+			return result;
 		} catch (err) {
 			if (run === generation.current) setError(err instanceof Error ? err.message : "Could not check shared writing.");
+			throw err;
 		}
 	}, [chatId]);
 	useEffect(() => {
-		void refresh();
+		void refresh().catch(() => {});
 		return () => { generation.current++; };
 	}, [refresh, submittedKey]);
 	useEffect(() => {
-		const onVisible = () => { if (!document.hidden) void refresh(); };
+		const onVisible = () => { if (!document.hidden) void refresh().catch(() => {}); };
 		window.addEventListener("focus", onVisible);
 		document.addEventListener("visibilitychange", onVisible);
 		return () => {
@@ -35,11 +40,11 @@ export function useSharedWriting(chatId: string, messages: readonly LhMessage[])
 			document.removeEventListener("visibilitychange", onVisible);
 		};
 	}, [refresh]);
-	useServerEvent("writing-changed", (e) => { if (e.chatId === chatId) void refresh(); });
-	useServerEvent("record-changed", (e) => { if (e.chatId === chatId) void refresh(); });
-	useServerEvent("turn-settled", (e) => { if (e.chatId === chatId) void refresh(); });
-	useServerResync(() => void refresh());
-	return { pending, error, refresh, ids: () => pending.map((w) => w.id) };
+	useServerEvent("writing-changed", (e) => { if (e.chatId === chatId) void refresh().catch(() => {}); });
+	useServerEvent("record-changed", (e) => { if (e.chatId === chatId) void refresh().catch(() => {}); });
+	useServerEvent("turn-settled", (e) => { if (e.chatId === chatId) void refresh().catch(() => {}); });
+	useServerResync(() => void refresh().catch(() => {}));
+	return { pending, pageAttachments, error, refresh, ids: () => pending.map((w) => w.id) };
 }
 
 export function SharedWritingImages({ chatId, writing }: { chatId: string; writing: readonly SharedWriting[] }) {
@@ -104,7 +109,7 @@ export function SharedWritingPanel({ chatId, writing, busy }: {
 			<SharedWritingImages chatId={chatId} writing={writing.pending} />
 			<p className="text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Review the images, add an explanation below if needed, then send your answer."}</p>
 		</>}
-		{writing.error && <p role="alert" className="text-destructive">{writing.error} <button type="button" className="underline" onClick={() => void writing.refresh()}>Try again</button></p>}
+		{writing.error && <p role="alert" className="text-destructive">{writing.error} <button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Try again</button></p>}
 		<details className={`lh-concepts-setup ${writing.pending.length ? "mt-2" : ""}`}>
 			<summary className="cursor-pointer text-muted-foreground">Share from Concepts · setup & tools</summary>
 			<ol className="my-2 list-decimal space-y-1 pl-5">
@@ -116,7 +121,7 @@ export function SharedWritingPanel({ chatId, writing, busy }: {
 			<label className="block">This session’s upload URL<input readOnly value={uploadUrl} onFocus={(e) => e.currentTarget.select()} className="my-1 w-full rounded border bg-background p-2" /></label>
 			<div className="flex flex-wrap gap-4">
 				<button type="button" className="underline" onClick={() => { void navigator.clipboard.writeText(uploadUrl).then(() => setCopied(true)).catch(() => setCopied(false)); }}>{copied ? "Copied" : "Copy upload URL"}</button>
-				<button type="button" className="underline" onClick={() => void writing.refresh()}>Check for writing</button>
+				<button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Check for writing</button>
 				<button type="button" className="underline" onClick={() => location.reload()}>Reload preview</button>
 			</div>
 			<p className="mt-2 text-muted-foreground">Reload keeps uploaded images and saved conversation. Unsent typed text resets.</p>

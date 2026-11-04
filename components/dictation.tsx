@@ -199,6 +199,12 @@ export function rmsToMeter(rms: number): number {
  * window, one pending question, one target at a time.
  */
 let questionTarget: ((text: string) => void) | null = null;
+let dictationCancellation = 0;
+/** Attach/Submit retain the existing speech owner through finalization. */
+export function dictationCheckpoint() {
+	const target = questionTarget, cancellation = dictationCancellation;
+	return () => target === questionTarget && cancellation === dictationCancellation;
+}
 
 /* The finisher registry: submit paths FAR from the hook's owner (the
  * pending question's dock) need finish() without a prop bridge. Same
@@ -542,6 +548,7 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 	}, [phase, cleanup]);
 
 	const cancel = useCallback(() => {
+		dictationCancellation++;
 		if (phase === "idle") return;
 		// Discard first, teardown second — cleanup() flushes, and the now-empty
 		// buffer makes that flush a no-op. Also kills a "stopping" run: the

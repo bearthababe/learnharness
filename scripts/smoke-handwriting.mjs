@@ -112,7 +112,7 @@ try {
 		const recoveredSave = page.waitForResponse(response => response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith("/handwriting") && response.status() === 200);
 		await page.click('.hw-notice button'); await ready();
 		await recoveredSave;
-		assert.equal((await (await fetch(`${origin}/api/chats/${id}/handwriting`)).json()).operations.length, 2);
+		assert.equal(Object.keys((await (await fetch(`${origin}/api/chats/${id}/handwriting`)).json()).events).length, 2);
 		await pencilTap("Undo"); assert.ok(await bitmap() === firstInk, "Recovered stroke remains individually undoable");
 	}
 	console.log("PASS blocking ACK during accepted stroke, device preservation, reload and Retry");
@@ -154,6 +154,9 @@ try {
 	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]')?.getAttribute("data-ready") === "true");
 	await page.click('[aria-label="Undo"]');
 	assert.equal(await bitmap(), ink, "Undo after reload restores Clear's editable working");
+	await page.reload({ waitUntil: "networkidle2" }); await ready();
+	await pencilTap("Redo"); assert.equal(await bitmap(), cleared, "Actual Pencil Redo reapplies Clear after reload");
+	await pencilTap("Undo"); assert.equal(await bitmap(), ink);
 	console.log("PASS real drawing + reload + persistent Clear/Undo");
 
 	// All tool activations go through actual pointer/click controls. A Pencil
@@ -164,7 +167,7 @@ try {
 		await pencilTap("Pen"); await pencilTap(`${colour} pen`);
 		await draw(210, 460);
 		const working = await page.evaluate(() => JSON.parse(localStorage.getItem("lh:handwriting:v1:handwriting_teach")));
-		assert.equal(working.operations.at(-1).stroke.colour, { Blue: "#2563eb", Red: "#dc2626", Green: "#15803d", Black: "#171717" }[colour]);
+		assert.equal(working.events[working.head].stroke.colour, { Blue: "#2563eb", Red: "#dc2626", Green: "#15803d", Black: "#171717" }[colour]);
 		await pencilTap("Undo");
 		assert.equal(await bitmap(), ink, "Pencil Undo runs once, including a compatibility click");
 	}
@@ -322,11 +325,33 @@ try {
 	assert.equal(await bitmap(), pendingInk);
 	await page.click('[data-testid="notebook-tools-toggle"]');
 	await page.waitForSelector('#handwriting-tools');
-	assert.ok(await page.$eval('#handwriting-tools', e => e.textContent.includes("Unsent typed text resets")));
+	assert.ok(await page.$eval('#handwriting-tools', e => e.textContent.includes("explanation saved at Attach")));
 	await Promise.all([page.waitForNavigation({ waitUntil: "networkidle2" }), page.click('#handwriting-tools button.underline')]); await ready();
 	assert.equal(await bitmap(), pendingInk, "Tools → Reload preview exercises recovery");
-	assert.equal(await page.$('[data-testid="notebook-attach"]'), null);
+	assert.ok(await page.$('[data-testid="notebook-attach"]'));
 	assert.equal(await page.$('[data-testid="notebook-circuit-example"]'), null);
+	// The real IndexedDB adapter, canvas encoder, multipart route and file store.
+	await page.click('[data-testid="open-notebook-chat"]');
+	await page.$eval(field, e => e.focus()); await page.keyboard.sendCharacter("Durable explanation at Attach");
+	await page.click('[data-testid="open-notebook"]');
+	const frozen = await page.evaluate(() => JSON.parse(localStorage.getItem("lh:handwriting:v1:handwriting_teach")));
+	const attached = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/writing") && response.status() === 201);
+	await page.click('[data-testid="notebook-attach"]'); const receipt = await (await attached).json();
+	await page.waitForFunction(() => document.querySelector('[data-testid="notebook-slot"]').hidden);
+	assert.equal(await page.$eval(field, e => e.value), "Durable explanation at Attach");
+	await page.reload({ waitUntil: "networkidle2" });
+	await page.waitForFunction(() => document.querySelector('textarea')?.value === "Durable explanation at Attach");
+	assert.deepEqual((await (await fetch(`${origin}/api/chats/handwriting_teach/writing/${receipt.writing.id}/source`)).json()).journal, frozen);
+	const pngSize = await page.evaluate(async url => { const image = new Image(); image.src = url; await image.decode(); return [image.naturalWidth, image.naturalHeight]; }, `${origin}/api/chats/handwriting_teach/writing/${receipt.writing.id}`);
+	assert.deepEqual(pngSize, [1400, 1800]);
+	await page.click('[data-testid="open-notebook"]'); await ready();
+	await draw(250, 550);
+	const updated = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/writing") && response.status() === 201);
+	await page.click('[data-testid="notebook-attach"]'); const replacement = await (await updated).json();
+	const pending = await (await fetch(`${origin}/api/chats/handwriting_teach/writing`)).json();
+	assert.deepEqual(pending.pending.map(image => image.id), [replacement.writing.id]);
+	assert.deepEqual((await (await fetch(`${origin}/api/chats/handwriting_teach/writing/${receipt.writing.id}/source`)).json()).journal, frozen);
+	console.log("PASS real IndexedDB Attach explanation reload, exact full source and same-page supersession without tutor input");
 	await page.setViewport({ width: 1400, height: 900, isMobile: true, hasTouch: true });
 	await page.click('[aria-label="Open sidebar"]');
 	await page.click('[data-testid="kind-filter-all"]');

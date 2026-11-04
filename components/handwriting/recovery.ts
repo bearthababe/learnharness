@@ -1,4 +1,4 @@
-import { emptyHandwriting, handwritingSchema, handwritingPrefix, replayHandwriting, reconcileHandwriting, type Handwriting, type HandwritingStroke, type HandwritingOperation } from "../../src/core/index.ts";
+import { emptyHandwriting, appendHandwriting, handwritingSchema, handwritingPrefix, replayHandwriting, reconcileHandwriting, type Handwriting, type HandwritingStroke, type HandwritingOperation } from "../../src/core/index.ts";
 import { handwritingKey, handwritingRecoveryKey, clearHandwritingDevice } from "./device.ts";
 export { handwritingKey, handwritingRecoveryKey } from "./device.ts";
 
@@ -14,7 +14,7 @@ export class HandwritingRecovery {
 	private listeners = new Set<() => void>();
 	private disposed = false;
 	private localSaved = false;
-	private acknowledged = 0;
+	private acknowledged: Handwriting = emptyHandwriting();
 	private flight: Promise<void> | null = null;
 	private opening: Promise<void> | null = null;
 	private blocked = false;
@@ -94,8 +94,9 @@ export class HandwritingRecovery {
 	}
 	private async response(response: Response): Promise<Handwriting> {
 		if (response.status === 404) {
-			this.sessionDeleted();
-			throw new Error("deleted");
+			this.blocked = true;
+			this.update({ ready: false, notice: "This session is unavailable. Your device recovery has been kept." });
+			throw new Error("unavailable");
 		}
 		if (response.status === 409) { this.conflict(); throw new Error("conflict"); }
 		if (!response.ok) throw new Error("unavailable");
@@ -119,7 +120,7 @@ export class HandwritingRecovery {
 			try { this.update({ working: reconcileHandwriting(this.state.working, remote) }); }
 			catch { this.conflict(); return; }
 			this.blocked = false;
-			this.acknowledged = remote.operations.length;
+			this.acknowledged = remote;
 			this.localSaved = this.persist();
 			if (this.blocked) return;
 			this.update({ ready: true, notice: null });
@@ -142,15 +143,18 @@ export class HandwritingRecovery {
 		};
 	}
 	draw(stroke: HandwritingStroke) { this.beginStroke()?.(stroke); }
-	clear() { if (this.page().length) this.append({ id: crypto.randomUUID(), kind: "clear" }); }
+	clear() { const page = replayHandwriting(this.state.working); if (page.strokes.length || page.background) this.append({ id: crypto.randomUUID(), kind: "clear" }); }
 	undo() {
 		if (replayHandwriting(this.state.working).canUndo) this.append({ id: crypto.randomUUID(), kind: "undo" });
+	}
+	redo() {
+		if (replayHandwriting(this.state.working).canRedo) this.append({ id: crypto.randomUUID(), kind: "redo" });
 	}
 	private append(operation: HandwritingOperation, acceptedBase?: Handwriting) {
 		if (this.disposed || this.deleted || (!acceptedBase && (!this.state.ready || this.blocked))) return;
 		if (acceptedBase && (!handwritingPrefix(this.state.working, acceptedBase) || !handwritingPrefix(acceptedBase, this.state.working))) this.conflict();
 		// This entire write occurs on pointer completion, never pointer movement.
-		this.state = { ...this.state, working: { version: 1, operations: [...(acceptedBase ?? this.state.working).operations, operation] } };
+		this.state = { ...this.state, working: appendHandwriting(acceptedBase ?? this.state.working, operation) };
 		this.localSaved = this.persist();
 		if (this.blocked) { this.preserveBlockedWorking(); return; }
 		this.update({ notice: this.localSaved ? null : "Couldn’t save on this device; saving to LearnHarness…" });
@@ -162,7 +166,7 @@ export class HandwritingRecovery {
 		return this.flight;
 	}
 	private async flush() {
-		while (!this.disposed && this.state.ready && !this.blocked && this.acknowledged < this.state.working.operations.length) {
+		while (!this.disposed && this.state.ready && !this.blocked && !handwritingPrefix(this.state.working, this.acknowledged)) {
 			const sent = this.state.working;
 			try {
 				const remote = await this.response(await this.deps.fetch(`/api/chats/${encodeURIComponent(this.chatId)}/handwriting`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sent) }));
@@ -173,7 +177,7 @@ export class HandwritingRecovery {
 					this.localSaved = this.persist();
 					if (this.blocked) return;
 				} else if (!handwritingPrefix(remote, this.state.working)) { this.conflict(); return; }
-				this.acknowledged = remote.operations.length;
+				this.acknowledged = remote;
 				this.retireRecoveryCopy(remote);
 				this.update({ notice: this.localSaved ? null : "Saved to LearnHarness; device recovery is unavailable." });
 			} catch {
@@ -187,7 +191,7 @@ export class HandwritingRecovery {
 		if (!this.state.ready) { this.blocked = false; await this.open(); return; }
 		this.localSaved = this.persist();
 		await this.sync();
-		if (this.state.ready && this.acknowledged === this.state.working.operations.length) this.update({ notice: this.localSaved ? null : "Saved to LearnHarness; device recovery is unavailable." });
+		if (this.state.ready && handwritingPrefix(this.state.working, this.acknowledged)) this.update({ notice: this.localSaved ? null : "Saved to LearnHarness; device recovery is unavailable." });
 	}
 	dispose() { this.disposed = true; this.listeners.clear(); }
 	sessionDeleted() {

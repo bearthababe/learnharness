@@ -9,6 +9,7 @@ import { CornerDownLeftIcon } from "lucide-react";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
+import { useHandwritingEditor } from "./handwriting/submission";
 import {
 	buildAnswer,
 	repairMathForDisplay,
@@ -37,6 +38,7 @@ import {
 	type QuizToolInput,
 	type SelectMode,
 	type Phase3,
+	type SharedWriting,
 } from "@/src/core";
 import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-rail";
 
@@ -63,6 +65,8 @@ import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-
 export interface QuestionDockProps {
 	dictation?: Dictation;
 	hasSharedWriting?: boolean;
+	readingThinking?: string;
+	onRestoreReadingThinking?: (text: string) => void;
 	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall";
 	toolCallId: string;
 	input: QuizToolInput | AskToolInput | ExplainToolInput;
@@ -76,7 +80,7 @@ export interface QuestionDockProps {
 	 */
 	reveal?: boolean;
 	onExpand: () => void;
-	onSubmit: (output: QuestionAnswerData) => void;
+	onSubmit: (output: QuestionAnswerData, reviewed?: SharedWriting[]) => void;
 	/** Restore only this call's unconfirmed submission after recovery. */
 	initialDraft?: QuestionFormDraft;
 	onSaveDraft?: (draft: QuestionFormDraft) => void;
@@ -103,6 +107,8 @@ export interface QuestionDockProps {
 
 export function QuestionDock({
 	dictation,
+	readingThinking,
+	onRestoreReadingThinking,
 	hasSharedWriting = false,
 	toolName,
 	toolCallId,
@@ -162,6 +168,8 @@ export function QuestionDock({
 			)}
 			<div className={expanded ? "dock-variant" : `${reveal ? "" : "lh-question-collapsed "}invisible h-0 overflow-hidden`}>
 				<QuestionDockForm
+					readingThinking={readingThinking}
+					onRestoreReadingThinking={onRestoreReadingThinking}
 					dictation={dictation}
 					hasSharedWriting={hasSharedWriting}
 					toolName={toolName}
@@ -262,6 +270,8 @@ export function QuestionDockBar({
 /** The expanded question: label, question, options, and the unified bottom row. */
 function QuestionDockForm({
 	dictation,
+	readingThinking = "",
+	onRestoreReadingThinking,
 	hasSharedWriting = false,
 	toolName,
 	toolCallId,
@@ -349,6 +359,16 @@ function QuestionDockForm({
 	// between questions, so each question starts fresh at 50.
 	const [confIdx, setConfIdx] = useState<number>(initialDraft?.confidenceIndex ?? DEFAULT_CONFIDENCE_INDEX);
 	const selectMode: SelectMode = qd.mode === "multi-select" ? "multi-select" : "single-select";
+	const latest = useRef({ sel, other, confIdx, compactionRunning, dictationClaim }); latest.current = { sel, other, confIdx, compactionRunning, dictationClaim };
+	const alive = useRef(true), submitting = useRef(false);
+	useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+	const transfer = useHandwritingEditor(`question:${toolCallId}`, () => ({ selection: { ...latest.current.sel, selected: [...latest.current.sel.selected].sort((a, b) => a - b) }, thinking: thinkingTextRef.current, other: latest.current.other, text: answerTextRef.current, confidenceIndex: latest.current.confIdx, readingThinking }), draft => {
+		const selection = draft.selection ? { ...draft.selection, selected: new Set(draft.selection.selected) } : emptyDockSelection();
+		thinkingTextRef.current = draft.thinking ?? ""; answerTextRef.current = draft.text ?? "";
+		latest.current = { ...latest.current, sel: selection, other: draft.other ?? "", confIdx: draft.confidenceIndex ?? DEFAULT_CONFIDENCE_INDEX };
+		setSel(selection); setThinking(thinkingTextRef.current); setText(answerTextRef.current); setOther(draft.other ?? ""); setConfIdx(draft.confidenceIndex ?? DEFAULT_CONFIDENCE_INDEX);
+		if (draft.readingThinking !== undefined) onRestoreReadingThinking?.(draft.readingThinking);
+	}, dictationClaim);
 
 	// The PRIMARY dictation input (owner, STT round 1): while a question
 	// waits, dictated finals land HERE, never in the hidden composer — text
@@ -386,7 +406,9 @@ function QuestionDockForm({
 			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0;
 
 	const submit = () => {
-		if (!canSubmit || compactionRunning) return;
+		if (!canSubmit || compactionRunning || transfer?.blocked() || submitting.current) return;
+		const reviewed = transfer?.reviewed();
+		submitting.current = true;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): Enter may arrive while
 		 * a run is live with reasoning still in Deepgram's hands. Stop the
 		 * run, let the last finals land in the target field, and only then
@@ -394,13 +416,15 @@ function QuestionDockForm({
 		 * forgotten stop. The field values below come from the REF mirrors
 		 * because the flush lands via setState after an await. */
 		if (!isDictationActive()) {
-			doSubmit();
+			doSubmit(reviewed); submitting.current = false;
 			return;
 		}
-		void finishDictation().then(doSubmit);
+		void finishDictation().then(() => doSubmit(reviewed)).finally(() => { submitting.current = false; });
 	};
-	const doSubmit = () => {
-		if (!canSubmit) return;
+	const doSubmit = (reviewed?: SharedWriting[]) => {
+		if (!alive.current || latest.current.compactionRunning || !latest.current.dictationClaim || transfer?.blocked()) return;
+		const { sel, other, confIdx } = latest.current;
+		if (qd.mode === "text" ? !answerTextRef.current.trim() && !(reviewed?.length ?? hasSharedWriting) : !sel.dontKnow && !(sel.otherSelected && other.trim()) && !sel.selected.size) return;
 		const req: AnswerRequest = {
 			dontKnow: sel.dontKnow,
 			values: [...sel.selected].map((i) => qd.options[i]!.value),
@@ -420,7 +444,7 @@ function QuestionDockForm({
 			text: answerTextRef.current,
 			confidenceIndex: confIdx,
 		});
-		onSubmit(buildAnswer(qd, req, toolName));
+		onSubmit(buildAnswer(qd, req, toolName), reviewed);
 	};
 
 	/* ENTER SUBMITS FROM ANYWHERE (owner round 6, 2026-10-05): the same

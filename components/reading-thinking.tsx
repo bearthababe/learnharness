@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
+import { useHandwritingEditor } from "./handwriting/submission";
 import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { CompactLearningInput } from "@/components/compact-learning-input";
 import { ChevronRightIcon } from "lucide-react";
@@ -27,6 +28,7 @@ export function ReadingThinkingField({
 	onOpen,
 	claim,
 	dictation,
+	targetKey = "reading",
 }: {
 	value: string;
 	onChange: (v: string) => void;
@@ -40,13 +42,17 @@ export function ReadingThinkingField({
 	/** Primary dictation claim — true while the check is behind its reveal. */
 	claim: boolean;
 	dictation?: Dictation;
+	targetKey?: string;
 }) {
+	const mirror = useRef(value), change = useRef(onChange); mirror.current = value; change.current = onChange;
+	const apply = useCallback((text: string) => { mirror.current = text; change.current(text); }, []);
+	const transfer = useHandwritingEditor(targetKey, () => ({ readingThinking: mirror.current }), draft => apply(draft.readingThinking ?? ""), claim);
 	useDictationTarget(
 		useCallback(
 			(t: string) => {
-				onChange(joinDictation(value, t));
+				apply(joinDictation(mirror.current, t));
 			},
-			[value, onChange],
+			[apply],
 		),
 		claim,
 	);
@@ -61,7 +67,7 @@ export function ReadingThinkingField({
 			<div className="lh-compact-row"><CompactLearningInput dictation={claim ? dictation : undefined}><textarea
 				aria-label="Thinking while reading"
 				value={value}
-				onChange={(e) => onChange(e.target.value)}
+				onChange={(e) => apply(e.target.value)}
 				/* py-0.5 (owner round, 2026-10-07): the scrollbar fix. Source
 				   Sans 3's font box is 22px at 16px; lh-input's 1.25 leading
 				   gives a 20px line box — the content area sticks 1px below the
@@ -88,7 +94,7 @@ export function ReadingThinkingField({
 					if (e.key === "Enter" && onOpen !== undefined && (!e.shiftKey || e.metaKey || e.ctrlKey)) {
 						e.preventDefault();
 						e.stopPropagation();
-						onOpen();
+						if (!transfer?.preparing) onOpen();
 						return;
 					}
 					// The dock's dumping convention: plain Enter is a newline.

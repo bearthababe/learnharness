@@ -45,8 +45,8 @@ import { QUESTION_TOOLS, toolQuestionKind } from "./pending.ts";
 
 /** One client-originated input event (the POST body's `input`). */
 export type ChatInput =
-	| { type: "text"; text: string; writingIds?: string[] }
-	| { type: "answer"; toolCallId: string; answer: QuestionAnswerData; writingIds?: string[] }
+	| { type: "text"; text: string; writingIds?: string[]; submissionId?: string }
+	| { type: "answer"; toolCallId: string; answer: QuestionAnswerData; writingIds?: string[]; submissionId?: string }
 	| { type: "continue" }
 	/** The failed-turn retry (issue #110): the banner's Retry button. */
 	| { type: "retry" }
@@ -54,7 +54,7 @@ export type ChatInput =
 	 *  thinking on the ACTIVE problem — one lane (owner 2026-10-05):
 	 *  whether it claims an answer is read from the text. One
 	 *  problem may carry many submissions; each is its own turn. */
-	| { type: "thinking"; problemCallId: string; text: string; writingIds?: string[] }
+	| { type: "thinking"; problemCallId: string; text: string; writingIds?: string[]; submissionId?: string }
 	/** The practice move-on signal (owner round 16): the learner's
 	 *  explicit go-ahead during the between-problems pause — the Next
 	 *  chip or Enter on an empty composer. Practice sessions only, and
@@ -167,7 +167,11 @@ function parseWritingIds(raw: unknown): { writingIds?: string[] } {
 export function parseChatInput(input: unknown): ChatInput {
 	if (typeof input !== "object" || input === null) throw new ChatInputError("input must be an object");
 	const i = input as Record<string, unknown>;
-	const writing = parseWritingIds(i.writingIds);
+	const writing: { writingIds?: string[]; submissionId?: string } = parseWritingIds(i.writingIds);
+	if (i.submissionId !== undefined) {
+		if (!writing.writingIds?.length || typeof i.submissionId !== "string" || !/^submission_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(i.submissionId)) throw new ChatInputError("submissionId requires an image-bearing submission and a UUID");
+		writing.submissionId = i.submissionId;
+	}
 	if (writing.writingIds && !["text", "answer", "thinking"].includes(String(i.type))) {
 		throw new ChatInputError("Shared writing requires a learner submission");
 	}

@@ -79,7 +79,7 @@
 .hw-arc_pen { right: 0; top: 0; }
 .hw-arc_highlighter { left: 0; top: 88px; }
 .hw-arc_eraser { right: 0; top: 176px; }
-.hw-arcUndo { position: absolute; top: 252px; right: 8px; border-radius: 50%; background: var(--tool-surface); border: 1px solid var(--tool-edge); box-shadow: var(--tool-shadow); }
+.hw-arcUndo { position: absolute; top: 252px; right: 8px; display: flex; border-radius: 999px; background: var(--tool-surface); border: 1px solid var(--tool-edge); box-shadow: var(--tool-shadow); }
 .hw-arcInspector { position: absolute; right: 122px; top: 44px; width: 204px; padding: 6px 10px 10px; background: var(--card); border: 1px solid var(--tool-edge); border-radius: 20px; box-shadow: var(--tool-shadow); }
 .hw-arcInspector > p { font-size: 9px; color: var(--muted-foreground); margin-top: 10px; }
 .hw-arc > .hw-toolButton, .hw-arcUndo, .hw-arcInspector { pointer-events: auto; }

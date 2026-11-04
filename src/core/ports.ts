@@ -27,7 +27,19 @@ import type {
 	NotesSource,
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
-import type { Handwriting } from "./handwriting.ts";
+import type { Handwriting, NotebookSource } from "./handwriting.ts";
+import type { SharedWriting, NotebookCapture, NotebookCaptureReceipt, WritingSnapshot } from "./shared-writing.ts";
+
+export interface SharedWritingStore {
+	put(chatId: string, bytes: Uint8Array): SharedWriting;
+	list(chatId: string): SharedWriting[];
+	read(chatId: string, id: string): Uint8Array;
+	filePath(chatId: string, id: string): string;
+	putNotebook(chatId: string, capture: NotebookCapture): NotebookCaptureReceipt;
+	readSource(chatId: string, id: string): NotebookSource | null;
+	readSnapshot(chatId: string): WritingSnapshot;
+	deleteChat(chatId: string): void;
+}
 
 /** Session-owned editable ink, never part of chat/sidebar projections. */
 export interface HandwritingStore {
