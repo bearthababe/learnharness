@@ -20,6 +20,7 @@ npm run build        # production build (standalone output)
 npm start            # serve the production build
 
 npm test             # the full suite (node:test via tsx; deterministic, no LLM, no network)
+npm run test:mobile  # disposable Chromium UI: inputs, Reveal, mobile layout
 npm run lint         # eslint — includes the import law (architecture §2)
 npm run typecheck    # tsc --noEmit
 node scripts/smoke-web-subscriptions.mjs # after build: offline Next start/dev + reload gate
@@ -179,6 +180,10 @@ pricing-generation step: Pi AI's catalog and public calculator are the authority
 **Dictation.** Optional speech-to-text: the server mints short-lived Deepgram tokens; audio streams browser→Deepgram over WebSocket, never through the server. Settings → Providers → Dictation → Language (below the Deepgram key) offers Nova-3's documented monolingual languages/locales or `language=multi` for automatic multilingual transcription. The app-wide `dictation.language` preference persists through the existing settings record and `PUT /api/settings/dictation`; absent preferences resolve to English (`en`). The settings control locks from connecting through stopping, and reconnects keep the run's original language. A shared preference controller publishes confirmed PUT responses to every reader immediately; the confirmed preference is cached across page navigation and reopening Settings, with no polling or per-recording read. Explicit external dictation-settings notifications invalidate the cache, and capture waits for a successful refresh. Navigating away cancels the run, invalidates pending startup/reconnect work and releases its microphone/socket without appending into another page's input. All other streaming parameters remain unchanged. The picker uses the model dropdown's shared `SearchMenuList` and `MenuShell`: the same fuzzy search, arrow navigation, Enter selection, row styling and scrolling. Its compact mono `SettingsMenuTrigger` is shared with Agent and Appearance; a muted setup line below the key and language rows links the Deepgram Console and states the Member-or-higher key-role requirement.
 
 ## Testing
+
+For browser prerequisites, retained diagnostics and fresh-checkout reruns, see
+[Mobile browser checks](verification/mobile-browser-checks.md). This gate runs
+separately from the deterministic suite below.
 
 All deterministic, no LLM, no network (engines are injected — pi-ai's faux provider scripted per test; `globalThis.fetch` stubbed where transport matters):
 

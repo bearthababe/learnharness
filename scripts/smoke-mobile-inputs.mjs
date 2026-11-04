@@ -2,23 +2,22 @@
  * Run: node scripts/smoke-mobile-inputs.mjs (no learner data or preview slots used).
  */
 import assert from "node:assert/strict";
-import { appendFile, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
+import { cp, mkdir, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import path from "node:path";
-import puppeteer from "puppeteer-core";
+import puppeteer, { PUPPETEER_REVISIONS } from "puppeteer-core";
+import { createRunDirectory, processScope, captureOutput, completed } from "./mobile-browser-runner.mjs";
 
-const root = process.cwd();
-const dir = process.env.LH_MOBILE_TEST_DIR ?? await mkdtemp("/tmp/opencode/mobile-input-browser-");
-assert.ok(path.basename(dir).startsWith("mobile-input-browser-") && path.resolve(dir) !== root, "Use a dedicated mobile-input-browser-* fixture directory");
-for (const name of ["app", "components", "src", "lib", "public", "electron", "config.ts", "package.json", "tsconfig.json", "postcss.config.mjs", "next.config.ts"]) {
-	await cp(path.join(root, name), path.join(dir, name), { recursive: true });
+const root = fileURLToPath(new URL("../", import.meta.url));
+const dir = await createRunDirectory();
+console.log(`Disposable browser app: ${dir}`);
+const executablePath = process.env.CHROMIUM_PATH ?? "/usr/bin/chromium";
+console.log(`Browser: ${executablePath}\n${execFileSync(executablePath, ["--version"], { encoding: "utf8" }).trim()}\nPuppeteer-supported Chrome: ${PUPPETEER_REVISIONS.chrome}`);
+for (const name of ["app", "components", "src", "lib", "public", "electron", "config.ts", "package.json", "package-lock.json", "tsconfig.json", "postcss.config.mjs", "next.config.ts", "node_modules"]) {
+	await cp(path.join(root, name), path.join(dir, name), { recursive: true, mode: constants.COPYFILE_FICLONE, verbatimSymlinks: true });
 }
-await symlink(path.join(root, "node_modules"), path.join(dir, "node_modules")).catch(error => { if (error.code !== "EEXIST") throw error; });
-// The installed packages are outside the disposable source root.
-const configPath = path.join(dir, "next.config.ts");
-await writeFile(configPath, (await readFile(configPath, "utf8")).replace("const nextConfig: NextConfig = {", 'const nextConfig: NextConfig = { turbopack: { root: "/" },'));
-await rm(path.join(dir, "data"), { recursive: true, force: true });
 await mkdir(path.join(dir, "data/chats"), { recursive: true });
 await writeFile(path.join(dir, "auth.json"), "{}\n", { mode: 0o600 });
 const now = new Date().toISOString();
@@ -39,6 +38,11 @@ for (const [id, tool, question] of [
 	["mobile_teaching", "explain", { question: "Explain pressure and area.", correctAnswer: "Pressure is force divided by area.", nodeId: "pressure", type: "check" }],
 	["mobile_selection", "quiz", { question: "Which change doubles pressure?", options: [{ label: "Halve the area", value: "half" }, { label: "Double the area", value: "double" }], correctAnswer: "half", explanation: "The same force over half the area doubles pressure.", nodeId: "pressure", type: "check" }],
 ]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, title: id, messages: [...teaching, call(tool, question, "question")] }));
+await writeFile(path.join(dir, "data/chats/mobile_reveal_regression.json"), JSON.stringify({ ...conversation, id: "mobile_reveal_regression", title: "Isolated reveal regression", messages: [...teaching, call("explain", { question: "Explain pressure and area.", correctAnswer: "Pressure is force divided by area.", nodeId: "pressure", type: "check" }, "question")] }));
+for (let index = 0; index < 20; index++) {
+	const id = `mobile_navigation_${index}`;
+	await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, title: `Disposable navigation fixture ${index}`, messages: [] }));
+}
 await writeFile(path.join(dir, "data/chats/mobile_other_answer.json"), JSON.stringify({ ...conversation, id: "mobile_other_answer", title: "Other answer fixture", messages: [call("ask_user_question", { question: "Which approach would you use?", options: [{ label: "Start with force", value: "force" }, { label: "Start with area", value: "area" }], multiSelect: true }, "question")] }));
 const problem = { statement: "Calculate pressure for a 100 N force on 2 square metres.", mode: "apply", target: ["pressure"], modelSolution: "50 Pa." };
 for (const id of ["mobile_practice", "mobile_drill"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, title: id, kind: "practice", ...(id === "mobile_drill" ? { practiceMode: "drill" } : {}), messages: [teaching[4], call("problem", problem, "problem"), result("problem", null, "problem")] }));
@@ -88,23 +92,29 @@ export function GET() {
 }
 `);
 const port = Number(process.env.LH_MOBILE_TEST_PORT ?? 3109);
+assert.ok(Number.isInteger(port) && port > 0 && port <= 65535 && ![3000, 3001, 3002].includes(port), "Use a dedicated non-preview port (default 3109)");
 const origin = `http://127.0.0.1:${port}`;
-const server = spawn(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(port)], {
+const processes = processScope();
+const server = processes.spawn(process.execPath, [path.join(dir, "node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(port)], {
 	cwd: dir, env: { ...process.env, PATH: `${path.dirname(process.execPath)}:${process.env.PATH}`, LH_DATA_DIR: path.join(dir, "data"), LH_AUTH_FILE: path.join(dir, "auth.json"), OPENROUTER_API_KEY: "scripted-test-only", NEXT_TELEMETRY_DISABLED: "1" }, stdio: ["ignore", "pipe", "pipe"],
 });
 let log = "";
-console.log(`Disposable browser app: ${dir}`);
-server.stdout.on("data", data => { log += data; void appendFile(path.join(dir, "server.log"), data); });
-server.stderr.on("data", data => { log += data; void appendFile(path.join(dir, "server.log"), data); });
+let serverError;
+server.once("error", error => { serverError = error; });
+captureOutput(server, path.join(dir, "server.log"), false);
+server.stdout.on("data", data => { log += data; });
+server.stderr.on("data", data => { log += data; });
 let browser;
 try {
 	for (let i = 0; ; i++) {
-		if (server.exitCode !== null) throw new Error(log);
+		if (serverError) throw serverError;
+		if (server.exitCode !== null || server.signalCode !== null) throw new Error(log);
 		if (log.includes("Ready in")) break;
-		if (i > 90) throw new Error(`Server did not start: ${log}`);
+		if (i > 120) throw new Error(`Server did not start: ${log}`);
 		await new Promise(resolve => setTimeout(resolve, 500));
 	}
-	browser = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-features=BackForwardCache", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
+	browser = await puppeteer.launch({ executablePath, headless: true, handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false, args: ["--no-sandbox", "--disable-features=BackForwardCache", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
+	processes.own(browser.process());
 	const page = await browser.newPage();
 	const errors = [];
 	page.on("pageerror", error => errors.push(error.message));
@@ -702,17 +712,29 @@ try {
 	assert.equal(await page.$eval(mic, e => e.checkVisibility()), false, "Compact microphone stays phone-only");
 	assert.deepEqual(errors, [], "No browser runtime errors");
 	console.log("PASS: conversation, reading/reveal, free-text/selection/Other answers, practice/drills, real persisted submissions, speech recovery, image review, panels, phone geometry and focus/gesture containment.");
+	await browser.close();
+	browser = undefined;
+	if (process.argv.includes("--all")) {
+		for (const [name, chat] of [["smoke-question-reveal", "mobile_reveal_regression"], ["smoke-mobile-layout", "mobile_panels"]]) {
+			console.log(`RUN: ${name}`);
+			const test = processes.spawn(process.execPath, [`scripts/${name}.mjs`], {
+				cwd: root, env: { ...process.env, LH_SMOKE_URL: origin, LH_SMOKE_CHAT_ID: chat }, stdio: ["ignore", "pipe", "pipe"],
+			});
+			captureOutput(test, path.join(dir, `${name}.log`));
+			await completed(test);
+		}
+		console.log("PASS: all three mobile browser suites");
+	}
 } catch (error) {
 	if (browser) {
-		const page = (await browser.pages()).at(-1);
-		await page.screenshot({ path: path.join(dir, "failure.png") });
-		await writeFile(path.join(dir, "failure.txt"), await page.evaluate(() => document.body.innerText));
+		try {
+			const page = (await browser.pages()).at(-1);
+			await page.screenshot({ path: path.join(dir, "failure.png") });
+			await writeFile(path.join(dir, "failure.txt"), await page.evaluate(() => document.body.innerText));
+		} catch (captureError) { console.error("Failure capture:", captureError); }
 	}
-	await writeFile(path.join(dir, "server.log"), log);
 	console.error(`Browser artifacts: ${dir}`);
 	throw error;
 } finally {
-	await browser?.close();
-	server.kill("SIGTERM");
-	if (server.exitCode === null) await once(server, "exit");
+	await processes.close();
 }
