@@ -70,7 +70,7 @@ jobs:
       - run: npm run test:mobile
       - name: Retain browser failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mobile-browser-failure-${{ github.run_attempt }}
           path: |
