@@ -8,6 +8,57 @@ build `fHPXoJTBmay2lBmcEUHGR`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
 The current fork's native Electron app remains open; use **Reload preview** to
 load the update. Physical phone and owner-learning acceptance are still pending.
 
+## Continuation interpretation correction — live checks passed, deployment pending
+
+Owner reported DeepSeek replacing the right side instead of extending an equality
+and failing to identify the line currently being continued. The saved execution
+inputs confirm full current Notebook and prior Notebook exchanges were supplied
+(5 and 7 exchanges respectively); Tutor conversation is not part of this editor
+context. The saved raw response itself replaced `p = F/A` with `p = 600/…`.
+An offline replay through `runNotebookEditor` reproduced that removal.
+
+Owner approved an exact continuation paragraph, regression checks and up to **3
+DeepSeek/low via Zen calls** on isolated copies, with deployment conditional on
+passing. The prompt correction is currently **undeployed**. First-round results:
+
+- Append incomplete fraction: PASS, preserved `p = F/A` and appended `= 600/…`.
+- Continue recently edited line: FAIL, asked whether line 1 or 2 and demanded
+  the missing denominator, despite the recent correction and unfinished-work rule.
+- Explicit replacement control: PASS, replaced only the final unfinished term
+  with the dictated `200000`, preserving earlier expressions and the other line.
+
+First round: exactly **3 provider calls**, no format retries. Overall semantic
+check **failed**. Owner subsequently approved the two additional recent-line and
+unfinished-expression rules in [the prompt plan](notebook-model-picker-plan.md),
+plus up to three more targeted calls. **The refined second round passed 3/3**:
+preserved `p = F/A` while appending the incomplete fraction; continued the recently
+edited line with `= 600 × 3 ÷` without asking for its missing operand; and replaced
+only the last term when explicitly instructed. The other line remained exact in
+all cases. Final build/review/deployment follow. Prior UI build `48224b9` remains deployed.
+No learner records or settings were written.
+
+First-round targeted receipt:
+`/tmp/opencode/notebook-integration/continuation-check-20261104/receipt.json`;
+that directory contains copied inputs, prompt hash, raw responses, usage and
+per-attempt timing. Logs: `check-28-continuation-live.log` and
+`check-28-continuation-replacement.log`. The first harness import failed before
+any provider dispatch; it was corrected before the bounded run.
+
+Final targeted receipt:
+`/tmp/opencode/notebook-integration/continuation-check-20261104-r2/receipt.json`;
+log `check-28-continuation-r2-live.log`. Exactly **3 additional provider calls**,
+no retries; **6 total newly authorized editor calls**, all DeepSeek/low through
+the production Zen engine. Each response was also inspected for preserved source,
+unchanged unrelated working and requested unfinished/explicit-replacement behavior.
+
+Offline context/application regressions: **14 tests passed**, typecheck/lint
+passed (`check-28-continuation-{tests,types,lint}.log`). The new automated test
+protects full-history transmission, whole-line application, unrelated source and
+Undo; it does **not** establish model comprehension. The new frozen live-evaluation
+case covers equality extension, unfinished working and explicit replacement.
+Earlier trial totals remain separately recorded; this check adds **6** editor
+dispatches/provider calls and no Tutor calls or speech capture.
+
 ## Card-content cleanup follow-up
 
 Owner accepted the overall layout, rejected the crowded contents, and approved

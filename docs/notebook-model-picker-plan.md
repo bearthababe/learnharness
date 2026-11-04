@@ -2,7 +2,7 @@
 
 Owner-approved 2026-11-04 after the controlled model comparisons.
 
-- A **Notebook model** dropdown above the instruction offers **DeepSeek / low ·
+- **⋯ → Model** (moved there by the later approved card cleanup) offers **DeepSeek / low ·
   Zen** (`opencode/deepseek-v4.1-flash`, low) and **Terra / off · ChatGPT**
   (`chatgpt/gpt-6.1-terra`, off).
 - Persist the choice per learning session. Sessions without a choice start with
@@ -41,3 +41,29 @@ auth paths; the current fork's native Electron shell is open against it. HTTPS,
 manifest/icons, reload and fixture-backed browser/mobile-emulation checks passed.
 See [delivery](notebook-delivery.md#notebook-candidate-picker-and-prompt-adoption-2026-11-04)
 for runtime ownership and remaining physical-phone/owner-learning acceptance.
+
+## Approved continuation paragraph — candidate, not deployed
+
+After the owner reported lost expressions and over-clarification, they approved
+this exact addition after the context/clarification rule:
+
+> When continuing a calculation, use the recent conversation to identify the line
+> being worked on. ‘Set that equal to …’ extends that line with another equals
+> sign, preserving the existing expressions, unless the learner asks to replace
+> them. Keep unfinished continuations unfinished. Ask only when the target or
+> intended edit remains genuinely ambiguous.
+
+Authorization: offline regression coverage and up to three targeted DeepSeek calls
+on isolated copies of the reported sequence, followed by verified deployment only
+if checks pass. Two checks passed; continuation of the recent line still produced
+an unnecessary question. The owner then approved this additional refinement and
+up to three more targeted DeepSeek calls:
+
+> For a continuation such as ‘that’ or ‘set that equal to’, use the line most
+> recently edited or explicitly named in the conversation unless the learner
+> indicates a different line. An expression ending with an operator or an empty
+> denominator is intentional unfinished working; record it as dictated rather
+> than asking for the missing part.
+
+Deployment remains conditional on successful checks. See the
+[canonical verification record](notebook-mobile-verification.md).

@@ -3,12 +3,14 @@ import { APP_IDENTITY, type PiEngine } from "./models.ts";
 import { notebookResponseSchema as responseSchema, type NotebookState, type NotebookExchange, type NotebookEditorInput, type NotebookResponse } from "../core/contracts/notebook.ts";
 export type { NotebookLine, NotebookState, NotebookHistoryEntry, NotebookExchange, NotebookEditorInput, NotebookResponse } from "../core/contracts/notebook.ts";
 
-// Frozen prototype rewrite instructions, followed by the owner's history and
-// whole-line targeting decisions. No expected evaluation answers enter here.
+// Prototype rewrite instructions with owner-approved history, targeting, speech
+// and continuation rules. No expected evaluation answers enter here.
 export const NOTEBOOK_EDITOR_PROMPT = `You edit a learner's mathematical notebook in response to conversational instructions.
 Record the learner's intended working, including mathematical mistakes and unfinished or invalid LaTeX. Do not solve, simplify, complete, correct the mathematics, convert units, or change unrelated content unless explicitly requested.
 Preserve the learner’s mathematical mistakes and unfinished working. Distinguish these from speech-recognition errors: use the current working and conversation to interpret likely mistranscriptions. Preserve existing mathematical symbols when the intended reference is clear. If a word could mean either a deliberate change or a transcription error, ask rather than silently choosing.
 Use the current notebook, any explicit selection/cursor, and the supplied conversation history to interpret references. If the intended target or edit is ambiguous, ask a concise clarification question and make no edit. After an answer, use the preceding question and instruction to continue.
+When continuing a calculation, use the recent conversation to identify the line being worked on. ‘Set that equal to …’ extends that line with another equals sign, preserving the existing expressions, unless the learner asks to replace them. Keep unfinished continuations unfinished. Ask only when the target or intended edit remains genuinely ambiguous.
+For a continuation such as ‘that’ or ‘set that equal to’, use the line most recently edited or explicitly named in the conversation unless the learner indicates a different line. An expression ending with an operator or an empty denominator is intentional unfinished working; record it as dictated rather than asking for the missing part.
 Output exactly one JSON object, without markdown fences or surrounding prose. Escape LaTeX backslashes as required by JSON.
 The notebook is an ordered list of {id, latex} lines. IDs are stable. Input selection and cursor describe only this turn; null means no explicit selection or cursor. A reference may still be resolved from conversation history when clear.
 Choose one response shape:

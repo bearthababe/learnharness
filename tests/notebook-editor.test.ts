@@ -38,6 +38,29 @@ test("an editor instruction changes only the addressed line and retains an undoa
 	assert.deepEqual(state, original, "the caller's working is never mutated in place");
 });
 
+test("equality continuation sends the entire earlier exchange and applies a whole-line result without losing earlier expressions", async () => {
+	const faux = createFauxCore({});
+	const before = [{ id: "L1", latex: String.raw`p = \frac{F}{A}` }, { id: "L2", latex: "2 + 2 = 5" }];
+	const continued = [{ id: "L1", latex: String.raw`p = \frac{F}{A} = \frac{600}{}` }, before[1]!];
+	const completed = [{ id: "L1", latex: String.raw`p = \frac{F}{A} = \frac{600}{0.003}` }, before[1]!];
+	const prompts: string[] = [];
+	faux.setResponses([continued, completed].map(lines => context => {
+		const content = context.messages[0]!.content;
+		assert.equal(typeof content, "string");
+		prompts.push(String(content));
+		return fauxAssistantMessage(JSON.stringify({ action: "edit", operations: [{ op: "replace", ...lines[0] }] }));
+	}));
+	const engine = { model: faux.getModel(), streamFn: faux.streamSimple };
+	const first = await runNotebookEditor({ state: { lines: before, undo: [] }, instruction: "On line one, set the equation equal to 600 over" }, { engine });
+	const second = await runNotebookEditor({ state: first.state, history: first.history, instruction: "Set the denominator of that new fraction to 0.003." }, { engine });
+	const supplied = JSON.parse(prompts[1]!.split("\n\nEARLIER CONVERSATION\n\n")[1]!.split("\n\nCURRENT INSTRUCTION")[0]!);
+	assert.deepEqual(supplied, first.history, "every earlier instruction, model response and applied state reaches the next turn");
+	assert.deepEqual(first.state.lines, continued);
+	assert.deepEqual(second.state.lines, completed);
+	assert.deepEqual(second.state.undo, [before, continued]);
+	assert.deepEqual(second.history.map(exchange => exchange.notebookAfter), [continued, completed]);
+});
+
 test("clarification retains context and historical source; a completed edit can be undone across turns", async () => {
 	const faux = createFauxCore({});
 	const seen: string[] = [];
