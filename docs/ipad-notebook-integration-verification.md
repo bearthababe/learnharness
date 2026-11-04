@@ -47,7 +47,15 @@ Approved proposal SHA-256 values:
 #46 implementation/checks have not yet run. Record exact delivery commits,
 commands/results, reviews and integration ancestry here as they become available.
 Use deterministic provider/speech fixtures and isolated data for automated checks.
-Live-provider spending and preview-slot replacement need separate coordination.
+The owner subsequently approved replacing the existing #45 handwriting review
+in slot 2 (`:8445`) when the integrated build is ready, preserving review data
+and the recorded lesson-navigation restoration details. Recheck live slot
+ownership, listeners and mappings before the actual handoff.
+
+The owner approved using their existing tutor/dictation configuration for calls
+they initiate during the physical iPad trial. Automated checks remain scripted:
+no agent-initiated live model/speech calls are authorized. Keep review data and
+configuration isolated, and never include credential contents in evidence.
 
 Physical iPad acceptance remains distinct from browser emulation. Keep required
 device gates open until owner confirmation. No push or remote merge is claimed.
