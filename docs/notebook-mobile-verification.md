@@ -11,6 +11,46 @@ load the update. Physical phone and owner-learning acceptance are still pending.
 Current tracker receipt: [#28 continuation fix](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6643703927),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6643706613).
 
+## Menu review and input-toolbar follow-up — implemented, verification in progress
+
+Owner approved removal of inline previews, menu-only **Review attached working**,
+editable explanation text (including current continuation), immutable ordered
+snapshots, and review scoped to the current activity. Questions include Answer,
+Thinking and Thinking while reading. Approved plain scrollable menu with Back and
+“No working attached yet” empty state; opening inspects only, selecting a text
+field uses existing Tutor handoff. The open/close icon moves below the active
+Tutor input through `StatsBar.leadingSlot`; card Close remains in ⋯.
+
+Implementation reuses `MenuShell` and the existing draft save/attachment paths.
+Portaled review inputs carry their workspace identity, participate in the existing
+Tutor handoff and mobile focus lock, and use a keyboard-aware menu viewport cap.
+Closing an edited review releases its stale input reference. Input Enter inserts
+a newline; menu Enter/Escape never applies or submits.
+
+Full suite on the new application code: **2,694 / 2,695 passed**, with only the
+new scope test failing on linkedom's lack of textarea defaultValue→value mirroring.
+A standalone DOM reproduction confirmed that harness limitation. After correcting
+the test to inspect React's initialized defaultValue, the affected UI/viewport/menu
+tests passed; application code did not change for that correction. Logs:
+`check-28-review-all-tests.log` and `check-28-review-final-targeted.log` under
+`/tmp/opencode/notebook-integration/`. Browser checks also verify actual textarea
+values and reload, rather than relying on the DOM emulator.
+
+### Latest saved latency evidence
+
+Read-only inspection of “Handwriting trial”, operation
+`8126e5bc-d4db-41c5-88a0-1a60b3e76622`, instruction “Great. So that's equal to 600
+times five, over a thousand.” Accepted `2026-11-04T22:40:39.077Z`, response finished
+`2026-11-04T22:41:00.345Z`: **21,268 ms** accepted-to-result, **20,738 ms** in one
+DeepSeek V4.1 Flash/low Zen call, approximately **530 ms** beforehand, **1,428
+reasoning tokens**, no retry. Adjacent model calls took **3,068 ms** and **4,999 ms**.
+Existing logs cannot distinguish provider waiting from generation time. No
+latency model/reasoning change, new live calls or further instrumentation approved.
+
+The oversized preview contained the pending ordinary Tutor draft's frozen
+revisions **2, 8 and 11**, oldest first, with empty intervening text parts. The
+latest version was present; this was an attachment review, not live Notebook state.
+
 ## Continuation interpretation correction — verified and deployed
 
 Owner reported DeepSeek replacing the right side instead of extending an equality

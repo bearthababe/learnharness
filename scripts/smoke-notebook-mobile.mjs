@@ -97,6 +97,18 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.waitForFunction(() => !document.querySelector(".session-workspace").inert);
 	const savedDraft = await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json();
 	assert.equal(savedDraft.snapshots.length, 1);
+	assert.equal(await page.$('[data-snapshot-id]'), null, 'No inline snapshot previews');
+	await openNotebookMenu(page, "Review attached working");
+	assert.equal(await page.$$eval('[data-snapshot-id]', nodes => nodes.length), 1);
+	await page.focus('[aria-label="Earlier explanation"]');
+	await page.keyboard.press('End');
+	await page.keyboard.press('Enter');
+	await page.keyboard.type('Reviewed earlier text.');
+	await page.focus('[aria-label="Current explanation"]');
+	await page.keyboard.press('End');
+	await page.keyboard.type(' Reviewed continuation.');
+	await page.keyboard.press('Escape');
+	assert.deepEqual(await page.evaluate(() => notebookSmoke.sends), [], 'Editing review and Enter never send');
 	await openNotebookMenu(page);
 	await page.keyboard.press("Enter");
 	await page.keyboard.press("ArrowDown");
@@ -113,6 +125,27 @@ export async function verifyNotebookMobile(browser, origin) {
 	assert.equal(await page.$eval('[data-notebook-candidate="terra-off"]', e => e.getAttribute("aria-checked")), "true");
 	await page.keyboard.press("Escape");
 	assert.ok(await page.$eval(tutor, e => e.value.includes("after working")), "Reload restores the independent Tutor continuation");
+	await openNotebookMenu(page, "Review attached working");
+	assert.ok(await page.$eval('[aria-label="Earlier explanation"]', e => e.value.includes('\nReviewed earlier text.')), 'Earlier edits and newlines survive reload');
+	assert.ok(await page.$eval('[aria-label="Current explanation"]', e => e.value.includes('Reviewed continuation.')), 'Current continuation stays synchronized');
+	await page.keyboard.press('Escape');
+	// A recording switched into the portaled earlier-text field must finish in
+	// its original Notebook draft, then focus the chosen Tutor prose part.
+	await page.focus('#notebook-instruction');
+	await page.click(mic);
+	await page.waitForFunction(() => notebookSmoke.sockets.length === 1 && notebookSmoke.worklet);
+	await page.evaluate(() => { notebookSmoke.audio(); notebookSmoke.time = 14; notebookSmoke.final('Retain this in the Notebook instruction.'); });
+	await openNotebookMenu(page, 'Review attached working');
+	assert.equal(await page.evaluate(() => notebookSmoke.closes), 0, 'Opening review leaves recording ownership alone');
+	await page.click('[aria-label="Earlier explanation"]');
+	await page.waitForFunction(() => notebookSmoke.closes === 1);
+	await page.evaluate(() => notebookSmoke.end());
+	await page.waitForFunction(() => !document.querySelector('.session-workspace').inert && document.activeElement?.getAttribute('aria-label') === 'Earlier explanation');
+	assert.ok(await page.$eval('#notebook-instruction', e => e.value.includes('Retain this in the Notebook instruction.')));
+	assert.equal(await page.$eval('[aria-label="Earlier explanation"]', e => e.value.includes('Retain this')), false);
+	assert.equal(await page.evaluate(() => notebookSmoke.captures), 1, 'Selecting review text does not start another recording');
+	assert.deepEqual(await page.evaluate(() => notebookSmoke.sends), []);
+	await page.keyboard.press('Escape');
 	await page.click('[data-testid="composer"] [aria-label="Send"]');
 	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
 	const saved = await (await fetch(`${origin}/api/chats/mobile_other`)).json();

@@ -3,9 +3,9 @@ import { SharedWritingImages, SharedWritingPanel, useSharedWriting } from "@/com
 import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
 import type { SharedWriting } from "@/src/core";
 
-import { createContext, Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { createContext, Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { explanationHasContent, serializeLearnerExplanation, type LearnerExplanation as Explanation } from "@/src/core";
-import { LearnerExplanation, NotebookDraftReview } from "./learner-explanation";
+import { LearnerExplanation } from "./learner-explanation";
 import { useChatSession } from "@/components/session";
 import { visibleQueuedSteers } from "@/components/session-core";
 import { SetupDialog } from "@/components/setup-dialog";
@@ -64,7 +64,7 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -276,6 +276,7 @@ export function Chat({
 
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
 	const workspaceRef = useRef<HTMLDivElement | null>(null);
+	const workspaceId = useId();
 	const notebook = useNotebookSession(chatId);
 	const notebookVisible = notebook.view?.visible ?? false;
 	const notebookLayout = useNotebookLayout(notebookVisible);
@@ -1319,7 +1320,7 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div ref={workspaceRef} inert={notebook.inputLocked} data-session-workspace="" className="session-workspace flex h-dvh overflow-hidden">
+		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" className="session-workspace flex h-dvh overflow-hidden">
 			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
 			<div className="session-tutor" inert={notebookLayout.expanded}>
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
@@ -1399,16 +1400,6 @@ export function Chat({
 					{/* The plan chip (owner, plan-placement round): session-level
 					    structure beside the phase chip — access to the full-DAG popup
 					    at every width; the marginalia is the wide-screen glance view. */}
-					<button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
-						className="lh-no-drag shrink-0 rounded border border-border px-2 py-1 text-xs"
-						onClick={() => {
-							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
-							if (notebookVisible && workspaceRef.current) {
-								void notebook.session.speech.choose(notebookTutorInput(workspaceRef.current)).then(() => notebook.session.dispatch({ type: "visibility", visible: false })).catch(() => {});
-							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
-						}}>
-						{notebookVisible ? "Collapse Notebook" : "Notebook"}
-					</button>
 					<NotebookSpeechDestination session={notebook.session} />
 					{planTree && (
 						<Hint label="Open the full plan" side="bottom">
@@ -1770,6 +1761,15 @@ export function Chat({
 					turns={turns}
 					contextTokens={contextTokens}
 					pricing={pricing}
+					notebookToggle={<button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
+						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
+						className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+						onClick={() => {
+							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
+							if (notebookVisible && workspaceRef.current) {
+								void notebook.session.speech.choose(notebookTutorInput(workspaceRef.current)).then(() => notebook.session.dispatch({ type: "visibility", visible: false })).catch(() => {});
+							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
+						}}><NotebookPenIcon className="size-4" /></button>}
 					onReserve={setDockReserve}
 					dictationSlot={<DictationBar dictation={dictation} />}
 					dictation={tutorDictation}
@@ -1798,7 +1798,6 @@ export function Chat({
 					}
 					composer={
 						<div>
-						<NotebookDraftReview draft={ordinaryDraft} onTextChange={(id, value) => notebook.session.tutor.updateText({ kind: "ordinary" }, value, id)} />
 						{tutorDraftState.error && <p role="alert" className="px-3 text-xs text-destructive">Unsent draft: {tutorDraftState.error}</p>}
 						{tutorDraftState.saving && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
 						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}
@@ -1875,7 +1874,8 @@ export function Chat({
 								requestAnimationFrame(focusDictationDestination);
 							}).catch(() => {});
 						}}>
-						{controls => <NotebookPanel session={notebook.session} dictation={dictation} viewControls={controls} />}
+						{controls => <NotebookPanel session={notebook.session} dictation={dictation} viewControls={controls} workspaceId={workspaceId}
+							activity={pending ? { kind: "question", toolCallId: pending.toolCallId, channel: "thinking" } : activeProblem ? { kind: "practice", problemCallId: activeProblem.toolCallId } : { kind: "ordinary" }} />}
 					</NotebookFrame>
 				</>}
 			</div>
@@ -2012,6 +2012,7 @@ export function shouldStampGeometryMute(nextH: number, prevH: number, pending: b
 
 function DockOverlay({
 	notebook,
+	notebookToggle,
 	sharedWritingSlot,
 	hasSharedWriting,
 	pending,
@@ -2041,6 +2042,7 @@ function DockOverlay({
 	queuedSteers,
 }: {
 	notebook: NotebookSession;
+	notebookToggle: React.ReactNode;
 	sharedWritingSlot?: React.ReactNode;
 	hasSharedWriting?: boolean;
 	pending: ReturnType<typeof findPendingToolCall>;
@@ -2539,6 +2541,7 @@ function DockOverlay({
 					    flush to the screen bottom — static height, outside the
 					    morphing shell so it never joins a height animation. */}
 					<StatsBar
+						leadingSlot={notebookToggle}
 						turns={turns}
 						contextTokens={contextTokens}
 						pricing={pricing}

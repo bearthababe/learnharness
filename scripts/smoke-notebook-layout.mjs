@@ -72,7 +72,27 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	assert.equal(await page.$eval('[data-notebook-scroll]', e => e.scrollTop), 300, "Close/reopen restores the last visible Notebook reading position");
 	assert.ok(await page.evaluate(() => layoutTutor === document.querySelector('[data-testid="composer"] textarea') && layoutNotebook === document.querySelector('#notebook-instruction')), "View switches keep both editors mounted");
 	assert.equal(await page.$eval('#notebook-instruction', e => e.value), "Keep this equation instruction.");
-	assert.ok(await page.evaluate(() => document.body.textContent.includes("My independent Tutor draft.")), "Tutor prose survives snapshot handoff");
+	assert.equal(await page.$('[data-snapshot-id]'), null, "Snapshots are absent from the inline input");
+	assert.equal(await page.$eval('button[data-input-owner="notebook"][aria-expanded]', e => !!e.closest('[data-testid="stats-bar"]')), true, "Notebook toggle lives below the active input");
+	await openNotebookMenu(page, "Review attached working");
+	assert.ok(await page.$eval('[aria-label="Earlier explanation"]', e => e.value.includes("My independent Tutor draft.")), "Tutor prose survives snapshot handoff and is available in review");
+	await page.click('[aria-label="Earlier explanation"]');
+	await page.waitForFunction(() => !document.querySelector('.session-workspace').inert);
+	await page.focus('[aria-label="Earlier explanation"]');
+	await page.evaluate(() => { Object.defineProperty(visualViewport, "height", { configurable: true, get: () => 500 }); visualViewport.dispatchEvent(new Event("resize")); });
+	await page.waitForFunction(() => document.documentElement.hasAttribute('data-session-input-locked'));
+	await page.waitForFunction(() => document.querySelector('[data-testid="notebook-options"]').getBoundingClientRect().bottom <= 500);
+	const reviewPosition = await page.evaluate(() => ({ x: scrollX, y: scrollY }));
+	const reviewClient = await page.createCDPSession();
+	for (const selector of ['[data-testid="notebook-options"]', '[aria-label="Earlier explanation"]', '.notebook-options-heading']) {
+		const point = await page.$eval(selector, e => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(Math.max(10, Math.min(480, r.y + r.height / 2))) }; });
+		for (const distance of [-120, 120]) await reviewClient.send('Input.synthesizeScrollGesture', { ...point, yDistance: distance, gestureSourceType: 'touch' });
+	}
+	assert.deepEqual(await page.evaluate(() => ({ x: scrollX, y: scrollY })), reviewPosition);
+	await page.screenshot({ path: path.join(artifacts, 'notebook-phone-attachment-review.png') });
+	await page.keyboard.press('Escape');
+	await page.evaluate(() => { delete visualViewport.height; visualViewport.dispatchEvent(new Event('resize')); });
+	await page.waitForFunction(() => !document.documentElement.hasAttribute('data-session-input-locked'));
 	// Phone keyboard allocation and gesture containment use real layout, emulated viewport.
 	await page.focus('#notebook-instruction');
 	await page.evaluate(() => { Object.defineProperty(visualViewport, "height", { configurable: true, get: () => 500 }); visualViewport.dispatchEvent(new Event("resize")); });

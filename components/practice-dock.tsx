@@ -8,7 +8,6 @@ import { finishDictation, isDictationActive, joinDictation, useDictationTarget, 
 import { explanationHasContent, type NotebookInputFields } from "@/src/core";
 import type { NotebookSession } from "./notebook-session";
 import { useNotebookActivityDraft } from "./notebook-activity-draft";
-import { NotebookDraftReview } from "./learner-explanation";
 import { CompactLearningInput } from "@/components/compact-learning-input";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { cn } from "@/lib/utils";
@@ -140,7 +139,6 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 
 			{/* The learner's half: Enter SENDS (owner round 2, 2026-10-05);
 			    Shift+Enter makes a newline — less to decide about. */}
-			<NotebookDraftReview draft={owned.draft} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
 			<div
 				data-testid="practice-thinking-field"
 				className={cn("lh-question-input m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50", !expanded && "lh-practice-collapsed")}

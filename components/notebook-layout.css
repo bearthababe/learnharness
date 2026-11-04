@@ -53,6 +53,8 @@
 .notebook-menu-content { padding: 8px; overflow-wrap: anywhere; }
 .notebook-menu-content article + article { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
 .notebook-menu-content h4 { color: var(--muted-foreground); }
+.notebook-draft-review + .notebook-draft-review { margin-top: 16px; }
+.notebook-draft-review textarea { min-height: 44px; padding: 8px 0; max-height: 8rem; overflow-y: auto; overscroll-behavior: contain; }
 .notebook-split-divider { display: flex; flex: 0 0 28px; align-items: center; justify-content: center; touch-action: none; user-select: none; cursor: ns-resize; background: var(--background); border-block: 1px solid var(--border); }
 .notebook-split-divider > span { width: 40px; height: 4px; border-radius: 4px; background: var(--muted-foreground); }
 .notebook-split-divider:focus-visible { background: var(--accent); }

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef } from "react";
 import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import type { NotebookSession } from "./notebook-session";
 import { useNotebookActivityDraft } from "./notebook-activity-draft";
-import { NotebookDraftReview } from "./learner-explanation";
 import { CompactLearningInput } from "@/components/compact-learning-input";
 import { ChevronRightIcon } from "lucide-react";
 
@@ -86,7 +85,6 @@ export function ReadingThinkingField({
 			<div className="pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 				Thinking while reading
 			</div>
-			<NotebookDraftReview draft={owned.draft} onTextChange={(id, text) => notebook!.tutor.updateText(owner, text, id)} />
 			{owned.state.error && <p role="alert" className="text-xs text-destructive">{owned.state.error}</p>}
 			<div className="lh-compact-row"><CompactLearningInput dictation={claim ? dictation : undefined}><textarea
 				aria-label="Thinking while reading"

@@ -4,16 +4,21 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeftIcon, CheckIcon, EllipsisIcon, Loader2Icon, Maximize2Icon, Minimize2Icon, Undo2Icon } from "lucide-react";
 import type { NotebookSession } from "./notebook-session";
 import { NotebookWorking } from "./notebook-working";
-import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, notebookCandidateSchema } from "@/src/core";
+import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, notebookCandidateSchema, type TutorDraftOwner } from "@/src/core";
 import { CompactLearningInput } from "./compact-learning-input";
 import type { Dictation } from "./dictation";
 import type { NotebookViewControls } from "./notebook-layout";
 import { MenuShell } from "./menu-shell";
+import { NotebookDraftReview } from "./learner-explanation";
 
-export function NotebookPanel({ session, dictation, viewControls }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls }) {
+export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string }) {
 	const { view, draftText, saving, editing, inputLocked, error, cursorLineId } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
 	const speech = useSyncExternalStore(session.speech.subscribe, session.speech.getSnapshot, session.speech.getSnapshot);
-	const [menu, setMenu] = useState<"options" | "model" | "history" | "usage" | null>(null);
+	const drafts = useSyncExternalStore(session.tutor.subscribe, session.tutor.getSnapshot, session.tutor.getSnapshot);
+	const attached = drafts.drafts.filter(({ owner }) => activity.kind === "question" ? owner.kind === "question" && owner.toolCallId === activity.toolCallId
+		: activity.kind === "practice" ? owner.kind === "practice" && owner.problemCallId === activity.problemCallId : owner.kind === "ordinary");
+	const hasWorking = attached.some(draft => draft.parts.some(part => part.kind === "working"));
+	const [menu, setMenu] = useState<"options" | "model" | "history" | "usage" | "review" | null>(null);
 	const trigger = useRef<HTMLButtonElement>(null);
 	const applyWaiting = editing || inputLocked;
 	const modelLocked = !view || saving || applyWaiting || !!view.pending || speech.active;
@@ -51,17 +56,22 @@ export function NotebookPanel({ session, dictation, viewControls }: { session: N
 				if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeMenu(); }
 				// Portal keys bubble through their React owner. Enter activates a
 				// choice, never the underlying Tutor or Notebook submission.
-				if (event.key === "Enter") { event.stopPropagation(); if (!(event.target instanceof HTMLButtonElement)) event.preventDefault(); }
+				if (event.key === "Enter") { event.stopPropagation(); if (!(event.target instanceof HTMLButtonElement) && !(event.target instanceof HTMLTextAreaElement)) event.preventDefault(); }
 			}}>
 				<button ref={trigger} type="button" aria-label="Notebook options" title="Notebook options" aria-expanded={menu !== null} aria-haspopup="menu" onClick={() => setMenu(menu ? null : "options")}><EllipsisIcon /></button>
-				{menu && <MenuShell key={menu} anchorRef={trigger} testid="notebook-options" preferredSide="down" menuClass="notebook-options">
-					{menu !== "options" && <div className="notebook-options-heading"><button type="button" aria-label="Back to Notebook options" onClick={() => setMenu("options")}><ArrowLeftIcon /></button><h3>{menu === "model" ? "Notebook model" : menu === "history" ? "History" : "Usage"}</h3></div>}
+				{menu && <MenuShell key={menu} anchorRef={trigger} testid="notebook-options" preferredSide="down" menuClass="notebook-options" fitVisualViewport={menu === "review"}>
+					{menu !== "options" && <div className="notebook-options-heading"><button type="button" aria-label="Back to Notebook options" onClick={() => setMenu("options")}><ArrowLeftIcon /></button><h3>{menu === "model" ? "Notebook model" : menu === "history" ? "History" : menu === "review" ? "Review attached working" : "Usage"}</h3></div>}
 					{menu === "options" && <div role="menu" aria-label="Notebook options">
 						<button type="button" role="menuitem" onClick={() => setMenu("model")}>Model<span>{NOTEBOOK_CANDIDATES[candidate].label}</span></button>
+						<button type="button" role="menuitem" onClick={() => setMenu("review")}>Review attached working</button>
 						<button type="button" role="menuitem" onClick={() => setMenu("history")}>History</button>
 						<button type="button" role="menuitem" disabled={applyWaiting || !!view?.pending || !!view?.problem || !view?.contextId} onClick={() => command("start-fresh")}>Start fresh</button>
 						<button type="button" role="menuitem" onClick={() => setMenu("usage")}>Usage</button>
 						{viewControls && <button type="button" role="menuitem" onClick={() => { setMenu(null); viewControls.close(); }}>Close notebook</button>}
+					</div>}
+					{menu === "review" && <div data-notebook-workspace={workspaceId} inert={inputLocked} className="notebook-menu-content">
+						{hasWorking ? attached.map(draft => <NotebookDraftReview key={draft.id} draft={draft} onTextChange={(id, text) => session.tutor.updateText(draft.owner, text, id)} />) : <p>No working attached yet.</p>}
+						{drafts.error && <p role="alert">{drafts.error}</p>}
 					</div>}
 					{menu === "model" && <div role="menu" aria-label="Notebook model">{Object.entries(NOTEBOOK_CANDIDATES).map(([id, option]) => <button type="button" key={id} role="menuitemradio" aria-checked={candidate === id} disabled={modelLocked} data-notebook-candidate={id}
 						onClick={() => { void session.dispatch({ type: "candidate", candidate: notebookCandidateSchema.parse(id) }).then(closeMenu).catch(() => {}); }}>

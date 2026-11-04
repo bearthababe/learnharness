@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type RefObject } from "react";
+import { notebookInputBelongsTo } from "./notebook-input-scope";
 
 /** Focus owns only an attribute/CSS lock, never another overlay's body styles. */
 export function useSessionInputViewport(rootRef: RefObject<HTMLElement | null>, enabled = true) {
@@ -27,7 +28,7 @@ export function useSessionInputViewport(rootRef: RefObject<HTMLElement | null>, 
 			if (disposed) return;
 			const field = document.activeElement as HTMLElement | null;
 			const mobile = window.innerWidth < 768 || window.matchMedia?.("(pointer: coarse) and (max-width: 979px)").matches;
-			if (!mobile || !field || !root.contains(field) || field.closest("[hidden],[inert]") || !field.matches('textarea,input:not([type="range"]),[contenteditable="true"]')) { release(); return; }
+			if (!mobile || !field || !notebookInputBelongsTo(root, field) || field.closest("[hidden],[inert]") || !field.matches('textarea,input:not([type="range"]),[contenteditable="true"]')) { release(); return; }
 			const pane = field.closest("[data-input-owner]")?.getAttribute("data-input-owner");
 			if (pane !== "notebook" && pane !== "tutor") { release(); return; }
 			if (!locked) {
@@ -85,7 +86,7 @@ export function useSessionInputViewport(rootRef: RefObject<HTMLElement | null>, 
 		window.visualViewport?.addEventListener("scroll", sync);
 		// Removing/collapsing a focused pane need not emit focusout on every browser.
 		const observer = new MutationObserver(() => { if (locked) sync(); });
-		observer.observe(root, { childList: true, subtree: true });
+		observer.observe(document.body, { childList: true, subtree: true });
 		sync();
 		return () => {
 			disposed = true; observer.disconnect(); release();

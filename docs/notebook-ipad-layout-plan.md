@@ -97,3 +97,24 @@ rejected the crowded controls inside it. Owner selected **Implement this cleanup
 
 Implementation and deployment to the same app are authorized. A later move of
 model selection to global Settings was mentioned as a future direction only.
+
+## Approved attachment review and toggle placement — 2026-11-04/05
+
+- Remove inline attachment previews from ordinary chat, question answers/thinking,
+  reading-thinking, and practice/drill inputs. Preserve automatic attachment and
+  the ordered content sent to Tutor.
+- Add **Review attached working** in Notebook ⋯. Show only the current activity's
+  drafts, including all question channels, with simple headings. Equations remain
+  immutable; earlier prose and the current continuation remain editable and durable.
+- Use the existing scrollable menu and Back control, with “No working attached
+  yet.” when empty. Browsing only inspects; selecting an explanation field uses
+  Tutor's settled handoff. Preserve the original recording's destination and
+  forbid implicit Apply/Send/new recording. Review text Enter inserts a newline.
+- Put a small accessible Notebook open/close icon in the shared toolbar directly
+  below the active Tutor input. Remove the title-bar toggle; card Close stays in ⋯.
+- Link portaled review fields explicitly to their workspace for focus, keyboard
+  and mobile scroll locking. Keep the visible review above the software keyboard.
+
+Owner separately approved **Keep text editable**, **Current activity**, and this
+concrete implementation/verification/deployment plan. Current results are recorded
+in [the authoritative verification record](notebook-mobile-verification.md).

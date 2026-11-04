@@ -108,6 +108,7 @@ export function MenuShell({
 	preferredSide,
 	align = "right",
 	menuClass,
+	fitVisualViewport = false,
 	children,
 }: {
 	anchorRef?: RefObject<HTMLElement | null>;
@@ -121,6 +122,8 @@ export function MenuShell({
 	/** The menu body classes: width, border, bg, padding, text — the
 	 *  shell adds position, z-index, the height cap, and scrolling. */
 	menuClass: string;
+	/** Editable Notebook review follows the software keyboard's visible area. */
+	fitVisualViewport?: boolean;
 	children: ReactNode;
 }) {
 	const menuRef = useRef<HTMLDivElement>(null);
@@ -198,13 +201,20 @@ export function MenuShell({
 		const place = () => {
 			const el = anchor();
 			if (!el || !menuRef.current) return;
+			const viewport = fitVisualViewport && (window.visualViewport?.scale ?? 1) === 1 ? window.visualViewport : null;
+			const offset = viewport?.offsetTop ?? 0;
+			const rect = el.getBoundingClientRect();
 			const p = computeMenuPlacement(
-				el.getBoundingClientRect(),
-				{ width: window.innerWidth, height: window.innerHeight },
+				{ top: rect.top - offset, bottom: rect.bottom - offset, left: rect.left, right: rect.right },
+				{ width: window.innerWidth, height: viewport?.height ?? window.innerHeight },
 				menuRef.current.scrollHeight,
 				preferredSide,
 				align,
 			);
+			if (viewport) {
+				if (typeof p.style.top === "number") p.style.top += offset;
+				if (typeof p.style.bottom === "number") p.style.bottom += window.innerHeight - offset - viewport.height;
+			}
 			setPlaced(p);
 		};
 		place();
@@ -214,12 +224,14 @@ export function MenuShell({
 		};
 		window.addEventListener("scroll", rePlace, true);
 		window.addEventListener("resize", rePlace);
+		if (fitVisualViewport) { window.visualViewport?.addEventListener("resize", rePlace); window.visualViewport?.addEventListener("scroll", rePlace); }
 		return () => {
 			cancelAnimationFrame(raf);
 			window.removeEventListener("scroll", rePlace, true);
 			window.removeEventListener("resize", rePlace);
+			if (fitVisualViewport) { window.visualViewport?.removeEventListener("resize", rePlace); window.visualViewport?.removeEventListener("scroll", rePlace); }
 		};
-	}, [anchorRef, anchorTestid, preferredSide, align]);
+	}, [anchorRef, anchorTestid, preferredSide, align, fitVisualViewport]);
 
 	// First pass: mounted hidden at the viewport's top-left so the layout
 	// effect can measure the real content height before anything is seen.

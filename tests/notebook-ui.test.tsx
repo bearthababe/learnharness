@@ -25,7 +25,7 @@ const { useEnterSubmits } = await import("../components/enter-submits.ts");
 const { QuestionDock } = await import("../components/question-dock.tsx");
 const { PracticeDock } = await import("../components/practice-dock.tsx");
 const { useNotebookDestination } = await import("../components/notebook-destination.ts");
-const { NotebookDraftReview, LearnerExplanation } = await import("../components/learner-explanation.tsx");
+const { LearnerExplanation } = await import("../components/learner-explanation.tsx");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 test("Notebook picker saves without Apply, locks during saving/recording/editing, and reopens its choice", async () => {
@@ -249,7 +249,7 @@ test("mounted written answer accepts working-only content, keeps commitment hidd
 	try {
 		await act(async () => root.render(<QuestionDock notebook={session} toolName="recall" toolCallId="written" input={{ question: "Pressure?", correctAnswer: "SECRET COMMITMENT" }} expanded onExpand={() => {}} onSubmit={async (answer, _id, fields) => { sent.push({ answer, fields }); return false; }} />));
 		await act(async () => { await session.dispatch({ type: "draft", text: "Make pressure" }); await session.dispatch({ type: "apply" }); await service.settled(chat.id); await session.refresh(); await session.tutor.returnToTutor({ kind: "question", toolCallId: "written", channel: "text" }); });
-		assert.equal(host.querySelectorAll("[data-snapshot-id]").length, 1);
+		assert.equal(host.querySelectorAll("[data-snapshot-id]").length, 0, "Attached working no longer occupies the question input");
 		assert.doesNotMatch(host.textContent!, /SECRET COMMITMENT/);
 		const button = host.querySelector<HTMLButtonElement>('[data-testid="question-send"]')!;
 		assert.equal(button.disabled, false);
@@ -356,7 +356,7 @@ test("mounted practice adapter reopens its owned working-only draft and retains 
 	let sent: unknown;
 	try {
 		await act(async () => root.render(<PracticeDock problemCallId="p1" input={{ statement: "Pressure?" }} expanded onExpand={() => {}} notebook={reopened} onSubmit={async (_text, _id, fields) => { sent = fields; return false; }} />));
-		assert.equal(host.querySelectorAll("[data-snapshot-id]").length, 1);
+		assert.equal(host.querySelectorAll("[data-snapshot-id]").length, 0, "Attached working no longer occupies the practice input");
 		assert.equal(host.querySelector<HTMLButtonElement>('[data-testid="practice-send"]')!.disabled, false);
 		await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="practice-send"]')!.click(); await reopened.tutor.idle(); });
 		assert.match(JSON.stringify(sent), /p=F\/A/);
@@ -382,12 +382,11 @@ test("mounted continuation reviews immutable snapshots, edits earlier prose, app
 		const draft = state.drafts[0];
 		const part = draft?.parts.at(-1);
 		useNotebookDestination(root, session, true);
-		return <div ref={root}>
+		return <div ref={root} id="review-workspace">
 			<div data-input-owner="tutor">
-				<NotebookDraftReview draft={draft} onTextChange={(id, text) => session.tutor.updateText({ kind: "ordinary" }, text, id)} />
 				<Composer value={part?.kind === "text" ? part.text : ""} onChange={(text) => session.tutor.updateText({ kind: "ordinary" }, text)} busy={false} canSend={!!draft?.parts.some((part) => part.kind === "working" || part.text.trim())} onStop={() => {}} onSend={() => { void session.tutor.prepareSubmission({ kind: "ordinary" }).then((input) => { sent = input.explanation; }); }} />
 				{sent && <LearnerExplanation parts={sent} />}
-			</div><NotebookPanel session={session} />
+			</div><NotebookPanel session={session} workspaceId="review-workspace" />
 		</div>;
 	}
 	const host = document.createElement("div"); document.body.append(host);
@@ -407,10 +406,16 @@ test("mounted continuation reviews immutable snapshots, edits earlier prose, app
 		const composer = host.querySelector<HTMLTextAreaElement>('[data-testid="composer"] textarea')!;
 		await act(async () => { composer.dispatchEvent(new window.Event("focusin", { bubbles: true })); await session.tutor.idle(); });
 		assert.equal(sent, undefined, "focus return never submits");
-		assert.equal(host.querySelectorAll('[data-snapshot-id]').length, 1);
+		assert.equal(host.querySelectorAll('[data-snapshot-id]').length, 0, "No inline attachment preview");
 		assert.equal(host.querySelector<HTMLButtonElement>('[aria-label="Send"]')!.disabled, false, "working-only ordinary content is eligible");
+		const openReview = async () => {
+			await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')!.click());
+			await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === "Review attached working")!.click());
+		};
+		await openReview();
+		assert.equal(document.querySelectorAll('[data-snapshot-id]').length, 1);
 		// Native input event on the actual earlier-text control.
-		const earlier = host.querySelector<HTMLTextAreaElement>('[aria-label="Earlier explanation"]')!;
+		let earlier = document.querySelector<HTMLTextAreaElement>('[aria-label="Earlier explanation"]')!;
 		await act(async () => {
 			const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
 			setter!.call(earlier, "Same force, larger area.");
@@ -419,15 +424,75 @@ test("mounted continuation reviews immutable snapshots, edits earlier prose, app
 		});
 		assert.equal(session.tutor.draft({ kind: "ordinary" })!.parts[0]!.kind, "text");
 		assert.match(JSON.stringify(session.tutor.draft({ kind: "ordinary" })), /Same force, larger area/);
+		await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')!.click());
 		await apply("Double area");
+		const beforeReview = structuredClone(session.tutor.draft({ kind: "ordinary" }));
+		await openReview();
+		assert.deepEqual(session.tutor.draft({ kind: "ordinary" }), beforeReview, "Opening review neither switches nor captures working");
+		earlier = document.querySelector<HTMLTextAreaElement>('[aria-label="Earlier explanation"]')!;
 		await act(async () => { earlier.dispatchEvent(new window.Event("focusin", { bubbles: true })); await session.tutor.idle(); });
 		const draft = session.tutor.draft({ kind: "ordinary" })!;
 		assert.deepEqual(draft.parts.filter((part) => part.kind === "working").map((part) => part.lines[0]!.latex), ["p=F/A", "p=F/(2A)"]);
 		assert.equal(draft.parts.at(-1)?.kind, "text", "return from earlier editor still appends at continuation");
 		assert.equal(sent, undefined);
+		await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')!.click());
 		await act(async () => { host.querySelector('[data-testid="composer"]')!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); await session.tutor.idle(); });
 		assert.deepEqual(sent, draft.parts);
 		assert.equal(service.view(chat.id).draft.text, "");
+	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); }
+});
+
+test("menu review scopes every question channel, persists prose edits and keeps other activities separate", async () => {
+	const chat = chatStore.createChat("Review scope");
+	const faux = createFauxCore({}); let calls = 0;
+	faux.setResponses([() => { calls++; return fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"p=F/A"}]}'); }]);
+	const service = createNotebookService({ chatStore, engine: async () => ({ engine: { model: faux.getModel(), streamFn: faux.streamSimple }, model: "faux:editor" }) });
+	const transport: typeof fetch = async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id);
+	let session = createNotebookSession(chat.id, transport);
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	await session.dispatch({ type: "draft", text: "Write pressure" }); await session.dispatch({ type: "apply" }); await service.settled(chat.id); await session.refresh();
+	const owners: import("../src/core/index.ts").TutorDraftOwner[] = [
+		{ kind: "question", toolCallId: "q1", channel: "text" },
+		{ kind: "question", toolCallId: "q1", channel: "thinking" },
+		{ kind: "question", toolCallId: "q1", channel: "reading-thinking" },
+		{ kind: "question", toolCallId: "old", channel: "text" },
+		{ kind: "ordinary" }, { kind: "practice", problemCallId: "p1" },
+	];
+	for (const [i, owner] of owners.entries()) {
+		session.tutor.updateText(owner, `Before ${i}`); await session.tutor.idle();
+		await session.tutor.returnToTutor(owner);
+		session.tutor.updateText(owner, `After ${i}`); await session.tutor.idle();
+	}
+	const host = document.createElement("div"); document.body.append(host); let root = createRoot(host);
+	const openReview = async () => {
+		await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')!.click());
+		await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === "Review attached working")!.click());
+	};
+	try {
+		await act(async () => root.render(<NotebookPanel session={session} activity={owners[0]} />));
+		await openReview();
+		assert.deepEqual([...document.querySelectorAll('.notebook-draft-review h4')].map(e => e.textContent), ["Answer", "Thinking", "Thinking while reading"]);
+		assert.equal(document.querySelectorAll('[data-snapshot-id]').length, 3);
+		// React initializes textarea.defaultValue; linkedom does not mirror it to
+		// value like a browser does. Real value/reload is also checked in Chromium.
+		assert.deepEqual([...document.querySelectorAll<HTMLTextAreaElement>('.notebook-draft-review textarea')].map(e => e.defaultValue), ["Before 0", "After 0", "Before 1", "After 1", "Before 2", "After 2"]);
+		const field = document.querySelector<HTMLTextAreaElement>('[data-notebook-channel="reading-thinking"] [aria-label="Current explanation"]')!;
+		await act(async () => {
+			Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(field, "Reading revision\nStill unfinished");
+			field.dispatchEvent(new window.Event("input", { bubbles: true })); await session.tutor.idle();
+		});
+		await act(async () => root.unmount()); session.dispose();
+		session = createNotebookSession(chat.id, transport); await session.refresh(); root = createRoot(host);
+		await act(async () => root.render(<NotebookPanel session={session} activity={owners[0]} />));
+		await openReview();
+		assert.equal(document.querySelector<HTMLTextAreaElement>('[data-notebook-channel="reading-thinking"] [aria-label="Current explanation"]')!.defaultValue, "Reading revision\nStill unfinished");
+		await act(async () => root.render(<NotebookPanel session={session} activity={owners[5]} />));
+		assert.deepEqual([...document.querySelectorAll<HTMLTextAreaElement>('.notebook-draft-review textarea')].map(e => e.defaultValue), ["Before 5", "After 5"]);
+		await act(async () => root.render(<NotebookPanel session={session} activity={{ kind: "practice", problemCallId: "p2" }} />));
+		assert.match(document.querySelector('[data-testid="notebook-options"]')!.textContent!, /No working attached yet/);
+		assert.equal(document.querySelectorAll('[data-snapshot-id]').length, 0);
+		assert.equal(chatStore.getChat(chat.id)!.messages.length, 0);
+		assert.equal(calls, 1, "Review never calls the editor");
 	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); }
 });
 
