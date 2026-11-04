@@ -181,6 +181,12 @@ pricing-generation step: Pi AI's catalog and public calculator are the authority
 
 ## Testing
 
+For an existing development preview, use the read-only
+[mobile preview command](verification/mobile-preview-checks.md) to verify launch
+metadata, the manifest/icon and the actual Reload control. The
+[retrospective tooling record](verification/retro-mobile-tooling.md) records the
+verification and global workflow changes that introduced these commands.
+
 For browser prerequisites, retained diagnostics and fresh-checkout reruns, see
 [Mobile browser checks](verification/mobile-browser-checks.md). This gate runs
 separately from the deterministic suite below.

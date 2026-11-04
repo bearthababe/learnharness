@@ -106,10 +106,13 @@ The dedicated `scripts/smoke-question-reveal.mjs` and
 `scripts/smoke-mobile-layout.mjs` also passed against the same disposable app
 restarted on localhost `3110`. The wrapper seeds a separate unrevealed teaching
 fixture and enough disposable session rows to exercise navigation scrolling;
-it then runs the repository scripts and stops the server. Reproduce with:
+it then runs the repository scripts and stops the server. That session-local
+wrapper is historical evidence; its cached fixture was tied to a now-removed
+worktree. For a fresh reproduction, use the committed
+[mobile browser runner](mobile-browser-checks.md):
 
 ```sh
-node /home/bjorn/.cache/opencode/mobile-input-37-completion/run-extra-browser.mjs
+npm run test:mobile
 ```
 
 The initial dedicated layout run timed out reopening Sessions immediately after
