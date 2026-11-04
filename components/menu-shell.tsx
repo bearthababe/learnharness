@@ -105,11 +105,14 @@ export function computeVisibleMenuPlacement(
 	rect: { top: number; bottom: number; left: number; right: number },
 	viewport: { width: number; height: number; offsetTop: number; offsetLeft: number },
 	contentHeight: number, menuWidth: number, preferredSide: MenuSide, align: MenuAlign,
+	dockSearch = false,
 ): MenuPlacement {
 	const clampY = (y: number) => Math.max(EDGE, Math.min(viewport.height - EDGE, y - viewport.offsetTop));
 	const local = { ...rect, top: clampY(rect.top), bottom: clampY(rect.bottom) };
-	const { side } = computeMenuPlacement(local, viewport, contentHeight, preferredSide, align);
-	const edge = side === "up" ? Math.max(EDGE, local.top - GAP) : Math.min(viewport.height - EDGE, local.bottom + GAP);
+	const side = dockSearch ? "up" : computeMenuPlacement(local, viewport, contentHeight, preferredSide, align).side;
+	// Focused phone search covers the composer instead of reserving its height.
+	// The visible bottom is the browser-reported keyboard/accessory boundary.
+	const edge = dockSearch ? viewport.height : side === "up" ? Math.max(EDGE, local.top - GAP) : Math.min(viewport.height - EDGE, local.bottom + GAP);
 	const room = side === "up" ? edge - EDGE : viewport.height - EDGE - edge;
 	const width = Math.min(menuWidth, Math.max(0, viewport.width - 2 * EDGE));
 	const wantedLeft = (align === "right" ? rect.right - width : rect.left) - viewport.offsetLeft;
@@ -150,11 +153,24 @@ export function MenuShell({
 	children: ReactNode;
 	/** Phone Model opens on the body; search focus requires an explicit tap. */
 	focusSearch?: boolean;
+	/** Phone Model fits the visible area and docks there during search. */
 	fitVisualViewport?: boolean;
 }) {
 	const menuRef = useRef<HTMLDivElement>(null);
 	const [placed, setPlaced] = useState<MenuPlacement | null>(null);
 	const focusedOnceRef = useRef(false);
+	const [searchFocused, setSearchFocused] = useState(false);
+	const searchDocked = fitVisualViewport && searchFocused;
+	const pickingRef = useRef(false);
+	const blurFrameRef = useRef(0);
+	const finishPick = () => {
+		pickingRef.current = false;
+		cancelAnimationFrame(blurFrameRef.current);
+		blurFrameRef.current = requestAnimationFrame(() => {
+			if (!menuRef.current?.contains(document.activeElement)) setSearchFocused(false);
+		});
+	};
+	useEffect(() => () => cancelAnimationFrame(blurFrameRef.current), []);
 
 	// Announce open↔close for lockable surfaces (see MENU_OPEN_EVENT).
 	useEffect(() => {
@@ -233,7 +249,7 @@ export function MenuShell({
 				el.getBoundingClientRect(),
 				{ width: viewport?.width ?? innerWidth, height: viewport?.height ?? innerHeight,
 					offsetTop: viewport?.offsetTop ?? 0, offsetLeft: viewport?.offsetLeft ?? 0 },
-				menuRef.current.scrollHeight, menuRef.current.getBoundingClientRect().width, preferredSide, align,
+				menuRef.current.scrollHeight, menuRef.current.getBoundingClientRect().width, preferredSide, align, searchDocked,
 			) : computeMenuPlacement(
 				el.getBoundingClientRect(),
 				{ width: window.innerWidth, height: window.innerHeight },
@@ -261,7 +277,7 @@ export function MenuShell({
 			viewport?.removeEventListener("resize", rePlace);
 			viewport?.removeEventListener("scroll", rePlace);
 		};
-	}, [anchorRef, anchorTestid, preferredSide, align, fitVisualViewport]);
+	}, [anchorRef, anchorTestid, preferredSide, align, fitVisualViewport, searchDocked]);
 
 	// First pass: mounted hidden at the viewport's top-left so the layout
 	// effect can measure the real content height before anything is seen.
@@ -285,7 +301,22 @@ export function MenuShell({
 			ref={menuRef}
 			data-testid={testid}
 			data-lh-menu=""
+			data-search-docked={searchDocked || undefined}
 			tabIndex={-1}
+			onFocusCapture={(event) => {
+				if (fitVisualViewport && event.target instanceof HTMLInputElement) setSearchFocused(true);
+			}}
+			onBlurCapture={(event) => {
+				// Keep the card still while a result takes focus on pointerdown;
+				// moving it before click would lose the intended model selection.
+				// Safari can blur the input without focusing the tapped button.
+				if (!pickingRef.current && !event.currentTarget.contains(event.relatedTarget)) setSearchFocused(false);
+			}}
+			onPointerDownCapture={(event) => {
+				if (searchDocked && event.target instanceof Element && event.target.closest("button")) pickingRef.current = true;
+			}}
+			onPointerUpCapture={() => { if (pickingRef.current) finishPick(); }}
+			onPointerCancel={() => { if (pickingRef.current) finishPick(); }}
 			onKeyDown={onBodyKeyDown}
 			style={{ position: "fixed", zIndex: 60, ...placed.style, maxHeight: placed.maxHeight, overflowY: "auto" }}
 			// The body is the arrow machine's focus home (input-less menus

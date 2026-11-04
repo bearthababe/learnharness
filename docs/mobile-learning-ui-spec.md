@@ -43,6 +43,17 @@ search focus remains inherited. Plan retains the full-screen/touch direction.
 The sheet description below records the previous selection, superseded for
 Usage/Model by this revision. Physical-iPhone acceptance is still required.
 
+**Focused-search refinement — owner approved after the compact trial:** the
+compact appearance is good overall, but while phone search is active the card
+must attach to the visible area's lower edge above iPhone keyboard/accessory
+controls. Cover the composer and model/thinking/Usage controls instead of reserving
+space for them. Keep the whole rounded card visible, shrinking its results area
+as needed; show search and results, hiding the explanatory footer while searching.
+Return to trigger anchoring when search loses focus. A result tap must still
+select the intended model without the card moving away between pointerdown and
+click. Retain the initial unfocused compact presentation and inherited desktop
+behavior. Physical iPhone confirmation of the native-control boundary is required.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),

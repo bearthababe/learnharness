@@ -87,7 +87,7 @@ export function ModelMenuList({
 				</>}
 			/>
 			{footer && (
-				<div className="mt-1 border-t px-2 pt-1.5 text-xs text-muted-foreground">{footer}</div>
+				<div data-model-menu-footer="" className="mt-1 border-t px-2 pt-1.5 text-xs text-muted-foreground">{footer}</div>
 			)}
 		</>
 	);

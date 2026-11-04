@@ -565,6 +565,8 @@ try {
 	}
 	const compactModel = await visibleBounds('[data-testid="model-menu"]');
 	assert.ok(compactModel.height <= 350 * .6 && compactModel.width < 375, "Model keeps the compact menu cap and edge spacing");
+	assert.ok(Math.abs(compactModel.bottom - compactModel.visibleBottom) <= 1, "Focused search attaches the whole card to the keyboard/accessory boundary");
+	assert.equal(await page.$eval('[data-model-menu-footer]', e => getComputedStyle(e).display), "none", "Focused search only shows search/results, without the explanatory footer");
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), true, "Viewport movement does not steal deliberate search focus");
 	assert.ok(await page.$eval('[data-testid="model-search"]', e => parseFloat(getComputedStyle(e).fontSize) >= 16), "Search avoids iOS focus autozoom");
 	await page.$eval('[data-testid="model-list"]', e => { e.scrollTop = e.scrollHeight; });
@@ -572,10 +574,45 @@ try {
 		const r = e.getBoundingClientRect();
 		return e.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
 	}), "Final model remains reachable above the keyboard");
+	// Native Done can blur search while leaving the picker open. Restore its
+	// compact trigger anchor, then re-enter search without changing the query.
+	await page.$eval('[data-testid="model-search"]', e => e.blur());
+	await page.waitForFunction(() => !document.querySelector('[data-testid="model-menu"]').hasAttribute("data-search-docked"));
+	const unfocusedModel = await visibleBounds('[data-testid="model-menu"]');
+	assert.ok(unfocusedModel.bottom < unfocusedModel.visibleBottom - 1, "Blur restores trigger-anchored positioning");
+	assert.notEqual(await page.$eval('[data-model-menu-footer]', e => getComputedStyle(e).display), "none");
+	await page.click('[data-testid="model-search"]');
+	// More native chrome leaves less room: the whole card follows that boundary,
+	// with its results shrinking inside it instead of extending underneath.
+	await page.evaluate(async () => {
+		Object.defineProperty(visualViewport, "height", { configurable: true, get: () => 250 });
+		Object.defineProperty(visualViewport, "offsetTop", { configurable: true, get: () => 56 });
+		visualViewport.dispatchEvent(new Event("resize"));
+		visualViewport.dispatchEvent(new Event("scroll"));
+		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+	});
+	const smallerModel = await visibleBounds('[data-testid="model-menu"]');
+	assert.ok(Math.abs(smallerModel.bottom - smallerModel.visibleBottom) <= 1 && smallerModel.top >= smallerModel.visibleTop);
+	assert.ok(smallerModel.height <= 250 * .6, "Card shrinks when iPhone controls reduce available space");
+	await fill('[data-testid="model-search"]', "no-model-can-match-this-fixture-query");
+	await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]').textContent.includes("No models match."));
+	const emptyModel = await visibleBounds('[data-testid="model-menu"]');
+	assert.ok(Math.abs(emptyModel.bottom - emptyModel.visibleBottom) <= 1, "Filtering to no results keeps the card attached");
 	await fill('[data-testid="model-search"]', longModel.id);
 	const visibleModel = `[data-testid="model-option-${longModel.id.replace(/[^a-z0-9-]/gi, "_")}"]`;
 	const keyboardPick = page.waitForResponse(r => new URL(r.url()).pathname === "/api/chats/mobile_panels/settings" && r.request().method() === "PUT" && r.ok());
-	await page.click(visibleModel);
+	await page.waitForSelector(visibleModel);
+	// Safari may blur search without focusing a tapped button. Keep its target
+	// stationary through pointerdown/blur until click commits the model.
+	const pickTarget = await page.$eval(visibleModel, e => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+	await page.mouse.move(pickTarget.x, pickTarget.y);
+	await page.mouse.down();
+	await page.evaluate(async () => {
+		document.activeElement?.blur();
+		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+	});
+	assert.ok(await page.$eval(visibleModel, (e, point) => e.contains(document.elementFromPoint(point.x, point.y)), pickTarget), "Result stays under the tap after search blur");
+	await page.mouse.up();
 	await keyboardPick;
 	await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
 	assert.equal(await page.$eval(input, e => e.value), "Keyboard-aware panels preserve this draft.");
@@ -648,7 +685,7 @@ try {
 	await page.click('[data-testid="stats-model"]');
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
 	await page.keyboard.press("Escape");
-	console.log("PASS: compact Model/Usage, deliberate phone search focus, visual-only keyboard clearance, Plan pinch/pan and drafts");
+	console.log("PASS: compact Model/Usage, focused search docking above keyboard/accessory controls, footer suppression, blur/pick stability, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	assert.equal((await upload("mobile_panels")).status, 201);

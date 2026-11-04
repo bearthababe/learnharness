@@ -14,6 +14,19 @@ const rect = (top: number, bottom: number) => ({ top, bottom, left: 100, right: 
 const viewport = (height: number) => ({ width: 1280, height });
 
 describe("phone visual-viewport placement", () => {
+	it("docks focused search to the visible bottom instead of reserving the composer and model bar", () => {
+		for (const height of [250, 350]) {
+			for (const offsetTop of [0, 36]) {
+				const view = { width: 375, height, offsetTop, offsetLeft: 0 };
+				const p = computeVisibleMenuPlacement(rect(180, 224), view, 500, 352, "up", "right", true);
+				assert.equal(p.side, "up");
+				assert.equal(p.style.top, height + offsetTop, "Whole card ends at the visible keyboard/accessory boundary");
+				assert.equal(p.style.transform, "translateY(-100%)");
+				assert.ok(Number(p.style.top) - p.maxHeight >= offsetTop + 8);
+				assert.equal(p.maxHeight, height * .6, "Retains compact sizing as native controls reduce the available area");
+			}
+		}
+	});
 	it("keeps an offscreen anchor's menu above a visual-only keyboard with offsets", () => {
 		const p = computeVisibleMenuPlacement(rect(600, 644), { width: 320, height: 350, offsetTop: 36, offsetLeft: 12 }, 500, 352, "up", "right");
 		assert.equal(p.side, "up");
