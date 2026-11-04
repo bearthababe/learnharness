@@ -11,6 +11,22 @@ Stop never applies or sends; #27 was closed as not planned. The #28 settled
 handoffs below supersede the earlier overlapping-action delivery notes.
 Current mobile limitations do not authorize redesigning the app-wide sidebar.
 
+## Latest: clean card controls deployed (2026-11-04)
+
+Owner accepted the overall card layout, rejected its crowded controls, and
+approved **Implement this cleanup**. Header now has small Undo/Expand icons and
+one ⋯ menu; Model, History, Start fresh, Usage and Close are in that menu. The
+compact instruction/microphone and small Apply leave the working area dominant.
+Clarifications/errors are expandable. Model selection remains per session.
+
+Source `48224b9`, build `fHPXoJTBmay2lBmcEUHGR`, is deployed to the existing
+**https://thinkpad.tailfd9bf6.ts.net:8444/**. Use **Reload preview**, including in
+the still-open native current-fork Electron app. Full **2,693 tests /499 suites**,
+typecheck/lint, browser flows, final geometry, review, build/payload, Electron
+smoke and actual HTTPS/Reload checks passed. Physical phone and owner-learning
+acceptance remain pending. The authoritative [verification record](notebook-mobile-verification.md)
+contains the current build location, process identity and evidence links.
+
 ## Notebook candidate picker and prompt adoption (2026-11-04)
 
 **Combined-build progress:** owner approved checkpointing Notebook (`2d43b41`),
@@ -48,8 +64,8 @@ Physical-phone and owner-learning
 acceptance remain incomplete.
 
 Owner approved the [picker implementation plan](notebook-model-picker-plan.md):
-**DeepSeek / low · Zen** and **Terra / off · ChatGPT**, selected directly above
-the Notebook instruction and remembered per learning session. The initial choice
+**DeepSeek / low · Zen** and **Terra / off · ChatGPT**, now selected under
+**⋯ → Model** and remembered per learning session. The initial choice
 is DeepSeek/low. Shared Cheap and Tutor settings remain independent.
 
 Each new Apply stores its candidate at acceptance, including speech reservations;

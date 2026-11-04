@@ -3,17 +3,18 @@
 Authoritative combined verification record for #28/#18. Review baseline:
 `d161c0d707e605e2a6ea5761b4f40bbd78dc0c58`. Notebook checkpoint: `2d43b41`.
 
-**Earlier layout deployed; approved control cleanup in verification.** Application source `19e80dc`, production build
-`P8NS9Q-Wp6wmWMML-2LhS`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
-The current fork's native Electron app is open. Physical phone and owner-learning
-acceptance are still pending.
+**Control cleanup verified and deployed.** Application source `48224b9`, production
+build `fHPXoJTBmay2lBmcEUHGR`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
+The current fork's native Electron app remains open; use **Reload preview** to
+load the update. Physical phone and owner-learning acceptance are still pending.
 
 ## Card-content cleanup follow-up
 
 Owner accepted the overall layout, rejected the crowded contents, and approved
 the [compact controls/menu arrangement](notebook-ipad-layout-plan.md#approved-card-content-cleanup--2026-11-04).
-The new controls are implemented; checks and updated deployment are in progress.
-The earlier deployed build below does not yet include this cleanup.
+The new controls are implemented, verified and deployed. Commits: `4223cdf`
+(cleanup) and `48224b9` (shared styling scales). This supersedes the earlier
+layout-only deployment without changing the URL or installed Home Screen identity.
 
 - New header has icon Undo/Expand and one options menu; instruction/microphone
   and small Apply occupy one row. Secondary controls are portaled through the
@@ -25,12 +26,36 @@ The earlier deployed build below does not yet include this cleanup.
   ownership, Stop/Apply/Send, notices, retained editors/scroll and phone geometry.
 - Cleanup review: Spec found no implementation defect. Standards identified
   off-ladder font sizes and spacing in copied compact-input styling. Corrected
-  these to shared typography tokens and the existing 4px spacing/radius scales;
-  final geometry check and production build follow this CSS-only correction.
-- Earlier whole-suite and deployment evidence below belongs to the layout build.
+  these to shared typography tokens and the existing 4px spacing/radius scales.
+  Standards reviewer confirmed both resolved in `48224b9`. **Open implementation
+  findings: Standards 0; Spec 0.** The pending delivery steps are now complete.
+- Final CSS geometry/notice/menu check passed (`check-28-cleanup-geometry.log`),
+  including shared 16px input typography, >60% phone-card working area, menu bounds,
+  native notice Enter, split/full/Close reading positions and keyboard gestures.
+- Production build, payload curation and Electron bundled-Node smoke passed:
+  `check-28-cleanup-{build,payload,electron-smoke}.log`. Offline provider smoke
+  reached all initialization gates with **zero network attempts**.
+- Final actual HTTP/HTTPS identity, compact controls, model-menu persistence after
+  **actual Reload preview**, manifest/icons/Apple metadata and phone gestures
+  passed: `check-28-combined-preview.json`, `check-28-cleanup-preview.log`.
+- Build was staged from exact committed source with installed dependencies in
+  `/home/bjorn/.cache/opencode/notebook-28-build-48224b9`, preserving the prior
+  server during compilation. Production serves its `.next/standalone/server.js`.
+  Server observed PID **3559293**, shell task `sh_1a888a8a7001AZsgOFrg3gMAx9`;
+  launch log `notebook-cleanup-production.log`. Recheck identity before restart.
+- Existing main-repo data/auth paths remain in use; production UI checks blocked
+  owner writes and used in-memory Notebook responses. Native current-fork window
+  PID **3540725** remains mapped. Slots 2/3 retain PIDs **3484369**/**3458594** and
+  all Tailscale mappings remain unchanged. No new live comparisons were performed.
+- For HTTPS re-verification of this deployment, set
+  `LH_NOTEBOOK_BUILD_DIR=/home/bjorn/.cache/opencode/notebook-28-build-48224b9`
+  when running `/tmp/opencode/notebook-integration/check-28-combined-preview.mjs`.
 
-Tracker receipt: [#28 delivery](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6642418525),
-linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6642420593).
+Earlier whole-suite and deployment evidence below documents the layout build.
+
+Current tracker receipt: [#28 cleanup](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6642995415),
+linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6642997600).
+Earlier layout receipt: [#28](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6642418525).
 
 ## Approved behavior
 
@@ -40,7 +65,7 @@ linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#i
 - Notebook has compact microphone controls inside its instruction input.
 - Preserve accepted mobile layout, independent drafts and immutable snapshots.
 
-## Software evidence
+## Earlier layout-build software evidence
 
 Logs below are under `/tmp/opencode/notebook-integration/`.
 
@@ -127,7 +152,7 @@ identity, reading positions, keyboard and available-width rules. Browser screens
 are in `/home/bjorn/.cache/opencode/mobile-input-browser-notebook-28-20261104/`
 as `notebook-{phone-split,phone-full,tablet-split,wide-split}.png`.
 
-## Deployment receipt
+## Earlier layout-only deployment receipt (superseded above)
 
 - Slot 1: localhost **3000** / HTTPS **8444**. Build identity confirmed in both
   local and HTTPS responses; `check-28-combined-preview.json` records all checks.
