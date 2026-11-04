@@ -27,6 +27,17 @@ import type {
 	NotesSource,
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
+import type { Handwriting } from "./handwriting.ts";
+
+/** Session-owned editable ink, never part of chat/sidebar projections. */
+export interface HandwritingStore {
+	/** Missing is empty; unreadable/corrupt/future formats throw. */
+	read(chatId: string): Handwriting;
+	/** Atomically extend a matching causal journal. Older retries acknowledge
+	 * current truth; divergent histories throw without replacing either copy. */
+	save(chatId: string, working: Handwriting): Handwriting;
+	deleteChat(chatId: string): void;
+}
 
 // ─── ChatStore — the session record's home (data/chats) ─────────────────────
 

@@ -126,6 +126,9 @@ export async function deleteChatSession(chatId: string, mode: ChatDeleteMode): P
 	// ledgers → jobs → the chat record.
 	const stats = deleteChatTraces(stores.graphStore, chatId, mode);
 	const jobsRemoved = stores.jobStore.deleteJobsForChat(chatId);
+	// Remove editable working before the session's final deletion. A failed
+	// cleanup leaves a deletable session; delayed saves recheck its existence.
+	stores.handwritingStore.deleteChat(chatId);
 	if (stores.chatStore.deleteChat(chatId)) {
 		stores.sharedWritingStore.deleteChat(chatId);
 		discardChatDeliveries(chatId);

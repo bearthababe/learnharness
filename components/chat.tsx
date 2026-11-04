@@ -1,6 +1,8 @@
 "use client";
 import { SharedWritingImages, SharedWritingPanel, useSharedWriting } from "@/components/shared-writing";
 import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
+import { HandwritingNotebook } from "@/components/handwriting/notebook";
+import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
 import type { SharedWriting } from "@/src/core";
 
 import { createContext, Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -250,6 +252,7 @@ export function Chat({
 	// settled terminal's callback — a stable ref assigned below, once
 	// syncFromServer exists (refs, not closures: no stale capture).
 	const reattachSettledRef = useRef<() => void>(() => {});
+	const handwriting = useHandwritingSession(chatId);
 
 	// THE SESSION HOOK (Wave D, owner-approved 2026-09-26): the app-owned
 	// replacement for useChat + the AI-SDK transport. The record is native
@@ -1277,8 +1280,9 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div ref={mobileChatRef} className="flex h-dvh overflow-hidden">
-			<div className="flex min-w-0 flex-1 flex-col">
+		<div ref={mobileChatRef} className={`flex h-dvh overflow-hidden ${handwriting.open ? "hw-workspace" : ""}`}>
+		<div className={handwriting.open ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
+			<div inert={handwriting.open && handwriting.expanded} className={`flex min-h-0 min-w-0 flex-1 flex-col ${handwriting.open ? "hw-chat hw-mobileHidden" : ""}`}>
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its
 				    bottom outline (border-b border-border) matches the one that
@@ -1395,6 +1399,7 @@ export function Chat({
 					) : (
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
 					)}
+					<Button variant="outline" size="sm" className="shrink-0" onClick={() => handwriting.show(true)} data-testid="open-notebook">Write</Button>
 				</TopBar>
 
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
@@ -1690,6 +1695,7 @@ export function Chat({
 				    height morph (typing, a question growing the band, the
 				    fold) and NEVER overlaps the composer. */}
 				<DockOverlay
+					fullQuestionWidth={handwriting.open}
 					sharedWritingSlot={<SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} />}
 					hasSharedWriting={hasSharedWriting}
 					pending={pending}
@@ -1792,6 +1798,9 @@ export function Chat({
 				<AbortTurnDialog mode={abortAsk} onClose={() => setAbortAsk(null)} onConfirm={confirmAbort} busy={busy} />
 				</div>
 			</div>
+			{handwriting.mounted && <HandwritingSplit hidden={!handwriting.open} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
+			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} />}
+		</div>
 		</div>
 		</JobsContext.Provider>
 		</SessionMermaidContext.Provider>
@@ -1924,6 +1933,7 @@ export function shouldStampGeometryMute(nextH: number, prevH: number, pending: b
 }
 
 function DockOverlay({
+	fullQuestionWidth = false,
 	sharedWritingSlot,
 	hasSharedWriting,
 	pending,
@@ -1952,6 +1962,8 @@ function DockOverlay({
 	setupCta,
 	queuedSteers,
 }: {
+	/** In the notebook split, a question fills the context pane. */
+	fullQuestionWidth?: boolean;
 	sharedWritingSlot?: React.ReactNode;
 	hasSharedWriting?: boolean;
 	pending: ReturnType<typeof findPendingToolCall>;
@@ -2006,6 +2018,7 @@ function DockOverlay({
 	setupCta?: React.ReactNode;
 }) {
 	const { isAtBottom, scrollToBottom, scrollRef } = useStickToBottomContext();
+	const wideQuestion = fullQuestionWidth && (!!pending || !!practice);
 	// Render-fresh bottom state (flicker round): the arrival block below reads
 	// it DURING RENDER — the same value the after-paint effect used to read a
 	// frame too late. Assigned per render like the other refs below.
@@ -2353,7 +2366,7 @@ function DockOverlay({
 		<div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }}>
 			<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
 			<div ref={blockRef} className="relative bg-background pb-5">
-				<div className={DOCK}>
+				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
 					<div ref={bodyRef}>
 					{setupCta}
@@ -2475,7 +2488,7 @@ function DockOverlay({
 				    the flank; below MARGIN_MIN_W it FADES (never pops away — no
 				    mid-question unmount), and widening past the floor fades it
 				    back in. */}
-				{pending && plan && (
+				{pending && plan && !wideQuestion && (
 					<Hint label="Open the full plan" side="bottom">
 <button
 						type="button"

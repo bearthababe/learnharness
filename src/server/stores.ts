@@ -11,6 +11,7 @@ import { graphStore } from "../store/graph.ts";
 import { jobStore } from "../store/jobs.ts";
 import { settingsStore } from "../store/settings.ts";
 import { sharedWritingStore } from "../store/shared-writing.ts";
+import { handwritingStore } from "../store/handwriting.ts";
 import { resolveSettings, type EffectiveSettings } from "../core/settings-resolution.ts";
 /** The wired adapters. Satisfies core/graph.ts's GraphDeps structurally. */
 export const stores = {
@@ -19,6 +20,7 @@ export const stores = {
 	jobStore,
 	settingsStore,
 	sharedWritingStore,
+	handwritingStore,
 };
 
 export type Stores = typeof stores;
