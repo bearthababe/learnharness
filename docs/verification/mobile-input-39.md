@@ -44,12 +44,19 @@ Tests were extended and run in successive geometry, speech/navigation, upload-re
 
 ## Baseline checks and diagnoses
 
-- Typecheck and targeted lint passed (`typecheck.log`, `lint.log`).
+- Typecheck and targeted component lint passed (`typecheck.log`, `lint.log`). Although the command above also names `scripts/smoke-mobile-inputs.mjs`, the repository ESLint configuration ignores `scripts/**`; the script did not receive lint coverage. Its validation is the passing real-browser execution recorded above.
 - Relevant component/handler regressions: **70/70 passed** (`targeted-regressions.log`): dictation flow/warm tokens, handwriting submission, server notifications, composer actions/rendering, stats rendering/meter and menu placement.
 - Full suite, initial and final runs: **2544 passed, 2 failed, 2546 total** (`full-suite.log`, `final-full-suite.log`). Both failures reproduce the audit's baseline; neither is introduced by this acceptance work.
   - `provider-runtime-payload.test.ts`: its positive control treats the checkout as a self-contained payload. The worktree's `node_modules` symlink resolves outside that payload, correctly tripping the confinement assertion. Running this worktree's `scripts/smoke-provider-runtime.mjs --standalone /home/bjorn/repo/teach/learnharness` passes all real installed Google/OpenCode/Copilot/xAI initialization probes with zero network attempts (`provider-installed-root.log`). No confinement rule was weakened.
   - `render-drill-entry.test.tsx`: the fixture provides `AppRouterContext` but no `PathnameContext`; `usePathname()` returns null and `AppShell` calls `startsWith`. These files predate #39's compact-input commit. The other session's uncommitted fixture correction was not copied and this unrelated test was not edited.
 - Integration recheck at `3730a75` with a real, in-worktree dependency copy: **2545 passed, 1 failed, 2546 total** (`/home/bjorn/.cache/opencode/issue39/integration-full-suite.log`). The provider-payload positive control passes once dependencies are physically inside the payload root; only the previously diagnosed drill-render fixture fails. This resolves the environment-dependent provider failure without changing its confinement rule or production code.
+
+## Review-fix recheck
+
+The owner-approved recovery/meter extraction was applied on `implement/mobile-input-39-review` after merging integration tip `4ee0850`. Compact and wide controls share the recovery operation and rolling-level sampler while retaining their activation/reset rules, geometry and compact elapsed-time display.
+
+- Typecheck and ESLint of `components/dictation.tsx` and `components/compact-learning-input.tsx` passed. Existing dictation and zero-key regressions passed **53/53**. Logs: `/home/bjorn/.cache/opencode/issue39/review-fixes-{typecheck,lint,dictation-tests}.log`.
+- The unchanged `scripts/smoke-mobile-inputs.mjs` passed its complete real-browser run against the refactored source (`/home/bjorn/.cache/opencode/issue39/review-fixes-browser-complete.log`). An initial attempt was interrupted by the shell's 120-second limit; the complete rerun used a 600-second allowance. The disposable fixture used localhost `3109`, which had no listener after completion. Public preview ports were untouched.
 
 ## Remaining external acceptance
 
