@@ -84,7 +84,7 @@ No scope creep was identified. Original report and resolution:
 
 Review totals: **Standards 3 resolved / 0 remaining** (most significant: domain
 policy outside core); **Spec 3 resolved / 0 remaining** (most significant:
-accepted-stroke loss). Physical acceptance is a separate open gate.
+accepted-stroke loss). The subsequent owner device acceptance is recorded below.
 
 ## Correction verification and preview
 
@@ -113,19 +113,24 @@ accepted-stroke loss). Physical acceptance is a separate open gate.
   assertion was corrected to inspect the actual supported metadata. No app
   metadata change was needed.
 
-## Device acceptance — pending
+## Device acceptance — owner confirmed, 2026-11-04
 
-Physical iPad, Safari and Home Screen acceptance remains required; Chromium
-input emulation does not establish Pencil latency, palm rejection or iOS storage
-behavior. Install once in Safari: **Share → Add to Home Screen → Open as Web App
-→ Add**, then launch the icon. Slot 2 is temporarily this handwriting review;
-other installed destinations at the same host follow its slot ownership.
+After the preview was restarted and the owner reported “It works,” the agent
+explicitly asked: **“Did your handwriting and Undo history also survive reloading
+and reopening the session on your iPad?”** The owner answered **“Yes, both
+survived”**, selecting the explanation that they tested writing, reload/reopen and
+Undo on the iPad. This establishes the remaining #45 physical writing/reopen
+acceptance rather than inferring it merely from a successful page load.
 
-The physical review must cover completed writing and persistent Undo after
-reload, navigation/reopen and Home Screen relaunch, plus the accepted tools,
-paper scrolling/pinch, split, Expand/Back and phone keyboard behavior. An
-interrupted incomplete stroke has no zero-loss guarantee under the approved
-contract. Existing unsent chat text retains its inherited full-reload behavior.
+The authoritative verification record, including this owner confirmation, is
+`/tmp/opencode/issue45-https-verification.json`. Source remains `329677b`.
+Earlier browser emulation and injected failure results remain distinct from this
+physical confirmation. The owner did not separately attest every Home Screen,
+gesture or injected-failure case; broader integrated-device acceptance remains
+#48, and additional input/feel improvements remain #44.
 
-Keep #45 open until its required device acceptance is recorded. Production
-handwriting submission and editable diagram/source reopening remain #46/#47.
+The #45 implementation, review and physical writing/reopen gate are complete.
+Production handwriting submission and editable diagram/source reopening remain
+#46/#47. An interrupted incomplete stroke has no zero-loss guarantee under the
+approved contract; existing unsent chat text retains its inherited full-reload
+behavior.
