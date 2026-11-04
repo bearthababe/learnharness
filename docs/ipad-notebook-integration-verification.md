@@ -26,14 +26,36 @@ Selected contracts include same-page unsent snapshot replacement, immutable sent
 versions, persistent Undo/Redo, exact capture retries, explanation durability at
 Attach, ordinary editing after definite rejection and acceptance reconciliation
 for uncertain delivery. Unified Open/undoable Restore/explicit Duplicate are
-carried into #47; its concrete implementation plan still needs approval.
+carried into #47.
+
+## #47 implementation approval
+
+The owner also approved `/tmp/opencode/issue4-reopening-plan-proposal.md` for
+implementation after #46 lands. Promote it to
+`docs/handwriting-pages-plan.md` with that implementation. It adds Pages,
+the unified Open/four-choice flow, undoable Restore, explicit Duplicate and
+diagram import. Page switching commits durable device state first, then syncs
+in the background, preserving the accepted layout and shared history contract.
+
+Approved proposal SHA-256 values:
+
+- #46: `e26754e627d66028d87cc6601114cb6884f8e271204843aeb67cdb89b0eb1233`.
+- #47: `7f1c846802e295d53d1007ef9c44ca4c0221f53a9cc52278fe82e3d812cc2c65`.
 
 ## Verification and delivery
 
 #46 implementation/checks have not yet run. Record exact delivery commits,
 commands/results, reviews and integration ancestry here as they become available.
 Use deterministic provider/speech fixtures and isolated data for automated checks.
-Live-provider spending and preview-slot replacement need separate coordination.
+The owner subsequently approved replacing the existing #45 handwriting review
+in slot 2 (`:8445`) when the integrated build is ready, preserving review data
+and the recorded lesson-navigation restoration details. Recheck live slot
+ownership, listeners and mappings before the actual handoff.
+
+The owner approved using their existing tutor/dictation configuration for calls
+they initiate during the physical iPad trial. Automated checks remain scripted:
+no agent-initiated live model/speech calls are authorized. Keep review data and
+configuration isolated, and never include credential contents in evidence.
 
 Physical iPad acceptance remains distinct from browser emulation. Keep required
 device gates open until owner confirmation. No push or remote merge is claimed.
