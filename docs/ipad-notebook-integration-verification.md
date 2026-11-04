@@ -26,7 +26,21 @@ Selected contracts include same-page unsent snapshot replacement, immutable sent
 versions, persistent Undo/Redo, exact capture retries, explanation durability at
 Attach, ordinary editing after definite rejection and acceptance reconciliation
 for uncertain delivery. Unified Open/undoable Restore/explicit Duplicate are
-carried into #47; its concrete implementation plan still needs approval.
+carried into #47.
+
+## #47 implementation approval
+
+The owner also approved `/tmp/opencode/issue4-reopening-plan-proposal.md` for
+implementation after #46 lands. Promote it to
+`docs/handwriting-pages-plan.md` with that implementation. It adds Pages,
+the unified Open/four-choice flow, undoable Restore, explicit Duplicate and
+diagram import. Page switching commits durable device state first, then syncs
+in the background, preserving the accepted layout and shared history contract.
+
+Approved proposal SHA-256 values:
+
+- #46: `e26754e627d66028d87cc6601114cb6884f8e271204843aeb67cdb89b0eb1233`.
+- #47: `7f1c846802e295d53d1007ef9c44ca4c0221f53a9cc52278fe82e3d812cc2c65`.
 
 ## Verification and delivery
 
