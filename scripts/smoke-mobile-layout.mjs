@@ -200,6 +200,9 @@ try {
 	check(await page.evaluate(() => !/user-scalable=no|maximum-scale=1(?:,|$)/.test(document.querySelector('meta[name="viewport"]').content)), "Viewport preserves pinch zoom");
 	await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1, isMobile: false, hasTouch: false });
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
+	// aria-hidden changes when opening starts, before the inherited width
+	// transition finishes. Assert its final width, as for phone opening above.
+	await page.evaluate(async () => { await Promise.all(document.querySelector('aside[aria-hidden]').getAnimations().map(a => a.finished.catch(() => {}))); });
 	check((await rect(sidebar)).width === 288, "Wide layout restores the inline desktop sidebar preference");
 	check(await page.evaluate(() => getComputedStyle(document.querySelector("main")).position !== "fixed" && !document.querySelector("main").inert), "Desktop content is interactive after mobile transition");
 	check(errors.length === 0, `No browser runtime errors${errors.length ? `: ${errors.join("; ")}` : ""}`);
