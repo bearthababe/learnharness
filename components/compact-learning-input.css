@@ -94,8 +94,6 @@
 	[data-testid="model-menu"] { overscroll-behavior: contain; }
 	[data-testid="model-menu"] [data-testid="model-search"] { flex-shrink: 0; font-size: 16px; }
 	[data-testid="model-menu"] [data-testid="model-list"] { min-height: 0; overscroll-behavior: contain; }
-	[data-testid="model-menu"][data-search-docked] [data-model-menu-footer] { display: none; }
-	[data-testid="model-menu"][data-search-docked] [data-testid="model-search"] { width: calc(100% - 48px); min-height: 44px; }
 }
 
 /* Mounted only at the shared phone breakpoint. Native dialog owns the top layer;

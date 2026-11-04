@@ -5,6 +5,20 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 /** Keep in sync with the phone shell rules in globals.css. */
 export const PHONE_MEDIA = "(max-width: 767px)";
 
+/** Refresh on lock release too: geometry can precede native resize events. */
+export function fitPhoneViewport() {
+	const style = document.documentElement.style;
+	if (!matchMedia(PHONE_MEDIA).matches) {
+		style.removeProperty("--lh-phone-height");
+		style.removeProperty("--lh-phone-top");
+		return;
+	}
+	const view = window.visualViewport;
+	if (view && view.scale !== 1) return;
+	style.setProperty("--lh-phone-height", `${view?.height ?? innerHeight}px`);
+	style.setProperty("--lh-phone-top", `${view?.offsetTop ?? 0}px`);
+}
+
 function subscribePhoneLayout(update: () => void) {
 	const media = window.matchMedia?.(PHONE_MEDIA);
 	media?.addEventListener("change", update);
@@ -28,12 +42,7 @@ export function usePhoneViewport() {
 			style.removeProperty("--lh-phone-height");
 			style.removeProperty("--lh-phone-top");
 		};
-		const fit = () => {
-			if (!media.matches) { clear(); return; }
-			if (view && view.scale !== 1) return;
-			style.setProperty("--lh-phone-height", `${view?.height ?? innerHeight}px`);
-			style.setProperty("--lh-phone-top", `${view?.offsetTop ?? 0}px`);
-		};
+		const fit = fitPhoneViewport;
 		const update = () => { setPhone(media.matches); fit(); };
 		let touch: { x: number; y: number } | undefined;
 		const start = (event: TouchEvent) => {

@@ -467,6 +467,14 @@ try {
 		const bounds = await page.$eval(selector, e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: innerWidth, height: innerHeight }; });
 		assert.ok(bounds.left >= 0 && bounds.right <= bounds.width && bounds.top >= 0 && bounds.bottom <= bounds.height, `${selector} fits: ${JSON.stringify(bounds)}`);
 	};
+	const assertCardBackdrop = async () => {
+		await page.waitForSelector('[data-testid="phone-menu-backdrop"]', { visible: true });
+		assert.ok(await page.$eval('[data-testid="phone-menu-backdrop"]', e => {
+			const css = getComputedStyle(e);
+			return css.backdropFilter !== "none" && css.backgroundColor !== "rgba(0, 0, 0, 0)";
+		}), "Phone card dims and lightly blurs the lesson");
+		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), true, "Lesson is inactive under the card");
+	};
 	const history = '[data-smoke-panel-history="true"]';
 	await page.evaluate(() => {
 		const log = document.querySelector('[role="log"]');
@@ -489,6 +497,7 @@ try {
 		await page.click('[data-testid="stats-model"]');
 		await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 		await fitPanel('[data-testid="model-menu"]');
+		await assertCardBackdrop();
 		await page.waitForFunction(count => document.querySelectorAll('[data-testid="model-list"] button').length === count, {}, catalog.models.length);
 		await fill('[data-testid="model-search"]', longModel.id);
 		const modelRow = `[data-testid="model-option-${longModel.id.replace(/[^a-z0-9-]/gi, "_")}"]`;
@@ -504,6 +513,7 @@ try {
 		await page.click('[data-testid="stats-thinking"]');
 		await page.waitForSelector('[data-testid="thinking-menu"]', { visible: true });
 		await fitPanel('[data-testid="thinking-menu"]');
+		await assertCardBackdrop();
 		assert.deepEqual(await page.$$eval('[data-testid="thinking-menu"] button', buttons => buttons.map(e => e.querySelector('span').textContent)), longModel.supportedLevels, "Every supported thinking level is retained");
 		const level = longModel.supportedLevels.at(-1);
 		const pickedLevel = page.waitForResponse(r => new URL(r.url()).pathname === "/api/chats/mobile_panels/settings" && r.request().method() === "PUT" && r.ok());
@@ -517,11 +527,13 @@ try {
 		await page.click('[data-testid="stats-summary"]');
 		await page.waitForSelector('[data-testid="stats-detail"]');
 		await fitPanel('[data-testid="stats-detail"]');
+		await assertCardBackdrop();
 		assert.equal((await page.$$('[data-testid="stats-detail"] li')).length, 24, "Usage retains every turn");
 		await page.$eval('[data-testid="stats-detail"] li:last-child', e => e.scrollIntoView({ block: "nearest" }));
 		const lastUsageVisible = await page.$eval('[data-testid="stats-detail"] li:last-child', e => { const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return e.contains(hit) && r.bottom <= innerHeight; });
 		assert.ok(lastUsageVisible, "Usage's overflowed final turn is reachable and visible");
 		await page.keyboard.press("Escape");
+		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Card dismissal restores lesson interaction");
 		await assertReading("Usage dismissal");
 		await page.focus(input);
 		await page.click('.lh-phone-plan');
@@ -586,16 +598,41 @@ try {
 		const target = await visibleBounds(hideKeyboard);
 		assert.ok(target.width >= 44 && target.height >= 44 && target.top >= target.visibleTop && target.bottom <= target.visibleBottom, "Keyboard-dismiss icon has a reachable phone-sized target");
 		const typingHeight = (await visibleBounds('[data-testid="model-list"]')).height;
+		const typingCard = await visibleBounds('[data-testid="model-menu"]');
+		const background = await page.$eval('.lh-app-shell', e => { const r = e.getBoundingClientRect(); return { top: r.top, height: r.height }; });
 		await page.click(hideKeyboard);
-		await page.waitForSelector(hideKeyboard, { hidden: true });
 		assert.equal(await page.$eval('[data-testid="model-menu"]', e => e === document.activeElement), true, "Keyboard dismissal leaves non-input focus in the open picker");
+		const waitingCard = await visibleBounds('[data-testid="model-menu"]');
+		assert.ok(Math.abs(waitingCard.bottom - typingCard.bottom) <= 1 && Math.abs(waitingCard.height - typingCard.height) <= 1, "Blur does not jump the card before keyboard geometry changes");
 		assert.equal(await page.$eval('[data-testid="model-search"]', e => e.value), "a", "Keyboard dismissal preserves query");
 		assert.deepEqual(await page.$$eval('[data-testid="model-list"] button', buttons => buttons.map(e => e.dataset.testid)), filteredModels, "Keyboard dismissal preserves filtered results");
-		await page.evaluate(async () => {
+		const closingFrames = await page.evaluate(async () => {
+			const frames = [];
+			for (const height of [400, 475, 550, 625, 700]) {
+				const offset = 36 * (700 - height) / 350;
+				Object.defineProperty(visualViewport, "height", { configurable: true, get: () => height });
+				Object.defineProperty(visualViewport, "offsetTop", { configurable: true, get: () => offset });
+				visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
+				const measure = () => {
+					const card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
+					const shell = document.querySelector('.lh-app-shell').getBoundingClientRect();
+					return { top: card.top, bottom: card.bottom, height: card.height, shellTop: shell.top, shellHeight: shell.height };
+				};
+				const immediate = measure();
+				await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+				frames.push({ visibleTop: offset, visibleBottom: offset + height, immediate, settled: measure() });
+			}
 			delete visualViewport.height; delete visualViewport.offsetTop;
 			visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
-			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+			return frames;
 		});
+		for (const frame of closingFrames) {
+			assert.ok(Math.abs(frame.immediate.bottom - frame.settled.bottom) <= 1 && Math.abs(frame.immediate.height - frame.settled.height) <= 1, `Card does not trail viewport geometry by a separate render: ${JSON.stringify(frame)}`);
+			assert.ok(frame.immediate.top >= frame.visibleTop && frame.immediate.bottom <= frame.visibleBottom + 1, "Whole card fits every intermediate visible area");
+			assert.equal(frame.settled.shellTop, background.top);
+			assert.equal(frame.settled.shellHeight, background.height, "Lesson stays stationary during keyboard motion");
+		}
+		await page.waitForSelector(hideKeyboard, { hidden: true });
 		assert.ok((await visibleBounds('[data-testid="model-list"]')).height > typingHeight, "Keyboard dismissal expands the browsing area");
 		await page.$eval('[data-testid="model-list"]', e => { e.scrollTop = e.scrollHeight; });
 		assert.ok(await page.$eval('[data-testid="model-list"] li:last-child button', e => { const r = e.getBoundingClientRect(); return e.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)); }), "Expanded filtered list remains scrollable to its final result");
@@ -615,6 +652,11 @@ try {
 	// Native Done can blur search while leaving the picker open. Restore its
 	// compact trigger anchor, then re-enter search without changing the query.
 	await page.$eval('[data-testid="model-search"]', e => e.blur());
+	await page.evaluate(async () => {
+		delete visualViewport.height; delete visualViewport.offsetTop;
+		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
+		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+	});
 	await page.waitForFunction(() => !document.querySelector('[data-testid="model-menu"]').hasAttribute("data-search-docked"));
 	const unfocusedModel = await visibleBounds('[data-testid="model-menu"]');
 	assert.ok(unfocusedModel.bottom < unfocusedModel.visibleBottom - 1, "Blur restores trigger-anchored positioning");
@@ -667,8 +709,33 @@ try {
 	const usagePopup = await visibleBounds('[data-testid="stats-detail"]');
 	assert.ok(usagePopup.height <= 700 * .6 && usagePopup.bottom < usagePopup.visibleBottom, "Usage restores its smaller anchored popup");
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0);
-	await page.click('[data-testid="stats-summary"]');
+	await page.click('[data-testid="phone-menu-backdrop"]', { offset: { x: 4, y: 4 } });
 	await page.waitForSelector('[data-testid="stats-detail"]', { hidden: true });
+	assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false);
+	// A browser can expose new viewport geometry before notifying listeners.
+	await page.click('[data-testid="stats-model"]');
+	await page.click('[data-testid="model-search"]');
+	await page.evaluate(() => {
+		Object.defineProperty(visualViewport, "height", { configurable: true, get: () => 350 });
+		visualViewport.dispatchEvent(new Event("resize"));
+	});
+	await page.click('[data-testid="model-hide-keyboard"]');
+	await page.evaluate(async () => {
+		Object.defineProperty(visualViewport, "height", { configurable: true, get: () => 600 });
+		Object.defineProperty(visualViewport, "offsetTop", { configurable: true, get: () => 10 });
+		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+	});
+	const silentModel = await visibleBounds('[data-testid="model-menu"]');
+	assert.ok(silentModel.height > 210 && silentModel.bottom <= 610, "Open card follows geometry without a resize notification");
+	assert.equal(await page.$eval('.lh-app-shell', e => e.getBoundingClientRect().height), 700, "Unnotified geometry keeps the lesson frozen");
+	await page.keyboard.press("Escape");
+	await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
+	assert.deepEqual(await page.$eval('.lh-app-shell', e => { const r = e.getBoundingClientRect(); return { height: r.height, top: r.top, inert: e.inert }; }),
+		{ height: 600, top: 10, inert: false }, "Dismissal restores current geometry, not the last notified viewport");
+	await page.evaluate(() => {
+		delete visualViewport.height; delete visualViewport.offsetTop;
+		visualViewport.dispatchEvent(new Event("resize"));
+	});
 	await page.click('.lh-phone-plan');
 	await page.waitForSelector('[data-testid="plan-popup-dialog"]');
 	const fullPlan = await visibleBounds('[data-testid="plan-popup"]');
@@ -716,6 +783,8 @@ try {
 	await page.setViewport({ width: 1100, height: 800, isMobile: true, hasTouch: true });
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	await fitPanel('[data-testid="model-menu"]');
+	await page.waitForSelector('[data-testid="phone-menu-backdrop"]', { hidden: true });
+	assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Wide layout releases the frozen phone background");
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0);
 	await page.keyboard.press("Escape");
 	assert.equal(await page.evaluate(() => document.body.style.overflow), "", "Phone modal releases its background lock on desktop");
@@ -723,7 +792,7 @@ try {
 	await page.click('[data-testid="stats-model"]');
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
 	await page.keyboard.press("Escape");
-	console.log("PASS: compact Model/Usage, keyboard-dismiss/reopen preserves search/results and expands browsing, focused docking, blur/pick stability, Plan pinch/pan and drafts");
+	console.log("PASS: dim/blur phone cards, stationary lesson, coordinated intermediate keyboard frames, preserved query/results, blur/pick stability, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	assert.equal((await upload("mobile_panels")).status, 201);

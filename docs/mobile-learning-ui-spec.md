@@ -61,6 +61,18 @@ the browsing space as the visual viewport grows. It does not pick a model or
 close the menu. Tapping search resumes typing. Use the accessible label “Hide
 keyboard” and a 44px target. The owner selected the icon instead of a Done label.
 
+**Coordinated motion and separation — owner approved 2026-11-05:** phone Model,
+Thinking and Usage use the existing confirmation dialog's dim/light-blur backdrop.
+Keep the lesson at its opening geometry and inactive while the card is open;
+outside taps dismiss the card. The model card's geometry, search-row width and
+footer reveal follow one visible-viewport update, rather than switching layout
+on blur and then resizing again. Read viewport geometry while the card is open
+to cover updates between browser notifications. As the keyboard closes, reveal
+the anchored browsing position in that same motion. Preserve query/results,
+model semantics, drafts and reading position; release the backdrop/background
+hold on dismissal and wide-layout transitions. Physical iOS timing must be
+confirmed separately from controlled intermediate-frame browser checks.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),

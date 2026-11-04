@@ -346,6 +346,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 					testid="model-menu"
 					focusSearch={!phone}
 					fitVisualViewport={phone}
+					onClose={() => setOpen(null)}
 					preferredSide="up"
 					menuClass="flex w-[22rem] flex-col rounded-xl border bg-card p-2 text-xs shadow-xl"
 				>
@@ -357,6 +358,8 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				<MenuShell
 					anchorRef={containerRef}
 					testid="thinking-menu"
+					fitVisualViewport={phone}
+					onClose={() => setOpen(null)}
 					preferredSide="up"
 					menuClass="flex w-44 flex-col gap-0.5 rounded-xl border bg-card p-2 text-xs shadow-xl"
 				>
