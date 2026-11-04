@@ -3,12 +3,15 @@
 Authoritative combined verification record for #28/#18. Review baseline:
 `d161c0d707e605e2a6ea5761b4f40bbd78dc0c58`. Notebook checkpoint: `2d43b41`.
 
-**Control cleanup verified and deployed.** Application source `48224b9`, production
-build `fHPXoJTBmay2lBmcEUHGR`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
+**Continuation correction verified and deployed.** Application source `0370c06`,
+production build `bPCDlh2I36j3OP5uQhKBA`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
 The current fork's native Electron app remains open; use **Reload preview** to
 load the update. Physical phone and owner-learning acceptance are still pending.
 
-## Continuation interpretation correction — live checks passed, deployment pending
+Current tracker receipt: [#28 continuation fix](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6643703927),
+linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6643706613).
+
+## Continuation interpretation correction — verified and deployed
 
 Owner reported DeepSeek replacing the right side instead of extending an equality
 and failing to identify the line currently being continued. The saved execution
@@ -19,7 +22,7 @@ An offline replay through `runNotebookEditor` reproduced that removal.
 
 Owner approved an exact continuation paragraph, regression checks and up to **3
 DeepSeek/low via Zen calls** on isolated copies, with deployment conditional on
-passing. The prompt correction is currently **undeployed**. First-round results:
+passing. First-round results (before the approved refinement):
 
 - Append incomplete fraction: PASS, preserved `p = F/A` and appended `= 600/…`.
 - Continue recently edited line: FAIL, asked whether line 1 or 2 and demanded
@@ -34,7 +37,8 @@ plus up to three more targeted calls. **The refined second round passed 3/3**:
 preserved `p = F/A` while appending the incomplete fraction; continued the recently
 edited line with `= 600 × 3 ÷` without asking for its missing operand; and replaced
 only the last term when explicitly instructed. The other line remained exact in
-all cases. Final build/review/deployment follow. Prior UI build `48224b9` remains deployed.
+all cases. The refined prompt is now deployed in source `0370c06`, retaining the
+owner-accepted compact controls from `48224b9`.
 No learner records or settings were written.
 
 First-round targeted receipt:
@@ -59,7 +63,37 @@ case covers equality extension, unfinished working and explicit replacement.
 Earlier trial totals remain separately recorded; this check adds **6** editor
 dispatches/provider calls and no Tutor calls or speech capture.
 
-## Card-content cleanup follow-up
+Independent incremental review of `0370c06` within the owner-selected `d161c0d`
+baseline: **Standards 0 findings; Spec 0 findings.** Review confirmed the two
+paragraphs match the approved wording exactly, expected evaluation answers never
+enter the production prompt, and no routing/state behavior changed.
+
+### Current deployment receipt
+
+- Build **`bPCDlh2I36j3OP5uQhKBA`**, source **`0370c06`**, staged from exact
+  committed source in `/home/bjorn/.cache/opencode/notebook-28-build-0370c06`.
+  Production serves that directory's `.next/standalone/server.js` on3000/8444.
+- Production build, payload and Electron bundled-Node smoke passed:
+  `check-28-continuation-{build,payload,electron-smoke}.log`.
+- Built server chunks contain both new continuation rules, and the source prompt
+  hash equals the final live-checked prompt:
+  `cc1ef0a555178a452681d8bc0953440f6b3438b47f25cf4d9309d8c7c05fd268`.
+  Artifact: `check-28-continuation-bundle.json`.
+- Actual local/HTTPS build identity, compact controls, model/draft persistence after
+  Reload, manifest/icons and emulated phone focus/gestures passed:
+  `check-28-combined-preview.json`, `check-28-continuation-preview.log`.
+- Server observed PID **3582340**, task `sh_1a8a983ad001y5DtZBlJJoLyJc`, log
+  `notebook-continuation-production.log`. Existing main-repo data/auth paths remain.
+  Recheck process identity before lifecycle changes. Native current-fork Electron
+  PID **3540725** remains mapped. Slots2/3 retain **3484369**/**3458594** and all
+  Tailscale mappings are preserved. Saved learning data was not corrected/reset.
+- Re-verification command uses
+  `LH_NOTEBOOK_BUILD_DIR=/home/bjorn/.cache/opencode/notebook-28-build-0370c06`
+  with `/tmp/opencode/notebook-integration/check-28-combined-preview.mjs`.
+- Owner accepted the compact controls for now; physical-device and real-learning
+  acceptance remain pending. Use **Reload preview** in the existing app.
+
+## Earlier card-content cleanup delivery
 
 Owner accepted the overall layout, rejected the crowded contents, and approved
 the [compact controls/menu arrangement](notebook-ipad-layout-plan.md#approved-card-content-cleanup--2026-11-04).
@@ -104,7 +138,7 @@ layout-only deployment without changing the URL or installed Home Screen identit
 
 Earlier whole-suite and deployment evidence below documents the layout build.
 
-Current tracker receipt: [#28 cleanup](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6642995415),
+Earlier cleanup receipt: [#28 cleanup](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6642995415),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6642997600).
 Earlier layout receipt: [#28](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6642418525).
 

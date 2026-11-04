@@ -42,7 +42,7 @@ manifest/icons, reload and fixture-backed browser/mobile-emulation checks passed
 See [delivery](notebook-delivery.md#notebook-candidate-picker-and-prompt-adoption-2026-11-04)
 for runtime ownership and remaining physical-phone/owner-learning acceptance.
 
-## Approved continuation paragraph — candidate, not deployed
+## Approved continuation correction — deployed
 
 After the owner reported lost expressions and over-clarification, they approved
 this exact addition after the context/clarification rule:
@@ -65,5 +65,7 @@ up to three more targeted DeepSeek calls:
 > denominator is intentional unfinished working; record it as dictated rather
 > than asking for the missing part.
 
-Deployment remains conditional on successful checks. See the
+The refined round passed all three targeted checks; source `0370c06` is deployed
+after review, build/payload, Electron smoke and actual HTTPS/Reload verification.
+No further calls were made beyond the six separately authorized editor calls. See the
 [canonical verification record](notebook-mobile-verification.md).

@@ -11,7 +11,27 @@ Stop never applies or sends; #27 was closed as not planned. The #28 settled
 handoffs below supersede the earlier overlapping-action delivery notes.
 Current mobile limitations do not authorize redesigning the app-wide sidebar.
 
-## Latest: clean card controls deployed (2026-11-04)
+## Latest: continuation interpretation corrected (2026-11-04)
+
+Owner accepted the compact controls for now, then reported DeepSeek removing an
+earlier expression instead of appending an equality and over-clarifying the line
+being continued. Saved requests contained full Notebook history; saved model
+output confirmed the mistaken replacement. Two explicitly approved prompt
+additions now describe equality extension, recent-line references and unfinished
+working while preserving explicit replacements and genuine ambiguity.
+
+First authorized three-call round passed2/3; after owner-approved refinement,
+the second passed3/3. Exactly **six** new DeepSeek/low calls, no Tutor/speech calls.
+Offline14-test regression checks, type/lint, independent review, build/payload,
+Electron smoke, prompt hash/bundle check and actual HTTPS/Reload passed.
+
+Source **`0370c06`**, build **`bPCDlh2I36j3OP5uQhKBA`**, is live at the existing
+**https://thinkpad.tailfd9bf6.ts.net:8444/**. Use **Reload preview**. Saved working,
+data/auth paths and other previews are retained. The authoritative
+[verification record](notebook-mobile-verification.md) links both test rounds and
+the current deployment. #28/#18 remain open for owner learning/device acceptance.
+
+## Earlier: clean card controls deployed (2026-11-04)
 
 Owner accepted the overall card layout, rejected its crowded controls, and
 approved **Implement this cleanup**. Header now has small Undo/Expand icons and
