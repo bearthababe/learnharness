@@ -110,7 +110,17 @@ async function closeBrowser(browser) {
 			browser.close(),
 			new Promise((_, reject) => {
 				timer = setTimeout(() => {
-					browser.process()?.kill("SIGKILL");
+					const child = browser.process();
+					try {
+						// Puppeteer owns a detached POSIX group, including Chromium's
+						// descendants. Match mobile-browser-runner's platform handling.
+						if (child?.pid) {
+							if (process.platform === "win32") child.kill("SIGKILL");
+							else process.kill(-child.pid, "SIGKILL");
+						}
+					} catch (error) {
+						if (error.code !== "ESRCH") { reject(error); return; }
+					}
 					reject(new Error("Browser cleanup exceeded 5000ms; Chromium killed"));
 				}, 5000);
 			}),

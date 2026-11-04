@@ -67,6 +67,34 @@ Local detailed logs are under `~/.cache/opencode/retro-mobile-37/` unless noted.
 | Command PATH | Original minimal PATH fails with all three missing tools identified. A transient user service using the final PATH resolves Node 26.7.0, npm 11.19.0 and gh 2.103.0. Unit and Bash syntax checks pass. |
 | Global instructions | Original preview rules compared byte-for-byte after the heading; links and global changes independently reviewed with no actionable Standards/Spec findings. |
 
+### Independent Spec follow-up: forced browser cleanup
+
+The final combined Spec review of `c6433c6...e90c9d4` found one P2: the preview
+check's five-second fallback killed only Chromium's launcher, allowing descendants
+to survive. The preview branch first incorporated `e90c9d4`, then changed that
+fallback to signal Puppeteer's owned POSIX process group, following the disposable
+runner's platform handling. `ESRCH` is tolerated; other signaling errors reject
+cleanup. Windows retains the existing direct-child fallback and was not exercised.
+
+The separate [Linux/Chromium regression command](mobile-preview-checks.md) calls the
+public CLI with a real-Chrome wrapper and owned sleeper against a disposable local
+failure page. **Red:** Chrome closed and the launcher was killed, but the sleeper
+survived. **Green:** the command failed within its cleanup deadline and neither
+launcher nor sleeper remained running. The test contains its own processes even
+when red; it is outside the browser-free default test glob.
+
+Follow-up evidence is retained in `/tmp/opencode/retro-mobile-37-preview/`:
+
+- `cleanup-red.log` and `cleanup-green.log`: the regression failed for the exact
+  leaked-descendant assertion before the fix, then passed; each links its retained
+  wrapper/process-marker/command-log directory.
+- `cleanup-cli-tests.log`: all three existing CLI tests passed.
+- `cleanup-real-ui.log`: root/session metadata, manifests, decoded PNG and actual
+  Reload/draft reset passed against the isolated development app on localhost 3117.
+- `cleanup-real-ui-failure.log`: missing session produced the expected HTTP 404 and
+  exit 1 after the real root/Reload checks. Script/regression syntax and diff checks
+  also passed. Public previews, learner data and services were untouched.
+
 Browser checks remain simulated/controlled evidence. The earlier owner-confirmed
 two-recording iPhone retry stands; the remaining physical-device acceptance stays
 under #37/#42. This tooling work does not close those acceptance tickets or claim

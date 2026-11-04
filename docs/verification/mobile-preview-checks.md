@@ -42,6 +42,9 @@ success and failure. It prints individual passes/skips and exits nonzero on fail
 HTTP reads consume response bodies under a 10-second combined headers/body deadline
 and a 4 MiB limit. Browser navigation/actions have 15-second deadlines, protocol
 calls 20 seconds, launch 30 seconds and cleanup 5 seconds before forced termination.
+Forced cleanup targets Puppeteer's owned process group on POSIX, including Chromium
+descendants; Windows uses the runner's direct-child fallback. Already-exited groups
+are tolerated.
 Long-lived app event streams are not used as a navigation-readiness signal.
 
 ## Command regression checks
@@ -54,6 +57,22 @@ node --import tsx --test tests/mobile-preview-command.test.ts
 These CLI-boundary tests use disposable loopback HTTP servers: missing destination,
 503 response, missing headers, and an unfinished response body. They need neither
 Chromium nor a running app. The real-UI command above supplies browser acceptance.
+
+The process-group cleanup regression is a separate, explicit **Linux + Chromium**
+check (also accepts `CHROMIUM_PATH`):
+
+```sh
+node --test tests/browser/mobile-preview-cleanup.test.mjs
+```
+
+It calls the public preview command against a disposable loopback failure page.
+A wrapper launches real Chrome plus a sleeper in Puppeteer's owned group, keeping
+the launcher alive after CDP closes Chrome. The check requires the command's bounded
+failure and termination of both launcher and sleeper. Its own fixture cleanup
+also contains a failing regression run. Diagnostics are retained in the printed
+run directory. This check is outside the default browser-free `npm test` glob and
+fails explicitly on unsupported platforms or missing Chromium rather than skipping.
+Recorded results are in [the tooling verification record](retro-mobile-tooling.md).
 
 Chromium touch emulation does not establish physical iOS/Home Screen acceptance.
 Reload resets unsent work. For a first phone installation, use the intended tested
