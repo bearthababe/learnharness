@@ -62,4 +62,6 @@ The owner-approved recovery/meter extraction was applied on `implement/mobile-in
 
 The coordinating session completed [HTTPS page/manifest/icon and actual Tools → Reload preview checks](mobile-input-39-https.md), then restored the prior slot-2 app. This implementation work never used either public preview slot. Physical iPhone keyboard clearance, safe areas, rubber-band containment, actual pinch zoom, VoiceOver, live microphone and a real-tutor learning walkthrough remain owner acceptance under #42. Chromium touch/keyboard-size simulation is not physical iOS acceptance.
 
-Integration commit `e9b13bd` was merged into this branch as `ead364b`. Final cleanup confirmed no listener on the fixture port `3109`; the test-owned browser/server exited. The worktree remains `/tmp/opencode/issue39/implement` on `implement/mobile-input-39`.
+Integration commit `e9b13bd` was merged into the acceptance branch as `ead364b`. Final cleanup confirmed no listener on fixture port `3109`; the test-owned browser/server exited. After merging and final review, both implementer worktrees were removed. The completed branch is `integration/mobile-input-39`, retained at `/home/bjorn/.cache/opencode/issue39/integration`.
+
+[Final two-axis review](mobile-input-39-review.md) found **0 unresolved Standards findings and 0 unresolved Spec findings** at implementation commit `05aa337`. `git diff --check fc71bd2...HEAD` also passed. #39 has no ongoing public-preview slot claim; later shared slot ownership is maintained separately in `/home/bjorn/.local/share/opencode/preview-slots.md`.
