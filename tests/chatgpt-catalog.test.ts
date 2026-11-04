@@ -50,3 +50,20 @@ test("account/full and catalog authority changes reject outstanding old leases w
  ipc({ channel: "lh:chatgpt", kind: "state", stamp: { epoch: 2, authorityRevision: 3, revision: 8 }, status: status("B"), invalidate: "none" });
  assert.equal(chatGPTModels().length, 0); await assert.rejects(chatGPTLease(newScope, false));
 });
+
+test("account-listed Terra 6.1 reaches the picker through the installed catalog without admitting unknown models", async () => {
+ const supported = piModels().getModels("openai").filter((candidate) => candidate.api === "openai-responses");
+ const refresh = refreshChatGPTModels(supported as never);
+ reply(pending.at(-1), { ...value("B", 9, "B", 3), models: [
+  { id: "gpt-6.1-terra", name: "GPT-6.1 Terra" },
+  { id: "unknown-account-model", name: "Unknown" },
+ ] });
+ await refresh;
+ assert.deepEqual(chatGPTModels().map((candidate) => candidate.id), ["gpt-6.1-terra"]);
+ const terra = chatGPTModels()[0]!;
+ assert.equal(terra.provider, "chatgpt");
+ assert.equal(terra.api, "openai-responses");
+ assert.equal(terra.contextWindow, 272_000);
+ assert.deepEqual(terra.cost, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+ assert.equal(chatGPTScope(terra.id).selectedModelId, terra.id);
+});

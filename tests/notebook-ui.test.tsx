@@ -26,6 +26,46 @@ const { useNotebookDestination } = await import("../components/notebook-destinat
 const { NotebookDraftReview, LearnerExplanation } = await import("../components/learner-explanation.tsx");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
+test("Notebook picker saves without Apply, locks during saving/recording/editing, and reopens its choice", async () => {
+	const chat = chatStore.createChat("Picker UI"); const faux = createFauxCore({}); let calls = 0;
+	let releaseEdit!: () => void; const editGate = new Promise<void>(resolve => { releaseEdit = resolve; });
+	faux.setResponses([async () => { calls++; await editGate; return fauxAssistantMessage('{"action":"question","question":"Which line?"}'); }]);
+	const service = createNotebookService({ chatStore, engine: async () => ({ engine: { model: faux.getModel(), streamFn: faux.streamSimple }, model: "faux:editor" }) });
+	let releaseSave!: () => void; const saveGate = new Promise<void>(resolve => { releaseSave = resolve; });
+	const transport: typeof fetch = async (_url, init) => {
+		if (init?.body && JSON.parse(String(init.body)).type === "candidate") await saveGate;
+		return service.handle(new Request("http://test/notebook", init), chat.id);
+	};
+	const session = createNotebookSession(chat.id, transport);
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true }); await session.dispatch({ type: "draft", text: "Keep my draft" });
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	try {
+		await act(async () => root.render(<NotebookPanel session={session} />));
+		const picker = host.querySelector<HTMLSelectElement>("#notebook-model")!;
+		assert.equal(picker.value, "deepseek-low"); assert.equal(picker.disabled, false);
+		assert.deepEqual([...picker.options].map(option => option.textContent), ["DeepSeek / low · Zen", "Terra / off · ChatGPT"]);
+		await act(async () => {
+			for (const option of picker.options) option.selected = option.value === "terra-off";
+			picker.dispatchEvent(new window.Event("change", { bubbles: true }));
+		});
+		assert.equal(picker.disabled, true); assert.equal(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled, true);
+		await act(async () => { releaseSave(); await session.idle(); });
+		assert.equal(picker.value, "terra-off"); assert.equal(picker.disabled, false); assert.equal(calls, 0);
+		assert.equal(session.getSnapshot().draftText, "Keep my draft");
+		let capture!: Awaited<ReturnType<typeof session.speech.begin>>;
+		await act(async () => { await session.speech.choose({ kind: "notebook" }); capture = await session.speech.begin({ id: "picker-speech", now: () => 0 }); });
+		assert.equal(picker.disabled, true);
+		await act(async () => { await capture.end("stop"); await session.idle(); });
+		assert.equal(picker.disabled, false);
+		await act(async () => { await session.dispatch({ type: "apply" }); }); assert.equal(picker.disabled, true);
+		await act(async () => { releaseEdit(); await service.settled(chat.id); await session.refresh(); });
+		assert.equal(picker.disabled, false, "clarification allows switching"); assert.equal(calls, 1);
+		const reopened = createNotebookSession(chat.id, transport); await reopened.refresh();
+		await act(async () => root.render(<NotebookPanel session={reopened} />));
+		assert.equal(host.querySelector<HTMLSelectElement>("#notebook-model")!.value, "terra-off"); reopened.dispose();
+	} finally { releaseSave(); releaseEdit(); await service.settled(chat.id); await act(async () => root.unmount()); session.dispose(); host.remove(); }
+});
+
 test("Notebook notifications coalesce, reconnect refreshes immediately, and unmount cancels scheduled reads", async t => {
 	const { useNotebookSession } = await import("../components/use-notebook-session.ts");
 	const { ServerEventsProvider } = await import("../components/server-events.tsx");

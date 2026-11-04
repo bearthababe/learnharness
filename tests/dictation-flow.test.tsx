@@ -233,6 +233,102 @@ test("the optional capture adapter receives source-timed finals while normal tex
 	assert.deepEqual(f.state.appends, [], "the session adapter owns revealing, not the current input registry");
 });
 
+test("clicked Apply flushes after sent audio, follows up once on short coverage, and retains a whole crossing word", async () => {
+	const fs = await import("node:fs");
+	const dir = fs.mkdtempSync("/tmp/opencode/notebook-finalize-mounted-");
+	process.env.LH_DATA_DIR = dir; process.env.LH_AUTH_FILE = `${dir}/auth.json`;
+	const { createFauxCore, fauxAssistantMessage } = await import("@earendil-works/pi-ai");
+	const { chatStore } = await import("../src/store/chats.ts");
+	const { createNotebookService } = await import("../src/server/notebook.ts");
+	const { createNotebookSession } = await import("../components/notebook-session.ts");
+	const chat = chatStore.createChat("Bounded finalization"); const editor = createFauxCore({}); let calls = 0; let prompt = "";
+	editor.setResponses([context => { calls++; prompt = JSON.stringify(context.messages); return fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"p="}]}'); }]);
+	const service = createNotebookService({ chatStore, engine: async () => ({ engine: { model: editor.getModel(), streamFn: editor.streamSimple }, model: "faux:editor" }) });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true }); await session.speech.choose({ kind: "notebook" });
+	const f = await fixture("en", undefined, () => <NotebookPanel session={session} />, session.speech);
+	const control = JSON.stringify({ type: "Finalize" });
+	try {
+		await f.mount(); AudioGraph.time = 10;
+		await act(async () => f.dictation.toggle());
+		const socket = Socket.all.at(-1)!; const worklet = Worklet.all.at(-1)!;
+		const audio = (start: number, samples: number) => worklet.emit({ type: "audio", buffer: new Int16Array(samples), contextStart: start, sampleRate: 16000 });
+		const result = (start: number, duration: number, transcript: string, words: Array<{ word: string; start: number; end: number }>, fromFinalize = false) => socket.dispatchEvent(Object.assign(new Event("message"), { data: JSON.stringify({ type: "Results", is_final: true, from_finalize: fromFinalize, start, duration, channel: { alternatives: [{ transcript, words }] } }) }));
+		await act(async () => { socket.open(); audio(10, 32000); });
+		await act(async () => {
+			AudioGraph.time = 12.05;
+			document.querySelector('.notebook-panel form')!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+			await session.idle();
+		});
+		assert.equal(socket.sent.includes(control), false, "audio covering the click has not been sent");
+		await act(async () => { audio(12, 2048); });
+		assert.ok(socket.sent.at(-1) === control, "request final coverage promptly after the covering PCM packet");
+		assert.ok(socket.sent.at(-2) instanceof Int16Array);
+		await act(async () => {
+			result(0, 2.032, "Write", [{ word: "Write", start: 1, end: 1.5 }], true);
+			result(0, 2.032, "Write", [{ word: "Write", start: 1, end: 1.5 }], true);
+			session.speech.apply(); await session.idle();
+		});
+		assert.equal(calls, 0, "a flush flag cannot certify the still-missing crossing word");
+		assert.equal(socket.sent.filter(value => value === control).length, 1, "follow-up needs additional audio");
+		await act(async () => { audio(12.128, 2048); });
+		assert.equal(socket.sent.filter(value => value === control).length, 2);
+		await act(async () => {
+			result(2.032, 0.224, "pressure.", [{ word: "pressure.", start: 2.04, end: 2.23 }], true);
+			await session.idle(); await session.speech.idle(); await service.settled(chat.id); await session.refresh();
+		});
+		assert.equal(calls, 1); assert.match(prompt, /Write pressure\./);
+		assert.equal(f.dictation.phase, "recording"); assert.equal(f.state.stops, 0);
+		await act(async () => {
+			audio(12.256, 11904);
+			result(2.256, 0.744, "Later.", [{ word: "Later.", start: 2.4, end: 2.8 }]);
+			await session.speech.idle(); f.dictation.stop();
+		});
+		await act(async () => socket.end());
+		assert.equal(socket.sent.filter(value => value === control).length, 2);
+		assert.equal(service.view(chat.id).draft.text, "Later."); assert.equal(service.view(chat.id).usage.calls, 1);
+		assert.equal(service.view(chat.id).speechRuns![0]!.incomplete, false);
+	} finally { await f.unmount(); session.dispose(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+for (const ending of ["stop", "cancel", "reconnect", "replace"] as const) test(`pending finalization is discarded on ${ending} and cannot leak from a retired capture`, async () => {
+	const clocks: Array<Parameters<DictationCaptureAdapter["begin"]>[0]> = [];
+	const f = await fixture("en", undefined, undefined, { begin: async clock => { clocks.push(clock); return { final() {}, incomplete() {}, end: async () => {} }; } });
+	await f.mount(); AudioGraph.time = 10; await act(async () => f.dictation.toggle());
+	const socket = Socket.all.at(-1)!; const worklet = Worklet.all.at(-1)!;
+	assert.equal(typeof clocks[0]!.requestFinalization, "function");
+	clocks[0]!.requestFinalization!(10.01);
+	if (ending === "reconnect") {
+		await act(async () => { socket.open(); socket.end(1006); });
+		await act(async () => { Socket.all.at(-1)!.open(); });
+	} else if (ending === "replace") {
+		await f.remount(); await act(async () => f.dictation.toggle());
+		await act(async () => Socket.all.at(-1)!.open());
+	} else await act(async () => f.dictation[ending]());
+	await act(async () => {
+		clocks[0]!.requestFinalization!(10.01);
+		worklet.emit({ type: "audio", buffer: new Int16Array(2048), contextStart: 10, sampleRate: 16000 });
+		if (ending === "stop") socket.open();
+		if (ending === "replace") Worklet.all.at(-1)!.emit({ type: "audio", buffer: new Int16Array(2048), contextStart: 10, sampleRate: 16000 });
+	});
+	assert.equal(Socket.all.flatMap(value => value.sent).includes(JSON.stringify({ type: "Finalize" })), false);
+});
+
+test("a finalization request during connection setup follows queued audio strictly beyond the click", async () => {
+	let clock!: Parameters<DictationCaptureAdapter["begin"]>[0];
+	const f = await fixture("en", undefined, undefined, { begin: async value => { clock = value; return { final() {}, incomplete() {}, end: async () => {} }; } });
+	await f.mount(); AudioGraph.time = 10; await act(async () => f.dictation.toggle());
+	const socket = Socket.all.at(-1)!; const worklet = Worklet.all.at(-1)!;
+	assert.equal(typeof clock.requestFinalization, "function"); clock.requestFinalization!(10.128);
+	const first = new Int16Array(2048); const second = new Int16Array(2048);
+	await act(async () => {
+		worklet.emit({ type: "audio", buffer: first, contextStart: 10, sampleRate: 16000 });
+		worklet.emit({ type: "audio", buffer: second, contextStart: 10.128, sampleRate: 16000 });
+		socket.open();
+	});
+	assert.deepEqual(socket.sent, [first, second, JSON.stringify({ type: "Finalize" })]);
+});
+
 for (const trigger of ["Apply button", "pane Enter"] as const) test(`mounted ${trigger} keeps capture running until a return finalizes the crossing word and completed working`, async () => {
 	const fs = await import("node:fs");
 	const dir = fs.mkdtempSync("/tmp/opencode/notebook-click-mounted-");

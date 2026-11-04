@@ -19,7 +19,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 	let handoff: Promise<void> | undefined;
 	let state = { active: false, switching: false, destination: "tutor" as "tutor" | "notebook", error: null as string | null };
 	function publish(error = state.error) { state = { active: active !== null, switching: !!handoff, destination: selected?.kind ?? "tutor", error }; for (const listener of listeners) listener(); }
-	let active: { run: NotebookSpeechRun; now: () => number; source: NotebookSpeechTarget; results: Map<string, DictationFinal>; consumed: Set<string>; captureStart: number; audioStarted?: boolean; intents: Array<{ id: string; clicked: boolean; speech: NotebookSpeechApply; cursorLineId?: string | null }> } | null = null;
+	let active: { run: NotebookSpeechRun; now: () => number; requestFinalization?: (cutoff: number) => void; source: NotebookSpeechTarget; results: Map<string, DictationFinal>; consumed: Set<string>; captureStart: number; audioStarted?: boolean; intents: Array<{ id: string; clicked: boolean; finalizationRequests: number; speech: NotebookSpeechApply; cursorLineId?: string | null }> } | null = null;
 	function stash() {
 		try { if (pending.length) storage?.setItem(key, JSON.stringify(pending)); else storage?.removeItem(key); }
 		catch { publish("Local dictation recovery could not be saved. Keep this page open until the server save succeeds."); }
@@ -160,7 +160,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		if (owner?.kind !== "notebook") return false;
 		const draftId = owner.draftId;
 		const nextDraftId = crypto.randomUUID();
-		const intent = { id: crypto.randomUUID(), clicked: commandIds.length === 0, cursorLineId: session.getSnapshot().cursorLineId, speech: { runId: active.run.id, draftId, nextDraftId, fragmentIds: [], text: "", prefix: session.getSnapshot().draftText, commandIds, cutoff, ready: false, resolves: session.getSnapshot().view?.problem?.operationId } };
+		const intent = { id: crypto.randomUUID(), clicked: commandIds.length === 0, finalizationRequests: 0, cursorLineId: session.getSnapshot().cursorLineId, speech: { runId: active.run.id, draftId, nextDraftId, fragmentIds: [], text: "", prefix: session.getSnapshot().draftText, commandIds, cutoff, ready: false, resolves: session.getSnapshot().view?.problem?.operationId } };
 		active.intents.push(intent); rebuild(); updateIntents(intent.id);
 		return true;
 	}
@@ -202,6 +202,15 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 			}
 		}
 	}
+	function requestFinalization(followup = false) {
+		if (!active?.requestFinalization || active.run.incomplete) return;
+		const intent = active.intents.findLast(item => item.clicked && !item.speech.ready);
+		if (!intent || intent.finalizationRequests !== (followup ? 1 : 0) || finalizedThrough() > intent.speech.cutoff) return;
+		// At most one follow-up when a flush stopped short. Neither the response
+		// flag nor requesting another flush changes the existing readiness rule.
+		intent.finalizationRequests++;
+		active.requestFinalization(intent.speech.cutoff);
+	}
 	function requireRecordingReady() {
 		if (handoff) throw new Error("Finish switching inputs before recording.");
 		if (session.tutor.getSnapshot().locked) throw new Error("Finish sending before recording.");
@@ -221,7 +230,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		requireRecordingReady();
 		selected = initial;
 		const run: NotebookSpeechRun = { id: clock.id, revision: 0, status: "recording", incomplete: false, fragments: [] };
-		active = { run, now: clock.now, source: target(initial), results: new Map(), consumed: new Set(), captureStart: clock.now(), intents: [] };
+		active = { run, now: clock.now, requestFinalization: clock.requestFinalization, source: target(initial), results: new Map(), consumed: new Set(), captureStart: clock.now(), intents: [] };
 		publish();
 		try {
 			await save(run);
@@ -234,10 +243,15 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		return {
 			audio(start) { if (active?.run === run && !active.audioStarted) { active.captureStart = start; active.audioStarted = true; } },
 			final(result) {
-				if (active?.run !== run || active.results.has(result.id)) return;
-				active.results.set(result.id, result);
-				recognizeCommands();
-				rebuild(); updateIntents(); void save(run).catch(() => {});
+				if (active?.run !== run) return;
+				if (!active.results.has(result.id)) {
+					active.results.set(result.id, result);
+					recognizeCommands();
+					rebuild(); updateIntents(); void save(run).catch(() => {});
+				}
+				// Deepgram can attach the flush flag to an already received span.
+				// Observe that hint without duplicating words or command handling.
+				if (result.fromFinalize) requestFinalization(true);
 			},
 			incomplete() { if (active?.run === run) { run.incomplete = true; void save(run).catch(() => {}); } },
 			async end(reason) {
@@ -258,6 +272,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 			if (active && (handoff || session.getSnapshot().editing)) { publish("Still applying. Apply again when finished"); return true; }
 			if (!active || !reserveApply(active.now(), [])) return false;
 			updateIntents();
+			requestFinalization();
 			void save(active.run).catch(() => {}); return true;
 		},
 		followTutor() { void choose(selected?.kind === "notebook" ? { kind: "notebook" } : config.tutor()).catch(() => {}); },

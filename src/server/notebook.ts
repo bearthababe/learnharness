@@ -7,8 +7,9 @@ import type { NotebookCommand, NotebookRecord, NotebookOperation, NotebookView, 
 import { isSubscriptionModel } from "../core/prices.ts";
 import { stores, effectiveSettings } from "./stores.ts";
 import { initAuthEnv } from "./keys.ts";
-import { refreshConnectionCatalog } from "./model-catalog.ts";
+import { ensureConnectionModel } from "./model-catalog.ts";
 import { callCost } from "./pricing.ts";
+import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, notebookCandidateSchema, type NotebookCandidate } from "../core/notebook-models.ts";
 import { ownedTutorDraftSchema, tutorDraftOwnerSchema } from "../core/notebook-content.ts";
 import { changeNotebookDraft, NotebookDraftConflict } from "../core/notebook-drafts.ts";
 import { notebookSpeechApplySchema, notebookSpeechRunSchema, changeNotebookSpeech } from "../core/notebook-speech.ts";
@@ -18,6 +19,7 @@ import { notebookOperationPending as outstanding, notebookOperationPaused as pau
 
 const id = z.string().min(1);
 const commandSchema = z.discriminatedUnion("type", [
+	z.object({ type: z.literal("candidate"), candidate: notebookCandidateSchema, expectedCandidate: notebookCandidateSchema }).strict(),
 	z.object({ type: z.literal("speech-run"), expectedRevision: z.number().int().nonnegative(), run: notebookSpeechRunSchema }).strict(),
 	z.object({ type: z.literal("discard-speech"), runId: id, fragmentId: id }).strict(),
 	z.object({ type: z.literal("visibility"), visible: z.boolean() }).strict(),
@@ -26,7 +28,7 @@ const commandSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("discard-tutor-draft"), owner: tutorDraftOwnerSchema, draftId: id, expectedRevision: z.number().int().nonnegative() }).strict(),
 	z.object({ type: z.literal("snapshot"), id, owner: tutorDraftOwnerSchema, draftId: id, expectedRevision: z.number().int().nonnegative(), continuationId: id, contextId: id.optional(), workingRevision: z.number().int().nonnegative().optional(), throughOperationId: id.optional() }).strict(),
 	z.object({ type: z.literal("apply"), id, contextId: id, draftRevision: z.number().int().nonnegative(), instruction: z.string(), cursorLineId: z.string().nullable().optional(),
-		speech: notebookSpeechApplySchema.optional() }).strict(),
+		candidate: notebookCandidateSchema.optional(), speech: notebookSpeechApplySchema.optional() }).strict(),
 	z.object({ type: z.literal("undo"), id, contextId: id }).strict(),
 	z.object({ type: z.literal("start-fresh"), id, contextId: id }).strict(),
 ]);
@@ -59,7 +61,7 @@ export function notebookView(record?: NotebookRecord): NotebookView {
 	}
 	const problem = record?.operations.find(paused);
 	const pending = record?.operations.find(outstanding);
-	return { revision: record?.revision ?? 0, visible: record?.visible ?? false,
+	return { revision: record?.revision ?? 0, candidate: record?.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE, visible: record?.visible ?? false,
 		contextId: record?.current.id ?? null, workingRevision: record?.current.revision ?? 0,
 		lastOperationId: record?.operations.filter(op => op.contextId === record.current.id && op.kind !== "start-fresh").reduce<NotebookOperation | undefined>((last, op) => !last || op.sequence > last.sequence ? op : last, undefined)?.id,
 		snapshots: structuredClone(record?.snapshots ?? []),
@@ -74,7 +76,7 @@ export function notebookView(record?: NotebookRecord): NotebookView {
 
 export function createNotebookService({ chatStore, engine }: {
 	chatStore: ChatStore;
-	engine: () => Promise<{ engine: PiEngine; model: string }>;
+	engine: (candidate?: NotebookCandidate) => Promise<{ engine: PiEngine; model: string }>;
 }) {
 	const running = new Map<string, Promise<void>>();
 	function read(chatId: string) {
@@ -114,7 +116,7 @@ export function createNotebookService({ chatStore, engine }: {
 				continue;
 			}
 			let resolved: Awaited<ReturnType<typeof engine>>;
-			try { resolved = await engine(); }
+			try { resolved = await engine(op.candidate); }
 			catch (error) {
 				mutate(chatId, (record) => restore(record, record.operations.find((item) => item.id === op.id)!, "failed", error instanceof Error ? error.message : "Editor unavailable"));
 				return;
@@ -187,6 +189,12 @@ export function createNotebookService({ chatStore, engine }: {
 			}
 		}
 		const saved = mutate(chatId, (record) => {
+			if (command.type === "candidate") {
+				if (record.operations.some(outstanding) || record.speechRuns?.some(run => run.status === "recording")) throw new NotebookRefusal("Finish recording and applying before changing the Notebook model", 409);
+				const current = record.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE;
+				if (current !== command.expectedCandidate && current !== command.candidate) throw new NotebookRefusal("Notebook model changed; refresh before selecting", 409);
+				record.candidate = command.candidate; return;
+			}
 			if (command.type === "speech-run" || command.type === "discard-speech") {
 				changeNotebookSpeech(record, command); return;
 			}
@@ -229,12 +237,15 @@ export function createNotebookService({ chatStore, engine }: {
 type NotebookService = ReturnType<typeof createNotebookService>;
 const globalNotebook = globalThis as typeof globalThis & { __lhNotebook?: NotebookService; __lhNotebookInitialized?: boolean };
 export function notebookService(): NotebookService {
-	return globalNotebook.__lhNotebook ??= createNotebookService({ chatStore: stores.chatStore, engine: async () => {
+	return globalNotebook.__lhNotebook ??= createNotebookService({ chatStore: stores.chatStore, engine: async (candidate) => {
 		initAuthEnv();
-		const cheap = effectiveSettings().models.cheap;
-		if (!cheap) throw new Error("Configure the existing Cheap model before editing the notebook.");
-		await refreshConnectionCatalog(cheap.provider);
-		return { engine: piEngineForSpec(cheap, false), model: `${cheap.provider}:${cheap.id}` };
+		// Only operations accepted before the picker retain the legacy slot lookup.
+		const spec = candidate === undefined ? effectiveSettings().models.cheap : NOTEBOOK_CANDIDATES[candidate];
+		if (!spec) throw new Error("Configure the existing Cheap model to finish the earlier Notebook operation.");
+		await ensureConnectionModel(spec.provider, spec.id);
+		const engine = piEngineForSpec(spec, false);
+		if (candidate !== undefined && engine.level !== spec.thinkingLevel) throw new Error("The selected Notebook reasoning level is unavailable.");
+		return { engine, model: `${spec.provider}:${spec.id}` };
 	} });
 }
 export function initializeNotebookRecovery() {

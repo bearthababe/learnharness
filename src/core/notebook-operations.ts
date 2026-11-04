@@ -2,6 +2,7 @@
  * provider results, IDs and time; these transitions only change owned state. */
 import type { NotebookRecord, NotebookOperation, NotebookCommand } from "./contracts/notebook.ts";
 import { NOTEBOOK_FAILURE, snapshotPart } from "./notebook-content.ts";
+import { DEFAULT_NOTEBOOK_CANDIDATE } from "./notebook-models.ts";
 
 export const notebookOperationPending = (op: NotebookOperation) => ["awaiting-transcript", "queued", "running", "result-ready"].includes(op.status);
 export const notebookOperationPaused = (op: NotebookOperation) => ["failed", "clarification", "unknown"].includes(op.status);
@@ -14,6 +15,7 @@ export class NotebookRefusal extends Error {
 /** Reconcile the exact request identity. Returns whether a durable update is
  * needed; repeating an already accepted request leaves the record untouched. */
 export function reconcileNotebookOperation(record: NotebookRecord, op: NotebookOperation, command: OperationCommand): boolean {
+	if (command.type === "apply" && command.candidate !== undefined && command.candidate !== op.candidate) throw new NotebookRefusal("Operation identity already used for a different Notebook model", 409);
 	if (command.type === "apply" && command.speech && op.speech) {
 		const source = (speech: NonNullable<NotebookOperation["speech"]>) => JSON.stringify([speech.runId, speech.draftId, speech.nextDraftId, speech.prefix, speech.cutoff, speech.resolves]);
 		if (op.contextId !== command.contextId || source(op.speech) !== source(command.speech)) throw new NotebookRefusal("Operation identity already used for different work", 409);
@@ -48,6 +50,7 @@ export function reserveNotebookOperation(record: NotebookRecord, command: Operat
 		!(command.type === "apply" && record.operations.some(notebookOperationPaused))) throw new NotebookRefusal("Start fresh is waiting; resolve earlier work first", 409);
 	let correctionIndex = -1;
 	if (command.type === "apply") {
+		if (command.candidate !== undefined && command.candidate !== (record.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE)) throw new NotebookRefusal("Notebook model changed; refresh before applying", 409);
 		const blocked = record.operations.find(notebookOperationPaused);
 		if (command.speech && blocked && command.speech.resolves !== blocked.id) {
 			if (command.speech.draftId !== record.notebookDraft.id) throw new NotebookRefusal("Notebook draft changed; review retained speech", 409);
@@ -56,7 +59,7 @@ export function reserveNotebookOperation(record: NotebookRecord, command: Operat
 			const later = record.notebookDraft.text.startsWith(prefix) ? record.notebookDraft.text.slice(prefix.length).replace(/^\n\n/, "") : record.notebookDraft.text;
 			blocked.recovery = { instructions: [...instructions, command.instruction].filter(Boolean), operationIds: [...blocked.recovery?.operationIds ?? [blocked.id], command.id] };
 			record.notebookDraft = { id: command.speech.nextDraftId, revision: record.notebookDraft.revision + 1, text: [...blocked.recovery.instructions, later].filter(Boolean).join("\n\n") };
-			record.operations.push({ id: command.id, sequence: record.nextSequence++, kind: "edit", contextId: command.contextId, instruction: command.instruction, speech: structuredClone(command.speech), acceptedAt, status: "recovered", completedWorking: { revision: record.current.revision, lines: structuredClone(record.current.state.lines) } });
+			record.operations.push({ id: command.id, candidate: record.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE, sequence: record.nextSequence++, kind: "edit", contextId: command.contextId, instruction: command.instruction, speech: structuredClone(command.speech), acceptedAt, status: "recovered", completedWorking: { revision: record.current.revision, lines: structuredClone(record.current.state.lines) } });
 			return;
 		}
 		if (!command.speech && !command.instruction.trim()) throw new NotebookRefusal("Enter a notebook instruction", 400);
@@ -70,7 +73,7 @@ export function reserveNotebookOperation(record: NotebookRecord, command: Operat
 	}
 	const op: NotebookOperation = { id: command.id, contextId: command.contextId, sequence: record.nextSequence++, kind: command.type === "apply" ? "edit" : command.type,
 		acceptedAt, status: command.type === "apply" && command.speech && !command.speech.ready ? "awaiting-transcript" : "queued",
-		...(command.type === "apply" ? { instruction: command.instruction, cursorLineId: command.cursorLineId, ...(command.speech ? { speech: structuredClone(command.speech) } : {}) } : {}) };
+		...(command.type === "apply" ? { candidate: record.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE, instruction: command.instruction, cursorLineId: command.cursorLineId, ...(command.speech ? { speech: structuredClone(command.speech) } : {}) } : {}) };
 	// A corrected instruction resolves the paused head before waiting controls.
 	if (correctionIndex >= 0) record.operations.splice(correctionIndex + 1, 0, op); else record.operations.push(op);
 }

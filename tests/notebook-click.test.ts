@@ -117,3 +117,26 @@ test("unattributable formatted words across a click stay recoverable rather than
 	assert.equal(view.speechRuns![0]!.fragments[0]!.text, "25"); assert.equal(view.speechRuns![0]!.unplaced?.length, 1);
 	assert.deepEqual(view.lines, []); session.dispose();
 });
+
+test("missing, duplicated or short flush responses never release a gap or request more than one follow-up", async () => {
+	const chat = chatStore.createChat("Short flush coverage");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No complete instruction"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true }); await session.speech.choose({ kind: "notebook" });
+	const requests: number[] = []; let time = 0;
+	const capture = await session.speech.begin({ id: "short", now: () => time, requestFinalization: cutoff => { requests.push(cutoff); } });
+	time = 2; session.speech.apply(); await session.idle();
+	assert.deepEqual(requests, [2]);
+	const early = { id: "early", start: 0, end: 1, text: "Write pressure", words: [{ text: "Write pressure", start: 0.1, end: 0.9 }], speechFinal: true };
+	capture.final(early); time = 300; await session.idle();
+	assert.deepEqual(requests, [2], "no timer or natural final substitutes for a flush response");
+	capture.final({ ...early, fromFinalize: true });
+	assert.deepEqual(requests, [2, 2], "a duplicate result can carry the first flush signal without duplicate words");
+	capture.final({ ...early, fromFinalize: true });
+	capture.final({ id: "short", start: 1, end: 1.9, text: "", words: [], speechFinal: false, fromFinalize: true });
+	await session.idle();
+	assert.deepEqual(requests, [2, 2]); assert.equal(service.view(chat.id).usage.calls, 0);
+	assert.equal(service.view(chat.id).pending?.status, "awaiting-transcript");
+	await assert.rejects(capture.end("stop"), /interrupted/);
+	assert.equal(service.view(chat.id).draft.text, "Write pressure"); session.dispose();
+});

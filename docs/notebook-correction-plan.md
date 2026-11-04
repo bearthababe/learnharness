@@ -6,6 +6,18 @@ Scope: correct the integrated Notebook delivered through #26, then finish #28 ac
 
 ## Agreed design
 
+### Apply latency follow-up (owner approved 2026-11-03)
+
+Two owner-trial edits returned top-level `action: insert`, triggering format
+retries that added roughly six seconds each. Offline replay reproduced both
+retries and the saved final results. The owner approved replacing the abbreviated
+edit example with a complete insert response and explicitly distinguishing
+top-level `action: edit` from nested `op: insert` / `op: replace`.
+Keep strict validation and the existing retry limit. Verify with existing tests
+and at most four isolated live editor calls, including retries. The owner
+subsequently confirmed keeping Luna at medium reasoning for this check; investigate
+Terra availability separately without changing provider/model settings.
+
 ### Superseding policy — settled handoffs (owner approved 2026-11-02)
 
 The owner approved simplifying the interaction instead of supporting arbitrary

@@ -1,11 +1,12 @@
-import { notebookSpeechApplySchema, type NotebookCommand, type NotebookCommandReceipt, type NotebookView, type NotebookSpeechApply } from "@/src/core";
+import { DEFAULT_NOTEBOOK_CANDIDATE, notebookSpeechApplySchema, type NotebookCandidate, type NotebookCommand, type NotebookCommandReceipt, type NotebookView, type NotebookSpeechApply } from "@/src/core";
 import { createNotebookTutorDrafts, type DraftRecoveryStorage } from "./notebook-tutor-drafts";
 import { createNotebookSpeech } from "./notebook-speech";
 
 export type NotebookSessionCommand =
+	| { type: "candidate"; candidate: NotebookCandidate }
 	| { type: "visibility"; visible: boolean }
 	| { type: "draft"; text: string }
-	| { type: "apply"; cursorLineId?: string | null; id?: string; speech?: NotebookSpeechApply }
+	| { type: "apply"; cursorLineId?: string | null; id?: string; candidate?: NotebookCandidate; speech?: NotebookSpeechApply }
 	| Extract<NotebookCommand, { type: "tutor-draft" | "snapshot" | "discard-tutor-draft" | "speech-run" | "discard-speech" }>
 	| { type: "undo" | "start-fresh" };
 export interface NotebookSessionSnapshot {
@@ -31,6 +32,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	let localRevision = 0;
 	let savedLocalRevision = 0;
 	let requests = 0;
+	let selectingCandidate = false;
 	let uncertain: Extract<NotebookCommand, { type: "apply" | "undo" | "start-fresh" }> | null = null;
 	let uncertainRevision = 0;
 	let operationFailure: Error | undefined;
@@ -66,7 +68,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	const publish = (patch: Partial<NotebookSessionSnapshot>) => {
 		state = { ...state, ...patch };
 		state.editing = requested.length > 0 || !!state.view?.pending && !state.view.problem;
-		state.inputLocked = speech.getSnapshot().switching || !!tutor.getSnapshot().locked;
+		state.inputLocked = selectingCandidate || speech.getSnapshot().switching || !!tutor.getSnapshot().locked;
 		state.sendBlocked = !!state.view?.pending || state.editing || state.inputLocked || speech.isActive();
 		for (const listener of listeners) listener();
 	};
@@ -117,6 +119,13 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		return refreshing;
 	}
 	function dispatch(command: NotebookSessionCommand, replay?: SpeechRequest): Promise<NotebookCommandReceipt> {
+		if (command.type === "candidate" && (!state.view || state.saving || state.editing || state.inputLocked || state.view.pending || speech.isActive())) {
+			const error = "Finish recording, applying and saving before changing the Notebook model";
+			publish({ error }); return Promise.reject(new Error(error));
+		}
+		if (command.type === "apply" && selectingCandidate) return Promise.reject(new Error("Notebook model is still saving"));
+		const candidate = command.type === "apply" && command.candidate ? command.candidate : state.view?.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE;
+		if (command.type === "apply" && command.speech && !replay) command = { ...command, candidate };
 		if (command.type === "start-fresh" && state.view?.problem) return Promise.reject(new Error(state.view.problem.message));
 		const updating = command.type === "apply" && command.id && (requested.some(request => request.id === command.id) || state.view?.pending?.id === command.id);
 		if (!replay && ["apply", "undo", "start-fresh"].includes(command.type) && state.editing && !updating) {
@@ -138,12 +147,14 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		}
 		const speechRequest = replay ?? (command.type === "apply" && command.speech && request ? { command: { ...command, id: operationId! }, contextId: request.contextId } : undefined);
 		if (speechRequest && !replay) { speechRequests.push(speechRequest); stashRequests(); }
+		if (command.type === "candidate") selectingCandidate = true;
 		requests++; publish({ saving: true });
 		const task = tail.then(async () => {
 			if (!state.view) await refresh();
 			if (!state.view) throw new Error("Notebook is not loaded");
 			let wire: NotebookCommand;
-			if (command.type === "draft") wire = { ...command, text: prepend(recoveryPrefixes.slice(recoveryEpoch), command.text), expectedRevision: state.view.draft.revision };
+			if (command.type === "candidate") wire = { ...command, expectedCandidate: candidate };
+			else if (command.type === "draft") wire = { ...command, text: prepend(recoveryPrefixes.slice(recoveryEpoch), command.text), expectedRevision: state.view.draft.revision };
 			else if (command.type === "visibility" || command.type === "tutor-draft" || command.type === "snapshot" || command.type === "discard-tutor-draft" || command.type === "speech-run" || command.type === "discard-speech") wire = command;
 			else {
 				if (!state.view.contextId) throw new Error("Open Notebook before editing");
@@ -163,7 +174,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 						const saved = await post({ type: "draft", text: prefix, expectedRevision: state.view.draft.revision });
 						adopt(saved.view);
 					}
-					wire = speechRequest?.wire ?? { type: "apply", id: operationId!, contextId: speechRequest?.contextId ?? state.view.contextId!, draftRevision: state.view.draft.revision, instruction, cursorLineId: command.cursorLineId, ...(command.speech ? { speech: command.speech } : {}) };
+					wire = speechRequest?.wire ?? { type: "apply", id: operationId!, candidate, contextId: speechRequest?.contextId ?? state.view.contextId!, draftRevision: state.view.draft.revision, instruction, cursorLineId: command.cursorLineId, ...(command.speech ? { speech: command.speech } : {}) };
 					if (speechRequest) { speechRequest.wire = wire; stashRequests(); }
 				} else wire = { type: command.type, id: operationId!, contextId: state.view.contextId };
 				uncertain = wire;
@@ -182,7 +193,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 			if (operationId) operationFailure = error instanceof Error ? error : new Error("Notebook save failed");
 			publish({ error: error instanceof Error ? error.message : "Notebook save failed" });
 			throw error;
-		}).finally(() => { if (request && requested.includes(request)) requested.splice(requested.indexOf(request), 1); requests--; publish({ saving: requests > 0 }); });
+		}).finally(() => { if (request && requested.includes(request)) requested.splice(requested.indexOf(request), 1); if (command.type === "candidate") selectingCandidate = false; requests--; publish({ saving: requests > 0 }); });
 		tail = task.catch(() => {});
 		return task;
 	}

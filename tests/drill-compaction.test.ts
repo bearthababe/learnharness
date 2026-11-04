@@ -173,7 +173,7 @@ it("records the constructed drill prompt for every assistant step even when inst
 	assert.equal(assistants.length, 2);
 	assert.equal(reopened.turns!.length, 1);
 	assert.equal(reopened.turns![0]!.steps.length, 2);
-	assert.ok(reopened.turns![0]!.steps.every((step) => step.inputTokens! > 0));
+	assert.ok(reopened.turns![0]!.steps.every((step) => step.inputTokens! + step.cacheReadTokens! + step.cacheWriteTokens! > 0));
 	assert.deepEqual(reopened.turns![0]!.drillPromptContext, {
 		messageIds: assistants.map((message) => message.id),
 		systemPromptTokens: Math.ceil(sentPrompt.length / 4),
@@ -254,7 +254,8 @@ it("settle uses the captured prompt to subtract a mid-flight instruction shrink 
 			startedPrompt = systemText(context);
 			fs.writeFileSync(fixture, policy);
 			promptOverrides.writeOverride("shared/10-voice.md", "Shared voice.");
-			settingsStore.writeSettings({ version: 1, agent: { prompts: { "shared/10-voice.md": true } }, compaction: { thresholdTokens: 70_000 } });
+			// Pi 1.5.0 counts cached prompt tokens once rather than also as fresh input.
+			settingsStore.writeSettings({ version: 1, agent: { prompts: { "shared/10-voice.md": true } }, compaction: { thresholdTokens: 35_000 } });
 			return fauxAssistantMessage("Continue with cancellation.");
 		},
 	]);
@@ -263,8 +264,8 @@ it("settle uses the captured prompt to subtract a mid-flight instruction shrink 
 	await turn(chat.id);
 	const reopened = chatStore.getChat(chat.id)!;
 	const anchor = estimateContextTokens(reopened.messages);
-	assert.ok(anchor.usageTokens > 70_000, "old instructions alone would have triggered settlement compaction");
-	assert.ok(anchor.tokens - 20_000 < 70_000, "the current instructions put the projection below threshold");
+	assert.ok(anchor.usageTokens > 35_000, "old instructions alone would have triggered settlement compaction");
+	assert.ok(anchor.tokens - 20_000 < 35_000, "the current instructions put the projection below threshold");
 	assert.equal(activeCompactionOf(reopened.messages), null, "shrinking instructions avoid an unnecessary summary");
 	assert.equal(reopened.turns![0]!.drillPromptContext!.systemPromptTokens, Math.ceil(startedPrompt.length / 4));
 	faux.setResponses([() => fauxAssistantMessage("Keep using cancellation.")]);

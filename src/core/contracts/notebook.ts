@@ -3,6 +3,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { CallUsage } from "./chat.ts";
 import type { LhMessage } from "../native-messages.ts";
 import type { QuestionFormDraft, QuestionAnswerData } from "../question-core.ts";
+import type { NotebookCandidate } from "../notebook-models.ts";
 
 export interface NotebookLine { id: string; latex: string }
 export interface NotebookState { lines: NotebookLine[]; undo: NotebookLine[][] }
@@ -54,6 +55,8 @@ export interface NotebookAttemptRecord {
 }
 export interface NotebookOperation {
 	id: string;
+	/** Frozen at acceptance; absent only on legacy operations using shared Cheap. */
+	candidate?: NotebookCandidate;
 	sequence: number;
 	contextId: string;
 	kind: "edit" | "undo" | "start-fresh";
@@ -84,6 +87,7 @@ export interface NotebookSpeechApply {
 }
 export interface NotebookRecord {
 	revision: number;
+	candidate?: NotebookCandidate;
 	visible: boolean;
 	current: { id: string; revision: number; state: NotebookState; exchanges: NotebookExchange[] };
 	/** Absent on sessions saved before history support. */
@@ -159,6 +163,7 @@ export interface OwnedTutorDraft {
 	form?: Omit<QuestionFormDraft, "selection"> & { selection: { selected: number[]; otherSelected: boolean; dontKnow: boolean } };
 }
 export type NotebookCommand =
+	| { type: "candidate"; candidate: NotebookCandidate; expectedCandidate: NotebookCandidate }
 	| { type: "speech-run"; expectedRevision: number; run: NotebookSpeechRun }
 	| { type: "discard-speech"; runId: string; fragmentId: string }
 	| { type: "discard-tutor-draft"; owner: TutorDraftOwner; draftId: string; expectedRevision: number }
@@ -166,7 +171,7 @@ export type NotebookCommand =
 	| { type: "draft"; expectedRevision: number; text: string }
 	| { type: "tutor-draft"; expectedRevision: number; draft: OwnedTutorDraft }
 	| { type: "snapshot"; id: string; owner: TutorDraftOwner; draftId: string; expectedRevision: number; continuationId: string; contextId?: string; workingRevision?: number; throughOperationId?: string }
-	| { type: "apply"; id: string; contextId: string; draftRevision: number; instruction: string; cursorLineId?: string | null; speech?: NotebookSpeechApply }
+	| { type: "apply"; id: string; contextId: string; draftRevision: number; instruction: string; candidate?: NotebookCandidate; cursorLineId?: string | null; speech?: NotebookSpeechApply }
 	| { type: "undo" | "start-fresh"; id: string; contextId: string };
 export interface NotebookUsage {
 	calls: number;
@@ -179,6 +184,7 @@ export interface NotebookUsage {
 /** Deliberate learner projection: no prompt, raw provider output or executor input. */
 export interface NotebookView {
 	revision: number;
+	candidate: NotebookCandidate;
 	visible: boolean;
 	contextId: string | null;
 	workingRevision: number;

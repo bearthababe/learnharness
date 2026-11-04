@@ -6,6 +6,8 @@ export interface DictationFinal {
 	end: number | null;
 	words: Array<{ text: string; start: number; end: number }>;
 	speechFinal: boolean;
+	/** A requested flush response is a hint, never proof of cutoff coverage. */
+	fromFinalize?: boolean;
 }
 export interface DictationCaptureRun {
 	audio?(start: number, end: number): void;
@@ -14,7 +16,7 @@ export interface DictationCaptureRun {
 	end(reason: "stop" | "interrupted" | "cancel"): Promise<void>;
 }
 export interface DictationCaptureAdapter {
-	begin(clock: { id: string; now: () => number }): Promise<DictationCaptureRun>;
+	begin(clock: { id: string; now: () => number; requestFinalization?: (cutoff: number) => void }): Promise<DictationCaptureRun>;
 }
 
 export interface DictationAudioPacket { buffer: ArrayBuffer | Int16Array; contextStart?: number; sampleRate?: number }
@@ -22,6 +24,7 @@ export interface DeepgramFinal {
 	start?: number;
 	duration?: number;
 	speech_final?: boolean;
+	from_finalize?: boolean;
 	channel_index?: number[];
 	channel?: { alternatives?: Array<{ transcript?: string; words?: Array<{ word: string; punctuated_word?: string; start: number; end: number }> }> };
 }
@@ -65,7 +68,8 @@ export function createDictationTimeline(socketId: string) {
 		const identity = Number.isFinite(message.start) && Number.isFinite(message.duration) ? `${message.start}:${message.duration}` : `untimed:${untimed++}`;
 		return { id: `${socketId}:${message.channel_index?.join(",") ?? "0"}:${identity}`,
 			text: alternative?.transcript ?? "", start: span?.[0] ?? null, end: span?.[1] ?? null,
-			words: words.some(word => !word) ? [] : words as DictationFinal["words"], speechFinal: message.speech_final === true };
+			words: words.some(word => !word) ? [] : words as DictationFinal["words"], speechFinal: message.speech_final === true,
+			...(message.from_finalize === true ? { fromFinalize: true } : {}) };
 	}
 	return { sent, final };
 }

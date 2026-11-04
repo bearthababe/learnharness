@@ -3,6 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import type { NotebookSession } from "./notebook-session";
 import { NotebookWorking } from "./notebook-working";
+import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, notebookCandidateSchema } from "@/src/core";
 
 export function NotebookPanel({ session }: { session: NotebookSession }) {
 	const { view, draftText, saving, editing, inputLocked, error, cursorLineId } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
@@ -17,6 +18,14 @@ export function NotebookPanel({ session }: { session: NotebookSession }) {
 	};
 	return <section aria-label="Notebook" data-input-owner="notebook" className="notebook-panel flex min-h-0 min-w-0 flex-col border-border bg-background">
 		<form className="max-h-full shrink-0 space-y-2 overflow-y-auto overscroll-contain border-b border-border p-3" onSubmit={(event) => { event.preventDefault(); apply(); }}>
+			<label className="flex flex-wrap items-center gap-2 text-sm" htmlFor="notebook-model">Notebook model
+				<select id="notebook-model" value={view?.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE}
+					disabled={!view || saving || applyWaiting || !!view.pending || speech.active}
+					className="min-w-0 max-w-full rounded border border-border bg-background px-2 py-1 text-base disabled:opacity-50"
+					onChange={(event) => { void session.dispatch({ type: "candidate", candidate: notebookCandidateSchema.parse(event.target.value) }).catch(() => {}); }}>
+					{Object.entries(NOTEBOOK_CANDIDATES).map(([id, candidate]) => <option key={id} value={id}>{candidate.label}</option>)}
+				</select>
+			</label>
 			<label className="block text-sm font-medium" htmlFor="notebook-instruction">Notebook instruction</label>
 			<textarea id="notebook-instruction" aria-label="Notebook instruction" value={draftText} rows={2}
 				className="lh-input w-full resize-none rounded border border-border bg-transparent p-2 text-base" style={{ maxHeight: "min(8rem, 20dvh)", overflowY: "auto" }}

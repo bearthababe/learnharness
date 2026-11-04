@@ -283,6 +283,7 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 	const adapterRef = useRef(capture); adapterRef.current = capture;
 	const captureRef = useRef<DictationCaptureRun | null>(null);
 	const sendAudioRef = useRef<((packet: DictationAudioPacket) => void) | null>(null);
+	const finalizeCutoffRef = useRef<number | null>(null);
 
 	// Live machinery (non-render values). The MediaStream tracks stop and
 	// the per-run nodes disconnect on teardown; the socket is recreated per
@@ -329,6 +330,7 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 		const endedGeneration = genRef.current;
 		const observer = captureRef.current; captureRef.current = null;
 		sendAudioRef.current = null;
+		finalizeCutoffRef.current = null;
 		stoppingRef.current = false;
 		captureFlushedRef.current = false;
 		closeSentRef.current = false;
@@ -400,9 +402,17 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 			wsRef.current = ws;
 			const timeline = createDictationTimeline(crypto.randomUUID());
 			const sendAudio = (packet: DictationAudioPacket) => {
-				if (!timeline.sent(packet)) captureRef.current?.incomplete();
+				if (!timeline.sent(packet)) { finalizeCutoffRef.current = null; captureRef.current?.incomplete(); }
 				if (packet.contextStart !== undefined) captureRef.current?.audio?.(packet.contextStart, packet.contextStart + packet.buffer.byteLength / 32000);
 				ws.send(packet.buffer);
+				const cutoff = finalizeCutoffRef.current;
+				if (cutoff !== null && !stoppingRef.current && packet.contextStart !== undefined && packet.contextStart + packet.buffer.byteLength / 32000 > cutoff) {
+					// A request only rides newly sent PCM, including a handshake queue.
+					// This is a latency hint; the observer still requires final coverage.
+					finalizeCutoffRef.current = null;
+					try { ws.send(JSON.stringify({ type: "Finalize" })); }
+					catch { captureRef.current?.incomplete(); }
+				}
 			};
 			sendAudioRef.current = sendAudio;
 
@@ -438,6 +448,7 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 				if (gen !== genRef.current || ws !== wsRef.current) return;
 				wsRef.current = null; // retire identity before the reconnect token await
 				sendAudioRef.current = null;
+				finalizeCutoffRef.current = null;
 				if (ev.code === 1000) {
 					// Our own CloseStream landing: finalize now — the stop path's
 					// safety net stays as the no-close backstop only.
@@ -480,6 +491,7 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 		stoppingRef.current = false;
 		captureFlushedRef.current = false;
 		closeSentRef.current = false;
+		finalizeCutoffRef.current = null;
 		const gen = ++genRef.current;
 		let language: DictationLanguage;
 		try {
@@ -519,7 +531,12 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 			if (ctx.state === "suspended") await ctx.resume();
 			if (gen !== genRef.current) return;
 			if (adapter) {
-				const observer = await adapter.begin({ id: crypto.randomUUID(), now: () => ctx.currentTime });
+				const observer = await adapter.begin({ id: crypto.randomUUID(), now: () => ctx.currentTime,
+					requestFinalization(cutoff) {
+						if (gen !== genRef.current || stoppingRef.current || reconnectsRef.current !== 0 || !Number.isFinite(cutoff)) return;
+						finalizeCutoffRef.current = cutoff;
+					},
+				});
 				if (gen !== genRef.current) { await observer.end("interrupted"); return; }
 				captureRef.current = observer;
 			}
@@ -587,6 +604,7 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 		const gen = genRef.current;
 		if ((phase !== "recording" && phase !== "connecting") || stoppingRef.current) return;
 		stoppingRef.current = true;
+		finalizeCutoffRef.current = null;
 		setPhase("stopping");
 		if (workletRef.current) {
 			// The worklet seals capture and sends its remaining PCM before ack.
