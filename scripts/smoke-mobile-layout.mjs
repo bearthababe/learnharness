@@ -1,5 +1,5 @@
 /** Read-only browser regression against a running app and an existing session.
- * LH_SMOKE_CHAT_ID=<id> node scripts/smoke-mobile-layout.mjs
+ * LH_SMOKE_CHAT_ID=<id-with-scrollable-history> node scripts/smoke-mobile-layout.mjs
  * Optional: LH_SMOKE_URL, CHROMIUM_PATH. No tutor turns or uploads are submitted.
  */
 import assert from "node:assert/strict";
@@ -49,7 +49,10 @@ try {
 		};
 	});
 	// A desktop sidebar preference must not open the phone overlay on launch.
-	await page.evaluateOnNewDocument(() => localStorage.setItem("lh:sidebar-open", "1"));
+	await page.evaluateOnNewDocument(() => {
+		// Tutor visuals use sandboxed child frames with no storage access.
+		if (window === window.top) localStorage.setItem("lh:sidebar-open", "1");
+	});
 	await page.goto(origin, { waitUntil: "networkidle2" });
 	await page.waitForSelector('[data-testid="import-notes"]');
 	for (const width of [320, 375, 430]) {
@@ -125,14 +128,11 @@ try {
 	check(await gesture('[data-testid="session-list"]', "top", 30), "Top-edge session-list gesture is contained");
 	check(await gesture('[data-testid="session-list"]', "bottom", -30), "Bottom-edge session-list gesture is contained");
 	check(!await gesture('[data-testid="session-list"]', "middle", -30), "Native scrolling remains enabled inside the session list");
-	await page.evaluate(async id => {
-		const chat = await (await fetch(`/api/chats/${id}`)).json();
-		const row = [...document.querySelectorAll('[data-testid="session-row"]')].find(e => e.textContent.includes(chat.title));
-		row.click();
-	}, chatId);
+	await page.locator('aside [aria-current="page"]').click();
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "true");
 	check(true, "Selecting the current session also closes phone navigation");
-	await page.click('button[aria-label="Open sidebar"]');
+	// Wait for the opener's closing-navigation animation before tapping it.
+	await page.locator('button[aria-label="Open sidebar"]').click();
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
 	await page.click('button[aria-label="Close sidebar"]');
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getBoundingClientRect().width === 0);
