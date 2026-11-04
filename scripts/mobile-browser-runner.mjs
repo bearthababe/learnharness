@@ -36,8 +36,8 @@ export function processScope() {
 		await exited;
 	};
 	const close = () => closing ??= Promise.all([...children].map(stop));
-	const handlers = new Map(["SIGINT", "SIGTERM"].map((signal, index) => {
-		const handler = () => { void close().finally(() => process.exit(index === 0 ? 130 : 143)); };
+	const handlers = new Map([["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]].map(([signal, code]) => {
+		const handler = () => { void close().finally(() => process.exit(code)); };
 		process.on(signal, handler);
 		return [signal, handler];
 	}));

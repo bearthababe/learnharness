@@ -30,7 +30,7 @@ controlled speech responses. No learner data or preview server is needed.
 The printed artifact directory contains `runner.log`, a nested fixture with
 `server.log`, and individual Reveal/layout logs. Input failures also attempt a
 screenshot and page-text capture. Failures return a nonzero exit status; success,
-failure, SIGINT and SIGTERM stop owned server/browser processes. Artifacts remain
+failure, SIGINT, SIGTERM and SIGHUP stop owned server/browser processes. Artifacts remain
 for inspection. After processes have stopped, the printed run directory can be
 deleted and the same command rerun; nothing in it is a prerequisite for later runs.
 CI retains failure logs and captures for seven days, excluding fixture sources
