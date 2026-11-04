@@ -131,7 +131,14 @@ try {
 	await page.locator('aside [aria-current="page"]').click();
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "true");
 	check(true, "Selecting the current session also closes phone navigation");
-	// Wait for the opener's closing-navigation animation before tapping it.
+	// A stable opener box can still be covered by the moving session title
+	// during the closing animation. Wait until its centre actually receives taps.
+	await page.waitForFunction(() => {
+		const opener = document.querySelector('button[aria-label="Open sidebar"]');
+		const r = opener.getBoundingClientRect();
+		const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+		return hit === opener || opener.contains(hit);
+	});
 	await page.locator('button[aria-label="Open sidebar"]').click();
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
 	await page.click('button[aria-label="Close sidebar"]');

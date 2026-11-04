@@ -2,6 +2,8 @@
 
 2026-11-04 · #37 / #39 / #40 / #41; physical acceptance remains #42.
 
+Latest completion pass: [integrated #39 merge and #40/#41 regression evidence](verification/mobile-input-37-integration.md).
+
 ## Delivered and reviewed
 
 - `fc71bd2`: owner-approved mobile groundwork and retained B prototype.
