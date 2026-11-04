@@ -5,6 +5,7 @@ import { it } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parseHTML } from "linkedom";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime.js";
+import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime.js";
 import { Home } from "../components/home.tsx";
 import { AppShell } from "../components/sidebar.tsx";
 import { Chat } from "../components/chat.tsx";
@@ -13,7 +14,7 @@ import { ServerEventsProvider } from "../components/server-events.tsx";
 function render(children: React.ReactNode) {
 	return renderToStaticMarkup(
 		<AppRouterContext.Provider value={{ back() {}, forward() {}, refresh() {}, push() {}, replace() {}, prefetch() {}, bfcacheId: "drill-test" }}>
-			<ServerEventsProvider>{children}</ServerEventsProvider>
+			<PathnameContext.Provider value="/"><ServerEventsProvider>{children}</ServerEventsProvider></PathnameContext.Provider>
 		</AppRouterContext.Provider>,
 	);
 }

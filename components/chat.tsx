@@ -2447,7 +2447,7 @@ function DockOverlay({
 						contextTokens={contextTokens}
 						pricing={pricing}
 						dictationSlot={dictationSlot}
-						compactInput={!practice || expanded}
+						compactInput
 						phonePlan={plan ? <button type="button" className="lh-phone-plan" onClick={onOpenPlan}>Plan</button> : undefined}
 						chatId={chatId}
 						onModelChange={onModelChange}

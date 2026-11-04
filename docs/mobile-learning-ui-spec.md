@@ -20,6 +20,10 @@ sequence and real-UI verification boundary. Physical-iPhone acceptance remains #
   corrections after the real model panel overflowed at 320px.
 - Preserve and commit the accepted mobile groundwork as the prerequisite baseline;
   keep the separate iPad prototype and research work outside these commits.
+- After review, the owner chose to keep practice/drill thinking inputs visible
+  when scrolling collapses the problem statement, just like teaching inputs.
+  Retain the mounted draft and recording feedback through collapse/reopen;
+  preserve existing practice submission rules and wide-layout presentation.
 
 Decision record: [implementation authorization and attachment scope](https://github.com/bearthababe/learnharness/issues/37#issuecomment-6629353085).
 The separately approved Reveal/dictation correction is already implemented.

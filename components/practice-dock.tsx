@@ -19,9 +19,9 @@ import { cn } from "@/lib/utils";
  * from the thinking itself; the agent reads it. One problem may carry
  * many submissions; each starts a turn.
  *
- * Collapse (scroll-up → slim bar) is owned by the DockOverlay; this
- * component is content only, and the expanded form stays MOUNTED while
- * collapsed (hidden) so a half-written trace survives scrolling.
+ * Collapse is owned by DockOverlay. Keep the learner's field mounted so
+ * scrolling cannot reset capture feedback or editor state. On phones only
+ * the problem statement collapses; wide layouts retain their slim bar.
  *
  * The commitment (modelSolution, decisionPoints, …) rides the tool call's
  * arguments and is NOT rendered here — only the statement is the
@@ -85,9 +85,9 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 	 * while the dock is — collapsed bar included (the trace survives). */
 	useEnterSubmits(submit);
 
-	/* ── the collapsed bar ── */
-	if (!expanded) {
-		return (
+	return (
+		<div data-testid="practice-dock" data-problem={problemCallId}>
+			{!expanded ? (
 			<button
 				type="button"
 				data-testid="practice-dock-bar"
@@ -98,28 +98,20 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 				<span className="font-medium">Problem</span>
 				<span className="min-w-0 flex-1 truncate">{input.statement}</span>
 			</button>
-		);
-	}
-
-	/* ── the expanded form ── */
-	return (
-		<div data-testid="practice-dock" data-problem={problemCallId}>
-			{/* The agent's half: the 'Problem' eyebrow (mirroring the quiz
-			    cards' label row — owner round, 2026-10-05) + the statement,
-			    markdown + LaTeX rendered, capped by the measured column
-			    (--dock-max-h; the old fixed 40vh cut long problems short). */}
+			) : (
 			<div data-dock-scroll-area="" className="max-h-[var(--dock-max-h,40vh)] overflow-y-auto px-4 pt-3 pb-2">
 				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Problem</div>
 				<div className="lh-prose text-[15px]">
 					<ToolContentResponse>{input.statement}</ToolContentResponse>
 				</div>
 			</div>
+			)}
 
 			{/* The learner's half: Enter SENDS (owner round 2, 2026-10-05);
 			    Shift+Enter makes a newline — less to decide about. */}
 			<div
 				data-testid="practice-thinking-field"
-				className="lh-question-input m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
+				className={cn("lh-question-input m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50", !expanded && "lh-practice-collapsed")}
 			>
 				<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					YOUR THINKING

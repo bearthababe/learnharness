@@ -39,7 +39,7 @@ for (const [id, tool, question] of [
 ]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, messages: [...teaching, call(tool, question, "question")] }));
 await writeFile(path.join(dir, "data/chats/mobile_other_answer.json"), JSON.stringify({ ...conversation, id: "mobile_other_answer", messages: [call("ask_user_question", { question: "Which approach would you use?", options: [{ label: "Start with force", value: "force" }, { label: "Start with area", value: "area" }], multiSelect: true }, "question")] }));
 const problem = { statement: "Calculate pressure for a 100 N force on 2 square metres.", mode: "apply", target: ["pressure"], modelSolution: "50 Pa." };
-for (const id of ["mobile_practice", "mobile_drill"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, kind: "practice", ...(id === "mobile_drill" ? { practiceMode: "drill" } : {}), messages: [call("problem", problem, "problem"), result("problem", null, "problem")] }));
+for (const id of ["mobile_practice", "mobile_drill"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, kind: "practice", ...(id === "mobile_drill" ? { practiceMode: "drill" } : {}), messages: [teaching[4], call("problem", problem, "problem"), result("problem", null, "problem")] }));
 await writeFile(path.join(dir, "data/settings.json"), JSON.stringify({ version: 1, models: { strong: { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } }, cheap: { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } } } }));
 // Only the disposable app substitutes the external model. The actual request
 // handler, stores, submission validation and transcript projections still run.
@@ -132,6 +132,19 @@ try {
 		await page.waitForFunction(sel => { const r = document.querySelector(sel).getBoundingClientRect(); return r.top >= 0 && r.bottom <= 350; }, {}, selector);
 		assert.ok(await page.$eval(selector, e => e.scrollHeight > e.clientHeight), "Long draft scrolls internally in a keyboard-sized viewport");
 		await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
+	};
+	const scrollBack = async () => {
+		const point = await page.evaluate(() => {
+			const log = document.querySelector('[role="log"]');
+			const scroll = [...log.querySelectorAll('div')].find(e => /auto|scroll/.test(getComputedStyle(e).overflowY));
+			const r = scroll.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + 40 };
+		});
+		await new Promise(resolve => setTimeout(resolve, 2100)); // inherited reveal-scroll suppression
+		await page.mouse.move(point.x, point.y);
+		for (let step = 0; step < 4; step++) {
+			await page.mouse.wheel({ deltaY: -180 });
+			await new Promise(resolve => setTimeout(resolve, 100));
+		}
 	};
 	await fill('[data-testid="composer"] textarea', "My typed explanation.");
 	const geometry = await page.evaluate(() => {
@@ -237,17 +250,7 @@ try {
 	await checkPhoneInput(answer);
 	await fill(answer, "Answer draft.");
 	// Wheel the actual history rather than invoking the dock's state machine.
-	const historyPoint = await page.evaluate(() => {
-		const log = document.querySelector('[role="log"]');
-		const scroll = [...log.querySelectorAll('div')].find(e => /auto|scroll/.test(getComputedStyle(e).overflowY));
-		const r = scroll.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + 40 };
-	});
-	await new Promise(resolve => setTimeout(resolve, 2100)); // inherited reveal-scroll suppression window
-	await page.mouse.move(historyPoint.x, historyPoint.y);
-	for (let step = 0; step < 4; step++) {
-		await page.mouse.wheel({ deltaY: -180 });
-		await new Promise(resolve => setTimeout(resolve, 100));
-	}
+	await scrollBack();
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { visible: true });
 	assert.ok(await page.$eval(answer, e => e.checkVisibility()), "A revealed question keeps its answer input visible when history scrolling collapses the question");
 	assert.equal(await page.$eval(answer, e => e.value), "Answer draft.");
@@ -298,6 +301,28 @@ try {
 		await fill(thinking, "100 divided by 2.");
 		await page.locator('[data-testid="practice-thinking-field"] [aria-label="Start dictation"]').click();
 		await page.waitForFunction(() => window.speech?.readyState === 1);
+		await scrollBack();
+		await page.waitForSelector('[data-testid="practice-dock-bar"]', { visible: true });
+		assert.ok(await page.$('[data-testid="practice-thinking-field"] [aria-label="Cancel dictation"]'), "Collapsed practice retains compact recording controls");
+		await page.waitForSelector('[data-testid="practice-thinking-field"] [aria-label="Cancel dictation"]', { visible: true });
+		const elapsed = await page.$eval('.lh-compact-timer', e => e.textContent);
+		await page.locator('[data-testid="practice-dock-bar"]').click();
+		await page.waitForSelector('[data-testid="practice-dock-bar"]', { hidden: true });
+		assert.ok(await page.$eval('.lh-compact-timer', (e, earlier) => e.textContent >= earlier, elapsed), "Reopening practice does not reset elapsed capture time");
+		await scrollBack();
+		await page.waitForSelector('[data-testid="practice-dock-bar"]', { visible: true });
+		await page.evaluate(() => window.speech.final("Cancelled practice capture."));
+		await page.locator('[aria-label="Cancel dictation"]').click();
+		assert.equal(await page.$eval(thinking, e => e.value), "100 divided by 2.", "Cancel while collapsed retains the earlier practice draft");
+		await page.evaluate(() => { window.denyMicrophone = true; });
+		await page.locator('[data-testid="practice-thinking-field"] [aria-label="Start dictation"]').click();
+		await page.waitForSelector('.lh-compact-error', { visible: true });
+		assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /Microphone permission denied.*Retry/);
+		await page.evaluate(() => { window.denyMicrophone = false; window.holdConnection = true; });
+		await page.locator('.lh-compact-error button').click();
+		await page.waitForFunction(() => window.speech?.readyState === 0);
+		assert.match(await page.$eval('.lh-compact-recording [role="status"]', e => e.textContent), /Connecting/);
+		await page.evaluate(() => { window.holdConnection = false; window.speech.open(); });
 		await page.evaluate(() => window.speech.final("So pressure is 50 Pa."));
 		await page.click('[aria-label="Stop dictation"]');
 		await page.waitForFunction(() => window.speech.finishing);

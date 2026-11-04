@@ -1,4 +1,5 @@
 .lh-compact-field { display: contents; }
+.lh-practice-collapsed { display: none; }
 .lh-compact-speech, .lh-compact-error, .lh-phone-plan, .lh-phone-usage-label, .lh-phone-reveal, .lh-phone-submit-icon { display: none; }
 
 @media (max-width: 767px) {
