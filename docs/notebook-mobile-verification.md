@@ -22,9 +22,10 @@ Logs below are under `/tmp/opencode/notebook-integration/`.
 | Lint | PASS | `check-28-layout-lint.log` |
 | Production build (`LH_NOTEBOOK_PREVIEW=1`) | PASS | `check-28-layout-build.log` |
 | Standalone payload curation | PASS | `check-28-layout-payload.log` |
-| Baseline mobile browser flows | PASS | `check-28-mobile-browser.log` (baseline PASS precedes combined-scenario failure) |
-| Combined Notebook browser flow | PASS | `check-28-notebook-browser.log` |
-| Electron bundled-Node standalone smoke | Earlier build PASS; layout build running | `check-28-layout-electron-smoke.log` |
+| Baseline mobile browser flows | PASS under new layout integration | `check-28-layout-browser.log` |
+| Combined Notebook browser flow | PASS under new layout integration | `check-28-layout-browser.log` |
+| iPad-style layout geometry/transitions | Behavior passed; iframe test setup corrected, final run pending | `check-28-layout-geometry.log` |
+| Electron bundled-Node standalone smoke | PASS, including offline provider initialization | `check-28-layout-electron-smoke.log` |
 | Standards/spec review against mobile baseline | Completed; corrections being verified | Findings below |
 | Combined slot 1 deployment and HTTPS/reload verification | Pending | — |
 
@@ -64,6 +65,16 @@ remain separate open gates.
 Review totals: Standards 1 boundary violation + 1 judgment call; Spec 1 defect.
 The corrections and requested layout adaptation supersede the previously built
 payload; rebuild and deployment verification remain required.
+
+Follow-up Standards review through `f3d1c63`: clean. Earlier attachment copying
+and touch coverage findings are resolved. Separate presentation follows the
+owner's explicit direction to make later common-shell extraction straightforward.
+
+Follow-up Spec review found one layout defect: effect cleanup read zero scroll
+position after Close hid the card. Corrected to capture outgoing positions while
+visible and never overwrite them from hidden cleanup. The real-browser suite now
+explicitly asserts the 300px reading position survives Close/reopen; prior checks
+already covered independent split/full positions and mounted editor identity.
 
 ## Approved iPad-style layout adaptation
 

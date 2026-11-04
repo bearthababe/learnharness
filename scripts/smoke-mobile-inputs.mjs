@@ -91,7 +91,9 @@ try {
 		await new Promise(resolve => setTimeout(resolve, 500));
 	}
 	browser = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-features=BackForwardCache", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
-	if (process.argv.includes("--notebook-only")) {
+	if (process.argv.includes("--layout-only")) {
+		await verifyNotebookLayout(browser, origin, dir);
+	} else if (process.argv.includes("--notebook-only")) {
 		await verifyNotebookMobile(browser, origin);
 		await verifyNotebookLayout(browser, origin, dir);
 	} else {

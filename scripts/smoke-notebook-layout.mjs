@@ -7,7 +7,9 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	const errors = [], sends = [];
 	page.on("pageerror", error => errors.push(error.message));
 	page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/chat") sends.push(request.postData()); });
-	await page.evaluateOnNewDocument(() => localStorage.setItem("lh:sidebar-open", "0"));
+	await page.evaluateOnNewDocument(origin => {
+		if (window === window.top && location.origin === origin) localStorage.setItem("lh:sidebar-open", "0");
+	}, origin);
 	await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 	await page.goto(`${origin}/chat/mobile_layout`, { waitUntil: "networkidle2", timeout: 240_000 });
 	await page.waitForSelector("#notebook-instruction", { visible: true });
@@ -61,6 +63,7 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	await page.waitForFunction(() => document.querySelector('.notebook-slot').hidden);
 	await page.locator('button[data-input-owner="notebook"][aria-expanded]').click();
 	await page.waitForFunction(() => !document.querySelector('.notebook-slot').hidden && !document.querySelector('.session-workspace').inert);
+	assert.equal(await page.$eval('[data-notebook-scroll]', e => e.scrollTop), 300, "Close/reopen restores the last visible Notebook reading position");
 	assert.ok(await page.evaluate(() => layoutTutor === document.querySelector('[data-testid="composer"] textarea') && layoutNotebook === document.querySelector('#notebook-instruction')), "View switches keep both editors mounted");
 	assert.equal(await page.$eval('#notebook-instruction', e => e.value), "Keep this equation instruction.");
 	assert.ok(await page.evaluate(() => document.body.textContent.includes("My independent Tutor draft.")), "Tutor prose survives snapshot handoff");

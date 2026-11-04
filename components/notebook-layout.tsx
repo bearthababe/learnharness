@@ -74,9 +74,11 @@ export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, chi
 		const position = positions.current[mode] ?? positions.current[prior];
 		if (position) { scroll.scrollTop = position.top; scroll.scrollLeft = position.left; }
 		previous.current = { hidden, expanded };
-		const save = () => { positions.current[mode] = { top: scroll.scrollTop, left: scroll.scrollLeft }; };
+		const save = () => { if (!element.hidden) positions.current[mode] = { top: scroll.scrollTop, left: scroll.scrollLeft }; };
+		save();
 		scroll.addEventListener("scroll", save);
-		return () => { save(); scroll.removeEventListener("scroll", save); };
+		// Hidden elements report zero; cleanup runs after geometry may change.
+		return () => { scroll.removeEventListener("scroll", save); };
 	}, [hidden, expanded]);
 	useEffect(() => {
 		const element = slot.current!;
@@ -94,7 +96,12 @@ export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, chi
 		fit();
 		return () => { observer.disconnect(); window.removeEventListener("resize", fit); window.visualViewport?.removeEventListener("resize", fit); window.visualViewport?.removeEventListener("scroll", fit); element.style.removeProperty("max-height"); };
 	}, [hidden, expanded]);
-	const changeView = (action: () => void) => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); action(); };
+	const changeView = (action: () => void) => {
+		const scroll = slot.current?.querySelector<HTMLElement>("[data-notebook-scroll]");
+		if (scroll) positions.current[expanded ? "full" : "split"] = { top: scroll.scrollTop, left: scroll.scrollLeft };
+		if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+		action();
+	};
 	return <div ref={slot} hidden={hidden} className="notebook-slot" style={{ position: expanded ? "absolute" : "relative", inset: expanded ? 0 : undefined, flex: "1 1 0px", minWidth: 0, minHeight: 0, boxSizing: "border-box", padding: 16, overflow: "hidden" }}>
 		<aside aria-label="Equation Notebook" className="notebook-frame rounded-2xl border bg-card shadow-lg"
 			style={{ position: "absolute", inset: 16, margin: 0, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
