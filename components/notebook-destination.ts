@@ -28,12 +28,13 @@ export function useNotebookDestination(rootRef: RefObject<HTMLElement | null>, s
 	useEffect(() => {
 		const root = rootRef.current;
 		if (!root) return;
+		let preserveFocus = false;
 		session.speech.configure({ finish: finishDictation, tutor: () => notebookTutorInput(root, tutorField.current?.isConnected && notebookInputBelongsTo(root, tutorField.current) ? tutorField.current : undefined), select: input => {
 			root.dataset.sessionDestination = input.kind;
 			if (input.kind === "notebook") {
 				if (!session.getSnapshot().view?.visible) void session.dispatch({ type: "visibility", visible: true }).catch(() => {});
 			}
-			setFocusRequest({ input });
+			if (!preserveFocus) setFocusRequest({ input });
 		} });
 		if (!visible && root.dataset.sessionDestination === "notebook") void session.speech.choose(notebookTutorInput(root)).catch(() => {});
 		const choose = (event: Event) => {
@@ -67,8 +68,15 @@ export function useNotebookDestination(rootRef: RefObject<HTMLElement | null>, s
 		let applicable = JSON.stringify(notebookTutorInput(root).owner);
 		const observer = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => {
 			const next = JSON.stringify(notebookTutorInput(root).owner);
-			if (next === applicable && (!tutorField.current || tutorField.current.isConnected)) return;
-			applicable = next; tutorField.current = null; session.speech.followTutor();
+			const detached = !!tutorField.current && !tutorField.current.isConnected;
+			if (next === applicable && !detached) return;
+			applicable = next; tutorField.current = null;
+			if (detached && session.speech.getSnapshot().destination === "tutor") {
+				// Dismissing review changes future speech back to the current
+				// input, but must not reopen its keyboard or steal menu focus.
+				preserveFocus = true;
+				void session.speech.choose(notebookTutorInput(root)).catch(() => {}).finally(() => { preserveFocus = false; });
+			} else session.speech.followTutor();
 		});
 		observer?.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-reading-claim", "data-notebook-question", "data-notebook-channel", "data-problem"] });
 		document.addEventListener("keydown", key, true);

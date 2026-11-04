@@ -36,6 +36,20 @@ tests passed; application code did not change for that correction. Logs:
 `/tmp/opencode/notebook-integration/`. Browser checks also verify actual textarea
 values and reload, rather than relying on the DOM emulator.
 
+Full scripted-browser run passed ordinary conversation, reading/reveal,
+free-text/selection/Other answers, practice/drills, persisted submissions, speech
+recovery, images/panels, phone focus/gesture checks, and the combined Notebook
+flow including recording handoff into an earlier review field. Its final layout
+check caught review dismissal refocusing the composer and retaining the keyboard
+lock. The dismissal now updates future speech ownership without restoring input
+focus; the browser regression explicitly requires release on Escape. Final
+Notebook/layout re-verification follows in `check-28-review-browser-final.log`.
+
+Self-review against the approved follow-up and `docs/architecture.md`: UI changes
+reuse the existing draft writer and speech handoff; no server/schema/model changes.
+Review scope is current activity, snapshot order/source stay immutable, and the
+shared menu's keyboard viewport option is opt-in for this editable review.
+
 ### Latest saved latency evidence
 
 Read-only inspection of “Handwriting trial”, operation
