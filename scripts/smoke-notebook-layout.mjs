@@ -31,6 +31,7 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	assert.ok(Math.abs(r.tutor.height - (r.workspace.height / 2 - 14)) < 2);
 	assert.equal(await page.$('.notebook-panel select'), null);
 	assert.equal(await page.$('[data-testid="notebook-options"]'), null);
+	assert.equal(await page.$eval('#notebook-instruction', e => getComputedStyle(e).fontSize), '16px', 'Instruction uses the shared readable input type rung');
 	assert.ok(await page.$eval('[data-notebook-scroll]', e => e.clientHeight > e.closest('.notebook-frame').clientHeight * .6), "Working occupies most of the phone card");
 	assert.deepEqual(await page.$$eval('.notebook-frame-header button', buttons => buttons.map(e => e.getAttribute('aria-label'))), ['Undo', 'Expand notebook', 'Notebook options']);
 	await page.screenshot({ path: path.join(artifacts, "notebook-phone-split.png") });

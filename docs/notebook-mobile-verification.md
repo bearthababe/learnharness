@@ -18,8 +18,15 @@ The earlier deployed build below does not yet include this cleanup.
 - New header has icon Undo/Expand and one options menu; instruction/microphone
   and small Apply occupy one row. Secondary controls are portaled through the
   shared menu shell; clarification/error detail is expandable.
-- Current typecheck and lint passed (`check-28-cleanup-{types,lint}.log`). Updated
-  mounted UI/history/speech regressions and browser flows are being verified.
+- Full suite passed **2,693 tests /499 suites** (`check-28-cleanup-tests.log`),
+  including updated mounted model/history/speech controls. Typecheck/lint passed
+  (`check-28-cleanup-{types,lint}.log`). Combined browser and layout flows passed
+  (`check-28-cleanup-browser.log`): model save/locks, menu Enter/Escape, recording
+  ownership, Stop/Apply/Send, notices, retained editors/scroll and phone geometry.
+- Cleanup review: Spec found no implementation defect. Standards identified
+  off-ladder font sizes and spacing in copied compact-input styling. Corrected
+  these to shared typography tokens and the existing 4px spacing/radius scales;
+  final geometry check and production build follow this CSS-only correction.
 - Earlier whole-suite and deployment evidence below belongs to the layout build.
 
 Tracker receipt: [#28 delivery](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6642418525),
