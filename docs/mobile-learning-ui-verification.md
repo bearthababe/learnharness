@@ -52,6 +52,38 @@ imports fail in the Node-only suite. Those files were preserved. The full green
 result above is for the committed mobile tree, not the combined dirty checkout.
 Chromium emulation/scripted speech is not physical iOS or live-tutor evidence.
 
+## First physical-iPhone feedback and corrections
+
+The owner reported two failures during the first iPhone walkthrough:
+
+1. The empty reading-thought placeholder painted underneath the microphone.
+   Reproduced visually in Chromium too. The phone input now reserves a real
+   48px microphone lane rather than relying on textarea padding to clip text.
+   Browser checks assert the editor ends before the microphone target; the
+   corrected empty field was also checked on HTTPS 8446.
+2. After Stop, a second recording appeared to start but had flat level bars and
+   produced no text. Normal repeated Chromium capture passed. Simulating Safari's
+   `interrupted` AudioContext state between captures reproduced a second run
+   labeled Recording with zero PCM frames. The start path previously resumed
+   only `suspended`; it now also resumes `interrupted`.
+
+The audio start code was unchanged by the compact-input commits (`git diff
+fc71bd2..0d82912 -- components/dictation.tsx public/worklets/pcm-capture.js` is
+empty). This identifies a reproducible recovery gap, **not proof of the exact
+state on the owner's phone** or a complete explanation of why it appeared now.
+The owner approved both bounded corrections and a subsequent iPhone retry.
+
+The real-UI regression now requires actual PCM frames from the browser microphone
+and worklet on both reading-thought captures, with the second graph deliberately
+paused and exposed as interrupted. Before the correction that run had zero
+frames; afterward both captures produced audio and appended once. Speech
+recognition remains scripted, with no provider/live-model trial. The full browser
+suite, 13 targeted dictation/reading tests, typecheck and targeted lint passed.
+Local WebKit could not launch because its installed runtime lacks
+`libicudata.so.74`; this is not Safari/iPhone verification.
+
+Reference: [MDN: resuming interrupted play states in iOS Safari](https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/state#resuming_interrupted_play_states_in_ios_safari).
+
 ## Preview ownership and remaining handoff
 
 During verification another session moved the notebook integration build into
@@ -60,23 +92,23 @@ third slot rather than interrupting either session.
 
 - This mobile checkout is running at `http://127.0.0.1:3002` using
   `next dev --hostname 127.0.0.1 --port 3002`.
-- Proposed private destination: `https://thinkpad.tailfd9bf6.ts.net:8446/`.
-- **HTTPS mapping pending:** the owner cannot run the administrator command yet:
+- Private destination: `https://thinkpad.tailfd9bf6.ts.net:8446/`.
+- Administrator mapping is now installed. Correct mobile app identity, page,
+  standalone manifest and PNG touch icon were verified over HTTPS 8446.
+- Shared slot assignments are recorded at
+  `/home/bjorn/.local/share/opencode/preview-slots.md`. Notebook and mobile share
+  the main-repo data/auth paths; coordinate agent-initiated writes and credential
+  changes. Automated submission tests continue to use disposable data.
 
-  ```sh
-  sudo tailscale serve --bg --https=8446 http://127.0.0.1:3002
-  ```
-
-After the command, verify the actual HTTPS page, manifest, icon and reload flow.
 Keep the existing 443/8443/8444/8445 mappings and tailnet-only access. Do not
 reassign this third slot while its Home Screen installation is in use.
 
-8446 is a new launch destination. Once HTTPS is verified, the owner can install:
+8446 is a new launch destination. The owner can install:
 **Safari → Share → Add to Home Screen → Open as Web App → Add**. Existing icons
 for 8444 still open that slot's app. Reload resets unsent local work; saved history
 persists. No service worker/offline caching was added.
 
-#42 remains open for HTTPS handoff plus physical iPhone acceptance: actual
+#42 remains open for the physical-iPhone retry and acceptance: actual
 keyboard/safe areas, edge gestures, pinch zoom, VoiceOver, live microphone,
 foreground/reconnect image recovery and a seated learning session with a real
 tutor response. The owner has not accepted those physical-device checks yet.

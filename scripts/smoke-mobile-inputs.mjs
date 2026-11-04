@@ -81,7 +81,16 @@ try {
 		else void request.continue();
 	});
 	await page.evaluateOnNewDocument(() => {
+		if (window !== window.top) return;
 		localStorage.setItem("lh:sidebar-open", "0");
+		// Keep the real graph/worklet/audio. Only emulate Safari's paused state
+		// between runs; a resumed graph must produce actual PCM again.
+		const NativeAudioContext = window.AudioContext;
+		window.AudioContext = class extends NativeAudioContext {
+			constructor(options) { super(options); window.captureContext = this; }
+			get state() { return this.interrupted ? "interrupted" : super.state; }
+			async resume() { this.interrupted = false; return super.resume(); }
+		};
 		const NativeSocket = window.WebSocket;
 		const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 		navigator.mediaDevices.getUserMedia = async constraints => {
@@ -94,6 +103,7 @@ try {
 			static OPEN = 1;
 			static CONNECTING = 0;
 			readyState = 0;
+			frames = 0;
 			constructor(url, protocols) {
 				super();
 				if (new URL(url).hostname !== "api.deepgram.com") return new NativeSocket(url, protocols);
@@ -101,13 +111,25 @@ try {
 				queueMicrotask(() => { if (!window.holdConnection) this.open(); });
 			}
 			open() { this.readyState = 1; this.dispatchEvent(new Event("open")); }
-			send(value) { if (typeof value === "string" && JSON.parse(value).type === "CloseStream") this.finishing = true; }
+			send(value) {
+				if (typeof value !== "string") { this.frames++; return; }
+				if (JSON.parse(value).type === "CloseStream") this.finishing = true;
+			}
 			final(text) { this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "Results", is_final: true, channel: { alternatives: [{ transcript: text }] } }) })); }
 			close() { this.readyState = 3; this.dispatchEvent(new CloseEvent("close", { code: 1000 })); }
 		};
 	});
 	await page.goto(`${origin}/chat/mobile_conversation`, { waitUntil: "networkidle2", timeout: 240_000 });
 	await page.waitForSelector('[data-testid="composer"] textarea');
+	const assertMicSpace = async selector => {
+		const separate = await page.$eval(selector, e => {
+			const editor = e.getBoundingClientRect();
+			const mic = e.parentElement.querySelector('[aria-label="Start dictation"]').getBoundingClientRect();
+			return editor.right <= mic.left;
+		});
+		assert.ok(separate, "Empty placeholder and typed text have their own space before the microphone target");
+	};
+	await assertMicSpace('[data-testid="composer"] textarea');
 	const fill = async (selector, text) => {
 		await page.focus(selector);
 		await page.keyboard.down("Control"); await page.keyboard.press("KeyA"); await page.keyboard.up("Control");
@@ -233,6 +255,20 @@ try {
 	const reading = '[data-testid="reading-thinking-field"] textarea';
 	await page.waitForSelector('[data-testid="teach-check-reveal"]', { visible: true });
 	assert.ok(await page.$('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]'), "Before reveal, the reading input owns the in-field microphone");
+	await assertMicSpace(reading);
+	for (let run = 1; run <= 2; run++) {
+		await page.locator('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]').click();
+		await page.waitForFunction(() => window.speech?.readyState === 1);
+		await page.waitForFunction(() => window.speech.frames >= 3, { timeout: 5000 });
+		assert.equal(await page.evaluate(() => window.captureContext.state), "running", `Reading capture ${run} must run the actual audio graph`);
+		await page.evaluate(n => window.speech.final(`Capture ${n}.`), run);
+		await page.locator('[aria-label="Stop dictation"]').click();
+		await page.waitForFunction(() => window.speech.finishing);
+		await page.evaluate(() => window.speech.close());
+		await page.waitForSelector('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
+		if (run === 1) await page.evaluate(async () => { await window.captureContext.suspend(); window.captureContext.interrupted = true; });
+	}
+	assert.equal(await page.$eval(reading, e => e.value), "Capture 1. Capture 2.", "Restart after interrupted audio captures and appends a second recording once");
 	await fill(reading, "Reading thought.");
 	await page.click('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
 	await page.waitForFunction(() => window.speech?.readyState === 1);

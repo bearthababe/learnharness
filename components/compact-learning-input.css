@@ -42,7 +42,9 @@
 		overflow-y: auto;
 		overscroll-behavior: contain;
 	}
-	.lh-compact-field[data-has-mic] > textarea { padding-right: 48px; }
+	/* Placeholder painting can extend into textarea padding. Reserve a real
+	   control lane so neither placeholder nor draft can paint under the mic. */
+	.lh-compact-field[data-has-mic] > textarea { flex: 0 1 auto; width: calc(100% - 48px); padding-right: 0; }
 	.lh-compact-field > textarea:placeholder-shown { white-space: nowrap; text-overflow: ellipsis; }
 	.lh-compact-field[data-recording] > textarea {
 		visibility: hidden;
