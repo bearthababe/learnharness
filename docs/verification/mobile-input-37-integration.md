@@ -122,9 +122,44 @@ on the opener before tapping. The corrected replay passed 10 reopen cycles
 No production navigation behavior changed. Both fixture ports had no listener
 after completion; no public slot was used.
 
-The final full-suite result above applies to the final production tree. The only
-subsequent executable change is that browser-test hit-readiness wait, verified
-by the complete dedicated layout run and `node --check`.
+The final full-suite result above applies to the final production tree.
+Subsequent executable changes are limited to the browser-test hit-readiness wait
+and the owner-approved shared target-check cleanup below, each verified by its
+complete affected browser run and `node --check`.
+
+## Independent review and bounded test cleanup
+
+Independent review of `fc71bd2...5f7121a` reported **Spec: 0 actionable findings**
+and **Standards: 0 hard breaches, 1 low-priority duplication advisory**. Reports
+are retained beside the worktree as `standards-review.md` and `spec-review.md`.
+The advisory identified duplicated touch-target geometry/hit assertions in
+`checkPhoneInput` and `hitTargets` in `scripts/smoke-mobile-inputs.mjs`.
+
+After confirming the clean worktree and latest integration tip were both
+`5f7121a`, the owner approved only consolidating those checks into the existing
+helper. Question/practice checks now call `hitTargets` for every button in their
+compact field; the conversation path retains its existing first-match selectors.
+Both paths use the same minimum 44px, viewport-boundary and centre-point hit
+assertions. Missing matches still fail, and the nonempty-target requirement is
+retained. No production code or new test abstraction was introduced.
+
+Validation after this review-stage refactor:
+
+- `node --check scripts/smoke-mobile-inputs.mjs`: passed.
+- Complete affected browser suite: passed, including all 12 conversation geometry
+  combinations, teaching-answer and practice/drill target checks, speech/recovery,
+  interrupted-audio PCM, uploads/reconnect/foreground, submission persistence,
+  panels and focus/gesture containment. Log: `browser-review-fix.log`.
+- Disposable fixture: `mobile-input-browser-review-fix`, using localhost `3109`;
+  no listener remained after completion. Public previews were untouched.
+- `git diff --check`: passed. Full-suite/typecheck reruns were not required for
+  this test-script-only correction; their production-tree evidence above remains
+  applicable.
+
+```sh
+LH_MOBILE_TEST_DIR=/home/bjorn/.cache/opencode/mobile-input-37-completion/mobile-input-browser-review-fix \
+  node scripts/smoke-mobile-inputs.mjs
+```
 
 ## Acceptance interpretation
 

@@ -180,19 +180,12 @@ try {
 		await page.keyboard.down("Control"); await page.keyboard.press("KeyA"); await page.keyboard.up("Control");
 		await page.keyboard.sendCharacter(text);
 	};
-	const checkPhoneInput = async selector => {
+	const checkPhoneInput = async fieldSelector => {
+		const selector = `${fieldSelector} textarea`;
 		for (const width of [320, 375, 430]) {
 			await page.setViewport({ width, height: 550, isMobile: true, hasTouch: true });
 			await fill(selector, "A substantial explanation.\n".repeat(16));
-			const targets = await page.$eval(selector, field => {
-				const shell = field.closest('.lh-compact-field');
-				return [...shell.querySelectorAll('button')].map(button => {
-					const r = button.getBoundingClientRect();
-					const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-					return { width: r.width, height: r.height, left: r.left, right: r.right, bottom: r.bottom, top: r.top, hit: button === hit || button.contains(hit) };
-				});
-			});
-			assert.ok(targets.length && targets.every(r => r.width >= 44 && r.height >= 44 && r.left >= 0 && r.right <= width && r.top >= 0 && r.bottom <= 550 && r.hit), `In-field controls fit and receive taps at ${width}px`);
+			await hitTargets([`${fieldSelector} .lh-compact-field button`], `In-field controls fit and receive taps at ${width}px`, true);
 		}
 		await page.setViewport({ width: 375, height: 350, isMobile: true, hasTouch: true });
 		await page.$eval(selector, e => e.focus());
@@ -225,15 +218,17 @@ try {
 	const input = '[data-testid="composer"] textarea';
 	const mic = '[data-testid="compact-dictation-toggle"]';
 	const longDraft = Array.from({ length: 20 }, (_, i) => `Line ${i}: my reasoning stays here.`).join("\n");
-	const hitTargets = async (selectors, label) => {
-		const targets = await page.evaluate(selectors => selectors.map(selector => {
-			const button = document.querySelector(selector);
-			if (!button) return { selector, missing: true };
-			const r = button.getBoundingClientRect();
-			const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-			return { selector, width: r.width, height: r.height, fits: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, hit: button === hit || button.contains(hit) };
-		}), selectors);
-		assert.ok(targets.every(r => r.width >= 44 && r.height >= 44 && r.fits && r.hit), `${label}: ${JSON.stringify(targets)}`);
+	const hitTargets = async (selectors, label, allMatches = false) => {
+		const targets = await page.evaluate(({ selectors, allMatches }) => selectors.flatMap(selector => {
+			const buttons = allMatches ? [...document.querySelectorAll(selector)] : [document.querySelector(selector)].filter(Boolean);
+			if (!buttons.length) return [{ selector, missing: true }];
+			return buttons.map(button => {
+				const r = button.getBoundingClientRect();
+				const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+				return { selector, width: r.width, height: r.height, fits: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, hit: button === hit || button.contains(hit) };
+			});
+		}), { selectors, allMatches });
+		assert.ok(targets.length && targets.every(r => r.width >= 44 && r.height >= 44 && r.fits && r.hit), `${label}: ${JSON.stringify(targets)}`);
 	};
 	const send = '[data-testid="composer"] [aria-label="Send"]';
 	for (const width of [320, 375, 430]) for (const height of [550, 350]) for (const enlarged of [false, true]) {
@@ -580,7 +575,7 @@ try {
 	assert.equal(await page.$eval(answer, e => e.value), "", "Reading speech is separate from the newly revealed answer");
 	assert.equal(await page.$eval('[data-testid="question-dock"] button[type="submit"]', e => e.disabled), true, "Empty text questions keep their existing submit gate");
 	assert.equal(await page.$('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]'), null, "Secondary reading input must not imply that it owns speech after reveal");
-	await checkPhoneInput(answer);
+	await checkPhoneInput('[data-testid="answer-field"]');
 	await fill(answer, "Answer draft.");
 	// Wheel the actual history rather than invoking the dock's state machine.
 	await scrollBack();
@@ -630,7 +625,7 @@ try {
 		const thinking = '[data-testid="practice-thinking-field"] textarea';
 		await page.waitForSelector(thinking, { visible: true });
 		assert.ok(await page.$('[data-testid="practice-thinking-field"] [aria-label="Start dictation"]'), "Practice/drill thinking owns the same in-field microphone");
-		await checkPhoneInput(thinking);
+		await checkPhoneInput('[data-testid="practice-thinking-field"]');
 		await fill(thinking, "100 divided by 2.");
 		await page.locator('[data-testid="practice-thinking-field"] [aria-label="Start dictation"]').click();
 		await page.waitForFunction(() => window.speech?.readyState === 1);
