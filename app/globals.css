@@ -50,6 +50,9 @@
 	--border: #434343;
 	--input: #434343;
 	--ring: #8d8d8d;
+	/* Writing stays white in storage; its on-screen paper follows the theme. */
+	--lh-dim-paper-filter: invert(1) hue-rotate(180deg) contrast(.65) brightness(1.3);
+	--lh-writing-image-filter: none;
 	/* Emphasis inks default to the REGULAR TEXT COLOR (owner ruling,
 	   appearance wave 2026-09-26 — the old #ee928c/#6fa9d6 factory
 	   emphasis colors are gone). Explicit overrides land via the
@@ -70,6 +73,7 @@
 /* The app is always dark (<html class="dark">); mirror the same values so
    the block stays coherent under Tailwind's variant. */
 .dark {
+	--lh-writing-image-filter: var(--lh-dim-paper-filter);
 	--background: #141414;
 	--foreground: #e6e6e6;
 	--card: #1c1c1c;
@@ -183,6 +187,322 @@ body {
 	background: var(--color-background);
 	color: var(--color-foreground);
 	font-family: var(--font-ui);
+}
+
+/* Phone shell — keep the breakpoint in sync with PHONE_MEDIA. The layout
+   follows the visual viewport for the keyboard, without disabling pinch zoom. */
+@media (max-width: 767px) {
+	:root {
+		--lh-safe-top: env(safe-area-inset-top, 0px);
+		--lh-safe-bottom: env(safe-area-inset-bottom, 0px);
+	}
+	html, body {
+		height: 100%;
+		overflow: hidden;
+		overscroll-behavior: none;
+	}
+	.lh-app-shell {
+		position: fixed;
+		inset-inline: 0;
+		top: var(--lh-phone-top, 0px);
+		height: var(--lh-phone-height, 100dvh);
+		padding: var(--lh-safe-top) env(safe-area-inset-right, 0px) var(--lh-safe-bottom) env(safe-area-inset-left, 0px);
+		overflow: hidden;
+	}
+	.lh-app-main {
+		min-height: 0;
+		overflow: hidden;
+	}
+	.lh-app-main > div {
+		height: 100%;
+		min-height: 0;
+	}
+	.lh-sessions-panel {
+		position: fixed;
+		inset-inline: 0;
+		top: var(--lh-phone-top, 0px);
+		height: var(--lh-phone-height, 100dvh);
+		z-index: 50;
+		transition: none !important;
+		background: var(--color-background);
+	}
+	.lh-sessions-panel[aria-hidden="false"] {
+		width: 100%;
+		padding: var(--lh-safe-top) env(safe-area-inset-right, 0px) var(--lh-safe-bottom) env(safe-area-inset-left, 0px);
+	}
+	.lh-sessions-content {
+		width: 100%;
+		border-right: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		font-family: var(--font-prose);
+	}
+	.lh-sessions-header {
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
+		min-height: 60px;
+		padding: 8px 16px;
+	}
+	.lh-sessions-header a {
+		justify-self: start;
+		width: auto;
+		min-height: 44px;
+		gap: 7px;
+		font-size: 15px;
+		color: var(--color-muted-foreground);
+	}
+	.lh-sessions-header a svg {
+		width: 20px;
+		height: 20px;
+	}
+	.lh-sessions-title {
+		display: block;
+		font-size: 21px;
+		font-weight: 600;
+		line-height: 1.2;
+		letter-spacing: -.02em;
+	}
+	.lh-phone-home-label, .lh-phone-close-label {
+		display: inline;
+	}
+	.lh-sessions-close {
+		justify-self: end;
+		width: auto;
+		min-width: 44px;
+		padding-inline: 4px;
+		font-size: 16px;
+		font-weight: 500;
+	}
+	.lh-desktop-close-icon, .lh-sessions-search-label {
+		display: none;
+	}
+	.lh-sessions-create {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 8px;
+		margin: 0 16px 12px;
+	}
+	.lh-sessions-create button {
+		justify-content: center;
+		gap: 5px;
+		padding: 8px;
+		border: 1px solid var(--color-border);
+		border-radius: 12px;
+		background: var(--color-card);
+		color: var(--color-foreground);
+		font-size: 15px;
+		font-weight: 500;
+		text-transform: none;
+		letter-spacing: normal;
+		white-space: nowrap;
+	}
+	.lh-sessions-create svg {
+		width: 15px;
+		height: 15px;
+		flex-shrink: 0;
+	}
+	.lh-sessions-search {
+		margin: 0 16px 12px;
+	}
+	.lh-sessions-search input {
+		height: 44px;
+		padding-left: 36px;
+		border-radius: 12px;
+		background: var(--color-card);
+	}
+	.lh-sessions-search svg {
+		left: 12px;
+		width: 16px;
+		height: 16px;
+	}
+	.lh-sessions-content [data-testid="session-kind-filter"] {
+		margin-inline: 16px;
+		padding: 3px;
+		border: 0;
+		border-radius: 12px;
+		background: var(--color-card);
+	}
+	.lh-sessions-content [data-testid="session-kind-filter"] button {
+		border-radius: 9px;
+		font-size: 14px;
+		font-weight: 500;
+		text-transform: none;
+		letter-spacing: normal;
+	}
+	.lh-sessions-content > [data-testid="session-list"] {
+		min-height: 6rem;
+		padding: 8px 12px;
+	}
+	.lh-session-row {
+		min-height: 64px;
+		margin-bottom: 3px;
+		padding: 10px 12px;
+		border-radius: 12px;
+	}
+	.lh-session-name {
+		font-size: 17px;
+		font-weight: 500;
+		line-height: 23px;
+	}
+	.lh-session-meta {
+		margin-top: 2px;
+		font-size: 13px;
+		line-height: 18px;
+	}
+	.lh-sessions-content > [data-testid="activity-section"] {
+		padding: 10px 16px 4px;
+	}
+	.lh-sessions-content > [data-testid="activity-section"] > div:first-child {
+		margin-bottom: 0;
+		font-size: 13px;
+		line-height: 20px;
+		text-transform: none;
+		letter-spacing: normal;
+	}
+	.lh-sessions-footer {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		align-items: start;
+		gap: 8px;
+		padding: 4px 16px 8px;
+	}
+	.lh-sessions-footer [data-testid="settings-entry"], .lh-sessions-tools summary {
+		font-size: 16px;
+		font-weight: 500;
+		line-height: 28px;
+		text-transform: none;
+		letter-spacing: normal;
+	}
+	.lh-sessions-footer [data-testid="settings-entry"] {
+		width: 100%;
+		gap: 8px;
+	}
+	.lh-sessions-footer [data-testid="settings-entry"] svg {
+		width: 16px;
+		height: 16px;
+	}
+	.lh-sessions-tools {
+		margin-top: 0;
+		font-size: 14px;
+	}
+	.lh-sessions-tools p {
+		font-size: 12px;
+		line-height: 1.4;
+	}
+	.lh-sessions-content > :not([data-testid="session-list"]) {
+		flex-shrink: 0;
+	}
+	.lh-sessions-content button, .lh-sessions-content summary {
+		min-height: 44px;
+	}
+	.lh-sessions-content input {
+		min-height: 40px;
+	}
+	.lh-app-shell input, .lh-app-shell textarea {
+		font-size: max(16px, 1em);
+	}
+	.lh-stats-bar {
+		flex-wrap: wrap;
+		row-gap: 8px;
+	}
+	.lh-dictation-slot {
+		flex: 0 0 100%;
+		order: -1;
+	}
+	.lh-dictation-slot [data-testid="dictation-toggle"] {
+		min-height: 44px;
+		min-width: 44px;
+		font-size: 14px;
+	}
+	.lh-stats-bar [data-testid="model-control"] {
+		max-width: 100%;
+		margin-left: auto;
+	}
+	.lh-shared-writing[data-has-writing="false"], .lh-concepts-setup {
+		display: none;
+	}
+
+	/* Home graph controls: navigation/search above the action row. The graph
+	   renderer and its desktop single-row toolbar retain their existing layout. */
+	.lh-home-navigation {
+		padding-inline: 16px;
+	}
+	.lh-home-navigation .lh-closed-toggle {
+		width: 44px;
+		height: 44px;
+		margin-right: 0;
+	}
+	.lh-home-navigation button {
+		width: 44px;
+		height: 44px;
+	}
+	.lh-home-toolbar {
+		left: 16px;
+		right: 16px;
+		max-width: none;
+		font-family: var(--font-prose);
+		pointer-events: none;
+	}
+	.lh-home-toolbar-actions > *, .lh-home-toolbar > :not(.lh-home-toolbar-actions) {
+		pointer-events: auto;
+	}
+	.lh-home-toolbar-actions {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 44px;
+		gap: 8px;
+		width: 100%;
+	}
+	.lh-graph-search {
+		grid-column: 1 / -1;
+		width: auto;
+		margin-left: 52px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		box-shadow: none;
+	}
+	.lh-graph-search input {
+		height: 44px;
+		padding-left: 36px;
+		border-radius: 12px;
+		background: var(--color-card);
+	}
+	.lh-graph-search svg {
+		left: 12px;
+		width: 16px;
+		height: 16px;
+	}
+	.lh-graph-chains, .lh-graph-import {
+		min-width: 0;
+		padding: 0;
+		background: var(--color-card);
+	}
+	.lh-graph-chains button, .lh-graph-import button {
+		justify-content: center;
+		width: 100%;
+		min-height: 44px;
+		padding-inline: 8px;
+		font-size: 15px;
+		white-space: nowrap;
+	}
+	.lh-graph-chains svg, .lh-graph-import svg {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+	}
+	.lh-graph-settings button[aria-label="Graph display settings"] {
+		width: 44px;
+		height: 44px;
+	}
+	.lh-home-toolbar-minimal .lh-home-toolbar-actions {
+		width: calc(100% - 52px);
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+	}
+	.lh-home-toolbar-actions[data-empty="true"] {
+		display: flex;
+		justify-content: flex-end;
+		width: calc(100% - 52px);
+	}
 }
 
 /* Teaching prose (the markdown renderer's container gets .lh-prose):

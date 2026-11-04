@@ -2397,7 +2397,13 @@ function DockOverlay({
 									expanded={expanded}
 									reveal={revealPending}
 									phase={phase}
-									onExpand={expandAndReveal}
+									onExpand={revealPending ? () => {
+										// Keep the reading field's dictation claim until its final
+										// words arrive, just like Enter in Thinking while reading.
+										void finishDictation().then(() => {
+											expandAndRevealRef.current();
+										});
+									} : expandAndReveal}
 									onSubmit={onSubmitAnswer}
 									initialDraft={initialQuestionDraft}
 									onSaveDraft={onSaveQuestionDraft}

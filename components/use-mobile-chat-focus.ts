@@ -2,6 +2,7 @@
 
 import { useEffect, type RefObject } from "react";
 import type { StickToBottomContext } from "use-stick-to-bottom";
+import { PHONE_MEDIA } from "@/components/use-phone-viewport";
 
 /** Focus-scoped counterpart of the accepted notebook preview lock. Native
  * history/textarea scrolling stays enabled; edge gestures cannot move the page. */
@@ -9,15 +10,16 @@ export function useMobileChatFocus(rootRef: RefObject<HTMLDivElement | null>, hi
 	useEffect(() => {
 		const root = rootRef.current;
 		if (!root) return;
-		const mobile = matchMedia("(pointer: coarse)");
+		const mobile = matchMedia("(pointer: coarse) and (max-width: 979px)");
+		const phone = matchMedia(PHONE_MEDIA);
 		let unlock: (() => void) | undefined;
 		let touch: { x: number; y: number } | undefined;
 		let frame = 0;
 		const viewport = () => {
 			const view = window.visualViewport;
 			if (!unlock || (view && view.scale !== 1)) return;
-			root.style.height = `${view?.height ?? innerHeight}px`;
-			root.style.top = `${view?.offsetTop ?? 0}px`;
+			root.style.height = phone.matches ? `calc(${view?.height ?? innerHeight}px - var(--lh-safe-top) - var(--lh-safe-bottom))` : `${view?.height ?? innerHeight}px`;
+			root.style.top = phone.matches ? `calc(${view?.offsetTop ?? 0}px + var(--lh-safe-top))` : `${view?.offsetTop ?? 0}px`;
 		};
 		const update = () => {
 			const focused = document.activeElement;
@@ -68,6 +70,7 @@ export function useMobileChatFocus(rootRef: RefObject<HTMLDivElement | null>, hi
 		root.addEventListener("focusin", update);
 		root.addEventListener("focusout", focusOut);
 		mobile.addEventListener("change", update);
+		phone.addEventListener("change", update);
 		window.visualViewport?.addEventListener("resize", viewport);
 		window.visualViewport?.addEventListener("scroll", viewport);
 		document.addEventListener("touchstart", start, { passive: true });
@@ -79,6 +82,7 @@ export function useMobileChatFocus(rootRef: RefObject<HTMLDivElement | null>, hi
 			root.removeEventListener("focusin", update);
 			root.removeEventListener("focusout", focusOut);
 			mobile.removeEventListener("change", update);
+			phone.removeEventListener("change", update);
 			window.visualViewport?.removeEventListener("resize", viewport);
 			window.visualViewport?.removeEventListener("scroll", viewport);
 			document.removeEventListener("touchstart", start);

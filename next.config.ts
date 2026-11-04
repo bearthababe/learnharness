@@ -5,6 +5,7 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 
 const nextConfig: NextConfig = {
 	allowedDevOrigins: ["thinkpad.tailfd9bf6.ts.net"],
+	devIndicators: false,
 	// Public build metadata only; no new runtime Electron version API.
 	env: { LH_VERSION: pkg.version, LH_HOMEPAGE: pkg.homepage },
 	// Desktop target (Electron wrapper, 2026-09-17): standalone output = a
