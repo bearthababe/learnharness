@@ -4,6 +4,7 @@
 // the shared Pencil release-inside activation path belong to the notebook.
 import { useState, type ButtonHTMLAttributes, type CSSProperties } from "react";
 import { EllipsisIcon, Undo2Icon, XIcon } from "lucide-react";
+import { HANDWRITING_HIGHLIGHT_COLOUR } from "@/src/core";
 
 type Tool = "pen" | "highlighter" | "eraser";
 export type ToolHandlers = (name: string, action: () => void) => Pick<ButtonHTMLAttributes<HTMLButtonElement>, "onPointerDown" | "onPointerUp" | "onPointerCancel" | "onLostPointerCapture" | "onClick">;
@@ -45,7 +46,7 @@ export function HandwritingToolbar(p: Props) {
 			<svg className="hw-arcTrack" viewBox="0 0 112 260" aria-hidden="true"><path d="M98 22C-7 58-7 193 98 235" /></svg>
 			{TOOLS.map(tool => <button key={tool.id} type="button" className={`hw-toolButton hw-arc_${tool.id}`} aria-label={tool.label} aria-pressed={p.tool === tool.id} disabled={p.disabled}
 				{...p.handlers(tool.label, () => { p.selectTool(tool.id); setExpanded(p.tool !== tool.id || !expanded); })}>
-				<ToolGlyph tool={tool.id} colour={tool.id === "highlighter" ? "#facc15" : p.colour} dim={p.dimPaper} /><span className="hw-toolName">{tool.label}</span>
+				<ToolGlyph tool={tool.id} colour={tool.id === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.colour} dim={p.dimPaper} /><span className="hw-toolName">{tool.label}</span>
 			</button>)}
 			<div className="hw-arcUndo"><button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} /></button></div>
 			{expanded && <div className="hw-arcInspector">

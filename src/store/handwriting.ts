@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { PATHS } from "../../config.ts";
-import { emptyHandwriting, handwritingSchema, handwritingPrefix, HandwritingConflict } from "../core/handwriting.ts";
+import { emptyHandwriting, handwritingSchema, reconcileHandwriting } from "../core/handwriting.ts";
 import type { HandwritingStore } from "../core/ports.ts";
 
 export function createHandwritingStore(root: string): HandwritingStore {
@@ -21,10 +21,9 @@ export function createHandwritingStore(root: string): HandwritingStore {
 			return handwritingSchema.parse(JSON.parse(text));
 		},
 		save(id, working) {
-			const next = handwritingSchema.parse(working);
 			const current = this.read(id);
-			if (handwritingPrefix(next, current)) return current;
-			if (!handwritingPrefix(current, next)) throw new HandwritingConflict("Divergent handwriting history");
+			const next = reconcileHandwriting(current, handwritingSchema.parse(working));
+			if (next === current) return current;
 			fs.mkdirSync(root, { recursive: true });
 			const target = file(id), temp = `${target}.${crypto.randomUUID()}.tmp`;
 			try {

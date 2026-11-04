@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import type { HandwritingHandle } from "./notebook";
+import { handwritingVisibilityKey } from "./device";
 
 /** The only session state for this extension: visibility and layout. Canvas,
  * recovery, storage and tools stay outside the session/conversation model. */
@@ -9,13 +10,13 @@ export function useHandwritingSession(chatId: string) {
 	const [open, setOpen] = useState(false), [mounted, setMounted] = useState(false), [expanded, setExpanded] = useState(false);
 	const ref = useRef<HandwritingHandle>(null);
 	useEffect(() => {
-		try { if (localStorage.getItem(`lh:handwriting:open:${chatId}`) === "1") { setOpen(true); setMounted(true); } } catch { /* visibility is optional */ }
+		try { if (localStorage.getItem(handwritingVisibilityKey(chatId)) === "1") { setOpen(true); setMounted(true); } } catch { /* visibility is optional */ }
 	}, [chatId]);
 	function show(value: boolean) {
 		if (ref.current && !ref.current.canResize()) return;
 		if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 		setOpen(value); setMounted(true); if (!value) setExpanded(false);
-		try { localStorage.setItem(`lh:handwriting:open:${chatId}`, value ? "1" : "0"); } catch { /* ink recovery reports its own failures */ }
+		try { localStorage.setItem(handwritingVisibilityKey(chatId), value ? "1" : "0"); } catch { /* ink recovery reports its own failures */ }
 	}
 	return { open, mounted, expanded, ref, show, toggleExpanded: () => setExpanded(value => !value) };
 }

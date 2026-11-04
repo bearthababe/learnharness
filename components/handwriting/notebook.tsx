@@ -8,12 +8,13 @@ import { Maximize2Icon, Minimize2Icon, XIcon } from "lucide-react";
 import { useSidebar } from "@/components/sidebar";
 import { HandwritingRecovery, type RecoveryState } from "./recovery";
 import { HandwritingToolbar } from "./toolbar";
-import type { HandwritingStroke as Stroke } from "@/src/core";
+import { HANDWRITING_DELETED_EVENT } from "./device";
+import { HANDWRITING_PAGE, HANDWRITING_PEN_COLOURS, HANDWRITING_PEN_SCALES, HANDWRITING_BROAD_WIDTHS, HANDWRITING_HIGHLIGHT_COLOUR, type HandwritingStroke as Stroke } from "@/src/core";
 
-const WIDTH = 1400, HEIGHT = 1800;
-const PEN_COLOURS = [{ name: "Black", value: "#171717" }, { name: "Blue", value: "#2563eb" }, { name: "Red", value: "#dc2626" }, { name: "Green", value: "#15803d" }] as const;
-const PEN_SIZES = [{ name: "Thin", value: 0.5 }, { name: "Medium", value: 1 }, { name: "Thick", value: 2 }] as const;
-const BROAD_SIZES = [{ name: "Small", value: 19 }, { name: "Medium", value: 38 }, { name: "Large", value: 76 }] as const;
+const { width: WIDTH, height: HEIGHT } = HANDWRITING_PAGE;
+const PEN_COLOURS = ["Black", "Blue", "Red", "Green"].map((name, i) => ({ name, value: HANDWRITING_PEN_COLOURS[i]! }));
+const PEN_SIZES = ["Thin", "Medium", "Thick"].map((name, i) => ({ name, value: HANDWRITING_PEN_SCALES[i]! }));
+const BROAD_SIZES = ["Small", "Medium", "Large"].map((name, i) => ({ name, value: HANDWRITING_BROAD_WIDTHS[i]! }));
 const HIGHLIGHT_OPACITY = 0.35;
 type Point = Stroke["points"][number];
 export type HandwritingHandle = { canResize: () => boolean };
@@ -41,15 +42,15 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	}, [hidden]);
 	const canvasRef = useRef<HTMLCanvasElement>(null), backgroundRef = useRef<HTMLCanvasElement>(null), highlightRef = useRef<HTMLCanvasElement>(null);
 	const controlsRef = useRef<HTMLElement>(null), slotRef = useRef<HTMLDivElement>(null), areaRef = useRef<HTMLDivElement>(null);
-	const strokes = useRef<Stroke[]>([]), active = useRef<{ pointerId: number; stroke: Stroke } | null>(null);
+	const strokes = useRef<Stroke[]>([]), active = useRef<{ pointerId: number; stroke: Stroke; complete: (stroke: Stroke) => void } | null>(null);
 	const recovery = useRef<HandwritingRecovery | null>(null);
 	const [saved, setSaved] = useState<Pick<RecoveryState, "ready" | "notice">>({ ready: false, notice: "Opening notebook…" });
 	const refreshStatus = useRef<() => void>(() => {});
 	const ownMutation = useRef(false);
 	const penToolTap = useRef<{ pointerId: number; button: HTMLButtonElement } | null>(null), penToolClick = useRef<HTMLButtonElement | null>(null);
 	const [tool, setTool] = useState<Stroke["tool"]>("pen");
-	const [colour, setColour] = useState<Stroke["colour"]>("#171717");
-	const [penScale, setPenScale] = useState<Stroke["penScale"]>(1), [eraserWidth, setEraserWidth] = useState<Stroke["width"]>(38), [highlighterWidth, setHighlighterWidth] = useState<Stroke["width"]>(38);
+	const [colour, setColour] = useState<Stroke["colour"]>(HANDWRITING_PEN_COLOURS[0]);
+	const [penScale, setPenScale] = useState<Stroke["penScale"]>(HANDWRITING_PEN_SCALES[1]), [eraserWidth, setEraserWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]), [highlighterWidth, setHighlighterWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]);
 	const [dimPaper, setDimPaper] = useState(true), [toolsOpen, setToolsOpen] = useState(false);
 	const [paperSize, setPaperSize] = useState({ width: 1, height: 1 });
 	const paperPositions = useRef<{ split: number; full?: number }>({ split: 0 }), restorePaperPosition = useRef<number | null>(null);
@@ -92,8 +93,10 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		const retry = () => { if (!active.current) void model.retry(); };
 		const visible = () => { if (document.visibilityState === "visible") retry(); };
 		const timer = window.setInterval(retry, 5000);
+		const deleted = (event: Event) => { if ((event as CustomEvent<string>).detail === chatId) model.sessionDeleted(); };
+		window.addEventListener(HANDWRITING_DELETED_EVENT, deleted);
 		window.addEventListener("online", retry); window.addEventListener("focus", retry); document.addEventListener("visibilitychange", visible);
-		return () => { unsubscribe(); model.dispose(); clearInterval(timer); window.removeEventListener("online", retry); window.removeEventListener("focus", retry); document.removeEventListener("visibilitychange", visible); };
+		return () => { unsubscribe(); model.dispose(); clearInterval(timer); window.removeEventListener(HANDWRITING_DELETED_EVENT, deleted); window.removeEventListener("online", retry); window.removeEventListener("focus", retry); document.removeEventListener("visibilitychange", visible); };
 	}, [chatId, redraw]);
 	useLayoutEffect(() => {
 		const slot = slotRef.current!, viewport = window.visualViewport;
@@ -141,11 +144,12 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		return { x: Math.max(0, Math.min(WIDTH, (event.clientX - rect.left) * WIDTH / rect.width)), y: Math.max(0, Math.min(HEIGHT, (event.clientY - rect.top) * HEIGHT / rect.height)), pressure: event.pointerType === "pen" && event.pressure > 0 ? event.pressure : 0.5 };
 	}
 	function start(event: ReactPointerEvent<HTMLCanvasElement>) {
-		if (event.pointerType === "touch" || event.button !== 0 || active.current || !recovery.current?.getSnapshot().ready) return;
+		if (event.pointerType === "touch" || event.button !== 0 || active.current) return;
+		const complete = recovery.current?.beginStroke(); if (!complete) return;
 		event.preventDefault(); if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 		const first = point(event.nativeEvent);
-		const stroke: Stroke = { tool, colour: tool === "highlighter" ? "#facc15" : colour, penScale, width: tool === "highlighter" ? highlighterWidth : eraserWidth, points: [first] };
-		strokes.current.push(stroke); active.current = { pointerId: event.pointerId, stroke }; event.currentTarget.setPointerCapture(event.pointerId);
+		const stroke: Stroke = { tool, colour: tool === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : colour, penScale, width: tool === "highlighter" ? highlighterWidth : eraserWidth, points: [first] };
+		strokes.current.push(stroke); active.current = { pointerId: event.pointerId, stroke, complete }; event.currentTarget.setPointerCapture(event.pointerId);
 		paint((tool === "highlighter" ? highlightRef.current! : event.currentTarget).getContext("2d")!, stroke, first, first);
 	}
 	function move(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -158,10 +162,10 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	function finish(event: ReactPointerEvent<HTMLCanvasElement>) {
 		if (active.current?.pointerId !== event.pointerId) return;
 		if (event.type === "pointerup") move(event);
-		const stroke = active.current.stroke;
+		const { stroke, complete } = active.current;
 		if (stroke.tool === "highlighter") mergeHighlight(event.currentTarget.getContext("2d")!);
 		active.current = null; ownMutation.current = true;
-		recovery.current!.draw(stroke); refreshStatus.current(); ownMutation.current = false;
+		complete(stroke); refreshStatus.current(); ownMutation.current = false;
 	}
 	function undoLast() { recovery.current?.undo(); }
 	function clear() { recovery.current?.clear(); }

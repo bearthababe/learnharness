@@ -15,8 +15,8 @@ await mkdir(path.join(dir, "data/chats"), { recursive: true });
 const now = new Date().toISOString();
 const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
 const assistant = content => ({ role: "assistant", content, id: "question", api: "openai-completions", provider: "openrouter", model: "test", usage, stopReason: "stop", timestamp: Date.now() });
-for (const id of ["handwriting_teach", "handwriting_practice", "handwriting_drill"]) {
-	const practice = id !== "handwriting_teach";
+for (const id of ["handwriting_teach", "handwriting_practice", "handwriting_drill", "handwriting_ack_0", "handwriting_ack_1", "handwriting_ack_2", "handwriting_read_race"]) {
+	const practice = id === "handwriting_practice" || id === "handwriting_drill";
 	const messages = [assistant([{ type: "text", text: "Work out pressure = force / area.\n\n".repeat(35) }, { type: "toolCall", name: practice ? "problem" : "ask_user_question", id: "problem-one", arguments: practice ? { statement: "Find the pressure for 100 N on 2 m².", mode: "apply", target: ["pressure"], modelSolution: "50 Pa" } : { question: "Explain how force and area affect pressure.", mode: "text" } }])];
 	if (practice) messages.push({ role: "toolResult", id: "result", toolName: "problem", toolCallId: "problem-one", content: [{ type: "text", text: "Ready" }], details: null, isError: false, timestamp: Date.now() });
 	await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ id, title: id, createdAt: now, updatedAt: now, messages, ...(practice ? { kind: "practice" } : {}), ...(id.endsWith("drill") ? { practiceMode: "drill" } : {}) }));
@@ -25,7 +25,7 @@ for (const id of ["handwriting_teach", "handwriting_practice", "handwriting_dril
 await writeFile(path.join(dir, "app/api/chat/route.ts"), 'export async function POST() { return new Response("No model calls in handwriting checks", { status: 503 }); }');
 await writeFile(path.join(dir, "app/api/stt/token/route.ts"), 'export async function GET() { return new Response(null, { status: 503 }); }');
 const port = Number(process.env.LH_HANDWRITING_TEST_PORT ?? 3115);
-assert.ok(port !== 3000 && port !== 3001);
+	assert.ok(![3000, 3001, 3002].includes(port));
 const origin = `http://127.0.0.1:${port}`;
 const server = spawn(process.execPath, [path.join(root, "node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(port)], { cwd: dir, env: { ...process.env, PATH: `${path.dirname(process.execPath)}:${process.env.PATH}`, LH_DATA_DIR: path.join(dir, "data"), LH_AUTH_FILE: path.join(dir, "auth.json"), NEXT_TELEMETRY_DISABLED: "1" }, stdio: ["ignore", "pipe", "pipe"] });
 let log = "", browser, page;
@@ -39,9 +39,13 @@ try {
 	page.on("pageerror", error => { errors.push(error.message); console.error("Browser error:", error.message); });
 	page.on("request", request => { if (new URL(request.url()).pathname === "/api/chat" && request.method() === "POST") turns.push(request.url()); });
 	await page.evaluateOnNewDocument(() => { try { localStorage.setItem("lh:sidebar-open", "0"); } catch { /* sandboxed generated-artifact frames have no storage */ } });
-	let failWrites = false, failReads = false, holdNextWrite = false, heldWrite;
+	let failWrites = false, failReads = false, holdNextWrite = false, heldWrite, holdNextRead = false, heldRead, failDelete = false;
+	const handwritingWrites = [];
 	await page.setRequestInterception(true);
 	page.on("request", request => {
+		if (request.method() === "PUT" && new URL(request.url()).pathname.endsWith("/handwriting")) handwritingWrites.push(request.url());
+		if (holdNextRead && request.method() === "GET" && new URL(request.url()).pathname.endsWith("/handwriting")) { holdNextRead = false; heldRead = request; return; }
+		if (failDelete && request.method() === "DELETE") { void request.respond({ status: 503, contentType: "application/json", body: '{"error":"Injected deletion failure","code":"unavailable"}' }); return; }
 		if (holdNextWrite && request.method() === "PUT" && new URL(request.url()).pathname.endsWith("/handwriting")) { holdNextWrite = false; heldWrite = request; return; }
 		if (new URL(request.url()).pathname.endsWith("/handwriting") && ((failWrites && request.method() === "PUT") || (failReads && request.method() === "GET"))) void request.respond({ status: 503, contentType: "application/json", body: '{"error":"Injected storage outage"}' });
 		else void request.continue();
@@ -70,6 +74,75 @@ try {
 		await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...end, buttons: 1, pointerType: "pen", force: 0.5 });
 		await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...end, button: "left", pointerType: "pen" });
 	};
+	// Review regression: a previous real save is acknowledged while the next
+	// accepted Pencil stroke is active. Corrupt/newer/divergent device truth
+	// blocks reconciliation, but must not discard the stroke on release/reopen.
+	for (const [index, replacement] of ["{broken", '{"version":2,"operations":[]}', JSON.stringify({ version: 1, operations: [{ id: "another-history", kind: "clear" }] })].entries()) {
+		const id = `handwriting_ack_${index}`, key = `lh:handwriting:v1:${id}`;
+		await page.goto(`${origin}/chat/${id}`, { waitUntil: "networkidle2" });
+		await page.click('[data-testid="open-notebook"]'); await ready();
+		holdNextWrite = true;
+		const saving = page.waitForRequest(request => request.method() === "PUT" && new URL(request.url()).pathname.endsWith("/handwriting"));
+		await draw(200, 450); await saving;
+		const firstInk = await bitmap();
+		const ack = await fetch(heldWrite.url(), { method: "PUT", headers: { "Content-Type": "application/json" }, body: heldWrite.postData() });
+		assert.equal(ack.status, 200); const acknowledged = await ack.text();
+		const r = await page.$eval(canvas, e => { const r = e.getBoundingClientRect(); return { x: r.x + 210, y: r.y + 270 }; });
+		await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...r, button: "left", buttons: 1, pointerType: "pen", force: 0.7 });
+		await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: r.x + 45, y: r.y + 20, buttons: 1, pointerType: "pen", force: 0.7 });
+		await page.evaluate((key, replacement) => {
+			localStorage.setItem(key, replacement); window.hwReconcileRead = false;
+			const get = Storage.prototype.getItem;
+			Storage.prototype.getItem = function(name) { if (name === key) window.hwReconcileRead = true; return get.call(this, name); };
+		}, key, replacement);
+		await heldWrite.respond({ status: 200, contentType: "application/json", body: acknowledged });
+		await page.waitForFunction(() => window.hwReconcileRead);
+		assert.equal(await page.$eval('[data-testid="handwriting-notebook"]', e => e.dataset.ready), "true", "Blocking ACK stays quiet until the accepted stroke finishes");
+		await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: r.x + 45, y: r.y + 20, button: "left", pointerType: "pen" });
+		const completed = await bitmap(); assert.notEqual(completed, firstInk);
+		await page.reload({ waitUntil: "networkidle2" });
+		await page.waitForSelector('.hw-notice');
+		await page.waitForFunction(() => !document.querySelector('.hw-notice')?.textContent.includes("Opening notebook"));
+		assert.ok(await bitmap() === completed, "A completed accepted stroke remains recoverable after a blocking ACK and reload");
+		assert.equal(await page.evaluate(key => localStorage.getItem(key), key), replacement, "Unrecognized/divergent device data is never replaced");
+		assert.equal(await page.$eval('[data-testid="handwriting-notebook"]', e => e.dataset.ready), "false");
+		// Repair only the injected record; Retry must now recover and sync the
+		// retained stroke through the real endpoint, with editable Undo intact.
+		await page.evaluate((key, value) => localStorage.setItem(key, value), key, acknowledged);
+		const recoveredSave = page.waitForResponse(response => response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith("/handwriting") && response.status() === 200);
+		await page.click('.hw-notice button'); await ready();
+		await recoveredSave;
+		assert.equal((await (await fetch(`${origin}/api/chats/${id}/handwriting`)).json()).operations.length, 2);
+		await pencilTap("Undo"); assert.ok(await bitmap() === firstInk, "Recovered stroke remains individually undoable");
+	}
+	console.log("PASS blocking ACK during accepted stroke, device preservation, reload and Retry");
+	{
+		const id = "handwriting_read_race", key = `lh:handwriting:v1:${id}`;
+		await page.goto(`${origin}/chat/${id}`, { waitUntil: "networkidle2" });
+		holdNextRead = true;
+		const reading = page.waitForRequest(request => request.method() === "GET" && new URL(request.url()).pathname.endsWith("/handwriting"));
+		await page.click('[data-testid="open-notebook"]'); await reading;
+		const response = await fetch(heldRead.url()); assert.equal(response.status, 200);
+		const empty = await response.text();
+		const newer = await (await fetch(`${origin}/api/chats/handwriting_ack_0/handwriting`)).text();
+		await page.evaluate((key, newer) => {
+			localStorage.setItem(key, newer); window.hwReadNative = Storage.prototype.getItem;
+			Storage.prototype.getItem = function(name) { if (name === key) throw new DOMException("Unreadable reconciliation", "SecurityError"); return window.hwReadNative.call(this, name); };
+		}, key, newer);
+		await heldRead.respond({ status: 200, contentType: "application/json", body: empty });
+		await page.waitForFunction(() => document.querySelector('.hw-notice')?.textContent.includes("Retry before editing"));
+		assert.equal(await page.$eval('[data-testid="handwriting-notebook"]', e => e.dataset.ready), "false");
+		const blank = await bitmap(); await draw(200, 450);
+		assert.ok(await bitmap() === blank, "Unreadable reconciliation never enables drawing");
+		assert.equal(handwritingWrites.filter(url => url.includes(id)).length, 0, "No blind PUT while device truth is unreadable");
+		assert.equal(await page.evaluate(key => window.hwReadNative.call(localStorage, key), key), newer);
+		await page.evaluate(() => { Storage.prototype.getItem = window.hwReadNative; });
+		const saved = page.waitForResponse(response => response.request().method() === "PUT" && response.url().includes(id) && response.status() === 200);
+		await page.click('.hw-notice button'); await ready(); await saved;
+		assert.ok(await bitmap() !== blank, "Retry discovers and restores the newer device working");
+	}
+	console.log("PASS unreadable reconciliation blocks actual drawing and PUT until Retry");
+	await page.goto(`${origin}/chat/handwriting_teach`, { waitUntil: "networkidle2" }); await ready();
 	await draw(200, 450);
 	const ink = await bitmap();
 	await page.reload({ waitUntil: "networkidle2" });
@@ -254,6 +327,32 @@ try {
 	assert.equal(await bitmap(), pendingInk, "Tools → Reload preview exercises recovery");
 	assert.equal(await page.$('[data-testid="notebook-attach"]'), null);
 	assert.equal(await page.$('[data-testid="notebook-circuit-example"]'), null);
+	await page.setViewport({ width: 1400, height: 900, isMobile: true, hasTouch: true });
+	await page.click('[aria-label="Open sidebar"]');
+	await page.click('[data-testid="kind-filter-all"]');
+	const kept = await page.evaluate(() => ({ ink: localStorage.getItem("lh:handwriting:v1:handwriting_teach"), visibility: localStorage.getItem("lh:handwriting:open:handwriting_teach") }));
+	for (const id of ["handwriting_practice", "handwriting_drill"]) {
+		await page.evaluate(id => { localStorage.setItem(`lh:handwriting:recovery:v1:${id}`, localStorage.getItem(`lh:handwriting:v1:${id}`)); }, id);
+		await page.waitForFunction(id => [...document.querySelectorAll('[data-testid="session-row"]')].some(e => e.textContent.includes(id)), {}, id);
+		const rows = await page.$$('[data-testid="session-row"]');
+		let target;
+		for (const row of rows) if (await row.evaluate((e, id) => e.textContent.includes(id), id)) target = row;
+		assert.ok(target, "Previously visited session is in the sidebar");
+		await target.scrollIntoView(); await target.click({ button: "right" });
+		await page.click('[data-testid="ctx-delete"]');
+		await page.waitForSelector('[data-testid="delete-session-dialog"]');
+		if (id.endsWith("drill")) await page.click('[data-testid="delete-traces-checkbox"]');
+		failDelete = true;
+		await page.click('[data-testid="delete-confirm"]'); await page.waitForSelector('[data-testid="delete-failure"]');
+		assert.ok(await page.evaluate(id => localStorage.getItem(`lh:handwriting:v1:${id}`) !== null, id), "Failed deletion keeps device recovery");
+		failDelete = false;
+		const deleted = page.waitForResponse(response => response.request().method() === "DELETE" && response.url().includes(id) && response.status() === 200);
+		await page.click('[data-testid="delete-retry"]'); await deleted;
+		await page.waitForSelector('[data-testid="delete-session-dialog"]', { hidden: true });
+		assert.deepEqual(await page.evaluate(id => [localStorage.getItem(`lh:handwriting:v1:${id}`), localStorage.getItem(`lh:handwriting:open:${id}`), localStorage.getItem(`lh:handwriting:recovery:v1:${id}`)], id), [null, null, null], "Successful deletion cleans a previously visited session without a controller 404");
+		assert.deepEqual(await page.evaluate(() => ({ ink: localStorage.getItem("lh:handwriting:v1:handwriting_teach"), visibility: localStorage.getItem("lh:handwriting:open:handwriting_teach") })), kept);
+	}
+	console.log("PASS real sidebar deletion/retry cleans only deleted-session device journals and visibility");
 	assert.deepEqual(turns, []); assert.deepEqual(errors, []);
 	console.log("PASS teaching/practice/drill isolation, Tools reload, no tutor calls or submission actions");
 } catch (error) {

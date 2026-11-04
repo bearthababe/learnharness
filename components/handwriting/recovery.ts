@@ -1,9 +1,10 @@
-import { emptyHandwriting, handwritingSchema, handwritingPrefix, handwritingPage, type Handwriting, type HandwritingStroke, type HandwritingOperation } from "../../src/core/index.ts";
+import { emptyHandwriting, handwritingSchema, handwritingPrefix, replayHandwriting, reconcileHandwriting, type Handwriting, type HandwritingStroke, type HandwritingOperation } from "../../src/core/index.ts";
+import { handwritingKey, handwritingRecoveryKey, clearHandwritingDevice } from "./device.ts";
+export { handwritingKey, handwritingRecoveryKey } from "./device.ts";
 
 type DeviceStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 type Dependencies = { storage: () => DeviceStorage; fetch: (url: string, init?: RequestInit) => Promise<Response> };
 export type RecoveryState = { working: Handwriting; ready: boolean; notice: string | null };
-export const handwritingKey = (id: string) => `lh:handwriting:v1:${id}`;
 
 /** Local write-ahead journal + ordered server sync. Completed operations own
  * immutable IDs; ACKs never remove the recovery copy or replace a newer tail.
@@ -12,7 +13,6 @@ export class HandwritingRecovery {
 	private state: RecoveryState = { working: emptyHandwriting(), ready: false, notice: "Opening notebook…" };
 	private listeners = new Set<() => void>();
 	private disposed = false;
-	private loadedLocal = false;
 	private localSaved = false;
 	private acknowledged = 0;
 	private flight: Promise<void> | null = null;
@@ -27,11 +27,56 @@ export class HandwritingRecovery {
 		this.state = { ...this.state, ...patch };
 		for (const listener of this.listeners) listener();
 	}
-	page() { return handwritingPage(this.state.working); }
-	private persist(): boolean {
+	page() { return replayHandwriting(this.state.working).strokes; }
+	private deviceReadFailure() {
+		this.blocked = true;
+		this.update({ ready: false, notice: "Couldn’t read handwriting on this device. Existing working is kept unchanged. Retry before editing." });
+	}
+	private restoreDevice(): boolean {
+		// A completed stroke accepted before an ACK blocked reconciliation may
+		// have its own recovery copy. Recover it first, even when the primary
+		// record is unreadable. Neither copy is silently replaced on divergence.
+		for (const key of [handwritingRecoveryKey(this.chatId), handwritingKey(this.chatId)]) {
+			let text: string | null, saved: Handwriting;
+			try {
+				text = this.deps.storage().getItem(key);
+				if (text === null) continue;
+				saved = handwritingSchema.parse(JSON.parse(text));
+			} catch { this.deviceReadFailure(); return false; }
+			try { this.update({ working: reconcileHandwriting(this.state.working, saved) }); }
+			catch { this.conflict(); return false; }
+			this.localSaved = handwritingPrefix(this.state.working, saved);
+		}
+		return true;
+	}
+	private preserveBlockedWorking() {
+		if (!this.localSaved) {
+			// This copy has a distinct key: a corrupt/newer/divergent primary is
+			// left byte-for-byte intact. Do not overwrite an unknown recovery copy.
+			try {
+				const storage = this.deps.storage(), key = handwritingRecoveryKey(this.chatId);
+				const previous = storage.getItem(key);
+				if (previous === null || handwritingPrefix(handwritingSchema.parse(JSON.parse(previous)), this.state.working)) {
+					const text = JSON.stringify(this.state.working);
+					storage.setItem(key, text); this.localSaved = storage.getItem(key) === text;
+				}
+			} catch { /* visible working remains in memory; never claim durability */ }
+		}
+		this.update({ notice: `${this.state.notice} ${this.localSaved ? "Latest working is saved on this device." : "Latest working could not be saved on this device or to LearnHarness. Keep this page open."}` });
+	}
+	private retireRecoveryCopy(acknowledged: Handwriting) {
+		if (this.disposed || this.deleted) return;
 		try {
-			const storage = this.deps.storage(), key = handwritingKey(this.chatId);
-			const previous = storage.getItem(key);
+			const storage = this.deps.storage(), key = handwritingRecoveryKey(this.chatId), text = storage.getItem(key);
+			if (text !== null && handwritingPrefix(handwritingSchema.parse(JSON.parse(text)), acknowledged)) storage.removeItem(key);
+		} catch { /* Keeping a redundant/unreadable recovery copy is safe. */ }
+	}
+	private persist(): boolean {
+		let storage: DeviceStorage, previous: string | null;
+		const key = handwritingKey(this.chatId);
+		try { storage = this.deps.storage(); previous = storage.getItem(key); }
+		catch { this.deviceReadFailure(); return false; }
+		try {
 			if (previous !== null) {
 				let journal: Handwriting;
 				try { journal = handwritingSchema.parse(JSON.parse(previous)); }
@@ -49,11 +94,7 @@ export class HandwritingRecovery {
 	}
 	private async response(response: Response): Promise<Handwriting> {
 		if (response.status === 404) {
-			this.deleted = true;
-			if (!this.disposed) {
-				try { this.deps.storage().removeItem(handwritingKey(this.chatId)); this.deps.storage().removeItem(`lh:handwriting:open:${this.chatId}`); } catch { /* best effort; server still refuses replay */ }
-				this.update({ ready: false, notice: "This session is no longer available. Handwriting cannot be synced." });
-			}
+			this.sessionDeleted();
 			throw new Error("deleted");
 		}
 		if (response.status === 409) { this.conflict(); throw new Error("conflict"); }
@@ -71,45 +112,47 @@ export class HandwritingRecovery {
 	}
 	private async load() {
 		if (this.disposed || this.deleted) return;
-		if (!this.loadedLocal) {
-			let text: string | null = null;
-			try { text = this.deps.storage().getItem(handwritingKey(this.chatId)); }
-			catch { this.update({ ready: false, notice: "Couldn’t read handwriting on this device. Existing working is kept unchanged. Retry before editing." }); return; }
-			if (text !== null) {
-				try { this.update({ working: handwritingSchema.parse(JSON.parse(text)) }); this.localSaved = true; }
-				catch { this.update({ ready: false, notice: "Couldn’t read the handwriting saved on this device. It has been kept unchanged. Retry to read again." }); return; }
-			}
-			this.loadedLocal = true;
-		}
+		if (!this.restoreDevice()) return;
 		try {
 			const remote = await this.response(await this.deps.fetch(`/api/chats/${encodeURIComponent(this.chatId)}/handwriting`, { cache: "no-store" }));
-			if (this.disposed) return;
-			const local = this.state.working;
-			if (handwritingPrefix(local, remote)) this.update({ working: remote });
-			else if (!handwritingPrefix(remote, local)) { this.conflict(); return; }
+			if (this.disposed || this.deleted) return;
+			try { this.update({ working: reconcileHandwriting(this.state.working, remote) }); }
+			catch { this.conflict(); return; }
 			this.blocked = false;
 			this.acknowledged = remote.operations.length;
 			this.localSaved = this.persist();
 			if (this.blocked) return;
 			this.update({ ready: true, notice: null });
 			await this.sync();
+			this.retireRecoveryCopy(remote);
 		} catch {
 			if (!this.deleted && !this.blocked) this.update({ ready: false, notice: "Couldn’t open saved handwriting. Your working is retained. Retry before editing." });
 		}
 	}
-	draw(stroke: HandwritingStroke) { this.append({ id: crypto.randomUUID(), kind: "stroke", stroke: structuredClone(stroke) }); }
+	/** Admission is decided on pointerdown. An ACK can block the next stroke,
+	 * but cannot revoke this accepted stroke's one completed operation. */
+	beginStroke(): ((stroke: HandwritingStroke) => void) | null {
+		if (!this.state.ready || this.disposed || this.blocked || this.deleted) return null;
+		const base = this.state.working;
+		let completed = false;
+		return stroke => {
+			if (completed) return;
+			completed = true;
+			this.append({ id: crypto.randomUUID(), kind: "stroke", stroke: structuredClone(stroke) }, base);
+		};
+	}
+	draw(stroke: HandwritingStroke) { this.beginStroke()?.(stroke); }
 	clear() { if (this.page().length) this.append({ id: crypto.randomUUID(), kind: "clear" }); }
 	undo() {
-		let depth = 0;
-		for (const op of this.state.working.operations) depth = op.kind === "undo" ? Math.max(0, depth - 1) : depth + 1;
-		if (depth) this.append({ id: crypto.randomUUID(), kind: "undo" });
+		if (replayHandwriting(this.state.working).canUndo) this.append({ id: crypto.randomUUID(), kind: "undo" });
 	}
-	private append(operation: HandwritingOperation) {
-		if (!this.state.ready || this.disposed || this.blocked) return;
+	private append(operation: HandwritingOperation, acceptedBase?: Handwriting) {
+		if (this.disposed || this.deleted || (!acceptedBase && (!this.state.ready || this.blocked))) return;
+		if (acceptedBase && (!handwritingPrefix(this.state.working, acceptedBase) || !handwritingPrefix(acceptedBase, this.state.working))) this.conflict();
 		// This entire write occurs on pointer completion, never pointer movement.
-		this.state = { ...this.state, working: { version: 1, operations: [...this.state.working.operations, operation] } };
+		this.state = { ...this.state, working: { version: 1, operations: [...(acceptedBase ?? this.state.working).operations, operation] } };
 		this.localSaved = this.persist();
-		if (this.blocked) return;
+		if (this.blocked) { this.preserveBlockedWorking(); return; }
 		this.update({ notice: this.localSaved ? null : "Couldn’t save on this device; saving to LearnHarness…" });
 		void this.sync();
 	}
@@ -123,7 +166,7 @@ export class HandwritingRecovery {
 			const sent = this.state.working;
 			try {
 				const remote = await this.response(await this.deps.fetch(`/api/chats/${encodeURIComponent(this.chatId)}/handwriting`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(sent) }));
-				if (this.disposed) return;
+				if (this.disposed || this.deleted) return;
 				if (!handwritingPrefix(sent, remote)) { this.conflict(); return; }
 				if (handwritingPrefix(this.state.working, remote)) {
 					this.update({ working: remote });
@@ -131,6 +174,7 @@ export class HandwritingRecovery {
 					if (this.blocked) return;
 				} else if (!handwritingPrefix(remote, this.state.working)) { this.conflict(); return; }
 				this.acknowledged = remote.operations.length;
+				this.retireRecoveryCopy(remote);
 				this.update({ notice: this.localSaved ? null : "Saved to LearnHarness; device recovery is unavailable." });
 			} catch {
 				if (!this.deleted && !this.blocked) this.update({ notice: this.localSaved ? "Saved on this device; couldn’t save to LearnHarness" : "Couldn’t save handwriting on this device or to LearnHarness. Keep this page open and Retry." });
@@ -146,4 +190,10 @@ export class HandwritingRecovery {
 		if (this.state.ready && this.acknowledged === this.state.working.operations.length) this.update({ notice: this.localSaved ? null : "Saved to LearnHarness; device recovery is unavailable." });
 	}
 	dispose() { this.disposed = true; this.listeners.clear(); }
+	sessionDeleted() {
+		this.deleted = true;
+		if (this.disposed) return;
+		clearHandwritingDevice(this.chatId, this.deps.storage);
+		this.update({ ready: false, notice: "This session is no longer available. Handwriting cannot be synced." });
+	}
 }

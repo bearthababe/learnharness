@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { after, it } from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { HandwritingRecovery } from "../components/handwriting/recovery.ts";
-import { handwritingKey } from "../components/handwriting/recovery.ts";
+import { handwritingKey, handwritingRecoveryKey } from "../components/handwriting/recovery.ts";
+import { handwritingVisibilityKey } from "../components/handwriting/device.ts";
 
 const data = mkdtempSync("/tmp/opencode/handwriting-recovery-");
 process.env.LH_DATA_DIR = data;
@@ -160,4 +161,99 @@ it("a delayed load cannot overwrite a newer or unreadable device record", async 
 		assert.equal(recovery.getSnapshot().ready, false);
 		recovery.dispose();
 	}
+});
+
+it("an unreadable reconciliation read after GET blocks edits and PUT until device truth can be read", async () => {
+	const chat = stores.chatStore.createChat("Unreadable reconciliation");
+	const storage = device();
+	let denyReads = false, release!: () => void, writes = 0, hold = true;
+	const recovery = new HandwritingRecovery(chat.id, { storage: () => ({ ...storage, getItem(key) { if (denyReads) throw new Error("SecurityError during reconciliation"); return storage.getItem(key); } }), fetch: async (url, init) => {
+		if (init?.method === "PUT") writes++;
+		else if (hold) await new Promise<void>(resolve => { release = resolve; });
+		return transport(chat.id)(url, init);
+	} });
+	const opening = recovery.open();
+	const newer = JSON.stringify({ version: 1, operations: [{ id: "undiscovered", kind: "stroke", stroke }] });
+	storage.setItem(handwritingKey(chat.id), newer); denyReads = true;
+	release(); await opening;
+	assert.equal(recovery.getSnapshot().ready, false, "Unreadable device truth is not a writable empty page");
+	recovery.draw(stroke); await recovery.retry();
+	assert.equal(writes, 0); assert.equal(storage.getItem(handwritingKey(chat.id)), newer);
+	denyReads = false; hold = false; await recovery.retry();
+	assert.equal(recovery.getSnapshot().ready, true);
+	assert.deepEqual(recovery.page(), [stroke]); recovery.dispose();
+});
+
+it("an admitted stroke is kept when a blocking ACK and failed recovery write occur before completion", async () => {
+	const chat = stores.chatStore.createChat("Admitted completion");
+	const storage = device();
+	let release!: () => void, first = true, failBackup = true;
+	const recovery = new HandwritingRecovery(chat.id, { storage: () => ({ ...storage, setItem(key, value) { if (key === handwritingRecoveryKey(chat.id) && failBackup) throw new Error("Quota exceeded"); storage.setItem(key, value); } }), fetch: async (url, init) => {
+		const response = await transport(chat.id)(url, init);
+		if (init?.method === "PUT" && first) { first = false; await new Promise<void>(resolve => { release = resolve; }); }
+		return response;
+	} });
+	await recovery.open(); recovery.draw(stroke);
+	while (!release) await new Promise(resolve => setTimeout(resolve, 0));
+	const complete = recovery.beginStroke(); assert.ok(complete);
+	const acknowledged = storage.getItem(handwritingKey(chat.id))!;
+	storage.setItem(handwritingKey(chat.id), '{"version":2,"operations":[]}');
+	release(); await recovery.retry();
+	assert.equal(recovery.getSnapshot().ready, false);
+	assert.equal(recovery.beginStroke(), null, "A blocked controller admits no further strokes");
+	const second = { ...stroke, points: [{ x: 300, y: 400, pressure: 0.9 }] };
+	complete(second); complete(second);
+	assert.deepEqual(recovery.page(), [stroke, second], "One accepted completion remains in working, even if it cannot yet be saved");
+	assert.match(recovery.getSnapshot().notice!, /Latest working could not be saved/);
+	assert.equal(storage.getItem(handwritingKey(chat.id)), '{"version":2,"operations":[]}');
+	failBackup = false; storage.setItem(handwritingKey(chat.id), acknowledged);
+	await recovery.retry();
+	assert.equal(recovery.getSnapshot().ready, true);
+	assert.equal((await (await transport(chat.id)("/handwriting")).json()).operations.length, 2);
+	recovery.dispose();
+	const reopened = new HandwritingRecovery(chat.id, { storage: () => storage, fetch: transport(chat.id) });
+	await reopened.open(); assert.deepEqual(reopened.page(), [stroke, second]);
+	reopened.undo(); await reopened.retry(); assert.deepEqual(reopened.page(), [stroke]); reopened.dispose();
+});
+
+it("successful deletion invalidates an acknowledged idle controller and late ACKs without recreating device data", async () => {
+	const { deleteChatSession } = await import("../src/server/chats.ts");
+	for (const hold of [false, true]) {
+		const chat = stores.chatStore.createChat("Delete callback");
+		const storage = device(); let release!: () => void;
+		const recovery = new HandwritingRecovery(chat.id, { storage: () => storage, fetch: async (url, init) => {
+			const response = await transport(chat.id)(url, init);
+			if (hold && init?.method === "PUT") await new Promise<void>(resolve => { release = resolve; });
+			return response;
+		} });
+		await recovery.open(); recovery.draw(stroke);
+		if (hold) { while (!release) await new Promise(resolve => setTimeout(resolve, 0)); }
+		else await recovery.retry();
+		const complete = recovery.beginStroke(); assert.ok(complete);
+		storage.setItem(handwritingVisibilityKey(chat.id), "1");
+		storage.setItem(handwritingRecoveryKey(chat.id), storage.getItem(handwritingKey(chat.id))!);
+		storage.setItem(handwritingKey("other-session"), "unrelated working");
+		assert.equal((await deleteChatSession(chat.id, "preserve-graph")).ok, true);
+		recovery.sessionDeleted();
+		if (hold) release();
+		complete(stroke); await recovery.retry();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.deepEqual([handwritingKey(chat.id), handwritingRecoveryKey(chat.id), handwritingVisibilityKey(chat.id)].map(key => storage.getItem(key)), [null, null, null]);
+		assert.equal(storage.getItem(handwritingKey("other-session")), "unrelated working");
+		assert.equal(recovery.getSnapshot().ready, false); recovery.dispose();
+	}
+});
+
+it("Undo exhaustion after restoring Clear is a no-op across save and reopen", async () => {
+	const chat = stores.chatStore.createChat("Undo replay"); const storage = device();
+	const recovery = new HandwritingRecovery(chat.id, { storage: () => storage, fetch: transport(chat.id) });
+	await recovery.open(); recovery.draw(stroke); recovery.clear(); recovery.undo();
+	assert.deepEqual(recovery.page(), [stroke]);
+	recovery.undo(); await recovery.retry(); assert.deepEqual(recovery.page(), []);
+	const saved = await (await transport(chat.id)("/handwriting")).json();
+	recovery.undo(); await recovery.retry(); recovery.dispose();
+	const reopened = new HandwritingRecovery(chat.id, { storage: () => storage, fetch: transport(chat.id) });
+	await reopened.open(); reopened.undo(); await reopened.retry();
+	assert.deepEqual(await (await transport(chat.id)("/handwriting")).json(), saved, "Undo availability follows the same history replay as the page");
+	reopened.dispose();
 });
