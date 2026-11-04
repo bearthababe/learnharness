@@ -17,14 +17,14 @@ Logs below are under `/tmp/opencode/notebook-integration/`.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Full automated suite | PASS: 2,692 tests / 499 suites | `check-28-mobile-tests.log` |
-| Typecheck | PASS | `check-28-mobile-types.log` |
-| Lint | PASS | `check-28-mobile-lint.log` |
-| Production build (`LH_NOTEBOOK_PREVIEW=1`) | PASS | `check-28-mobile-build.log` |
-| Standalone payload curation | PASS | `check-28-mobile-payload.log` |
+| Full automated suite | PASS: 2,693 tests / 499 suites, including layout integration | `check-28-layout-tests.log` |
+| Typecheck | PASS | `check-28-layout-types.log` |
+| Lint | PASS | `check-28-layout-lint.log` |
+| Production build (`LH_NOTEBOOK_PREVIEW=1`) | PASS | `check-28-layout-build.log` |
+| Standalone payload curation | PASS | `check-28-layout-payload.log` |
 | Baseline mobile browser flows | PASS | `check-28-mobile-browser.log` (baseline PASS precedes combined-scenario failure) |
 | Combined Notebook browser flow | PASS | `check-28-notebook-browser.log` |
-| Electron bundled-Node standalone smoke | PASS, including offline provider initialization | `check-28-mobile-electron-smoke.log` |
+| Electron bundled-Node standalone smoke | Earlier build PASS; layout build running | `check-28-layout-electron-smoke.log` |
 | Standards/spec review against mobile baseline | Completed; corrections being verified | Findings below |
 | Combined slot 1 deployment and HTTPS/reload verification | Pending | — |
 
@@ -64,6 +64,23 @@ remain separate open gates.
 Review totals: Standards 1 boundary violation + 1 judgment call; Spec 1 defect.
 The corrections and requested layout adaptation supersede the previously built
 payload; rebuild and deployment verification remain required.
+
+## Approved iPad-style layout adaptation
+
+Owner approved [the adaptation plan](notebook-ipad-layout-plan.md), including
+implementation and deployment. Presentation follows handwriting source `329677b`
+and the coordinating session's exact handoff; its module structure deliberately
+keeps layout separate from equation editing for later common-shell extraction.
+
+Notebook now has the rounded card and 16px gaps, below-Tutor layout until 980px
+available workspace width, adjustable divider, and Expand/Back/Close without
+remounting either editor. Starting proportions and focused-phone allocation
+remain as approved. Touch focus protection includes 768–979px. The complete
+automated suite, typecheck/lint and production build/payload passed. Full combined
+browser checks and final layout review are running. This supersedes the earlier
+pending layout decision. Existing Apply/Stop/return/Send browser checks already
+passed under the new layout; extra layout checks cover actual frame geometry,
+divider, mounted identity, reading positions, keyboard and available-width rules.
 
 ## Acceptance boundary
 

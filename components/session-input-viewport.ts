@@ -26,7 +26,8 @@ export function useSessionInputViewport(rootRef: RefObject<HTMLElement | null>, 
 		const sync = () => {
 			if (disposed) return;
 			const field = document.activeElement as HTMLElement | null;
-			if (window.innerWidth >= 768 || !field || !root.contains(field) || !field.matches('textarea,input:not([type="range"]),[contenteditable="true"]')) { release(); return; }
+			const mobile = window.innerWidth < 768 || window.matchMedia?.("(pointer: coarse) and (max-width: 979px)").matches;
+			if (!mobile || !field || !root.contains(field) || field.closest("[hidden],[inert]") || !field.matches('textarea,input:not([type="range"]),[contenteditable="true"]')) { release(); return; }
 			const pane = field.closest("[data-input-owner]")?.getAttribute("data-input-owner");
 			if (pane !== "notebook" && pane !== "tutor") { release(); return; }
 			if (!locked) {
@@ -39,6 +40,11 @@ export function useSessionInputViewport(rootRef: RefObject<HTMLElement | null>, 
 			}
 			const viewport = window.visualViewport;
 			if ((viewport?.scale ?? 1) !== 1) return;
+			const parent = root.parentElement?.getBoundingClientRect();
+			if (parent) {
+				style("--session-viewport-left", `${parent.left}px`);
+				style("--session-viewport-width", `${parent.width}px`);
+			}
 			if (root.dataset.inputFocused !== pane) root.dataset.inputFocused = pane;
 			const keyboard = String((viewport?.height ?? window.innerHeight) < window.innerHeight - 100);
 			if (root.dataset.keyboardOpen !== keyboard) root.dataset.keyboardOpen = keyboard;

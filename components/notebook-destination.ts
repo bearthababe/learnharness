@@ -36,7 +36,7 @@ export function useNotebookDestination(rootRef: RefObject<HTMLElement | null>, s
 		if (!visible && root.dataset.sessionDestination === "notebook") void session.speech.choose(notebookTutorInput(root)).catch(() => {});
 		const choose = (event: Event) => {
 			// The shared microphone control belongs to neither text destination.
-			if ((event.target as HTMLElement).closest?.('[data-testid="dictation-toggle"]')) return;
+			if ((event.target as HTMLElement).closest?.('[data-testid="dictation-toggle"], [data-notebook-view-control]')) return;
 			const owner = (event.target as HTMLElement).closest?.("[data-input-owner]")?.getAttribute("data-input-owner");
 			if (owner) {
 				if (session.getSnapshot().inputLocked) { event.preventDefault(); return; }

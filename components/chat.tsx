@@ -33,6 +33,7 @@ import { useNotebookSession } from "@/components/use-notebook-session";
 import type { NotebookSession } from "@/components/notebook-session";
 import type { NotebookInputFields } from "@/src/core";
 import { NotebookPanel } from "@/components/notebook-panel";
+import { NotebookFrame, NotebookSplit, useNotebookLayout } from "@/components/notebook-layout";
 import { NotebookSavedDrafts } from "@/components/notebook-saved-drafts";
 import { useNotebookDestination } from "@/components/notebook-destination";
 import { notebookTutorInput } from "@/components/notebook-speech-input";
@@ -277,6 +278,7 @@ export function Chat({
 	const workspaceRef = useRef<HTMLDivElement | null>(null);
 	const notebook = useNotebookSession(chatId);
 	const notebookVisible = notebook.view?.visible ?? false;
+	const notebookLayout = useNotebookLayout(notebookVisible);
 	const notebookSpeech = useSyncExternalStore(notebook.session.speech.subscribe, notebook.session.speech.getSnapshot, notebook.session.speech.getSnapshot);
 	const tutorDraftState = useSyncExternalStore(notebook.session.tutor.subscribe, notebook.session.tutor.getSnapshot, notebook.session.tutor.getSnapshot);
 	const ordinaryDraft = tutorDraftState.drafts.find((draft) => draft.owner.kind === "ordinary");
@@ -1318,7 +1320,8 @@ export function Chat({
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
 		<div ref={workspaceRef} inert={notebook.inputLocked} data-session-workspace="" className="session-workspace flex h-dvh overflow-hidden">
-			<div className="flex min-w-0 flex-1 flex-col">
+			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
+			<div className="session-tutor" inert={notebookLayout.expanded}>
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its
 				    bottom outline (border-b border-border) matches the one that
@@ -1396,13 +1399,13 @@ export function Chat({
 					{/* The plan chip (owner, plan-placement round): session-level
 					    structure beside the phase chip — access to the full-DAG popup
 					    at every width; the marginalia is the wide-screen glance view. */}
-					<button type="button" data-input-owner="notebook" aria-expanded={notebookVisible}
+					<button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
 						className="lh-no-drag shrink-0 rounded border border-border px-2 py-1 text-xs"
 						onClick={() => {
 							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
 							if (notebookVisible && workspaceRef.current) {
 								void notebook.session.speech.choose(notebookTutorInput(workspaceRef.current)).then(() => notebook.session.dispatch({ type: "visibility", visible: false })).catch(() => {});
-							} else void notebook.session.dispatch({ type: "visibility", visible: true }).catch(() => {});
+							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
 						}}>
 						{notebookVisible ? "Collapse Notebook" : "Notebook"}
 					</button>
@@ -1450,8 +1453,7 @@ export function Chat({
 				{!notebookVisible && notebook.error && <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>}
 
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
-				<div className="session-panes min-h-0 flex-1" data-notebook-open={notebookVisible}>
-				<div ref={sessionFindScopeRef} data-input-owner="tutor" className="relative flex min-h-0 min-w-0 overflow-hidden">
+				<div ref={sessionFindScopeRef} data-input-owner="tutor" className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
 					<ConversationContent className="min-h-full gap-0 p-0">
@@ -1860,8 +1862,22 @@ export function Chat({
 				{planOpen && <PlanPopup messages={messages} onClose={() => setPlanOpen(false)} />}
 				<AbortTurnDialog mode={abortAsk} onClose={() => setAbortAsk(null)} onConfirm={confirmAbort} busy={busy} />
 				</div>
-				{notebookVisible && <NotebookPanel session={notebook.session} dictation={dictation} />}
 				</div>
+				{notebookLayout.mounted && <>
+					<NotebookSplit hidden={!notebookVisible} />
+					<NotebookFrame hidden={!notebookVisible} expanded={notebookLayout.expanded}
+						onExpand={() => { void notebook.session.speech.choose({ kind: "notebook" }).then(notebookLayout.expand).catch(() => {}); }}
+						onBack={notebookLayout.back}
+						onClose={() => {
+							if (!workspaceRef.current) return;
+							void notebook.session.speech.choose(notebookTutorInput(workspaceRef.current)).then(async () => {
+								await notebook.session.dispatch({ type: "visibility", visible: false });
+								requestAnimationFrame(focusDictationDestination);
+							}).catch(() => {});
+						}}>
+						<NotebookPanel session={notebook.session} dictation={dictation} />
+					</NotebookFrame>
+				</>}
 			</div>
 		</div>
 		</JobsContext.Provider>

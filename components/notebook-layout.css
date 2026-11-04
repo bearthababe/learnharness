@@ -1,0 +1,35 @@
+/* Presentation counterpart of handwriting/notebook.css at 329677b. Keep these
+ * shell classes independent of equation content for later shared extraction. */
+.session-workspace { container: equation-notebook / inline-size; }
+.session-panes { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; --notebook-context-share: var(--notebook-share-column, 50%); }
+.session-tutor { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+.session-panes[data-notebook-open="true"] > .session-tutor { flex: 0 0 calc(var(--notebook-context-share) - 14px); }
+.notebook-slot { display: flex; flex-direction: column; }
+.notebook-slot[hidden], .notebook-split-divider[hidden] { display: none !important; }
+.notebook-frame { overscroll-behavior: contain; }
+.notebook-frame-header { display: flex; flex: none; min-height: 52px; align-items: center; gap: 2px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.notebook-frame-header h2 { margin-right: auto; padding-inline: 4px; font-size: 12px; font-weight: 500; }
+.notebook-frame-header button { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding-inline: 8px; font-size: 11px; color: var(--muted-foreground); touch-action: manipulation; }
+.notebook-frame-header button:hover { color: var(--foreground); background: var(--accent); }
+.notebook-frame-header svg { width: 14px; height: 14px; }
+.notebook-panel { flex: 1; }
+.notebook-split-divider { display: flex; flex: 0 0 28px; align-items: center; justify-content: center; touch-action: none; user-select: none; cursor: ns-resize; background: var(--background); border-block: 1px solid var(--border); }
+.notebook-split-divider > span { width: 40px; height: 4px; border-radius: 4px; background: var(--muted-foreground); }
+.notebook-split-divider:focus-visible { background: var(--accent); }
+.session-panes[data-notebook-expanded="true"] > :is(.session-tutor, .notebook-split-divider) { visibility: hidden; pointer-events: none; }
+.session-panes[data-notebook-expanded="true"] > .notebook-slot { z-index: 4; }
+@container equation-notebook (min-width: 980px) {
+	.session-panes { flex-direction: row; --notebook-context-share: var(--notebook-share-row, 60%); }
+	.notebook-split-divider { cursor: ew-resize; border-block: 0; border-inline: 1px solid var(--border); }
+	.notebook-split-divider > span { width: 4px; height: 40px; }
+}
+@media (max-width: 767px) {
+	.session-workspace[data-keyboard-open="true"][data-input-focused="tutor"] .session-panes { --notebook-context-share: 66.6667%; }
+	.session-workspace[data-keyboard-open="true"][data-input-focused="notebook"] .session-panes { --notebook-context-share: 33.3333%; }
+}
+html[data-session-input-locked], html[data-session-input-locked] body { overflow: hidden; overscroll-behavior: none; }
+.session-workspace[data-input-focused] {
+	position: fixed; top: calc(var(--session-viewport-top) + var(--lh-safe-top, 0px)); left: var(--session-viewport-left);
+	width: var(--session-viewport-width); height: calc(var(--session-viewport-height) - var(--lh-safe-top, 0px) - var(--lh-safe-bottom, 0px)); overflow: hidden;
+}
+.session-workspace[data-input-focused] :is(textarea, [data-notebook-scroll], [data-dock-scroll-area], [data-input-owner="tutor"] [style*="overflow"]) { overscroll-behavior: contain; }

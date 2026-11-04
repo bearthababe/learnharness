@@ -69,6 +69,10 @@ test("mounted focused-input lock contains edges, keeps native interiors/pinch, a
 		await act(async () => notebookField.dispatchEvent(new window.Event("focusin", { bubbles: true })));
 		assert.equal(surface.dataset.inputFocused, "notebook");
 		assert.equal(surface.dataset.keyboardOpen, "true");
+		Object.defineProperty(window, "innerWidth", { configurable: true, value: 834 });
+		window.matchMedia = query => ({ matches: window.innerWidth < 980, media: query, onchange: null, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent: () => true });
+		await act(async () => window.dispatchEvent(new window.Event("resize")));
+		assert.equal(document.documentElement.hasAttribute("data-session-input-locked"), true, "touch tablet focus retains the mobile lock above 768px");
 		await act(async () => notebookField.parentElement!.remove());
 		assert.equal(document.documentElement.hasAttribute("data-session-input-locked"), false, "closing the focused pane releases focus ownership");
 		assert.equal(document.body.style.overflow, "hidden", "blur cannot release a modal lock");

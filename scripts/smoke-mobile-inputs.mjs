@@ -8,6 +8,7 @@ import { once } from "node:events";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
 import { verifyNotebookMobile } from "./smoke-notebook-mobile.mjs";
+import { verifyNotebookLayout } from "./smoke-notebook-layout.mjs";
 
 const root = process.cwd();
 const dir = process.env.LH_MOBILE_TEST_DIR ?? await mkdtemp("/tmp/opencode/mobile-input-browser-");
@@ -27,6 +28,10 @@ const assistant = (content, id = "assistant") => ({ role: "assistant", content, 
 const conversation = { id: "mobile_conversation", title: "Mobile browser conversation", createdAt: now, updatedAt: now, messages: [assistant([{ type: "text", text: "Explain how pressure changes with area." }])] };
 await writeFile(path.join(dir, "data/chats/mobile_conversation.json"), JSON.stringify(conversation));
 await writeFile(path.join(dir, "data/chats/mobile_other.json"), JSON.stringify({ ...conversation, id: "mobile_other", title: "Other isolated session" }));
+await writeFile(path.join(dir, "data/chats/mobile_layout.json"), JSON.stringify({ ...conversation, id: "mobile_layout", title: "Notebook layout fixture",
+	messages: [assistant([{ type: "text", text: Array(35).fill("Explain how pressure changes with area. Keep your reasoning alongside your working.").join("\n\n") }])],
+	notebook: { revision: 1, visible: true, current: { id: "layout-context", revision: 1, state: { lines: Array.from({ length: 40 }, (_, i) => ({ id: `L${i + 1}`, latex: `p_{${i + 1}}=F/A` })), undo: [] }, exchanges: [] }, notebookDraft: { id: "layout-draft", revision: 0, text: "Keep this equation instruction." }, nextSequence: 1, operations: [] },
+}));
 const call = (name, args, id) => assistant([{ type: "toolCall", name, arguments: args, id }], `assistant_${id}`);
 const result = (name, details, id) => ({ role: "toolResult", toolName: name, toolCallId: id, id: `result_${id}`, content: [{ type: "text", text: "Ready." }], details, isError: false, timestamp: Date.now() });
 const teaching = [
@@ -88,6 +93,7 @@ try {
 	browser = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--disable-features=BackForwardCache", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
 	if (process.argv.includes("--notebook-only")) {
 		await verifyNotebookMobile(browser, origin);
+		await verifyNotebookLayout(browser, origin, dir);
 	} else {
 	const page = await browser.newPage();
 	const errors = [];
@@ -452,6 +458,7 @@ try {
 	console.log("PASS: conversation, reading/reveal, free-text/selection/Other answers, practice/drills, real persisted submissions, speech recovery, image review, panels, phone geometry and focus/gesture containment.");
 	await page.close();
 	await verifyNotebookMobile(browser, origin);
+	await verifyNotebookLayout(browser, origin, dir);
 	}
 } catch (error) {
 	if (browser) {
