@@ -2,8 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2Icon, MicIcon, SquareIcon, XIcon } from "lucide-react";
-import { DEEPGRAM_KEY_ID, DICTATION_KEYLESS, METER_TICK_MS, rmsToMeter, type Dictation } from "@/components/dictation";
-import { useSettingsDialog } from "@/components/settings/settings-dialog";
+import { DICTATION_KEYLESS, sampleDictationMeter, useDictationRecovery, type Dictation } from "@/components/dictation";
 
 /** Presentation around the existing, always-mounted editor. Capture, ownership
  * and submission stay with the caller. Wide layouts use display:contents. */
@@ -16,7 +15,6 @@ export function CompactLearningInput({ children, dictation, enabled = true }: {
 	const saved = useRef<{ value: string; start: number; end: number; direction: "forward" | "backward" | "none"; scroll: number } | null>(null);
 	const wasActive = useRef(false);
 	const active = !!dictation?.active;
-	const { open: openSettings } = useSettingsDialog();
 	// The inherited short-window dock can scroll as a whole when both reading
 	// thoughts and an answer are tall. Reveal the focused editor within that
 	// viewport after keyboard/layout changes, without scrolling page or history.
@@ -70,12 +68,7 @@ export function CompactLearningInput({ children, dictation, enabled = true }: {
 		}
 		wasActive.current = active;
 	}, [active]);
-	const recover = () => {
-		if (dictation?.error === DICTATION_KEYLESS) {
-			dictation.clearError();
-			openSettings("keys", DEEPGRAM_KEY_ID);
-		} else { remember(); dictation?.toggle(); }
-	};
+	const recover = useDictationRecovery(dictation, remember);
 	return <>
 		{enabled && dictation?.error && <div role="alert" className="lh-compact-error">
 			<span>{dictation.error}</span>
@@ -99,11 +92,9 @@ function Recording({ dictation }: { dictation: Dictation }) {
 	useEffect(() => {
 		if (phase !== "recording") return;
 		const start = Date.now();
-		const timer = setInterval(() => {
+		return sampleDictationMeter(levelRef, setLevels, () => {
 			setElapsed(Math.floor((Date.now() - start) / 1000));
-			setLevels(previous => [...previous.slice(1), rmsToMeter(levelRef.current)]);
-		}, METER_TICK_MS);
-		return () => clearInterval(timer);
+		});
 	}, [phase, levelRef]);
 	const status = phase === "connecting" ? "Connecting…" : phase === "stopping" ? "Finishing…" : "Recording";
 	return <div className="lh-compact-recording">

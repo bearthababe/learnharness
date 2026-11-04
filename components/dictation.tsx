@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Loader2Icon, MicIcon } from "lucide-react";
 import { useSettingsDialog } from "@/components/settings/settings-dialog";
 import { Hint } from "@/components/ui/hint";
@@ -264,6 +264,37 @@ export type Dictation = {
 	 * back clean. */
 	clearError: () => void;
 };
+
+/** Shared idle/retry action. Keyless recovery clears the error and opens the
+ * Deepgram settings row; other starts retain presentation-specific preparation. */
+export function useDictationRecovery(dictation: Dictation | undefined, beforeToggle?: () => void) {
+	const { open: openSettings } = useSettingsDialog();
+	return () => {
+		if (!dictation) return;
+		if (dictation.error === DICTATION_KEYLESS) {
+			dictation.clearError();
+			openSettings("keys", DEEPGRAM_KEY_ID);
+		} else {
+			beforeToggle?.();
+			dictation.toggle();
+		}
+	};
+}
+
+/** Sample the latest RMS into a presentation's rolling history. Callers own
+ * activation, history size/reset and any elapsed-time display; return cleanup
+ * directly from their effect so sampling ends with that presentation's phase. */
+export function sampleDictationMeter(
+	levelRef: Dictation["levelRef"],
+	setLevels: Dispatch<SetStateAction<number[]>>,
+	onTick?: () => void,
+) {
+	const timer = setInterval(() => {
+		onTick?.();
+		setLevels(previous => [...previous.slice(1), rmsToMeter(levelRef.current)]);
+	}, METER_TICK_MS);
+	return () => clearInterval(timer);
+}
 
 /**
  * One dictation instance per composer-bearing page. `append` is the
@@ -627,13 +658,8 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
  *             (full text in the tooltip), cleared on the next click.
  */
 export function DictationBar({ dictation }: { dictation: Dictation }) {
-	const { phase, error, levelRef, toggle, active, clearError } = dictation;
-	const { open: openSettings } = useSettingsDialog();
-	/** The keyless click (zero-keys wave, owner dictation trio): the errored
-	 *  idle button deep-links Settings → Keys → the Deepgram row and clears
-	 *  the error — the surface is clean when the user returns. Any other
-	 *  error keeps the old behavior (click = retry, which clears). */
-	const keyless = error === DICTATION_KEYLESS;
+	const { phase, error, levelRef, toggle, active } = dictation;
+	const recover = useDictationRecovery(dictation);
 	const [levels, setLevels] = useState<number[]>(() => new Array(METER_CELLS).fill(0));
 	/** Adaptive cell count (owner round 2): derived from the meter's
 	 *  measured width — narrow rows show fewer bars instead of
@@ -646,14 +672,7 @@ export function DictationBar({ dictation }: { dictation: Dictation }) {
 	useEffect(() => {
 		if (!active) return;
 		setLevels(new Array(METER_CELLS).fill(0));
-		const id = setInterval(() => {
-			setLevels((ring) => {
-				const next = ring.slice(1);
-				next.push(rmsToMeter(levelRef.current));
-				return next;
-			});
-		}, METER_TICK_MS);
-		return () => clearInterval(id);
+		return sampleDictationMeter(levelRef, setLevels);
 	}, [active, levelRef]);
 
 	// Fit the cell count to the available width (4px pitch per cell:
@@ -685,14 +704,7 @@ export function DictationBar({ dictation }: { dictation: Dictation }) {
 			>
 				<button
 					type="button"
-					onClick={() => {
-						if (keyless) {
-							clearError();
-							openSettings("keys", DEEPGRAM_KEY_ID);
-						} else {
-							toggle();
-						}
-					}}
+					onClick={recover}
 					aria-label={error ? `Dictation failed: ${error}` : "Start dictation"}
 					data-testid="dictation-toggle"
 					className="flex h-7 w-full items-center justify-center gap-1.5 rounded-md border border-border/50 bg-card/50 text-xs text-muted-foreground/70 shadow-lg backdrop-blur transition-colors hover:border-border hover:text-muted-foreground"
