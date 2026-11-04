@@ -16,6 +16,8 @@ import { fitGraphView, fitZoomFor, zoomedGraphView, type Viewport } from "@/comp
 import type { PlanBlockData, PlanNodeStatus, PlanTree } from "@/src/core";
 import { derivedNodeStatus, derivePlanStatuses } from "@/src/core";
 import { Hint } from "@/components/ui/hint";
+import { PhonePanel } from "@/components/phone-panel";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
 
 /**
  * PLAN BLOCKS — the plan lives in the chat (wave 4): persisted
@@ -749,6 +751,7 @@ const POPUP_PAD = GLOW_REACH;
  * through while the focus owns the session area.
  */
 export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessage[]; onClose: () => void }) {
+	const phone = usePhoneLayout();
 	const tree = useMemo(() => latestTree(messages), [messages]);
 	const statuses = useMemo(
 		() => (tree ? derivePlanStatuses(tree, messages as Parameters<typeof derivePlanStatuses>[1]) : null),
@@ -764,6 +767,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 	// plan-open-while-dictating double-act (Esc closed the plan AND
 	// cancelled the dictation).
 	useEffect(() => {
+		if (phone) return; // The native phone panel owns dismissal and focus.
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key === "Escape") {
 				e.preventDefault();
@@ -773,7 +777,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 		};
 		document.addEventListener("keydown", onKey);
 		return () => document.removeEventListener("keydown", onKey);
-	}, [onClose]);
+	}, [onClose, phone]);
 
 	// ── pan/zoom viewport (harvested semantics: fit floor = the default) ──
 	const viewportRef = useRef<HTMLDivElement>(null);
@@ -784,7 +788,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 		const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, []);
+	}, [phone]);
 
 	const layout = useMemo(() => (tree ? blockLayout(tree.nodes, tree.edges) : null), [tree]);
 	// The fit box is the PADDED ink box — the diagram renders with POPUP_PAD
@@ -833,16 +837,28 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 		};
 		el.addEventListener("wheel", onWheel, { passive: false });
 		return () => el.removeEventListener("wheel", onWheel);
-	}, [fitZoom, box, size]);
+	}, [fitZoom, box, size, phone]);
 
 	// Smooth zoom: the transform eases between states (CSS retargets from the
 	// current computed value, so chained wheel ticks stay fluid). Panning is
 	// per-frame — the transition is off while dragging or it rubber-bands.
 	const [panning, setPanning] = useState(false);
 	const dragRef = useRef<{ px: number; py: number; x: number; y: number; moved: boolean } | null>(null);
+	const touches = useRef(new Map<number, { x: number; y: number }>());
+	const touchPoint = (e: React.PointerEvent<HTMLDivElement>) => {
+		const rect = e.currentTarget.getBoundingClientRect();
+		return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+	};
 	const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
 		if (e.button !== 0) return;
 		if ((e.target as HTMLElement).closest("button")) return;
+		if (phone && e.pointerType === "touch") {
+			// Keep both pointers even at fit: pinch is how a phone leaves the floor.
+			touches.current.set(e.pointerId, touchPoint(e));
+			e.currentTarget.setPointerCapture(e.pointerId);
+			setPanning(true);
+			return;
+		}
 		if (atFloor) return;
 		dragRef.current = { px: e.clientX, py: e.clientY, x: view.x, y: view.y, moved: false };
 		setPanning(true);
@@ -850,6 +866,27 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 		e.currentTarget.setPointerCapture(e.pointerId);
 	};
 	const moveDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+		if (touches.current.has(e.pointerId)) {
+			const before = [...touches.current.values()];
+			touches.current.set(e.pointerId, touchPoint(e));
+			const after = [...touches.current.values()];
+			const midpoint = (points: typeof before) => ({ x: (points[0]!.x + points[1]!.x) / 2, y: (points[0]!.y + points[1]!.y) / 2 });
+			const distance = (points: typeof before) => Math.hypot(points[1]!.x - points[0]!.x, points[1]!.y - points[0]!.y);
+			const factor = after.length === 2 ? distance(after) / Math.max(1, distance(before)) : 1;
+			// A swipe against the fit floor did not adjust the view. Keep automatic
+			// re-fitting active when the phone rotates or its keyboard changes size.
+			if (!atFloor || factor > 1) userAdjustedRef.current = true;
+			setView((v) => {
+				if (after.length === 1) return v.zoom <= fitZoom + 1e-9 ? v : {
+					...v, x: v.x + after[0]!.x - before[0]!.x, y: v.y + after[0]!.y - before[0]!.y,
+				};
+				if (after.length !== 2) return v;
+				const from = midpoint(before), to = midpoint(after);
+				const next = zoomedGraphView(v, factor, fitZoom, from, box, size);
+				return next.zoom <= fitZoom + 1e-9 ? next : { ...next, x: next.x + to.x - from.x, y: next.y + to.y - from.y };
+			});
+			return;
+		}
 		const d = dragRef.current;
 		if (!d) return;
 		d.moved = true;
@@ -858,6 +895,11 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 		);
 	};
 	const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+		if (phone && e.pointerType === "touch") {
+			touches.current.delete(e.pointerId);
+			setPanning(touches.current.size > 0);
+			return;
+		}
 		const d = dragRef.current;
 		if (d) {
 			dragRef.current = null;
@@ -878,37 +920,10 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 
 	const markerId = useId().replace(/[^a-zA-Z0-9-]/g, "");
 
-	return (
-		<div
-			data-testid="plan-popup"
-			// SESSION-SCOPED (absolute, not fixed): the chat page mounts this
-			// INSIDE the session-area div — below the drag bar, right of the
-			// sidebar. 80% + blur: the transcript ghosts through.
-			className="absolute inset-0 z-40 flex flex-col bg-background/80 p-4 backdrop-blur-sm"
-			role="dialog"
-			aria-modal="true"
-			aria-label="The full plan"
-			onClick={(e) => {
-				if (e.target === e.currentTarget) onClose();
-			}}
-		>
-			<div className="mb-2 flex items-center gap-2">
-				<span className="text-sm font-medium">The plan</span>
-				<span className="text-xs text-muted-foreground">live — statuses derive from your check outcomes</span>
-				<Hint label="Close" binding="escape" side="left">
-<button
-					type="button"
-					onClick={onClose}
-					aria-label="Close"
-					data-testid="plan-popup-close"
-					className="ml-auto rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-				>
-					<XIcon className="size-4" />
-				</button>
-</Hint>
-			</div>
+	const graph = (
 			<div
 				ref={viewportRef}
+				data-testid="plan-viewport"
 				className={cn(
 					"relative min-h-0 flex-1 touch-none overflow-hidden rounded-xl border select-none",
 					atFloor ? "cursor-default" : "cursor-grab",
@@ -917,6 +932,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 				onPointerMove={moveDrag}
 				onPointerUp={endDrag}
 				onPointerCancel={endDrag}
+				onLostPointerCapture={endDrag}
 			>
 				{tree ? (
 					<>
@@ -947,7 +963,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 							/>
 						</div>
 						<div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between p-2">
-							<span className="text-xs text-muted-foreground/60">Drag to pan · scroll to zoom</span>
+							<span className="text-xs text-muted-foreground/60">{phone ? "Pinch to zoom · drag to pan" : "Drag to pan · scroll to zoom"}</span>
 							<div className="flex gap-1">
 								<Hint label="Zoom out" side="bottom">
 <button
@@ -989,6 +1005,24 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 					</div>
 				)}
 			</div>
+	);
+	if (phone) return <PhonePanel title="The plan" testid="plan-popup" presentation="full" onClose={onClose}>
+		<p className="mb-2 shrink-0 text-xs text-muted-foreground">live — statuses derive from your check outcomes</p>
+		{graph}
+	</PhonePanel>;
+	return (
+		<div data-testid="plan-popup" className="absolute inset-0 z-40 flex flex-col bg-background/80 p-4 backdrop-blur-sm"
+			role="dialog" aria-modal="true" aria-label="The full plan"
+			onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+			<div className="mb-2 flex items-center gap-2">
+				<span className="text-sm font-medium">The plan</span>
+				<span className="text-xs text-muted-foreground">live — statuses derive from your check outcomes</span>
+				<Hint label="Close" binding="escape" side="left">
+					<button type="button" onClick={onClose} aria-label="Close" data-testid="plan-popup-close"
+						className="ml-auto rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><XIcon className="size-4" /></button>
+				</Hint>
+			</div>
+			{graph}
 		</div>
 	);
 }

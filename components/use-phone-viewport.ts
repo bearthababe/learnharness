@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 /** Keep in sync with the phone shell rules in globals.css. */
 export const PHONE_MEDIA = "(max-width: 767px)";
+
+function subscribePhoneLayout(update: () => void) {
+	const media = window.matchMedia?.(PHONE_MEDIA);
+	media?.addEventListener("change", update);
+	return () => media?.removeEventListener("change", update);
+}
+
+/** Read the shared breakpoint without acquiring the app shell's viewport lock. */
+export function usePhoneLayout() {
+	return useSyncExternalStore(subscribePhoneLayout, () => window.matchMedia?.(PHONE_MEDIA).matches ?? false, () => false);
+}
 
 /** The visual viewport shrinks for the iOS keyboard; 100dvh alone does not.
  * Leave zoomed viewports alone so pinch/pan remains native. */

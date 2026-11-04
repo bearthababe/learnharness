@@ -4,6 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { subscriptionLabels, subscriptionLabel, type SessionPricing, type TurnUsage } from "@/src/core";
 import { formatTokens, formatUsd, planCostLabel, prettyModel } from "@/components/usage-format";
 import { ModelControl, catalogLimits, useModelCatalog } from "@/components/model-picker";
+import { PhonePanel } from "@/components/phone-panel";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
+
+function UsagePanel({ phone, onClose, children }: { phone: boolean; onClose: () => void; children: ReactNode }) {
+	return phone ? <PhonePanel title="Usage" testid="stats-detail" onClose={onClose}>{children}</PhonePanel>
+		: <div data-testid="stats-detail" className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</div>;
+}
 
 export function formatContextMeasurement(tokens: number | null, limit: number | null): string {
 	const numerator = tokens === null ? "?" : formatTokens(tokens);
@@ -60,6 +67,7 @@ export function StatsBar({
 	compactInput?: boolean;
 	phonePlan?: ReactNode;
 }) {
+	const phone = usePhoneLayout();
 	const [open, setOpen] = useState(false);
 	const [selectedModel, setSelectedModel] = useState<string | undefined>();
 	const modelChanged = useCallback((model: string | undefined) => {
@@ -70,7 +78,7 @@ export function StatsBar({
 	// stats round 1): close on any pointerdown outside the bar or on Escape.
 	const barRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
-		if (!open) return;
+		if (!open || phone) return;
 		const onPointerDown = (e: PointerEvent) => {
 			if (barRef.current && !barRef.current.contains(e.target as Node)) setOpen(false);
 		};
@@ -89,7 +97,7 @@ export function StatsBar({
 			document.removeEventListener("pointerdown", onPointerDown);
 			document.removeEventListener("keydown", onKeyDown);
 		};
-	}, [open]);
+	}, [open, phone]);
 	// Catalog-only denominator; the picker reports its effective selection.
 	// Missing/pending catalog means usage-only, never a hardcoded maximum.
 	const { catalog } = useModelCatalog();
@@ -145,10 +153,7 @@ export function StatsBar({
 				</span>
 			</button>
 				{open && (
-					<div
-						data-testid="stats-detail"
-						className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl"
-					>
+					<UsagePanel phone={phone} onClose={() => setOpen(false)}>
 						<div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 							Session stats
 						</div>
@@ -194,7 +199,7 @@ export function StatsBar({
 								</ul>
 							</>
 						)}
-					</div>
+					</UsagePanel>
 				)}
 			</div>
 			)}

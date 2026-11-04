@@ -535,6 +535,113 @@ try {
 		await page.waitForFunction(() => getComputedStyle(document.body).position !== "fixed");
 		console.log(`PASS: complete Model/Thinking/Usage/Plan capabilities and focus release at ${width}×350`);
 	}
+	// iOS keyboards shrink the VISUAL viewport without changing innerHeight.
+	// Whole-viewport resizing above cannot catch a menu positioned behind it.
+	await page.setViewport({ width: 375, height: 700, isMobile: true, hasTouch: true });
+	await fill(input, "Keyboard-aware panels preserve this draft.");
+	const keyboardReading = await scrollHistoryBack();
+	await page.click('[data-testid="stats-model"]');
+	await page.waitForSelector('[data-testid="model-menu-dialog"]');
+	await page.evaluate(async () => {
+		Object.defineProperty(visualViewport, "height", { configurable: true, get: () => 350 });
+		Object.defineProperty(visualViewport, "offsetTop", { configurable: true, get: () => 36 });
+		visualViewport.dispatchEvent(new Event("resize"));
+		visualViewport.dispatchEvent(new Event("scroll"));
+		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+	});
+	assert.equal(await page.evaluate(() => innerHeight), 700, "Keyboard test retains the layout viewport");
+	const visibleBounds = async selector => page.$eval(selector, e => {
+		const r = e.getBoundingClientRect(), v = visualViewport;
+		return { top: r.top, bottom: r.bottom, height: r.height, width: r.width, visibleTop: v.offsetTop, visibleBottom: v.offsetTop + v.height };
+	});
+	for (const selector of ['[data-testid="model-menu"]', '[data-testid="model-search"]', '[data-testid="model-list"]', '[data-testid="model-menu-close"]']) {
+		const r = await visibleBounds(selector);
+		assert.ok(r.top >= r.visibleTop && r.bottom <= r.visibleBottom, `${selector} clears keyboard: ${JSON.stringify(r)}`);
+	}
+	const sheet = await visibleBounds('[data-testid="model-menu"]');
+	assert.ok(Math.abs(sheet.bottom - sheet.visibleBottom) <= 1, "Model sheet is attached to the keyboard, without a toolbar gap");
+	assert.equal(await page.$eval('[data-testid="model-menu-dialog"]', e => e.matches(":modal")), true, "Lesson is inert under the native sheet");
+	const closeTarget = await visibleBounds('[data-testid="model-menu-close"]');
+	assert.ok(closeTarget.width >= 44 && closeTarget.height >= 44, "Close has a phone-sized target");
+	assert.ok(await page.$eval('[data-testid="model-search"]', e => parseFloat(getComputedStyle(e).fontSize) >= 16), "Search avoids iOS focus autozoom");
+	await page.$eval('[data-testid="model-list"]', e => { e.scrollTop = e.scrollHeight; });
+	assert.ok(await page.$eval('[data-testid="model-list"] li:last-child button', e => {
+		const r = e.getBoundingClientRect();
+		return e.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+	}), "Final model remains reachable above the keyboard");
+	await fill('[data-testid="model-search"]', longModel.id);
+	const visibleModel = `[data-testid="model-option-${longModel.id.replace(/[^a-z0-9-]/gi, "_")}"]`;
+	const keyboardPick = page.waitForResponse(r => new URL(r.url()).pathname === "/api/chats/mobile_panels/settings" && r.request().method() === "PUT" && r.ok());
+	await page.click(visibleModel);
+	await keyboardPick;
+	await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
+	assert.equal(await page.$eval(input, e => e.value), "Keyboard-aware panels preserve this draft.");
+	assert.ok(Math.abs(await page.$eval(history, e => e.scrollTop) - keyboardReading) <= 1, "Keyboard model selection preserves reading position");
+	await page.evaluate(async () => {
+		delete visualViewport.height;
+		delete visualViewport.offsetTop;
+		visualViewport.dispatchEvent(new Event("resize"));
+		visualViewport.dispatchEvent(new Event("scroll"));
+		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+	});
+	await page.click('[data-testid="stats-summary"]');
+	await page.waitForSelector('[data-testid="stats-detail-dialog"]');
+	const usageSheet = await visibleBounds('[data-testid="stats-detail"]');
+	assert.ok(usageSheet.top > 0 && Math.abs(usageSheet.bottom - usageSheet.visibleBottom) <= 1, "Usage is a tall bottom sheet");
+	await page.click('[data-testid="stats-detail-close"]');
+	await page.click('.lh-phone-plan');
+	await page.waitForSelector('[data-testid="plan-popup-dialog"]');
+	const fullPlan = await visibleBounds('[data-testid="plan-popup"]');
+	assert.equal(fullPlan.top, 0);
+	assert.equal(fullPlan.bottom, fullPlan.visibleBottom, "Plan fills the phone's visible area");
+	const graph = '[data-testid="plan-viewport"]';
+	const transform = () => page.$eval(`${graph} > div`, e => new DOMMatrix(getComputedStyle(e).transform).toFloat64Array().slice(0, 16));
+	await page.waitForFunction(selector => {
+		const el = document.querySelector(`${selector} > div`), css = getComputedStyle(el);
+		const actual = new DOMMatrix(css.transform), target = new DOMMatrix(el.style.transform);
+		return css.opacity === "1" && Math.abs(actual.a - target.a) < .0001 && Math.abs(actual.e - target.e) < .0001 && Math.abs(actual.f - target.f) < .0001;
+	}, {}, graph);
+	const initialTransform = await transform();
+	const point = await page.$eval(graph, e => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+	const touchSession = await page.createCDPSession();
+	await touchSession.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ id: 1, x: point.x, y: point.y }] });
+	await touchSession.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ id: 1, x: point.x + 20, y: point.y + 10 }] });
+	await touchSession.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+	assert.equal((await transform())[12], initialTransform[12], "Pan is locked at the fit floor");
+	await page.setViewport({ width: 430, height: 700, isMobile: true, hasTouch: true });
+	await page.waitForFunction(selector => {
+		const graph = document.querySelector(selector).getBoundingClientRect();
+		const svg = document.querySelector(`${selector} svg`).getBoundingClientRect();
+		return Math.abs((svg.left + svg.right - graph.left - graph.right) / 2) < 1;
+	}, {}, graph);
+	await page.setViewport({ width: 375, height: 700, isMobile: true, hasTouch: true });
+	await page.waitForFunction((selector, expected) => Math.abs(new DOMMatrix(getComputedStyle(document.querySelector(`${selector} > div`)).transform).e - expected) < .001, {}, graph, initialTransform[12]);
+	const pinch = async (type, distance) => touchSession.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ id: 1, x: point.x - distance, y: point.y }, { id: 2, x: point.x + distance, y: point.y }] });
+	await pinch("touchStart", 24);
+	for (const distance of [36, 48, 60, 80]) await pinch("touchMove", distance);
+	await pinch("touchEnd", 0);
+	assert.ok((await transform())[0] > initialTransform[0] * 1.5, "Two-finger pinch zooms the plan from fit");
+	const zoomed = await transform();
+	await touchSession.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ id: 1, x: point.x, y: point.y }] });
+	await touchSession.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ id: 1, x: point.x + 40, y: point.y + 20 }] });
+	await touchSession.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+	assert.notEqual((await transform())[12], zoomed[12], "One-finger drag pans the zoomed plan");
+	await page.click('[data-testid="plan-popup-fit"]');
+	await page.waitForFunction((selector, expected) => Math.abs(new DOMMatrix(getComputedStyle(document.querySelector(`${selector} > div`)).transform).a - expected) < .001, {}, graph, initialTransform[0]);
+	await page.click('[data-testid="plan-popup-close"]');
+	assert.equal(await page.$eval(input, e => e.value), "Keyboard-aware panels preserve this draft.");
+	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0, "Closing panels releases native modal ownership");
+	// A responsive transition must release the phone's modal and restore the
+	// inherited desktop popup rather than leaving the rest of the app inert.
+	await page.click('[data-testid="stats-model"]');
+	await page.setViewport({ width: 1100, height: 800, isMobile: true, hasTouch: true });
+	await page.waitForSelector('[data-testid="model-menu-dialog"]', { hidden: true });
+	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
+	await fitPanel('[data-testid="model-menu"]');
+	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0);
+	await page.keyboard.press("Escape");
+	assert.equal(await page.evaluate(() => document.body.style.overflow), "", "Phone modal releases its background lock on desktop");
+	console.log("PASS: keyboard-attached Model, tall Usage, full-screen Plan pinch/pan, drafts and responsive modal cleanup");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	assert.equal((await upload("mobile_panels")).status, 201);

@@ -85,22 +85,39 @@
 	.lh-compact-stats [data-testid="model-control"] button { min-height: 44px; min-width: 44px; padding-inline: 6px; }
 	.lh-compact-stats [data-testid="stats-model"] { min-width: 0; }
 	.lh-compact-stats [data-testid="stats-model"] span:first-child { overflow-wrap: anywhere; }
-	.lh-compact-stats [data-testid="stats-detail"] {
-		--tw-translate-x: 0;
-		left: 0;
-		right: 0;
-		transform: none;
-		translate: none;
-		width: 100%;
-		max-height: calc(var(--lh-phone-height, 100dvh) * .6);
-		overflow-y: auto;
-		overscroll-behavior: contain;
-	}
-	[data-testid="model-menu"] {
-		left: 8px !important;
-		right: 8px !important;
-		width: auto;
-		max-width: calc(100vw - 16px);
-		overscroll-behavior: contain;
-	}
 }
+
+/* Mounted only at the shared phone breakpoint. Native dialog owns the top layer;
+   its visual-viewport-sized frame keeps the sheet flush with the keyboard. */
+.lh-phone-panel {
+	position: fixed; inset: 0 auto auto 0; margin: 0; padding: 0;
+	width: 100%; max-width: none; height: 100dvh; max-height: none;
+	border: 0; overflow: hidden; color: var(--foreground); background: transparent;
+}
+.lh-phone-panel[open] { display: flex; flex-direction: column; justify-content: flex-end; }
+.lh-phone-panel::backdrop { background: rgb(0 0 0 / .78); }
+.lh-phone-panel-frame {
+	display: flex; flex-direction: column; min-height: 0; height: 88%; width: 100%;
+	border: 1px solid var(--border); border-bottom: 0; border-radius: 24px 24px 0 0;
+	background: var(--card); overflow: hidden;
+	padding-bottom: env(safe-area-inset-bottom);
+}
+.lh-phone-panel-full { background: var(--background); }
+.lh-phone-panel-full .lh-phone-panel-frame { height: 100%; border: 0; border-radius: 0; background: var(--background); }
+.lh-phone-panel[data-keyboard="true"] .lh-phone-panel-frame { height: 100%; padding-bottom: 0; }
+.lh-phone-panel-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 12px; padding: 8px 12px 8px 20px; border-bottom: 1px solid var(--border); }
+.lh-phone-panel-full .lh-phone-panel-header,
+.lh-phone-panel[data-keyboard="true"] .lh-phone-panel-header { padding-top: max(8px, env(safe-area-inset-top)); }
+.lh-phone-panel-header h2 { font-size: 16px; font-weight: 600; }
+.lh-phone-panel-header button { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 8px; }
+.lh-phone-panel-header button:hover, .lh-phone-panel-header button:focus-visible { background: var(--accent); }
+.lh-phone-panel-body { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 12px; overflow: auto; overscroll-behavior: contain; font-size: 14px; }
+.lh-phone-panel [data-testid="model-search"] { flex-shrink: 0; min-height: 44px; font-size: 16px; }
+.lh-phone-panel [data-testid="model-list"] { flex: 1; min-height: 0; max-height: none; overscroll-behavior: contain; }
+.lh-phone-panel [data-testid="model-list"] button { min-height: 44px; padding-block: 10px; }
+.lh-phone-panel [data-testid="model-list"] .truncate { white-space: normal; overflow-wrap: anywhere; }
+.lh-phone-panel [data-testid="model-menu"] .lh-phone-panel-body { overflow: hidden; }
+.lh-phone-panel [data-testid="stats-detail"] ul { max-height: none; overflow: visible; }
+.lh-phone-panel [data-testid="stats-detail"] .lh-phone-panel-body { display: block; }
+.lh-phone-panel [data-testid="plan-popup"] .lh-phone-panel-body { overflow: hidden; }
+.lh-phone-panel [data-testid="plan-popup"] .pointer-events-auto { min-height: 44px; min-width: 44px; }

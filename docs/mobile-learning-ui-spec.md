@@ -28,6 +28,33 @@ sequence and real-UI verification boundary. Physical-iPhone acceptance remains #
 Decision record: [implementation authorization and attachment scope](https://github.com/bearthababe/learnharness/issues/37#issuecomment-6629353085).
 The separately approved Reveal/dictation correction is already implemented.
 
+### Phone supporting panels — owner-selected acceptance correction
+
+During #42 acceptance, the owner rejected the cluttered floating Usage panel and
+the model picker hidden behind the keyboard, and requested touch interaction for
+Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),
+the owner selected and then asked to proceed with:
+
+- **Plan:** an opaque full-screen phone overlay, top-right Close (44×44px), with
+  pinch zoom and one-finger pan. Retain the existing fit floor, zoom ceiling,
+  buttons and live plan/status content. Future Plan additions are separate work.
+- **Usage and Model:** tall bottom sheets over a strongly dimmed lesson, with
+  stationary top-right Close controls. Preserve actual information, options and
+  model-selection semantics. Search continues to receive focus on opening Model.
+- **Keyboard attachment:** Model's lower edge follows the visible viewport's
+  bottom, directly above the keyboard; the sheet can use the remaining visible
+  height. Search and Close remain visible, with results scrolling internally.
+  Follow visual-viewport resize and offset changes rather than relying on
+  `innerHeight` or whole-window resize. Dismissal retains draft/reading position.
+
+This bounded phone correction supersedes the existing-panel-presentation
+restriction below for these three surfaces. The inherited desktop presentation,
+thinking-level menu and backend contracts remain the baseline. Native modal
+focus/background containment and the existing one-Escape dismissal rule apply.
+Verify visual-only keyboard resize/offsets, list reachability, pinch/pan and modal
+cleanup, then return to physical-iPhone acceptance. Canonical observations and
+verification: [mobile learning UI record](mobile-learning-ui-verification.md).
+
 ## Problem Statement
 
 The learner wants to study on an iPhone while seated and comfortable speaking.
