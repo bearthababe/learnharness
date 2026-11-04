@@ -14,6 +14,8 @@ const { createNotebookService } = await import("../src/server/notebook.ts");
 const { newUserMessage } = await import("../src/core/native-messages.ts");
 const dom = parseHTML("<!doctype html><html><body></body></html>");
 Object.assign(globalThis, { React, window: dom.window, document: dom.document, Element: dom.window.Element, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
+Object.assign(globalThis, { CustomEvent: dom.window.CustomEvent, HTMLButtonElement: dom.window.HTMLButtonElement, HTMLInputElement: dom.window.HTMLInputElement, HTMLTextAreaElement: dom.window.HTMLTextAreaElement, requestAnimationFrame: (callback: () => void) => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout });
+Object.assign(window, { innerWidth: 390, innerHeight: 844 });
 Object.defineProperty(document, "oninput", { value: null, configurable: true });
 Object.defineProperty(document, "compatMode", { value: "CSS1Compat", configurable: true });
 const { createRoot } = await import("react-dom/client");
@@ -32,12 +34,19 @@ async function mounted(faux: ReturnType<typeof createFauxCore>) {
 	const root = createRoot(host);
 	await act(async () => root.render(<NotebookPanel session={session} />));
 	async function click(label: string, settle = true) {
-		const button = [...host.querySelectorAll("button")].find((button) => button.textContent === label);
+		if (["Start fresh", "History"].includes(label)) {
+			if (document.querySelector('[data-testid="notebook-options"]')) await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')!.click());
+			await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')!.click());
+		}
+		const button = [...document.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === label || button.textContent === label);
 		assert.ok(button, `Missing learner control: ${label}`);
 		assert.equal(button.disabled, false, `${label} is available`);
 		await act(async () => {
 			if (button.getAttribute("type") === "submit") button.closest("form")!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
 			else button.click();
+			await session.speech.idle();
+		});
+		await act(async () => {
 			await session.idle();
 			if (settle) await service.settled(chat.id);
 			await session.refresh();
@@ -77,13 +86,13 @@ test("Start fresh archives exact source; browsing and reopening preserve working
 		assert.ok(Number.isFinite(Date.parse(fresh.history[0]!.createdAt)));
 		assert.deepEqual(fresh.history[0]!.lines, [{ id: "L1", latex: "2+2=5" }, { id: "L2", latex: "\\frac{a}{" }]);
 		await ui.click("History");
-		const history = ui.host.querySelector('[aria-label="Notebook history"]')!;
+		const history = document.querySelector('[aria-label="Notebook history"]')!;
 		assert.ok(history);
 		assert.match(history.textContent!, /Entry 1/);
 		assert.match(history.querySelector("time")!.outerHTML, new RegExp(fresh.history[0]!.createdAt));
 		assert.equal(history.querySelector("[data-notebook-source]")?.textContent, "\\frac{a}{");
 		assert.equal(history.querySelector("button, textarea, input"), null, "historical source is read-only");
-		await ui.click("History");
+		await ui.click("Notebook options");
 		assert.deepEqual(ui.session.getSnapshot().view, fresh, "browse toggles do not dispatch or change saved state");
 		await ui.click("Start fresh");
 		assert.equal(ui.session.getSnapshot().view!.history.length, 1, "empty working is not archived");
@@ -121,7 +130,7 @@ test("learner reuses supplied history across duplicate line numbers, clarifies, 
 		const archives = ui.session.getSnapshot().view!.history;
 		await apply("Write z=7");
 		await ui.click("History");
-		assert.equal(ui.host.querySelectorAll('[aria-label="Notebook history"] article').length, 2);
+		assert.equal(document.querySelectorAll('[aria-label="Notebook history"] article').length, 2);
 		await apply("Copy line one from history to line two");
 		assert.match(ui.host.textContent!, /Entry 1 or entry 2\?/);
 		assert.deepEqual(ui.session.getSnapshot().view!.lines, [{ id: "L1", latex: "z=7" }]);
@@ -165,11 +174,12 @@ for (const outcome of ["failed", "clarification"] as const) test(`Start fresh is
 		const context = ui.session.getSnapshot().view!.contextId;
 		await ui.draft("Write pressure"); await ui.click("Apply changes", false);
 		await ui.draft("Later unsent words");
-		const startFresh = [...ui.host.querySelectorAll("button")].find((button) => button.textContent === "Start fresh")!;
+		await ui.click("Notebook options", false);
+		const startFresh = [...document.querySelectorAll("button")].find((button) => button.textContent === "Start fresh")!;
 		assert.equal(startFresh.disabled, true);
 		assert.deepEqual(ui.session.getSnapshot().view!.history, []);
 		assert.equal(ui.session.getSnapshot().view!.contextId, context);
-		const undo = [...ui.host.querySelectorAll("button")].find((button) => button.textContent === "Undo")!;
+		const undo = ui.host.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!;
 		assert.equal(undo.disabled, true, "a new control cannot overlap an edit");
 		for (const type of ["undo", "start-fresh", "apply"] as const) {
 			await act(async () => { await assert.rejects(ui.session.dispatch({ type }), /Still applying/); });

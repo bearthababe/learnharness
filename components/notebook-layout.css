@@ -9,10 +9,50 @@
 .notebook-frame { overscroll-behavior: contain; }
 .notebook-frame-header { display: flex; flex: none; min-height: 52px; align-items: center; gap: 2px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
 .notebook-frame-header h2 { margin-right: auto; padding-inline: 4px; font-size: 12px; font-weight: 500; }
-.notebook-frame-header button { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding-inline: 8px; font-size: 11px; color: var(--muted-foreground); touch-action: manipulation; }
-.notebook-frame-header button:hover { color: var(--foreground); background: var(--accent); }
-.notebook-frame-header svg { width: 14px; height: 14px; }
+.notebook-frame-header button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 8px; color: var(--muted-foreground); touch-action: manipulation; }
+.notebook-frame-header button:is(:hover, :focus-visible):not(:disabled) { color: var(--foreground); background: var(--accent); }
+.notebook-frame-header button:disabled { opacity: .35; }
+.notebook-frame-header svg { width: 16px; height: 16px; }
 .notebook-panel { flex: 1; }
+.notebook-instruction-form { flex: none; max-height: calc(100% - 52px); padding: 8px; overflow-y: auto; overscroll-behavior: contain; }
+.notebook-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px; }
+.notebook-input-row .lh-compact-field { display: flex; position: relative; min-width: 0; min-height: 54px; border: 1px solid var(--border); border-radius: 12px; background: var(--background); }
+.notebook-input-row .lh-compact-field:focus-within { border-color: var(--primary); }
+.notebook-input-row textarea { min-width: 0; min-height: 52px; max-height: min(8rem, 20dvh); padding: 14px 10px; line-height: 24px; field-sizing: content; overflow-y: auto; overscroll-behavior: contain; }
+.notebook-input-row [data-has-mic] > textarea { flex: 0 1 auto; width: calc(100% - 48px); padding-right: 0; }
+.notebook-input-row textarea:placeholder-shown { white-space: nowrap; text-overflow: ellipsis; }
+.notebook-input-row [data-recording] > textarea { visibility: hidden; height: var(--lh-capture-height); min-height: var(--lh-capture-height, 52px); }
+.notebook-input-row .lh-compact-speech { display: block; position: absolute; right: 3px; bottom: 3px; }
+.notebook-input-row [data-recording] .lh-compact-speech { left: 3px; }
+.notebook-input-row .lh-compact-speech button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; flex-shrink: 0; border-radius: 8px; }
+.notebook-input-row .lh-compact-recording { display: flex; align-items: center; min-width: 0; }
+.notebook-input-row .lh-compact-feedback { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1; padding-left: 4px; }
+.notebook-input-row .lh-compact-timer { font-size: 12px; font-variant-numeric: tabular-nums; }
+.notebook-input-row .lh-compact-meter { display: flex; align-items: center; height: 24px; flex: 1; min-width: 0; gap: 2px; overflow: hidden; }
+.notebook-input-row .lh-compact-meter > span { flex: 1; min-width: 1px; background: var(--foreground); border-radius: 2px; }
+.notebook-input-row .lh-compact-status { display: flex; align-items: center; gap: 4px; font-size: 12px; overflow-wrap: anywhere; }
+.notebook-input-row .lh-compact-error { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; color: var(--destructive); font-size: 12px; overflow-wrap: anywhere; }
+.notebook-input-row .lh-compact-error > span { flex: 1; min-width: 0; }
+.notebook-input-row .lh-compact-error button { min-height: 44px; min-width: 44px; text-decoration: underline; }
+.notebook-apply { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 44px; margin-bottom: 5px; padding-inline: 4px; border-radius: 8px; font-size: 12px; color: var(--primary); touch-action: manipulation; }
+.notebook-apply:is(:hover, :focus-visible):not(:disabled) { background: var(--accent); }
+.notebook-input-row button:disabled { opacity: .4; }
+.notebook-apply svg { width: 16px; height: 16px; }
+.notebook-notice { margin-top: 4px; padding-inline: 4px; font-size: 12px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.notebook-notice summary { cursor: pointer; padding-block: 4px; }
+.notebook-notice p { padding-block: 4px; white-space: pre-wrap; }
+.notebook-notice button { min-height: 44px; text-decoration: underline; }
+.notebook-options { width: 288px; max-width: calc(100vw - 32px); padding: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 8px 24px #0002; overscroll-behavior: contain; font-size: 12px; }
+.notebook-options [role="menu"] > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 8px; border-radius: 8px; text-align: left; }
+.notebook-options button:is(:hover, :focus-visible):not(:disabled) { background: var(--accent); }
+.notebook-options button:disabled { opacity: .4; }
+.notebook-options button > span { max-width: 65%; color: var(--muted-foreground); text-align: right; }
+.notebook-options svg { width: 16px; height: 16px; flex: none; }
+.notebook-options-heading { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--border); }
+.notebook-options-heading button { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 8px; }
+.notebook-menu-content { padding: 8px; overflow-wrap: anywhere; }
+.notebook-menu-content article + article { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+.notebook-menu-content h4 { color: var(--muted-foreground); }
 .notebook-split-divider { display: flex; flex: 0 0 28px; align-items: center; justify-content: center; touch-action: none; user-select: none; cursor: ns-resize; background: var(--background); border-block: 1px solid var(--border); }
 .notebook-split-divider > span { width: 40px; height: 4px; border-radius: 4px; background: var(--muted-foreground); }
 .notebook-split-divider:focus-visible { background: var(--accent); }

@@ -48,7 +48,7 @@ export function useNotebookDestination(rootRef: RefObject<HTMLElement | null>, s
 		const key = (event: KeyboardEvent) => {
 			if (!visible || root.dataset.sessionDestination !== "notebook" || event.defaultPrevented || event.isComposing) return;
 			const target = event.target as HTMLElement;
-			if (target.closest?.('input,textarea,select,button,a,[contenteditable="true"],[role="dialog"],[role="menu"]')) return;
+			if (target.closest?.('input,textarea,select,button,a,summary,[contenteditable="true"],[role="dialog"],[role="menu"],[data-lh-menu]')) return;
 			if (event.key !== "Enter" || event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) return;
 			event.preventDefault(); event.stopPropagation();
 			const state = session.getSnapshot();

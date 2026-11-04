@@ -13,6 +13,8 @@ const { chatStore } = await import("../src/store/chats.ts");
 const { createNotebookService } = await import("../src/server/notebook.ts");
 const dom = parseHTML("<!doctype html><html><body></body></html>");
 Object.assign(globalThis, { React, window: dom.window, document: dom.document, Element: dom.window.Element, HTMLElement: dom.window.HTMLElement, IS_REACT_ACT_ENVIRONMENT: true });
+Object.assign(globalThis, { CustomEvent: dom.window.CustomEvent, HTMLButtonElement: dom.window.HTMLButtonElement, HTMLInputElement: dom.window.HTMLInputElement, HTMLTextAreaElement: dom.window.HTMLTextAreaElement, requestAnimationFrame: (callback: () => void) => setTimeout(callback, 0), cancelAnimationFrame: clearTimeout });
+Object.assign(window, { innerWidth: 390, innerHeight: 844 });
 Object.defineProperty(document, "oninput", { value: null, configurable: true });
 Object.defineProperty(document, "compatMode", { value: "CSS1Compat", configurable: true });
 const { createRoot } = await import("react-dom/client");
@@ -41,28 +43,33 @@ test("Notebook picker saves without Apply, locks during saving/recording/editing
 	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
 	try {
 		await act(async () => root.render(<NotebookPanel session={session} />));
-		const picker = host.querySelector<HTMLSelectElement>("#notebook-model")!;
-		assert.equal(picker.value, "deepseek-low"); assert.equal(picker.disabled, false);
-		assert.deepEqual([...picker.options].map(option => option.textContent), ["DeepSeek / low · Zen", "Terra / off · ChatGPT"]);
-		await act(async () => {
-			for (const option of picker.options) option.selected = option.value === "terra-off";
-			picker.dispatchEvent(new window.Event("change", { bubbles: true }));
-		});
-		assert.equal(picker.disabled, true); assert.equal(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled, true);
+		const openModel = async () => {
+			await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')!.click());
+			await act(async () => document.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click());
+		};
+		const picker = () => document.querySelector<HTMLButtonElement>('[data-notebook-candidate="terra-off"]')!;
+		assert.equal(host.querySelector('[role="menu"]'), null, "Secondary controls start out of the working area");
+		await openModel();
+		assert.equal(document.querySelector('[data-notebook-candidate="deepseek-low"]')!.getAttribute("aria-checked"), "true");
+		assert.equal(picker().disabled, false);
+		assert.deepEqual([...document.querySelectorAll('[data-notebook-candidate]')].map(option => option.textContent), ["DeepSeek / low · Zen", "Terra / off · ChatGPT"]);
+		await act(async () => picker().click());
+		assert.equal(picker().disabled, true); assert.equal(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled, true);
 		await act(async () => { releaseSave(); await session.idle(); });
-		assert.equal(picker.value, "terra-off"); assert.equal(picker.disabled, false); assert.equal(calls, 0);
+		await openModel();
+		assert.equal(picker().getAttribute("aria-checked"), "true"); assert.equal(picker().disabled, false); assert.equal(calls, 0);
 		assert.equal(session.getSnapshot().draftText, "Keep my draft");
 		let capture!: Awaited<ReturnType<typeof session.speech.begin>>;
 		await act(async () => { await session.speech.choose({ kind: "notebook" }); capture = await session.speech.begin({ id: "picker-speech", now: () => 0 }); });
-		assert.equal(picker.disabled, true);
+		assert.equal(picker().disabled, true);
 		await act(async () => { await capture.end("stop"); await session.idle(); });
-		assert.equal(picker.disabled, false);
-		await act(async () => { await session.dispatch({ type: "apply" }); }); assert.equal(picker.disabled, true);
+		assert.equal(picker().disabled, false);
+		await act(async () => { await session.dispatch({ type: "apply" }); }); assert.equal(picker().disabled, true);
 		await act(async () => { releaseEdit(); await service.settled(chat.id); await session.refresh(); });
-		assert.equal(picker.disabled, false, "clarification allows switching"); assert.equal(calls, 1);
+		assert.equal(picker().disabled, false, "clarification allows switching"); assert.equal(calls, 1);
 		const reopened = createNotebookSession(chat.id, transport); await reopened.refresh();
 		await act(async () => root.render(<NotebookPanel session={reopened} />));
-		assert.equal(host.querySelector<HTMLSelectElement>("#notebook-model")!.value, "terra-off"); reopened.dispose();
+		assert.equal(picker().getAttribute("aria-checked"), "true"); reopened.dispose();
 	} finally { releaseSave(); releaseEdit(); await service.settled(chat.id); await act(async () => root.unmount()); session.dispose(); host.remove(); }
 });
 
@@ -473,7 +480,7 @@ test("mounted Notebook applies, shows exact fallback, preserves Tutor draft, and
 		assert.equal(host.querySelector('[data-notebook-source]')?.textContent, "\\frac{a}{");
 		const tutorField = host.querySelector<HTMLTextAreaElement>('[data-testid="composer"] textarea')!;
 		assert.equal(tutorField.value || tutorField.defaultValue, "My untouched reasoning");
-		const undo = [...host.querySelectorAll("button")].find((b) => b.textContent === "Undo")!;
+		const undo = host.querySelector<HTMLButtonElement>('[aria-label="Undo"]')!;
 		const nativeEnter = new window.Event("keydown", { bubbles: true, cancelable: true });
 		Object.assign(nativeEnter, { key: "Enter" });
 		await act(async () => undo.dispatchEvent(nativeEnter));

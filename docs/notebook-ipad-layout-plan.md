@@ -45,8 +45,8 @@ iPad evidence: `/tmp/opencode/issue45-https-verification.json`.
    the iPad design. Keep the active composer above the keyboard, native inner
    scrolling, contained edge gestures, modal ownership and pinch zoom. Cover the
    previously uncovered 768–979px touch-width range.
-6. **Equation controls.** Keep model choice, instruction, compact microphone,
-   Apply, Undo, Start fresh and History in their agreed above-working position.
+6. **Equation controls.** The owner-approved cleanup below supersedes the original
+   above-working control strip.
    Preserve the existing mathematical editor and Tutor/Notebook distinction.
    Expanding selects Notebook through its existing settled handoff; Back changes
    only the presentation. Close uses the existing settled return to Tutor.
@@ -78,3 +78,22 @@ update review and the single combined verification record. Deploy only after
 verification, to the existing Notebook slot 3000/8444 with the existing data/auth
 paths and Home Screen identity, then verify actual HTTPS assets and Reload.
 Physical-phone and owner-learning acceptance remain the owner's subsequent step.
+
+## Approved card-content cleanup — 2026-11-04
+
+After reviewing the deployed card, the owner accepted the overall layout and
+rejected the crowded controls inside it. Owner selected **Implement this cleanup**:
+
+- Header: Notebook title, small Undo and Expand/Back icons, and one **⋯** menu.
+- One compact instruction field with microphone and small Apply at its edge;
+  retain the accessible input/action names without a repeated visible label.
+- Model, History, Start fresh, Usage and Close live in the menu. Keep model
+  selection per session with the existing candidates, default and locking rules.
+- Equations occupy the remaining working area. Clarifications/errors become a
+  compact expandable notice retaining their full details and recovery action.
+- Use the existing menu placement and keyboard behavior. Opening/browsing menus
+  preserves speech destination; menu Enter/Escape cannot Apply or Send. Editing
+  actions use the existing settled handoff. Retain the frame/scroll contract.
+
+Implementation and deployment to the same app are authorized. A later move of
+model selection to global Settings was mentioned as a future direction only.

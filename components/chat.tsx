@@ -1875,7 +1875,7 @@ export function Chat({
 								requestAnimationFrame(focusDictationDestination);
 							}).catch(() => {});
 						}}>
-						<NotebookPanel session={notebook.session} dictation={dictation} />
+						{controls => <NotebookPanel session={notebook.session} dictation={dictation} viewControls={controls} />}
 					</NotebookFrame>
 				</>}
 			</div>

@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
-import { Maximize2Icon, Minimize2Icon } from "lucide-react";
+
+export interface NotebookViewControls {
+	expanded: boolean;
+	toggleExpanded: () => void;
+	close: () => void;
+}
 
 /** Presentation only, following handwriting/session.tsx at 329677b. Content,
  * visibility persistence and settled input handoffs remain with the caller. */
@@ -60,7 +65,7 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 /** The accepted four-corner frame and expanded overlay, independent of editor
  * implementation. Retained DOM keeps input state; each view has its own scroll. */
 export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, children }: {
-	hidden: boolean; expanded: boolean; onExpand: () => void; onBack: () => void; onClose: () => void; children: ReactNode;
+	hidden: boolean; expanded: boolean; onExpand: () => void; onBack: () => void; onClose: () => void; children: (controls: NotebookViewControls) => ReactNode;
 }) {
 	const slot = useRef<HTMLDivElement>(null);
 	const positions = useRef<{ split?: { top: number; left: number }; full?: { top: number; left: number } }>({});
@@ -105,13 +110,7 @@ export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, chi
 	return <div ref={slot} hidden={hidden} className="notebook-slot" style={{ position: expanded ? "absolute" : "relative", inset: expanded ? 0 : undefined, flex: "1 1 0px", minWidth: 0, minHeight: 0, boxSizing: "border-box", padding: 16, overflow: "hidden" }}>
 		<aside aria-label="Equation Notebook" className="notebook-frame rounded-2xl border bg-card shadow-lg"
 			style={{ position: "absolute", inset: 16, margin: 0, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
-			<header className="notebook-frame-header"><h2>Notebook</h2>
-				<button type="button" data-notebook-view-control="" onClick={() => changeView(expanded ? onBack : onExpand)} aria-label={expanded ? "Back to split" : "Expand notebook"}>
-					{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? "Back to split" : "Expand"}
-				</button>
-				<button type="button" data-notebook-view-control="" onClick={() => changeView(onClose)}>Close notebook</button>
-			</header>
-			{children}
+			{children({ expanded, toggleExpanded: () => changeView(expanded ? onBack : onExpand), close: () => changeView(onClose) })}
 		</aside>
 	</div>;
 }

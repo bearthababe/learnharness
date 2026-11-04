@@ -3,10 +3,24 @@
 Authoritative combined verification record for #28/#18. Review baseline:
 `d161c0d707e605e2a6ea5761b4f40bbd78dc0c58`. Notebook checkpoint: `2d43b41`.
 
-**Software ready and deployed.** Application source `19e80dc`, production build
+**Earlier layout deployed; approved control cleanup in verification.** Application source `19e80dc`, production build
 `P8NS9Q-Wp6wmWMML-2LhS`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
 The current fork's native Electron app is open. Physical phone and owner-learning
 acceptance are still pending.
+
+## Card-content cleanup follow-up
+
+Owner accepted the overall layout, rejected the crowded contents, and approved
+the [compact controls/menu arrangement](notebook-ipad-layout-plan.md#approved-card-content-cleanup--2026-11-04).
+The new controls are implemented; checks and updated deployment are in progress.
+The earlier deployed build below does not yet include this cleanup.
+
+- New header has icon Undo/Expand and one options menu; instruction/microphone
+  and small Apply occupy one row. Secondary controls are portaled through the
+  shared menu shell; clarification/error detail is expandable.
+- Current typecheck and lint passed (`check-28-cleanup-{types,lint}.log`). Updated
+  mounted UI/history/speech regressions and browser flows are being verified.
+- Earlier whole-suite and deployment evidence below belongs to the layout build.
 
 Tracker receipt: [#28 delivery](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6642418525),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6642420593).

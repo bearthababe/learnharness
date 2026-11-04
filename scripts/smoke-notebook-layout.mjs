@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import path from "node:path";
+import { openNotebookMenu } from "./smoke-notebook-mobile.mjs";
 
 /** Real presentation controls and persisted drafts; no external generation. */
 export async function verifyNotebookLayout(browser, origin, artifacts) {
@@ -28,6 +29,10 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	assert.equal(r.direction, "column"); frame(r);
 	assert.ok(r.slot.y >= r.tutor.bottom);
 	assert.ok(Math.abs(r.tutor.height - (r.workspace.height / 2 - 14)) < 2);
+	assert.equal(await page.$('.notebook-panel select'), null);
+	assert.equal(await page.$('[data-testid="notebook-options"]'), null);
+	assert.ok(await page.$eval('[data-notebook-scroll]', e => e.clientHeight > e.closest('.notebook-frame').clientHeight * .6), "Working occupies most of the phone card");
+	assert.deepEqual(await page.$$eval('.notebook-frame-header button', buttons => buttons.map(e => e.getAttribute('aria-label'))), ['Undo', 'Expand notebook', 'Notebook options']);
 	await page.screenshot({ path: path.join(artifacts, "notebook-phone-split.png") });
 	// Drive the same divider by pointer and keyboard, retaining the chosen share.
 	await page.mouse.move(r.divider.x + r.divider.width / 2, r.divider.y + r.divider.height / 2);
@@ -59,7 +64,7 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	await page.waitForFunction(() => document.querySelector('[data-notebook-scroll]').scrollTop === 150);
 	await page.click('[aria-label="Back to split"]');
 	await page.waitForFunction(() => document.querySelector('[data-notebook-scroll]').scrollTop === 300);
-	await page.locator('.notebook-frame-header button:last-of-type').click();
+	await openNotebookMenu(page, "Close notebook");
 	await page.waitForFunction(() => document.querySelector('.notebook-slot').hidden);
 	await page.locator('button[data-input-owner="notebook"][aria-expanded]').click();
 	await page.waitForFunction(() => !document.querySelector('.notebook-slot').hidden && !document.querySelector('.session-workspace').inert);
@@ -105,6 +110,37 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	await page.reload({ waitUntil: "networkidle2" });
 	await page.waitForSelector('#notebook-instruction', { visible: true });
 	assert.equal(await page.$eval('#notebook-instruction', e => e.value), "Keep this equation instruction.");
+	// Clarification detail is deliberately collapsed. Native summary Enter must
+	// expand it rather than triggering the page-wide Notebook Apply shortcut.
+	const fixture = await (await fetch(`${origin}/api/chats/mobile_layout/notebook`)).json();
+	const message = "Which pressure equation should change? Keep the unfinished working until you identify the line.";
+	const commands = [];
+	await page.setRequestInterception(true);
+	page.on('request', request => {
+		if (request.method() !== 'GET') { if (request.method() === 'POST') commands.push(request.url()); void request.abort(); return; }
+		if (new URL(request.url()).pathname === '/api/chats/mobile_layout/notebook') {
+			void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...fixture, problem: { operationId: 'notice-fixture', status: 'clarification', message } }) });
+		} else void request.continue();
+	});
+	await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+	await page.reload({ waitUntil: 'networkidle2' });
+	await page.waitForSelector('.notebook-notice summary', { visible: true });
+	assert.equal(await page.$eval('.notebook-notice', e => e.open), false);
+	await page.focus('#notebook-instruction');
+	await page.waitForFunction(() => document.querySelector('.session-workspace').dataset.sessionDestination === 'notebook');
+	await page.focus('.notebook-notice summary');
+	await page.keyboard.press('Enter');
+	await page.waitForFunction(() => document.querySelector('.notebook-notice').open);
+	assert.equal(await page.$eval('.notebook-notice p', e => e.textContent), message);
+	await page.keyboard.press('Enter');
+	await page.waitForFunction(() => !document.querySelector('.notebook-notice').open);
+	await page.screenshot({ path: path.join(artifacts, 'notebook-phone-notice.png') });
+	await openNotebookMenu(page);
+	await page.screenshot({ path: path.join(artifacts, 'notebook-phone-options.png') });
+	const menuRect = await page.$eval('[data-testid="notebook-options"]', e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; });
+	assert.ok(menuRect.left >= 0 && menuRect.right <= 390 && menuRect.top >= 0 && menuRect.bottom <= 844, JSON.stringify(menuRect));
+	await page.keyboard.press('Escape');
+	assert.deepEqual(commands, [], 'Notice/menu keyboard interaction never submits');
 	assert.deepEqual(sends, []); assert.deepEqual(errors, []);
 	console.log("PASS: iPad-style equation frame, phone/tablet below Tutor, available-width wide split, divider pointer/keys, full/split/close mounted identity and scroll retention, keyboard allocation/gestures, tablet lock and durable reload.");
 	await page.close();
