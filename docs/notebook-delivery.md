@@ -22,8 +22,12 @@ at `prototype/notebook-send-comparison-v1` (`63d0cc2`); no further decision is p
 
 The full suite passed **2,692 tests / 499 suites**, plus typecheck, lint, production
 build and payload curation. Baseline mobile browser checks passed. Combined
-Notebook browser verification and review against `d161c0d` are in progress;
-the combined build is **not deployed yet**. The authoritative combined acceptance
+Notebook browser verification and Electron bundled-Node smoke also passed.
+Review against `d161c0d` found two corrected submission issues; 30 targeted tests,
+typecheck and lint passed after correction. The owner then requested adapting
+the accepted iPad notebook's overall page design, with Notebook below Tutor and
+split/full-page views. Exact session handoff and a concrete layout plan precede
+implementation. The combined build is **not deployed yet**. The authoritative combined acceptance
 record is [notebook-mobile-verification.md](notebook-mobile-verification.md).
 
 **Owner acceptance resumed (2026-11-04):** the owner confirmed the mobile interface

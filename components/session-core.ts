@@ -833,7 +833,7 @@ export class SessionModel {
 	 *  result (fork 1), riding as its input event. */
 	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission" | "writingIds">): Promise<void> {
 		void tool;
-		return this.send({ type: "answer", toolCallId, answer: output, ...fields }).then(() => undefined);
+		return this.send({ type: "answer", toolCallId, answer: output, submission: fields?.submission, writingIds: fields?.writingIds }).then(() => undefined);
 	}
 
 	/** The dismissal path (owner design 2026-10-03, "A2"): the skipped
@@ -852,7 +852,7 @@ export class SessionModel {
 			const res = await this.fetch(`/api/chats/${this.chatId}/dismiss`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ input: { type: "dismiss", toolCallId, answer, ...fields } }),
+				body: JSON.stringify({ input: { type: "dismiss", toolCallId, answer, submission: fields?.submission } }),
 			});
 			if (!res.ok) throw new Error(`The dismissal failed (${res.status}).`);
 		} catch (err) {

@@ -98,7 +98,9 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 				try { await onSubmit(prepared.text, problemCallId, prepared); }
 				finally { await notebook!.tutor.reconcile(prepared.submission.id); }
 			} else {
-				const text = thinkingRef.current.trim();
+				// An owned draft was already checked above. Image-only submission
+				// must not revive the legacy field after that draft was consumed.
+				const text = notebook?.getSnapshot().view?.contextId ? "" : thinkingRef.current.trim();
 				if (!text && !hasSharedWriting) return;
 				const accepted = await onSubmit(text, problemCallId);
 				if (accepted !== false && thinkingRef.current.trim() === text) update("");

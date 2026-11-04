@@ -300,6 +300,38 @@ test("practice keeps its existing text draft when Notebook is first opened, with
 	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); }
 });
 
+test("practice shared-writing-only submission does not repeat consumed invisible thinking", async () => {
+	const { commitNotebookInput } = await import("../src/server/notebook-submissions.ts");
+	const { newThinkingMessage } = await import("../src/core/native-messages.ts");
+	const chat = chatStore.createChat("Practice continued", "practice");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No edit expected"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	const sent: string[] = [];
+	const submit: React.ComponentProps<typeof PracticeDock>["onSubmit"] = async (text, problemCallId, fields) => {
+		sent.push(text);
+		if (fields?.submission) commitNotebookInput(chatStore, chat.id, fields, [newThinkingMessage(problemCallId, text, fields.explanation, fields.submission.id)]);
+		return true;
+	};
+	const render = (hasSharedWriting: boolean) => <PracticeDock problemCallId="p1" input={{ statement: "Pressure?" }} expanded onExpand={() => {}} notebook={session} onSubmit={submit} hasSharedWriting={hasSharedWriting} />;
+	try {
+		await act(async () => root.render(render(false)));
+		const field = host.querySelector<HTMLTextAreaElement>("textarea")!;
+		await act(async () => {
+			Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!.call(field, "Pressure is force per area.");
+			field.dispatchEvent(new window.Event("input", { bubbles: true }));
+			await session.tutor.idle();
+		});
+		await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="practice-send"]')!.click(); await session.tutor.idle(); });
+		assert.deepEqual(sent, ["Pressure is force per area."]);
+		assert.equal(field.value, "", "Accepted thinking is consumed from the visible field");
+		await act(async () => root.render(render(true)));
+		await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid="practice-send"]')!.click(); await session.tutor.idle(); });
+		assert.deepEqual(sent, ["Pressure is force per area.", ""], "The image-only follow-up contains no earlier thinking");
+	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); }
+});
+
 test("mounted practice adapter reopens its owned working-only draft and retains it when send is unconfirmed", async () => {
 	const chat = chatStore.createChat("Practice draft", "practice");
 	const editor = createFauxCore({});

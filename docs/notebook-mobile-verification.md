@@ -25,7 +25,7 @@ Logs below are under `/tmp/opencode/notebook-integration/`.
 | Baseline mobile browser flows | PASS | `check-28-mobile-browser.log` (baseline PASS precedes combined-scenario failure) |
 | Combined Notebook browser flow | PASS | `check-28-notebook-browser.log` |
 | Electron bundled-Node standalone smoke | PASS, including offline provider initialization | `check-28-mobile-electron-smoke.log` |
-| Standards/spec review against mobile baseline | Pending | — |
+| Standards/spec review against mobile baseline | Completed; corrections being verified | Findings below |
 | Combined slot 1 deployment and HTTPS/reload verification | Pending | — |
 
 Browser checks use disposable data and scripted providers. Baseline coverage:
@@ -33,6 +33,37 @@ conversation, teaching/reading/reveal, free-text/selection/Other answers, practi
 and drills, speech recovery, image review, phone geometry and gesture containment.
 Repeated Send/Submit during recording finalization persists final words once.
 Combined snapshot/handwriting tests verify that both reach the model and transcript.
+
+## Final review against `d161c0d`
+
+### Standards
+
+One documented boundary violation: `SessionModel.submitAnswer` and
+`dismissQuestion` spread attachment objects after native request discriminants.
+Corrected to copy only `submission` and answer `writingIds`, as required by the
+approved correction plan. Existing callers had sanitized their objects.
+
+One judgment-call duplication finding: Notebook and ordinary mobile focus hooks
+duplicate viewport/gesture handling, with 768px versus 979px touch coverage.
+Asked the owner about the behavior difference. Owner instead requested the iPad
+notebook's overall page design, with equation Notebook below Tutor on phones and
+split/full-page views. Layout adaptation is now awaiting the exact iPad-session
+handoff and an approved concrete plan.
+
+### Spec
+
+One defect: a practice/drill image-only follow-up could resend already-consumed,
+invisible thinking from the legacy field reference. A mounted real-draft
+regression reproduced the duplicate; corrected the image-only path to submit
+empty text when the owned draft has no content. All 30 targeted UI/activity/input
+tests, typecheck and lint passed: `check-28-review-tests.log`,
+`check-28-review-types.log`, `check-28-review-lint.log`.
+No substantiated scope-creep findings. Physical-device and learning acceptance
+remain separate open gates.
+
+Review totals: Standards 1 boundary violation + 1 judgment call; Spec 1 defect.
+The corrections and requested layout adaptation supersede the previously built
+payload; rebuild and deployment verification remain required.
 
 ## Acceptance boundary
 
