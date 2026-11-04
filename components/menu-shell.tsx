@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { ChevronDownIcon, KeyboardIcon } from "lucide-react";
 
 /**
  * THE shared menu shell (menu standardization, fix wave chunk B): one
@@ -326,6 +327,21 @@ export function MenuShell({
 			// carry their own hover/highlight; the ring is pure noise.
 			className={`${menuClass} outline-none`}
 		>
+			{searchDocked && (
+				<button type="button" aria-label="Hide keyboard" data-testid="model-hide-keyboard"
+					className="absolute right-2 top-2 flex size-11 flex-col items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+					onPointerDown={(event) => event.preventDefault()}
+					onClick={() => {
+						pickingRef.current = false;
+						setSearchFocused(false);
+						menuRef.current?.querySelector<HTMLInputElement>("input")?.blur();
+						// Keep non-input focus in the open picker as this control hides.
+						menuRef.current?.focus({ preventScroll: true });
+					}}>
+					<KeyboardIcon aria-hidden className="size-5" />
+					<ChevronDownIcon aria-hidden className="size-3" />
+				</button>
+			)}
 			{children}
 		</div>,
 		document.body,

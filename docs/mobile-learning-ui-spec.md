@@ -54,6 +54,13 @@ select the intended model without the card moving away between pointerdown and
 click. Retain the initial unfocused compact presentation and inherited desktop
 behavior. Physical iPhone confirmation of the native-control boundary is required.
 
+**Keyboard-dismiss affordance — owner approved:** show a keyboard-dismiss icon
+beside focused phone search. It dismisses the software keyboard and returns
+non-input focus to the still-open picker, preserving query/results and expanding
+the browsing space as the visual viewport grows. It does not pick a model or
+close the menu. Tapping search resumes typing. Use the accessible label “Hide
+keyboard” and a 44px target. The owner selected the icon instead of a Done label.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),

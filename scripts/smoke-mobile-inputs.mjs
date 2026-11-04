@@ -574,6 +574,44 @@ try {
 		const r = e.getBoundingClientRect();
 		return e.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
 	}), "Final model remains reachable above the keyboard");
+	// Hide the keyboard without picking a model or throwing away the search.
+	await fill('[data-testid="model-search"]', "a");
+	const filteredModels = await page.$$eval('[data-testid="model-list"] button', buttons => buttons.map(e => e.dataset.testid));
+	let dismissWrites = 0;
+	const countDismissWrites = request => { if (request.method() === "PUT" && new URL(request.url()).pathname.endsWith("/settings")) dismissWrites++; };
+	page.on("request", countDismissWrites);
+	for (let cycle = 0; cycle < 2; cycle++) {
+		const hideKeyboard = '[data-testid="model-hide-keyboard"]';
+		await page.waitForSelector(hideKeyboard, { visible: true });
+		const target = await visibleBounds(hideKeyboard);
+		assert.ok(target.width >= 44 && target.height >= 44 && target.top >= target.visibleTop && target.bottom <= target.visibleBottom, "Keyboard-dismiss icon has a reachable phone-sized target");
+		const typingHeight = (await visibleBounds('[data-testid="model-list"]')).height;
+		await page.click(hideKeyboard);
+		await page.waitForSelector(hideKeyboard, { hidden: true });
+		assert.equal(await page.$eval('[data-testid="model-menu"]', e => e === document.activeElement), true, "Keyboard dismissal leaves non-input focus in the open picker");
+		assert.equal(await page.$eval('[data-testid="model-search"]', e => e.value), "a", "Keyboard dismissal preserves query");
+		assert.deepEqual(await page.$$eval('[data-testid="model-list"] button', buttons => buttons.map(e => e.dataset.testid)), filteredModels, "Keyboard dismissal preserves filtered results");
+		await page.evaluate(async () => {
+			delete visualViewport.height; delete visualViewport.offsetTop;
+			visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
+			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+		});
+		assert.ok((await visibleBounds('[data-testid="model-list"]')).height > typingHeight, "Keyboard dismissal expands the browsing area");
+		await page.$eval('[data-testid="model-list"]', e => { e.scrollTop = e.scrollHeight; });
+		assert.ok(await page.$eval('[data-testid="model-list"] li:last-child button', e => { const r = e.getBoundingClientRect(); return e.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)); }), "Expanded filtered list remains scrollable to its final result");
+		await page.click('[data-testid="model-search"]');
+		assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement && e.value === "a"), true, "Tapping search resumes typing with the same query");
+		await page.evaluate(async () => {
+			Object.defineProperty(visualViewport, "height", { configurable: true, get: () => 350 });
+			Object.defineProperty(visualViewport, "offsetTop", { configurable: true, get: () => 36 });
+			visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
+			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+		});
+		const redocked = await visibleBounds('[data-testid="model-menu"]');
+		assert.ok(Math.abs(redocked.bottom - redocked.visibleBottom) <= 1, "Resumed search reattaches above keyboard controls");
+	}
+	page.off("request", countDismissWrites);
+	assert.equal(dismissWrites, 0, "Keyboard-dismiss/reopen never changes settings");
 	// Native Done can blur search while leaving the picker open. Restore its
 	// compact trigger anchor, then re-enter search without changing the query.
 	await page.$eval('[data-testid="model-search"]', e => e.blur());
@@ -685,7 +723,7 @@ try {
 	await page.click('[data-testid="stats-model"]');
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
 	await page.keyboard.press("Escape");
-	console.log("PASS: compact Model/Usage, focused search docking above keyboard/accessory controls, footer suppression, blur/pick stability, Plan pinch/pan and drafts");
+	console.log("PASS: compact Model/Usage, keyboard-dismiss/reopen preserves search/results and expands browsing, focused docking, blur/pick stability, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	assert.equal((await upload("mobile_panels")).status, 201);
