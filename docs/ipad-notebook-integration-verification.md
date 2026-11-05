@@ -1471,20 +1471,20 @@ authoritative combined-source verification record. Earlier physical owner
 acceptance above belongs to its recorded deployment; these combined checks use
 scripted providers/speech and Chromium emulation, not new physical acceptance.
 
-| Check | Combined result / evidence |
+| Check | Initial combined result / evidence (before draft-edit correction) |
 | --- | --- |
 | Typecheck | Passed, `typecheck-final.log` |
 | Lint | Passed, `lint-final.log`; one existing `<head>` warning in `tests/source-name-ui.test.tsx:26` |
 | Production build and provider-runtime smoke | Passed, `build-final.log`, `provider-runtime.log`; isolated build data/auth |
 | Whole nonlive unit suite | Passed: 3,820 passed, four platform/filesystem skips, zero failures/cancellations, 573 suites; `unit-bounded.log`, `NODE_ENV=test node --import tsx --test --test-concurrency=2 tests/*.test.ts tests/*.test.tsx`. First default-concurrency run had four child-process timeouts in `custom-provider-restart.test.ts` (`unit-combined.log`); all passed in the complete bounded rerun without product changes. |
 | Native Pages/adoption, precommit/capture, atomic creation retirement | Passed sequentially, `native-pages-clean.log`, `native-precommit-clean.log`, `native-creation-clean.log` |
-| Fresh aggregate mobile | First run failed at Settings recovery with Settings/Notebook fetch failures: `mobile-input-browser-eA6VtP/result.json`; source clean `acf32a2`, SHA-256 `ed5245b006a4f6755a8303ed3eefc2d1b5bf34751a2515320a49d442d0e46c06`. Fresh diagnostic aggregate pending. |
+| Fresh aggregate mobile | First run failed at Settings recovery with Settings/Notebook fetch failures: `mobile-input-browser-eA6VtP/result.json`; source clean `acf32a2`, SHA-256 `ed5245b006a4f6755a8303ed3eefc2d1b5bf34751a2515320a49d442d0e46c06`. Subsequent failure dispositions and final aggregate are recorded below. |
 | Full handwriting browser | Passed, `handwriting-combined.log`; fixture `handwriting-browser-XkwUJp`, source SHA-256 `ed5245b006a4f6755a8303ed3eefc2d1b5bf34751a2515320a49d442d0e46c06`. Includes all Pages/import, recovery, Attach, and no-implicit-turn checks. |
 | Supplemental Chromium / actual Electron file paths | Passed all eleven checks with zero visual/coverage failures and no external requests, `file-paths-short-root.log`; `TMPDIR=/tmp/opencode LH_TEST_CHROME=/usr/bin/chromium node scripts/smoke-file-paths.mjs`. Long-root launch exceeded Linux's Unix-socket path limit (`file-paths-combined.log`); an overlapping launch was refused by Next's same-checkout lock (`file-paths-short-tmp.log`). Both are excluded from passing evidence. |
 
 The earlier duplicate/interrupted unit/mobile runs and shared `native-*.log`
 files are not completion evidence. The clean native sequence replaces those
-ambiguous logs. Final delivery remains pending the full unit/browser outcomes.
+ambiguous logs. Post-correction outcomes are recorded below.
 Parent owns the single
 combined PR, remote merge and local main update.
 
@@ -1506,5 +1506,91 @@ tests pass, 16/16 (`editor-green2.log`); typecheck/lint pass again
 
 The transfer browser fixture's remaining Other-answer selectors now use the
 upstream contenteditable input. Product/browser revalidation after this correction
-is pending below; earlier successful whole-unit/build/browser results above are
+is recorded below; earlier successful whole-unit/build/browser results above are
 retained as pre-correction evidence, not substituted for affected final checks.
+
+### Completed post-correction verification and fixture dispositions
+
+The production correction is `b476a13442224bbd2b83f60626fd4389fd45b3c5`.
+Subsequent commits `e94b3bdf37880f69316396b5bdde1e2a8651e785` and
+`a8f4ab999280cea4bf7ecfce3ed3da76482ef8b7` change browser assertions only;
+application code and dependencies are identical for the post-correction checks.
+All evidence paths below remain relative to the artifact root stated above.
+
+| Check | Post-correction outcome / retained evidence |
+| --- | --- |
+| Whole nonlive unit suite | Passed: 3,821/3,825 tests, 573 suites, zero failures/cancellations/todos, four skips, 490620.414229 ms; `unit-fixed.log`. Command: `LH_HANDWRITING_TEST_ROOT=/home/bjorn/.cache/opencode/issue4/main-verification TMPDIR=/home/bjorn/.cache/opencode/issue4/main-verification NODE_ENV=test node --import tsx --test --test-concurrency=2 tests/*.test.ts tests/*.test.tsx`. |
+| Mounted editor / transfer regression | Passed 16/16, `editor-green2.log`; original reversion reproduced in `editor-red.log`. The first green attempt lacked the test provider (`editor-green.log`); corrected test setup, then passing rerun. |
+| Typecheck | Passed, `npm run typecheck`, `typecheck-editor.log`. |
+| Lint | Passed, `npm run lint`, `lint-editor.log`; zero errors, one unchanged `<head>` warning in `tests/source-name-ui.test.tsx:26`. |
+| Production build | Passed, `npm run build`, `build-fixed.log`, isolated `build-fixed-data` and `build-fixed-auth.json`; all 12 static pages generated. Four existing dynamic-filesystem tracing warnings retained. |
+| Offline provider runtime | Passed, `node scripts/smoke-provider-runtime.mjs`, `provider-fixed.log`: all ten native chat implementations evaluated, Google/Bedrock lazy initialization reached, Copilot/xAI OAuth transports initialized offline, 593 modules confined to `.next/standalone`, zero network attempts. |
+| Full handwriting browser | Passed all 18 reported checks, `handwriting-fixed.log`; fixture `handwriting-browser-eyjLfk`, source SHA-256 `df458679981e9fab004caf6174bda286407492217548a622966ee99f32b2e94c`. Command: `LH_HANDWRITING_TEST_ROOT=/home/bjorn/.cache/opencode/issue4/main-verification LH_HANDWRITING_TEST_PORT=3142 CHROMIUM_PATH=/usr/bin/chromium node scripts/smoke-handwriting.mjs`. |
+| Native Pages/adoption, capture lifecycle, creation retirement | The completed sequential `native-pages-clean.log` (11 PASS groups), `native-precommit-clean.log` (13 scenarios), and `native-creation-clean.log` (13 scenarios) remain applicable: their implementation inputs did not change and they do not import the corrected submission hook. |
+| Chromium / actual Electron file paths | Passed all eleven checks, `file-paths-fixed.log`, zero visual/coverage failures, no external requests; actual production preload and isolated native profile verified. Command: `TMPDIR=/tmp/opencode LH_TEST_CHROME=/usr/bin/chromium node scripts/smoke-file-paths.mjs`. |
+| Fresh combined mobile aggregate | **Passed all three suites** (`inputs-notebook`, `reveal`, `layout`), exit 0: `mobile-input-browser-jeqj3h/result.json`, `mobile-7.log`. Clean source `a8f4ab999280cea4bf7ecfce3ed3da76482ef8b7`, SHA-256 `3a722ce0fdb8f012925d795ff1fb770193b8d7cdbff53e0bdb0d3735eff7a2c8`. Started `2026-11-05T16:35:03.423Z`, finished `2026-11-05T16:41:47.237Z`, no aggregate/suite errors. Command: `LH_MOBILE_TEST_DIR=/home/bjorn/.cache/opencode/issue4/main-verification LH_MOBILE_TEST_PORT=3146 CHROMIUM_PATH=/usr/bin/chromium npm run test:mobile`. |
+
+The four full-suite skips are Windows read-only rename semantics, two
+case-insensitive credential-path checks on a case-sensitive filesystem, and
+Windows drive/UNC/alternate-stream path handling. They are platform exclusions,
+not waived integration failures.
+
+Run 5 (`mobile-5.log`, `mobile-input-browser-eHWMXs/result.json`) passed all four
+navigation/dictation phases after the product correction, then counted a new
+Snapshot actions button as a second image. The selector now counts only
+`button[aria-label^="Open handwritten working "]`; the reconnect guarantees stay
+asserted. Run 6 (`mobile-6.log`, `mobile-input-browser-mFRt9f/result.json`, clean
+`e94b3bd`, SHA-256
+`69df635cfd442a906a8c423d27c931cdddd2ce68eea4617d279cba61cdbe1324`) passed reconnect,
+foreground recovery, phone panels, capture retries, immutable Send/recovery,
+speech/background-acceptance and choice recovery. Its final transfer assertion
+still looked for retired speech in the legacy handwriting-only IDB notice.
+
+The isolated replay (`late-speech-red.log`) reproduced that mismatch. The
+canonical Notebook record already retained the exact typed text plus speech tail
+under `question:first`; the second question stayed empty. The revised check uses
+the existing Saved drafts UI and `/api/chats/:id/notebook`, verifies the original
+owner and exact text, empty second question, no capture for the changed target,
+and the same saved draft after reload. The minimized replay passed in
+`late-speech-green2.log`; `late-speech-green.log` records a diagnostic assertion
+using the chat projection rather than the Notebook endpoint. These are fixture
+corrections, with no change to speech routing or recovery implementation.
+
+All failed aggregate receipts remain failed; isolated probes never substitute
+for the fresh aggregate. Atomic launch guards prevented duplicate run-6/run-7
+invocations from starting tests or overwriting the authoritative logs. Diagnostic
+scripts are outside the repository under `/tmp/opencode`; earlier overlapping
+diagnostic logs remain excluded from passing evidence.
+
+The passing aggregate includes all #46 identity-bound Attach/Send recovery and
+speech/background-acceptance races, old-question speech retained visibly after
+reload without retargeting, native-IDB remount success/failure/lost-ACK and
+atomic abort/deletion/corruption fences, Pencil menu ownership, combined
+Pencil/equation layout/draft/ink/review preservation, real Notebook provider
+seams with scripted responses, Reveal finalization and phone focus/gesture
+containment. Its request failures are the deliberately injected transport
+faults and cancelled navigation fetches; all assertions and cleanup completed.
+
+### Delivery closure
+
+All required executions have settled. Final process inspection found one old
+authored hang fixture, `lh-version-runner-E6BkUk/bin/claude --version` (PID
+136702), which deliberately ignores SIGTERM. Its exact command and fixture PID
+file were verified before SIGKILL, and exit was awaited. This was an isolated
+test executable, not the installed CLI. No required runner was relaunched.
+Owned verification process inspection then found no remaining runners, fixture
+servers, Chromium/Electron processes or diagnostic replays. The generated
+dev-only `next-env.d.ts` import change was
+restored to its committed production form. Final script syntax checks and
+`git diff --check` pass. The delivery evidence commit changes only this record;
+the passing aggregate fingerprint remains the final executable-source identity.
+
+Ancestry verified for all three required source tips:
+
+- upstream `03482969fa6c8179e764d5e182a35352934b4000`;
+- accepted mobile `4413ec8b9c9e85315ba8c967615bda5ae6186ac6`;
+- accepted handwriting `58280c99c00cfa3b8f025e3abe1c31a036adb2b2`.
+
+This completes automated combined-source verification. Earlier physical iOS
+acceptance remains tied to its original deployment. Parent owns publication,
+the single combined PR/merge and the actual local `main` fast-forward.
