@@ -14,6 +14,10 @@
 .notebook-frame-header button:disabled { opacity: .35; }
 .notebook-frame-header svg { width: 16px; height: 16px; }
 .notebook-panel { flex: 1; }
+.notebook-expression { position: relative; display: inline-flex; min-width: 28px; min-height: 44px; align-items: center; justify-content: center; padding: 14px 4px 4px; }
+.notebook-expression-number { position: absolute; top: 1px; left: 4px; color: var(--muted-foreground); opacity: .7; font: 10px/1.1 var(--font-sans); font-variant-numeric: tabular-nums; pointer-events: none; }
+.notebook-expression .katex-display { margin: 0; }
+.notebook-relation { padding-top: 10px; }
 .notebook-instruction-form { flex: none; max-height: calc(100% - 52px); padding: 8px; overflow-y: auto; overscroll-behavior: contain; }
 .notebook-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px; }
 .notebook-input-row .lh-compact-field { display: flex; position: relative; min-width: 0; min-height: 54px; border: 1px solid var(--border); border-radius: 12px; background: var(--background); }
@@ -43,7 +47,7 @@
 .notebook-notice p { padding-block: 4px; white-space: pre-wrap; }
 .notebook-notice button { min-height: 44px; text-decoration: underline; }
 .notebook-options { width: 288px; max-width: calc(100vw - 32px); padding: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 8px 24px #0002; overscroll-behavior: contain; font-size: var(--text-sm); line-height: var(--text-sm--line-height); }
-.notebook-options [role="menu"] > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 8px; border-radius: 8px; text-align: left; }
+.notebook-options :is([role="menu"], [role="group"]) > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 8px; border-radius: 8px; text-align: left; }
 .notebook-options button:is(:hover, :focus-visible):not(:disabled) { background: var(--accent); }
 .notebook-options button:disabled { opacity: .4; }
 .notebook-options button > span { max-width: 65%; color: var(--muted-foreground); text-align: right; }

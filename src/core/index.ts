@@ -43,6 +43,7 @@ export * from "./math-delims.ts";
 export * from "./native-messages.ts";
 export * from "./notebook-content.ts";
 export * from "./notebook-models.ts";
+export * from "./notebook-expressions.ts";
 export * from "./notebook-speech.ts";
 export type { NotebookSpeechRun, NotebookSpeechFragment, NotebookSpeechTarget } from "./contracts/notebook.ts";
 export type { NotebookSpeechApply } from "./contracts/notebook.ts";

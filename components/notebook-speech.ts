@@ -1,4 +1,4 @@
-import { notebookSpeechRunSchema, sameDraftOwner, type DictationCaptureAdapter, type DictationFinal, type NotebookSpeechApply, type NotebookSpeechRun, type NotebookSpeechTarget, type NotebookView, type TutorDraftOwner } from "@/src/core";
+import { notebookSpeechRunSchema, sameDraftOwner, type NotebookExpressionSelection, type DictationCaptureAdapter, type DictationFinal, type NotebookSpeechApply, type NotebookSpeechRun, type NotebookSpeechTarget, type NotebookView, type TutorDraftOwner } from "@/src/core";
 import type { DraftRecoveryStorage } from "./notebook-tutor-drafts";
 import type { NotebookSession } from "./notebook-session";
 
@@ -19,7 +19,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 	let handoff: Promise<void> | undefined;
 	let state = { active: false, switching: false, destination: "tutor" as "tutor" | "notebook", error: null as string | null };
 	function publish(error = state.error) { state = { active: active !== null, switching: !!handoff, destination: selected?.kind ?? "tutor", error }; for (const listener of listeners) listener(); }
-	let active: { run: NotebookSpeechRun; now: () => number; requestFinalization?: (cutoff: number) => void; source: NotebookSpeechTarget; results: Map<string, DictationFinal>; consumed: Set<string>; captureStart: number; audioStarted?: boolean; intents: Array<{ id: string; clicked: boolean; finalizationRequests: number; speech: NotebookSpeechApply; cursorLineId?: string | null }> } | null = null;
+	let active: { run: NotebookSpeechRun; now: () => number; requestFinalization?: (cutoff: number) => void; source: NotebookSpeechTarget; results: Map<string, DictationFinal>; consumed: Set<string>; captureStart: number; audioStarted?: boolean; intents: Array<{ id: string; clicked: boolean; finalizationRequests: number; speech: NotebookSpeechApply; cursorLineId?: string | null; expressionSelection: NotebookExpressionSelection | null }> } | null = null;
 	function stash() {
 		try { if (pending.length) storage?.setItem(key, JSON.stringify(pending)); else storage?.removeItem(key); }
 		catch { publish("Local dictation recovery could not be saved. Keep this page open until the server save succeeds."); }
@@ -160,7 +160,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		if (owner?.kind !== "notebook") return false;
 		const draftId = owner.draftId;
 		const nextDraftId = crypto.randomUUID();
-		const intent = { id: crypto.randomUUID(), clicked: commandIds.length === 0, finalizationRequests: 0, cursorLineId: session.getSnapshot().cursorLineId, speech: { runId: active.run.id, draftId, nextDraftId, fragmentIds: [], text: "", prefix: session.getSnapshot().draftText, commandIds, cutoff, ready: false, resolves: session.getSnapshot().view?.problem?.operationId } };
+		const intent = { id: crypto.randomUUID(), clicked: commandIds.length === 0, finalizationRequests: 0, cursorLineId: session.getSnapshot().cursorLineId, expressionSelection: structuredClone(session.getSnapshot().expressionSelection ?? null), speech: { runId: active.run.id, draftId, nextDraftId, fragmentIds: [], text: "", prefix: session.getSnapshot().draftText, commandIds, cutoff, ready: false, resolves: session.getSnapshot().view?.problem?.operationId } };
 		active.intents.push(intent); rebuild(); updateIntents(intent.id);
 		return true;
 	}
@@ -198,7 +198,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 				ready: !created && !active.run.incomplete && through > intent.speech.cutoff && through >= Math.max(...fragments.map(fragment => fragment.end ?? Infinity)) };
 			if (created === intent.id || JSON.stringify(speech) !== JSON.stringify(intent.speech)) {
 				intent.speech = speech;
-				void session.dispatch({ type: "apply", id: intent.id, cursorLineId: intent.cursorLineId, speech }).catch(() => {});
+				void session.dispatch({ type: "apply", id: intent.id, cursorLineId: intent.cursorLineId, expressionSelection: intent.expressionSelection, speech }).catch(() => {});
 			}
 		}
 	}

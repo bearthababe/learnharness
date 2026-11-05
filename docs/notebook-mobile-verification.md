@@ -17,6 +17,66 @@ linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#i
 Earlier tracker receipt: [#28 continuation fix](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6643703927),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6643706613).
 
+## Terra/Sol controls and expression references — 2026-11-05
+
+Owner approved the complete implementation and deployment plan: separate Model
+and Reasoning under ⋯ → Model; Terra/medium default for new and existing sessions;
+Terra and Sol through ChatGPT only; session-specific subsequent choices and frozen
+accepted operations. Terra/Off switches to Sol/Medium. Small numbered expressions
+span outer-level relations, include the leftmost/empty trailing slot, renumber by
+position, and support tapping “this”; whole-line selection remains available.
+Changed lines clear expression selection while retaining the current line. The
+source-preserving map is shared by rendering and model context, with conservative
+whole-line fallback for uncertain segmentation. Vocabulary is in `GLOSSARY.md`.
+
+### Six bounded live checks
+
+**6/6 passed, zero retries; this approval's call budget is exhausted.**
+Both models used medium reasoning through the existing native ChatGPT subscription.
+Outgoing requests verified model, effort and byte-identical frozen per-case prompt.
+All cases preserved unrelated working (including `2+2=5`), unfinished slots and Undo.
+
+| Model | Numbered substitution | Tapped-source substitution | Mixed-relation edit |
+| --- | ---: | ---: | ---: |
+| Terra 6.1 / medium | Pass, 3.439 s | Pass, 2.955 s | Pass, 3.153 s |
+| Sol 6.1 / medium | Pass, 4.049 s | Pass, 5.357 s | Pass, 3.499 s |
+
+These are isolated editor timings, not phone click-to-visible timings or general
+learning acceptance. Full frozen inputs, raw outputs and projected checks:
+`/tmp/opencode/notebook-integration/expression-model-check-20261105/`
+(`manifest.json`, `results.json`, `summary.json`). Runner:
+`/tmp/opencode/notebook-integration/check-28-expression-models.mjs`.
+Prompt SHA-256: `fcaef585d4625865663fecd823f94073ef5bd7439119307a44507a699fa38faa`.
+The owner explicitly approved another native pause/reopen for credential ownership.
+No subscription credentials copied; browser preview sign-in remains an owner action
+through Providers. Native window reopening confirmed in `native-restored.log`.
+
+### Software and mobile verification
+
+- 136 Notebook regressions passed (`check-28-expression-regressions-final.log`),
+  plus the additional queued DeepSeek migration case: all 8 model/recovery tests
+  passed in `check-28-expression-legacy-final.log` (137 distinct cases total).
+- Typecheck and lint passed (`check-28-expression-types-final.log`,
+  `check-28-expression-lint-final.log`). Scanner checks include mixed relations,
+  fractions/grouping, unfinished slots, source preservation and conservative fallback.
+- Production-transport fixtures verify Terra/medium independently of shared Cheap;
+  existing catalog reuse, account changes and no-fallback admission checks pass.
+- Scripted real-browser Notebook/layout checks passed (`check-28-expression-browser.log`):
+  separate model/reasoning, Off→Sol/Medium, 10px labels and expression/line taps,
+  empty slots, frozen clicked selection, renumbering, selection clearing and reload.
+  Existing original-recording ownership, Stop, Tutor Send, snapshots, clarification
+  Close, independent drafts, phone/tablet/wide layouts and keyboard/gesture checks pass.
+  Artifacts: `/home/bjorn/.cache/opencode/mobile-input-browser-28-expressions/`.
+  Phone split/full screenshots inspected: muted labels remain outside mathematical
+  notation, with working dominant. Physical iPhone acceptance remains pending.
+- A later verification rerun encountered the `/tmp` per-user quota (`EDQUOT`,
+  confirmed by a direct write probe and `usrquota` mount option). The branch's older
+  `.next` cache was retained at
+  `/home/bjorn/.cache/opencode/notebook-28-worktree-next-archive-20261105` with the
+  original path linked to it. No learner files removed. Affected checks then passed.
+
+Build/payload and deployment verification are in progress.
+
 ## Owner follow-up: interpretation and latency — 2026-11-05
 
 Owner reports the interaction feels better, but conversational mathematical edits

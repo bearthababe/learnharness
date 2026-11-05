@@ -19,6 +19,7 @@ await fs.writeFile(path.join(directory, "chatgpt-credentials.json"), JSON.string
 let discoveries = 0, generations = 0, zenGenerations = 0;
 let visibleModels = [modelId];
 let discoveryFails = false, generationFails = false;
+let expectedEffort = "medium";
 const generationAccounts: string[] = [];
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
@@ -45,7 +46,7 @@ globalThis.fetch = async (input, init) => {
 	generationAccounts.push(request.headers.get("authorization")!); generations++;
 	if (generationFails) return Response.json({ error: { message: "Fixture authorization rejected", type: "invalid_request_error", code: "invalid_user" } }, { status: 401 });
 	const body = await request.json(); assert.equal(body.model, modelId);
-	assert.equal(body.reasoning?.effort, "none", "Terra/off must not inherit the shared Cheap low setting");
+	assert.equal(body.reasoning?.effort, expectedEffort, "Notebook reasoning must not inherit the shared Cheap low setting");
 	const prompt = body.input.flatMap((item: { content: Array<{ text?: string }> }) => item.content ?? []).map((part: { text?: string }) => part.text ?? "").join("");
 	const state = JSON.parse(prompt.split("CURRENT NOTEBOOK AND CONTEXT\n\n")[1]!.split("\n\nNOTEBOOK HISTORY")[0]!);
 	const text = JSON.stringify({ action: "edit", operations: [{ op: state.lines.length ? "replace" : "insert", ...(!state.lines.length ? { after: null } : {}), id: "L1", latex: `p=${generations}` }] });
@@ -78,26 +79,27 @@ async function apply() {
 }
 
 test("production Notebook engine reuses account-valid catalogs while preserving admission and explicit failure recovery", async t => {
-	await t.test("the default candidate uses Zen low on the wire independently of shared Cheap", async () => {
-		const independent = chatStore.createChat("Default DeepSeek");
+	await t.test("the default candidate uses ChatGPT Terra medium on the wire independently of shared Cheap", async () => {
+		const independent = chatStore.createChat("Default Terra medium");
 		const client = createNotebookSession(independent.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), independent.id));
 		try {
 			await client.refresh(); await client.dispatch({ type: "visibility", visible: true });
 			await client.dispatch({ type: "draft", text: "Write x=" }); await client.dispatch({ type: "apply" });
 			await service.settled(independent.id); await client.refresh();
 			assert.equal(client.getSnapshot().view?.problem, null);
-			assert.deepEqual(client.getSnapshot().view?.lines, [{ id: "L1", latex: "x=" }]);
-			assert.equal(zenGenerations, 1); assert.equal(generations, 0); assert.equal(discoveries, 0);
+			assert.deepEqual(client.getSnapshot().view?.lines, [{ id: "L1", latex: "p=1" }]);
+			assert.equal(zenGenerations, 0); assert.equal(generations, 1); assert.equal(discoveries, 1);
 			const attempt = chatStore.getChat(independent.id)!.notebook!.operations[0]!.execution!.attempts[0]!;
-			assert.equal(attempt.model, "opencode:deepseek-v4.1-flash"); assert.equal(attempt.thinkingLevel, "low");
+			assert.equal(attempt.model, "chatgpt:gpt-6.1-terra"); assert.equal(attempt.thinkingLevel, "medium");
 		} finally { client.dispose(); }
 	});
 	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
 	await session.dispatch({ type: "candidate", candidate: "terra-off" });
+	expectedEffort = "none";
 	const leases = t.mock.method(webSubscriptionOwner().chatgpt, "lease");
-	await t.test("cold discovery once; the next Apply reaches generation without discovery", async () => {
-		assert.equal((await apply()).problem, null); assert.equal(discoveries, 1); assert.equal(generations, 1);
-		assert.equal((await apply()).problem, null); assert.equal(generations, 2);
+	await t.test("the next session and Apply reuse discovery but acquire fresh credential admissions", async () => {
+		assert.equal((await apply()).problem, null); assert.equal(discoveries, 1); assert.equal(generations, 2);
+		assert.equal((await apply()).problem, null); assert.equal(generations, 3);
 		assert.equal(leases.mock.callCount(), 2, "catalog reuse never reuses a credential admission");
 		assert.equal(discoveries, 1, "warm Apply must not wait on a new provider catalog request");
 	});

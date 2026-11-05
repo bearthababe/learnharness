@@ -65,6 +65,16 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.waitForFunction(() => !document.querySelector('[data-notebook-candidate="terra-off"]').disabled);
 	await page.click('[data-notebook-candidate="terra-off"]');
 	await page.waitForFunction(() => !document.querySelector('[data-testid="notebook-options"]'));
+	await openNotebookMenu(page, "Model");
+	await page.click('[data-notebook-model="sol"]');
+	await page.waitForFunction(() => document.querySelector('[data-notebook-candidate="sol-medium"]')?.getAttribute('aria-checked') === 'true');
+	assert.equal(await page.$('[data-notebook-candidate="sol-off"]'), null);
+	await page.waitForFunction(() => !document.querySelector('[data-notebook-model="terra"]').disabled);
+	await page.click('[data-notebook-model="terra"]');
+	await page.waitForFunction(() => document.querySelector('[data-notebook-candidate="terra-medium"]')?.getAttribute('aria-checked') === 'true');
+	await page.waitForFunction(() => !document.querySelector('[data-notebook-candidate="terra-off"]').disabled);
+	await page.click('[data-notebook-candidate="terra-off"]');
+	await page.waitForFunction(() => !document.querySelector('[data-testid="notebook-options"]'));
 	const before = await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json();
 	assert.equal(before.candidate, "terra-off", "Picker choice is saved before Apply");
 	assert.equal(before.usage.calls, 0, "Changing candidates never applies");
@@ -73,6 +83,11 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.waitForSelector('[data-notebook-scroll] [aria-label="Select line 1"]');
 	await page.waitForFunction(() => !document.querySelector('.session-workspace').inert);
 	assert.deepEqual((await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json()).lines, [{ id: "L1", latex: "p=F/A" }]);
+	await page.tap('[data-notebook-scroll] [aria-label="Select expression 2 on line 1"]');
+	assert.equal(await page.$eval('[data-notebook-scroll] [aria-label="Select expression 2 on line 1"]', e => e.getAttribute('aria-pressed')), 'true');
+	assert.equal(await page.$eval('.notebook-expression-number', e => getComputedStyle(e).fontSize), '10px');
+	await page.tap('[data-notebook-scroll] [aria-label="Select line 1"]');
+	assert.equal(await page.$eval('[data-notebook-scroll] [aria-label="Select expression 2 on line 1"]', e => e.getAttribute('aria-pressed')), 'false');
 	const mic = '.notebook-panel [aria-label="Start dictation"]';
 	await page.click(mic);
 	await page.waitForFunction(() => notebookSmoke.sockets.length === 1 && notebookSmoke.worklet);
@@ -190,6 +205,27 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.waitForSelector('.notebook-notice summary');
 	assert.equal(await page.$eval('#notebook-instruction', e => e.value), 'Clarify fixture target');
 	assert.deepEqual(await page.evaluate(() => notebookSmoke.sends), []);
+	await page.goto(`${origin}/chat/mobile_expressions`, { waitUntil: 'networkidle2' });
+	await page.waitForSelector('[data-notebook-scroll] [aria-label="Select expression 4 on line 1"]');
+	const expression = n => `[data-notebook-scroll] [aria-label="Select expression ${n} on line 1"]`;
+	assert.match(await page.$eval(expression(4), e => e.textContent), /Empty expression/);
+	await page.tap(expression(2));
+	const applies = [];
+	page.on('request', request => {
+		if (new URL(request.url()).pathname === '/api/chats/mobile_expressions/notebook' && request.method() === 'POST') {
+			const command = JSON.parse(request.postData()); if (command.type === 'apply') applies.push(command);
+		}
+	});
+	await page.type('#notebook-instruction', 'Remove this expression fixture');
+	await page.click('.notebook-panel button[type="submit"]');
+	await page.waitForFunction(() => !document.querySelector('[data-notebook-scroll] [aria-label="Select expression 4 on line 1"]'));
+	assert.deepEqual(applies[0].expressionSelection, { lineId: 'L1', number: 2, text: 'F/A', lineSource: 'p=F/A=2+2=' });
+	assert.equal(await page.$eval(expression(2), e => e.getAttribute('aria-pressed')), 'false');
+	assert.equal(await page.$eval('[data-notebook-scroll] [aria-label="Select line 1"]', e => e.getAttribute('aria-pressed')), 'true');
+	assert.match(await page.$eval(expression(3), e => e.textContent), /Empty expression/);
+	await page.reload({ waitUntil: 'networkidle2' });
+	await page.waitForSelector(expression(3));
+	assert.deepEqual((await (await fetch(`${origin}/api/chats/mobile_expressions/notebook`)).json()).lines, [{ id: 'L1', latex: 'p=2+2=' }, { id: 'L2', latex: '2+2=5' }]);
 	assert.deepEqual(errors, []);
 	console.log("PASS: combined phone Notebook picker, Apply, destination-owned microphone, Stop without Apply/Send, settled return, immutable snapshot, independent drafts, reload and explicit Tutor submission.");
 	await page.close();

@@ -4,6 +4,7 @@ import type { CallUsage } from "./chat.ts";
 import type { LhMessage } from "../native-messages.ts";
 import type { QuestionFormDraft, QuestionAnswerData } from "../question-core.ts";
 import type { NotebookCandidate } from "../notebook-models.ts";
+import type { NotebookExpressionSelection } from "../notebook-expressions.ts";
 
 export interface NotebookLine { id: string; latex: string }
 export interface NotebookState { lines: NotebookLine[]; undo: NotebookLine[][] }
@@ -17,6 +18,7 @@ export interface NotebookExchange {
 	instruction: string;
 	selection: { lineId: string; text: string } | null;
 	cursorLineId: string | null;
+	expressionSelection?: NotebookExpressionSelection | null;
 	response: NotebookResponse | null;
 	error?: string;
 	notebookAfter: NotebookLine[];
@@ -26,6 +28,7 @@ export interface NotebookEditorInput {
 	instruction: string;
 	selection?: { lineId: string; text: string } | null;
 	cursorLineId?: string | null;
+	expressionSelection?: NotebookExpressionSelection | null;
 	history?: NotebookExchange[];
 	notebookHistory?: NotebookHistoryEntry[];
 }
@@ -62,6 +65,7 @@ export interface NotebookOperation {
 	kind: "edit" | "undo" | "start-fresh";
 	instruction?: string;
 	cursorLineId?: string | null;
+	expressionSelection?: NotebookExpressionSelection | null;
 	acceptedAt: string;
 	status: "awaiting-transcript" | "queued" | "running" | "result-ready" | "applied" | "clarification" | "failed" | "unknown" | "recovered";
 	baseRevision?: number;
@@ -88,6 +92,7 @@ export interface NotebookSpeechApply {
 export interface NotebookRecord {
 	revision: number;
 	candidate?: NotebookCandidate;
+	modelPickerVersion?: number;
 	visible: boolean;
 	current: { id: string; revision: number; state: NotebookState; exchanges: NotebookExchange[] };
 	/** Absent on sessions saved before history support. */
@@ -171,7 +176,7 @@ export type NotebookCommand =
 	| { type: "draft"; expectedRevision: number; text: string }
 	| { type: "tutor-draft"; expectedRevision: number; draft: OwnedTutorDraft }
 	| { type: "snapshot"; id: string; owner: TutorDraftOwner; draftId: string; expectedRevision: number; continuationId: string; contextId?: string; workingRevision?: number; throughOperationId?: string }
-	| { type: "apply"; id: string; contextId: string; draftRevision: number; instruction: string; candidate?: NotebookCandidate; cursorLineId?: string | null; speech?: NotebookSpeechApply }
+	| { type: "apply"; id: string; contextId: string; draftRevision: number; instruction: string; candidate?: NotebookCandidate; cursorLineId?: string | null; expressionSelection?: NotebookExpressionSelection | null; speech?: NotebookSpeechApply }
 	| { type: "undo" | "start-fresh"; id: string; contextId: string };
 export interface NotebookUsage {
 	calls: number;

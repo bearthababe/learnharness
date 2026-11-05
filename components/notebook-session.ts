@@ -1,4 +1,4 @@
-import { DEFAULT_NOTEBOOK_CANDIDATE, notebookSpeechApplySchema, type NotebookCandidate, type NotebookCommand, type NotebookCommandReceipt, type NotebookView, type NotebookSpeechApply } from "@/src/core";
+import { DEFAULT_NOTEBOOK_CANDIDATE, notebookSpeechApplySchema, notebookExpressions, selectedNotebookExpression, type NotebookExpressionSelection, type NotebookCandidate, type NotebookCommand, type NotebookCommandReceipt, type NotebookView, type NotebookSpeechApply } from "@/src/core";
 import { createNotebookTutorDrafts, type DraftRecoveryStorage } from "./notebook-tutor-drafts";
 import { createNotebookSpeech } from "./notebook-speech";
 
@@ -6,7 +6,7 @@ export type NotebookSessionCommand =
 	| { type: "candidate"; candidate: NotebookCandidate }
 	| { type: "visibility"; visible: boolean }
 	| { type: "draft"; text: string }
-	| { type: "apply"; cursorLineId?: string | null; id?: string; candidate?: NotebookCandidate; speech?: NotebookSpeechApply }
+	| { type: "apply"; cursorLineId?: string | null; expressionSelection?: NotebookExpressionSelection | null; id?: string; candidate?: NotebookCandidate; speech?: NotebookSpeechApply }
 	| Extract<NotebookCommand, { type: "tutor-draft" | "snapshot" | "discard-tutor-draft" | "speech-run" | "discard-speech" }>
 	| { type: "undo" | "start-fresh" };
 export interface NotebookSessionSnapshot {
@@ -18,6 +18,7 @@ export interface NotebookSessionSnapshot {
 	inputLocked: boolean;
 	error: string | null;
 	cursorLineId?: string | null;
+	expressionSelection?: NotebookExpressionSelection | null;
 }
 
 /** One session-lifetime observable. Serialized saves never overwrite newer text;
@@ -89,7 +90,8 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 			}
 		}
 		const cursorLineId = state.view?.contextId === view.contextId && view.lines.some(line => line.id === state.cursorLineId) ? state.cursorLineId : null;
-		publish({ view, cursorLineId, ...(savedLocalRevision === localRevision ? { draftText: view.draft.text } : {}) });
+		const expressionSelection = cursorLineId && state.expressionSelection && selectedNotebookExpression(view.lines, state.expressionSelection) ? state.expressionSelection : null;
+		publish({ view, cursorLineId, expressionSelection, ...(savedLocalRevision === localRevision ? { draftText: view.draft.text } : {}) });
 	}
 	async function post(command: NotebookCommand): Promise<NotebookCommandReceipt> {
 		const response = await fetcher(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
@@ -121,6 +123,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		return refreshing;
 	}
 	function dispatch(command: NotebookSessionCommand, replay?: SpeechRequest): Promise<NotebookCommandReceipt> {
+		if (command.type === "apply" && !replay) command = { ...command, expressionSelection: structuredClone(command.expressionSelection === undefined ? state.expressionSelection ?? null : command.expressionSelection) };
 		if (command.type === "candidate" && (!state.view || state.saving || state.editing || state.inputLocked || state.view.pending || speech.isActive())) {
 			const error = "Finish recording, applying and saving before changing the Notebook model";
 			publish({ error }); return Promise.reject(new Error(error));
@@ -176,7 +179,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 						const saved = await post({ type: "draft", text: prefix, expectedRevision: state.view.draft.revision });
 						adopt(saved.view);
 					}
-					wire = speechRequest?.wire ?? { type: "apply", id: operationId!, candidate, contextId: speechRequest?.contextId ?? state.view.contextId!, draftRevision: state.view.draft.revision, instruction, cursorLineId: command.cursorLineId, ...(command.speech ? { speech: command.speech } : {}) };
+					wire = speechRequest?.wire ?? { type: "apply", id: operationId!, candidate, contextId: speechRequest?.contextId ?? state.view.contextId!, draftRevision: state.view.draft.revision, instruction, cursorLineId: command.cursorLineId, expressionSelection: command.expressionSelection, ...(command.speech ? { speech: command.speech } : {}) };
 					if (speechRequest) { speechRequest.wire = wire; stashRequests(); }
 				} else wire = { type: command.type, id: operationId!, contextId: state.view.contextId };
 				uncertain = wire;
@@ -231,7 +234,12 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		getSnapshot: () => state,
 		subscribe(listener: () => void) { observe(); listeners.add(listener); return () => { listeners.delete(listener); }; },
 		dispatch, refresh, settle,
-		selectLine(cursorLineId: string) { if (state.view?.lines.some(line => line.id === cursorLineId)) publish({ cursorLineId }); },
+		selectLine(cursorLineId: string) { if (state.view?.lines.some(line => line.id === cursorLineId)) publish({ cursorLineId, expressionSelection: null }); },
+		selectExpression(lineId: string, number: number) {
+			const line = state.view?.lines.find(line => line.id === lineId);
+			const expression = line && notebookExpressions(line.latex)?.find(part => part.number === number);
+			if (line && expression) publish({ cursorLineId: lineId, expressionSelection: { lineId, number, lineSource: line.latex, text: expression.text } });
+		},
 		async idle() { await tail; },
 		dispose() { lifetime++; for (const cancel of cancelHandoffs) cancel(); stopObserving?.(); stopObserving = undefined; listeners.clear(); tutor.dispose(); },
 	};

@@ -29,6 +29,9 @@ const conversation = { id: "mobile_conversation", title: "Mobile browser convers
 await writeFile(path.join(dir, "data/chats/mobile_conversation.json"), JSON.stringify(conversation));
 await writeFile(path.join(dir, "data/chats/mobile_other.json"), JSON.stringify({ ...conversation, id: "mobile_other", title: "Other isolated session" }));
 await writeFile(path.join(dir, "data/chats/mobile_notebook_close.json"), JSON.stringify({ ...conversation, id: "mobile_notebook_close", title: "Notebook close fixture" }));
+await writeFile(path.join(dir, "data/chats/mobile_expressions.json"), JSON.stringify({ ...conversation, id: "mobile_expressions", title: "Expression references fixture",
+	notebook: { revision: 1, visible: true, current: { id: "expressions-context", revision: 1, state: { lines: [{ id: "L1", latex: "p=F/A=2+2=" }, { id: "L2", latex: "2+2=5" }], undo: [] }, exchanges: [] }, notebookDraft: { id: "expressions-draft", revision: 0, text: "" }, nextSequence: 1, operations: [] },
+}));
 await writeFile(path.join(dir, "data/chats/mobile_layout.json"), JSON.stringify({ ...conversation, id: "mobile_layout", title: "Notebook layout fixture",
 	messages: [assistant([{ type: "text", text: Array(35).fill("Explain how pressure changes with area. Keep your reasoning alongside your working.").join("\n\n") }])],
 	notebook: { revision: 1, visible: true, current: { id: "layout-context", revision: 1, state: { lines: Array.from({ length: 40 }, (_, i) => ({ id: `L${i + 1}`, latex: `p_{${i + 1}}=F/A` })), undo: [] }, exchanges: [] }, notebookDraft: { id: "layout-draft", revision: 0, text: "Keep this equation instruction." }, nextSequence: 1, operations: [] },
@@ -68,7 +71,9 @@ import { createNotebookService } from "@/src/server/notebook";
 import { chatStore } from "@/src/store/chats";
 const service = createNotebookService({ chatStore, engine: async () => {
  const faux = createFauxCore({});
-  faux.setResponses([context => fauxAssistantMessage(JSON.stringify(String(context.messages[0].content).endsWith("CURRENT INSTRUCTION\\n\\nClarify fixture target")
+   faux.setResponses([context => fauxAssistantMessage(JSON.stringify(String(context.messages[0].content).endsWith("CURRENT INSTRUCTION\\n\\nRemove this expression fixture")
+    ? { action: "edit", operations: [{ op: "replace", id: "L1", latex: "p=2+2=" }] }
+    : String(context.messages[0].content).endsWith("CURRENT INSTRUCTION\\n\\nClarify fixture target")
    ? { action: "question", question: "Which occurrence should change?" }
    : { action: "edit", operations: [{ op: "insert", after: null, id: "L1", latex: "p=F/A" }] }))]);
  return { engine: { model: faux.getModel(), streamFn: faux.streamSimple }, model: "faux:editor" };

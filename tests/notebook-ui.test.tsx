@@ -28,6 +28,42 @@ const { useNotebookDestination } = await import("../components/notebook-destinat
 const { LearnerExplanation } = await import("../components/learner-explanation.tsx");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
+test("model and reasoning controls save separately and Sol never offers Off", async () => {
+	const chat = chatStore.createChat("Separate model and reasoning");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("Picker must not generate"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	await session.dispatch({ type: "candidate", candidate: "terra-off" });
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	try {
+		await act(async () => root.render(<NotebookPanel session={session} />));
+		await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')!.click());
+		await act(async () => document.querySelector<HTMLButtonElement>('[role="menuitem"]')!.click());
+		await act(async () => { document.querySelector<HTMLButtonElement>('[data-notebook-model="sol"]')!.click(); await session.idle(); });
+		assert.equal(session.getSnapshot().view!.candidate, "sol-medium");
+		assert.deepEqual([...document.querySelectorAll('[data-notebook-candidate]')].map(e => e.textContent), ["Low", "Medium", "High", "Extra high", "Max"]);
+		await act(async () => { document.querySelector<HTMLButtonElement>('[data-notebook-candidate="sol-high"]')!.click(); await session.idle(); });
+		assert.equal(document.querySelector('[data-testid="notebook-options"]'), null);
+		assert.equal(service.view(chat.id).candidate, "sol-high"); assert.equal(service.view(chat.id).usage.calls, 0);
+	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); }
+});
+
+test("expression labels are distinct from math and tapping expressions or line numbers changes the reference", async () => {
+	const { NotebookWorking } = await import("../components/notebook-working.tsx");
+	const lines = [{ id: "L1", latex: String.raw`x^2 = \frac{2+2}{5} =` }, { id: "L2", latex: String.raw`x=\badmacro` }, { id: "L3", latex: String.raw`x=\frac{1}{` }];
+	const selected: unknown[] = []; const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	try {
+		await act(async () => root.render(<NotebookWorking lines={lines} onSelect={id => selected.push(id)} onSelectExpression={(id, number) => selected.push([id, number])} />));
+		assert.equal(host.querySelectorAll('.notebook-expression-number').length, 5, "Unbalanced source retains whole-line targeting; invalid but segmentable math retains addresses");
+		assert.equal(host.querySelector('.katex .notebook-expression-number'), null, "Reference labels are outside mathematical superscripts");
+		await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Select expression 3 on line 1"]')!.click());
+		await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Select line 1"]')!.click());
+		assert.deepEqual(selected, [["L1", 3], "L1"]);
+		assert.match(host.querySelector('[aria-label="Select expression 2 on line 2"]')!.textContent!, /\\badmacro/);
+		assert.equal(host.querySelector('[aria-label="Select expression 1 on line 3"]'), null);
+	} finally { await act(async () => root.unmount()); host.remove(); }
+});
+
 test("Notebook picker saves without Apply, locks during saving/recording/editing, and reopens its choice", async () => {
 	const chat = chatStore.createChat("Picker UI"); const faux = createFauxCore({}); let calls = 0;
 	let releaseEdit!: () => void; const editGate = new Promise<void>(resolve => { releaseEdit = resolve; });
@@ -50,9 +86,10 @@ test("Notebook picker saves without Apply, locks during saving/recording/editing
 		const picker = () => document.querySelector<HTMLButtonElement>('[data-notebook-candidate="terra-off"]')!;
 		assert.equal(host.querySelector('[role="menu"]'), null, "Secondary controls start out of the working area");
 		await openModel();
-		assert.equal(document.querySelector('[data-notebook-candidate="deepseek-low"]')!.getAttribute("aria-checked"), "true");
+		assert.equal(document.querySelector('[data-notebook-candidate="terra-medium"]')!.getAttribute("aria-checked"), "true");
 		assert.equal(picker().disabled, false);
-		assert.deepEqual([...document.querySelectorAll('[data-notebook-candidate]')].map(option => option.textContent), ["DeepSeek / low · Zen", "Terra / off · ChatGPT"]);
+		assert.deepEqual([...document.querySelectorAll('[data-notebook-model]')].map(option => option.textContent), ["Terra 6.1 · ChatGPT", "Sol 6.1 · ChatGPT"]);
+		assert.deepEqual([...document.querySelectorAll('[data-notebook-candidate]')].map(option => option.textContent), ["Off", "Low", "Medium", "High", "Extra high", "Max"]);
 		await act(async () => picker().click());
 		assert.equal(picker().disabled, true); assert.equal(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled, true);
 		await act(async () => { releaseSave(); await session.idle(); });

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeftIcon, CheckIcon, EllipsisIcon, Loader2Icon, Maximize2Icon, Minimize2Icon, Undo2Icon } from "lucide-react";
 import type { NotebookSession } from "./notebook-session";
 import { NotebookWorking } from "./notebook-working";
-import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, notebookCandidateSchema, type TutorDraftOwner } from "@/src/core";
+import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, NOTEBOOK_PICKER_MODELS, notebookCandidateFor, notebookPickerModel, type NotebookPickerModel, type TutorDraftOwner } from "@/src/core";
 import { CompactLearningInput } from "./compact-learning-input";
 import type { Dictation } from "./dictation";
 import type { NotebookViewControls } from "./notebook-layout";
@@ -13,7 +13,7 @@ import { NotebookDraftReview } from "./learner-explanation";
 import { notebookActivityDrafts } from "./notebook-activity-draft";
 
 export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string }) {
-	const { view, draftText, saving, editing, inputLocked, error, cursorLineId } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+	const { view, draftText, saving, editing, inputLocked, error, cursorLineId, expressionSelection } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
 	const speech = useSyncExternalStore(session.speech.subscribe, session.speech.getSnapshot, session.speech.getSnapshot);
 	const drafts = useSyncExternalStore(session.tutor.subscribe, session.tutor.getSnapshot, session.tutor.getSnapshot);
 	const attached = notebookActivityDrafts(drafts.drafts, activity);
@@ -23,6 +23,8 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 	const applyWaiting = editing || inputLocked;
 	const modelLocked = !view || saving || applyWaiting || !!view.pending || speech.active;
 	const candidate = view?.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE;
+	const model = notebookPickerModel(candidate);
+	const reasoningLabels = { off: "Off", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" };
 	useEffect(() => {
 		if (!menu) return;
 		const outside = (event: PointerEvent) => {
@@ -59,7 +61,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 				if (event.key === "Enter") { event.stopPropagation(); if (!(event.target instanceof HTMLButtonElement) && !(event.target instanceof HTMLTextAreaElement)) event.preventDefault(); }
 			}}>
 				<button ref={trigger} type="button" aria-label="Notebook options" title="Notebook options" aria-expanded={menu !== null} aria-haspopup="menu" onClick={() => setMenu(menu ? null : "options")}><EllipsisIcon /></button>
-				{menu && <MenuShell key={menu} anchorRef={trigger} testid="notebook-options" preferredSide="down" menuClass="notebook-options" fitVisualViewport={menu === "review"}>
+				{menu && <MenuShell key={menu} anchorRef={trigger} testid="notebook-options" preferredSide="down" menuClass="notebook-options" fitVisualViewport={menu === "review" || menu === "model"}>
 					{menu !== "options" && <div className="notebook-options-heading"><button type="button" aria-label="Back to Notebook options" onClick={() => setMenu("options")}><ArrowLeftIcon /></button><h3>{menu === "model" ? "Notebook model" : menu === "history" ? "History" : menu === "review" ? "Review attached working" : "Usage"}</h3></div>}
 					{menu === "options" && <div role="menu" aria-label="Notebook options">
 						<button type="button" role="menuitem" onClick={() => setMenu("model")}>Model<span>{NOTEBOOK_CANDIDATES[candidate].label}</span></button>
@@ -73,10 +75,17 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 						{hasWorking ? attached.map(draft => <NotebookDraftReview key={draft.id} draft={draft} onTextChange={(id, text) => session.tutor.updateText(draft.owner, text, id)} />) : <p>No working attached yet.</p>}
 						{drafts.error && <p role="alert">{drafts.error}</p>}
 					</div>}
-					{menu === "model" && <div role="menu" aria-label="Notebook model">{Object.entries(NOTEBOOK_CANDIDATES).map(([id, option]) => <button type="button" key={id} role="menuitemradio" aria-checked={candidate === id} disabled={modelLocked} data-notebook-candidate={id}
-						onClick={() => { void session.dispatch({ type: "candidate", candidate: notebookCandidateSchema.parse(id) }).then(closeMenu).catch(() => {}); }}>
-						{option.label}{candidate === id && <CheckIcon />}
-					</button>)}</div>}
+					{menu === "model" && <div role="menu" aria-label="Notebook model">
+						<div role="group" aria-label="Model">{(Object.keys(NOTEBOOK_PICKER_MODELS) as NotebookPickerModel[]).map(id => <button type="button" key={id} role="menuitemradio" aria-checked={model === id} disabled={modelLocked} data-notebook-model={id}
+							onClick={() => { void session.dispatch({ type: "candidate", candidate: notebookCandidateFor(id, candidate) }).catch(() => {}); }}>
+							{NOTEBOOK_PICKER_MODELS[id].label}{model === id && <CheckIcon />}
+						</button>)}</div>
+						<h4 className="px-3 pt-3 pb-1 text-xs text-muted-foreground">Reasoning</h4>
+						<div role="group" aria-label="Reasoning">{NOTEBOOK_PICKER_MODELS[model].candidates.map(id => <button type="button" key={id} role="menuitemradio" aria-checked={candidate === id} disabled={modelLocked} data-notebook-candidate={id}
+							onClick={() => { void session.dispatch({ type: "candidate", candidate: id }).then(closeMenu).catch(() => {}); }}>
+							{reasoningLabels[NOTEBOOK_CANDIDATES[id].thinkingLevel]}{candidate === id && <CheckIcon />}
+						</button>)}</div>
+					</div>}
 					{menu === "history" && <section aria-label="Notebook history" className="notebook-menu-content">
 						{!view?.history.length && <p>No earlier working yet.</p>}
 						{view?.history.map((entry, index) => <article key={entry.id} aria-label={`Entry ${index + 1}`}>
@@ -114,7 +123,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 			</details>}
 		</form>
 		<div data-notebook-scroll="" className="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
-			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} onSelect={session.selectLine} />
+			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} expressionSelection={expressionSelection} onSelect={session.selectLine} onSelectExpression={session.selectExpression} />
 			{view?.lines.length === 0 && <p className="text-sm text-muted-foreground">Your working appears here.</p>}
 		</div>
 	</section>;

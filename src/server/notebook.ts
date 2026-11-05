@@ -9,7 +9,8 @@ import { stores, effectiveSettings } from "./stores.ts";
 import { initAuthEnv } from "./keys.ts";
 import { ensureConnectionModel } from "./model-catalog.ts";
 import { callCost } from "./pricing.ts";
-import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, notebookCandidateSchema, type NotebookCandidate } from "../core/notebook-models.ts";
+import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, NOTEBOOK_MODEL_PICKER_VERSION, notebookCandidateSchema, type NotebookCandidate } from "../core/notebook-models.ts";
+import { notebookExpressionSelectionSchema, selectedNotebookExpression } from "../core/notebook-expressions.ts";
 import { ownedTutorDraftSchema, tutorDraftOwnerSchema } from "../core/notebook-content.ts";
 import { changeNotebookDraft, NotebookDraftConflict } from "../core/notebook-drafts.ts";
 import { notebookSpeechApplySchema, notebookSpeechRunSchema, changeNotebookSpeech } from "../core/notebook-speech.ts";
@@ -28,13 +29,13 @@ const commandSchema = z.discriminatedUnion("type", [
 	z.object({ type: z.literal("discard-tutor-draft"), owner: tutorDraftOwnerSchema, draftId: id, expectedRevision: z.number().int().nonnegative() }).strict(),
 	z.object({ type: z.literal("snapshot"), id, owner: tutorDraftOwnerSchema, draftId: id, expectedRevision: z.number().int().nonnegative(), continuationId: id, contextId: id.optional(), workingRevision: z.number().int().nonnegative().optional(), throughOperationId: id.optional() }).strict(),
 	z.object({ type: z.literal("apply"), id, contextId: id, draftRevision: z.number().int().nonnegative(), instruction: z.string(), cursorLineId: z.string().nullable().optional(),
-		candidate: notebookCandidateSchema.optional(), speech: notebookSpeechApplySchema.optional() }).strict(),
+		expressionSelection: notebookExpressionSelectionSchema.nullable().optional(), candidate: notebookCandidateSchema.optional(), speech: notebookSpeechApplySchema.optional() }).strict(),
 	z.object({ type: z.literal("undo"), id, contextId: id }).strict(),
 	z.object({ type: z.literal("start-fresh"), id, contextId: id }).strict(),
 ]);
 
 function emptyNotebook(): NotebookRecord {
-	return { revision: 0, visible: false,
+	return { revision: 0, visible: false, candidate: DEFAULT_NOTEBOOK_CANDIDATE, modelPickerVersion: NOTEBOOK_MODEL_PICKER_VERSION,
 		current: { id: crypto.randomUUID(), revision: 0, state: { lines: [], undo: [] }, exchanges: [] },
 		notebookDraft: { id: crypto.randomUUID(), revision: 0, text: "" }, nextSequence: 1, operations: [] };
 }
@@ -82,6 +83,13 @@ export function createNotebookService({ chatStore, engine }: {
 	function read(chatId: string) {
 		const chat = chatStore.getChat(chatId);
 		if (!chat) throw new NotebookRefusal("Session not found", 404);
+		if (chat.notebook && (chat.notebook.modelPickerVersion ?? 0) < NOTEBOOK_MODEL_PICKER_VERSION) {
+			// One-time owner-approved default migration. Accepted operation pairs,
+			// including legacy shared-slot operations, remain frozen as recorded.
+			chat.notebook.candidate = DEFAULT_NOTEBOOK_CANDIDATE;
+			chat.notebook.modelPickerVersion = NOTEBOOK_MODEL_PICKER_VERSION;
+			chat.notebook = chatStore.saveNotebook(chatId, chat.notebook.revision, chat.notebook);
+		}
 		if (chat.notebook?.submissions?.some((receipt) => receipt.status === "pending")) {
 			const ids = new Set(chat.messages.map((message) => message.id));
 			for (const receipt of chat.notebook.submissions) if (ids.has(receipt.message.id)) receipt.status = "delivered";
@@ -114,6 +122,10 @@ export function createNotebookService({ chatStore, engine }: {
 			if (op.kind === "undo") {
 				mutate(chatId, record => undoNotebookWorking(record, record.operations.find(item => item.id === op.id)!));
 				continue;
+			}
+			if (op.expressionSelection && !selectedNotebookExpression(record.current.state.lines, op.expressionSelection)) {
+				mutate(chatId, record => restore(record, record.operations.find(item => item.id === op.id)!, "failed", "The selected expression changed. Select it again before applying."));
+				return;
 			}
 			let resolved: Awaited<ReturnType<typeof engine>>;
 			try { resolved = await engine(op.candidate); }
@@ -190,6 +202,7 @@ export function createNotebookService({ chatStore, engine }: {
 		}
 		const saved = mutate(chatId, (record) => {
 			if (command.type === "candidate") {
+				if (command.candidate === "deepseek-low") throw new NotebookRefusal("Choose Terra or Sol for new Notebook work", 400);
 				if (record.operations.some(outstanding) || record.speechRuns?.some(run => run.status === "recording")) throw new NotebookRefusal("Finish recording and applying before changing the Notebook model", 409);
 				const current = record.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE;
 				if (current !== command.expectedCandidate && current !== command.candidate) throw new NotebookRefusal("Notebook model changed; refresh before selecting", 409);

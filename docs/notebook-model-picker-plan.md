@@ -1,5 +1,38 @@
 # Notebook candidate picker and prompt adoption
 
+## Current plan: Terra/Sol and expression references — approved 2026-11-05
+
+This supersedes the initial shortlist/default below. **⋯ → Model** has separate
+model and reasoning groups. Offer only Terra 6.1 and Sol 6.1 through ChatGPT.
+Terra supports Off/Low/Medium/High/Extra high/Max; Sol omits Off. Switching from
+Terra/Off to Sol chooses Medium; otherwise retain supported reasoning.
+
+Migrate new and existing sessions to Terra/medium once, then persist subsequent
+session choices. Frozen accepted pairs (including DeepSeek/low and Terra/off) and
+legacy shared-Cheap operations retain their original routing. Switching does not
+generate work; existing busy/admission/recovery rules still apply.
+
+Number expressions from 1 on each line, including the leftmost and empty trailing
+slots. Split only at outer-level =, ≈, ≠, <, >, ≤, ≥; preserve sums, fractions and
+grouping. Renumber by current position. Small muted numbers sit outside mathematical
+notation; tap the expression to establish “this”, or its line number for whole-line
+selection. A changed line clears expression selection while keeping the line current.
+One source-preserving map supplies both rendering and editor context. Unreliable
+segmentation retains whole-line addressing, and invalid but segmentable math retains
+exact source with the same expression addresses. Accepted Apply, speech finalization
+and recovery freeze the selection, rejecting stale references before generation.
+
+Shared language: line, expression, relation chain, term, factor, numerator and
+denominator. Copy duplicates; substitute replaces a named symbol; replace exchanges
+the target expression; continue appends a relation and expression. Preserve mistakes,
+unfinished working, unrelated lines, Undo and clarification for genuine ambiguity.
+
+Owner approved regression checks, six isolated ChatGPT calls (three cases on each
+model at medium, one call per case, no retries), and deployment to the existing
+preview when checks pass. [Canonical verification](notebook-mobile-verification.md#terrasol-controls-and-expression-references--2026-11-05).
+
+## Initial plan — 2026-11-04
+
 Owner-approved 2026-11-04 after the controlled model comparisons.
 
 - **⋯ → Model** (moved there by the later approved card cleanup) offers **DeepSeek / low ·

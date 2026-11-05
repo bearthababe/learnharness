@@ -1,5 +1,6 @@
 import { normalizeContext, type AssistantMessage, type Usage } from "@earendil-works/pi-ai";
 import { APP_IDENTITY, type PiEngine } from "./models.ts";
+import { notebookExpressionMap } from "../core/notebook-expressions.ts";
 import { notebookResponseSchema as responseSchema, type NotebookState, type NotebookExchange, type NotebookEditorInput, type NotebookResponse } from "../core/contracts/notebook.ts";
 export type { NotebookLine, NotebookState, NotebookHistoryEntry, NotebookExchange, NotebookEditorInput, NotebookResponse } from "../core/contracts/notebook.ts";
 
@@ -12,6 +13,9 @@ Use the current notebook, any explicit selection/cursor, and the supplied conver
 When continuing a calculation, use the recent conversation to identify the line being worked on. ‘Set that equal to …’ extends that line with another equals sign, preserving the existing expressions, unless the learner asks to replace them. Keep unfinished continuations unfinished. Ask only when the target or intended edit remains genuinely ambiguous.
 For a continuation such as ‘that’ or ‘set that equal to’, use the line most recently edited or explicitly named in the conversation unless the learner indicates a different line. An expression ending with an operator or an empty denominator is intentional unfinished working; record it as dictated rather than asking for the missing part.
 For follow-up edits, continue on the current line—the line most recently created, edited, explicitly named or selected—unless the learner explicitly switches targets or requests multiple lines or all occurrences. The same expression appearing on other lines is not by itself a reason to ask which line. Ask only when no single current line can be established or the requested edit remains genuinely ambiguous.
+Shared Notebook language: a line is the whole displayed row. A numbered expression is one part separated by outer-level relation signs (=, ≈, ≠, <, >, ≤, ≥). A relation chain is the whole sequence; an equality chain uses equals signs. A term is an added/subtracted part within an expression; factors are multiplied parts, and numerator/denominator refer to fractions. Understand conversational wording using this context rather than requiring fixed commands.
+Use the supplied expressionMap as the authority for references such as “line one, expression four”. Expression numbers start at 1 with the leftmost expression on each line and describe current left-to-right positions, renumbering after edits. Grouped expressions, fractions and sums remain together. Empty expressions after trailing relations are intentional unfinished slots. A null expression list means no reliable numbered map: use whole-line references or clarify instead of inventing expression numbers.
+expressionSelection identifies the expression the learner tapped; use it to resolve “this” or “that” when referring to an expression, including a source on a different line from the requested destination. Copy duplicates the source at the specified destination; substitute replaces the named symbol with the source expression, grouping it where needed to preserve meaning; replace exchanges the whole target expression; continue appends the requested relation and expression. Use the specified expression only, not the rest of its relation chain. Do not simplify or correct the result unless asked. Clarify only missing source, destination or edit details that cannot be resolved from the instruction and context.
 Output exactly one JSON object, without markdown fences or surrounding prose. Escape LaTeX backslashes as required by JSON.
 The notebook is an ordered list of {id, latex} lines. IDs are stable. Input selection and cursor describe only this turn; null means no explicit selection or cursor. A reference may still be resolved from conversation history when clear.
 Choose one response shape:
@@ -51,8 +55,9 @@ function recordUsage(attempt: NotebookAttempt, message: AssistantMessage) {
 function promptFor(input: NotebookEditorInput) {
 	return [NOTEBOOK_EDITOR_PROMPT, "CURRENT NOTEBOOK AND CONTEXT", JSON.stringify({
 		lines: input.state.lines, selection: input.selection ?? null,
-		cursorLineId: input.cursorLineId ?? null, undoAvailable: input.state.undo.length > 0,
-	}), "NOTEBOOK HISTORY", JSON.stringify(input.notebookHistory ?? []),
+		cursorLineId: input.cursorLineId ?? null, expressionSelection: input.expressionSelection ?? null,
+		expressionMap: notebookExpressionMap(input.state.lines), undoAvailable: input.state.undo.length > 0,
+	}), "NOTEBOOK HISTORY", JSON.stringify((input.notebookHistory ?? []).map(entry => ({ ...entry, expressionMap: notebookExpressionMap(entry.lines) }))),
 	"EARLIER CONVERSATION", JSON.stringify(input.history ?? []), "CURRENT INSTRUCTION", input.instruction].join("\n\n");
 }
 
@@ -140,6 +145,7 @@ export async function runNotebookEditor(input: NotebookEditorInput, { engine, si
 	const error = response === null ? attempts.at(-1)?.error : undefined;
 	const history: NotebookExchange[] = [...structuredClone(input.history ?? []), {
 		instruction: input.instruction, selection: input.selection ?? null, cursorLineId: input.cursorLineId ?? null,
+		...(input.expressionSelection ? { expressionSelection: structuredClone(input.expressionSelection) } : {}),
 		response, ...(error ? { error } : {}), notebookAfter: structuredClone(state.lines),
 	}];
 	return { state, response, history, attempts, error };
