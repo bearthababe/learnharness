@@ -367,15 +367,16 @@ try {
 	await page.locator(mic).click();
 	await page.waitForSelector('.lh-compact-error');
 	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /Microphone permission denied.*Retry/);
-	await page.evaluate(() => { window.denyMicrophone = false; window.holdConnection = false; });
+	await page.evaluate(() => { window.denyMicrophone = false; window.holdConnection = false; window.cancelledSpeech = window.speech; });
 	await page.click('.lh-compact-error button');
-	await page.waitForFunction(() => window.speech.readyState === 1);
+	await page.waitForFunction(() => window.speech !== window.cancelledSpeech && window.speech.readyState === 1);
 	await page.click('[aria-label="Cancel dictation"]');
 	// Empty conversation drafts retain the inherited active-dictation Send gate.
 	await fill(input, "");
 	assert.equal(await page.$eval(send, e => e.disabled), true);
+	await page.evaluate(() => { window.cancelledSpeech = window.speech; });
 	await page.click(mic);
-	await page.waitForFunction(() => window.speech.readyState === 1);
+	await page.waitForFunction(() => window.speech !== window.cancelledSpeech && window.speech.readyState === 1);
 	assert.equal(await page.$eval(send, e => e.disabled), false, "Active speech enables Send before any text is flushed");
 	await page.evaluate(() => window.speech.final("Speech only."));
 	await page.click(send);
@@ -392,6 +393,7 @@ try {
 	await fill(input, "Settings recovery retains my draft.");
 	await page.click(mic);
 	await page.waitForSelector('.lh-compact-error');
+	await page.waitForSelector('[data-testid="composer"] [aria-label="Start dictation"]');
 	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /Dictation needs a Deepgram key.*Settings/);
 	await page.click('.lh-compact-error button');
 	await page.waitForSelector('[data-testid="settings-dialog"]');

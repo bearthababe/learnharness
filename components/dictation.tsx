@@ -401,7 +401,7 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 				for (const waiter of waiters) waiter.resolve();
 			}).catch((error: unknown) => {
 				const failure = error instanceof Error ? error : new Error("Dictation could not be restored");
-				if (genRef.current === endedGeneration) setError(failure.message);
+				if (genRef.current === endedGeneration) setError(current => current ?? failure.message);
 				for (const waiter of waiters) waiter.reject(failure);
 			}).finally(() => {
 				if (endingRef.current === ending) endingRef.current = null;

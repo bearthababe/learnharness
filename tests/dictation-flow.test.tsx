@@ -72,6 +72,7 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 		nextWrite: undefined as Promise<Response> | undefined,
 		nextMic: undefined as Promise<{ getTracks: () => { stop: () => void }[] }> | undefined,
 		readFails: false,
+		tokenMissing: false,
 		reads: 0,
 		active: false,
 		captures: 0,
@@ -91,7 +92,7 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 		WebSocket: Socket, AudioContext: AudioGraph, AudioWorkletNode: Worklet,
 		IS_REACT_ACT_ENVIRONMENT: true,
 		fetch: async (url: string, init?: RequestInit) => {
-			if (url === "/api/stt/token") return Response.json({ token: "test-token" });
+			if (url === "/api/stt/token") return state.tokenMissing ? Response.json({ error: "Missing Deepgram key" }, { status: 503 }) : Response.json({ token: "test-token" });
 			if (url === "/api/settings") {
 				state.reads++;
 				if (state.nextRead) { const response = state.nextRead; state.nextRead = undefined; return response; }
@@ -231,6 +232,18 @@ test("the optional capture adapter receives source-timed finals while normal tex
 	await act(async () => f.dictation.stop()); await act(async () => socket.end());
 	assert.deepEqual(endings, ["stop"]);
 	assert.deepEqual(f.state.appends, [], "the session adapter owns revealing, not the current input registry");
+});
+
+test("capture recovery preserves the actionable missing-key error after startup fails", async () => {
+	const reasons: string[] = [];
+	const f = await fixture("en", undefined, undefined, { begin: async () => ({ final() {}, incomplete() {}, end: async reason => { reasons.push(reason); } }) });
+	f.state.tokenMissing = true;
+	await f.mount();
+	await act(async () => f.dictation.toggle());
+	assert.equal(f.dictation.phase, "idle");
+	assert.match(f.dictation.error!, /Dictation needs a Deepgram key/);
+	assert.deepEqual(reasons, ["interrupted"]);
+	assert.equal(f.state.active, false);
 });
 
 test("clicked Apply flushes after sent audio, follows up once on short coverage, and retains a whole crossing word", async () => {
