@@ -533,3 +533,106 @@ and is not a blocker for continuing #47/#48. No new keyboard bindings or Tab
 navigation are authorized in this delivery. Existing Escape-priority regressions
 and other non-deferred review findings still require correction and verification.
 Review: `/home/bjorn/.cache/opencode/issue4/47-review-standards.md`.
+
+### #47 independent review and correction handoff
+
+Initial delivery `56a26fc6ed81e19c87db21ceac51a6d168242666` remains pinned in
+`/home/bjorn/.cache/opencode/issue4/ticket-47`. Corrections are isolated in
+`/home/bjorn/.cache/opencode/issue4/ticket-47-fixes` on
+`implement/handwriting-47-fixes`.
+
+- Standards: S1 keyboard reachability is owner-deferred to #51 above. S2
+  focus-independent Escape ownership and S3 retirement of the replaced recovery
+  controller require correction. H1 notice-text-driven scroll state is also
+  included in the correction pass.
+- Spec **BLOCK**: R1 cold remote backgrounds become editable before referenced
+  assets are durable, blocking immediate-reload recovery; R2 a successful cold
+  page read poisons subsequent navigation/choice reads; R3 cancellation during
+  lazy notebook initialization is lost before snapshot preparation begins.
+  All three were independently reproduced with actual controllers/session hook
+  and native IndexedDB. Existing focused tests passed 15/15 but do not cover
+  these boundaries. Report:
+  `/home/bjorn/.cache/opencode/issue4/47-review-spec.md`; reproduction:
+  `/home/bjorn/.cache/opencode/issue4/47-review-native-boundaries.mjs`.
+
+The implementer has the reports and exact reproduction. Corrections, completed
+verification, and independent re-review of the resulting commit remain required
+before #47 integration. #46's existing approvals remain intact.
+
+Correction delivery: `eeef5d3c6db9daa8789f7266a6a3302626ea6f9c` on
+`implement/handwriting-47-fixes`, including integration documentation `674e3da`.
+Implementer reports S2/S3/H1 and R1–R3 corrected, 283 tests plus native runners,
+both browser suites, typecheck, lint and build passed, and a clean tree. S1 remains
+explicitly deferred to #51. Both independent reviewers are assigned this exact
+commit for re-review; approval and integration remain pending.
+
+Standards re-review at `eeef5d3`: S3/H1 closed, original S2 focus defect fixed;
+S1 remains owner-deferred. One N1 blocker remains: notebook capture steals
+Escape from a newer nonmodal Snapshot actions menu, closing underlying Pages
+and moving focus behind the open menu. Narrow Chromium event-order reproduction:
+`/home/bjorn/.cache/opencode/issue4/47-rereview-escape-boundary.log`; report:
+`/home/bjorn/.cache/opencode/issue4/47-rereview-standards.md`.
+Correction is dispatched in isolated worktree
+`/home/bjorn/.cache/opencode/issue4/ticket-47-menu-fix`, branch
+`implement/handwriting-47-menu-fix`, preserving `ticket-47-fixes` at the exact
+commit still under independent Spec review. No new keyboard binding/navigation
+is authorized; this corrects existing topmost-Escape ownership.
+
+The owner subsequently **approved the narrow N1 implementation plan**: a small
+shared Escape-ownership stack for notebook and nonmodal snapshot menus; newest
+open surface dismisses first regardless of focus, native dialogs retain priority,
+and focus returns to the closed surface's trigger. Verify overlapping menus and
+existing Pencil/dictation behavior. This does not change the #51 navigation
+deferral or authorize new bindings.
+
+Spec re-review at `eeef5d3` independently closed R1/R2/R3, but found P2 R4:
+aborted durable adoption of a known compatible newer server head releases editing
+on its stale ancestor; a subsequent stroke creates an avoidable persistent
+conflict. Report: `/home/bjorn/.cache/opencode/issue4/47-rereview-spec.md`;
+native reproduction:
+`/home/bjorn/.cache/opencode/issue4/47-rereview-extra-boundaries.mjs`.
+R4 and the approved N1 correction are dispatched together. Known incoming
+working must remain recoverable and unsafe edits gated until adoption succeeds;
+no new product behavior is required beyond existing reconciliation guarantees.
+
+N1/R4 correction delivered as `fa8c2aa25bc2cf17844e841127e3835b359ae901` on
+`implement/handwriting-47-menu-fix`, including integration `674e3da`.
+Implementer reports a clean tree and completed passes for 65 focused tests,
+native checks, affected browser checks, typecheck, lint and production build.
+Independent Standards and Spec incremental reviews are dispatched against this
+exact commit. Independent **Standards PASS** at `fa8c2aa`: N1/S2 closed,
+S3/H1 remain closed, no new findings. Independent Chromium checks covered both
+menu opening orders, focus-independent dismissal, trigger restoration and native
+modal priority. Report:
+`/home/bjorn/.cache/opencode/issue4/47-menu-review-standards.md`; evidence:
+`/home/bjorn/.cache/opencode/issue4/47-menu-review-escape-boundary.log`.
+S1 remains owner-deferred to #51, not fixed or blocking.
+
+Spec at `fa8c2aa`: **R1–R4 CLOSED; BLOCK on P2 R5**. Repaired creation-response
+adoption changes page metadata while a creation action remains outstanding; the
+next retry rebuilds the seed using adopted metadata and receives persistent 400
+responses from actual server validation. Newer strokes remain local across reload
+but cannot sync. Report:
+`/home/bjorn/.cache/opencode/issue4/47-adoption-review-spec.md`; actual server/store
+and native-IDB reproduction:
+`/home/bjorn/.cache/opencode/issue4/47-adoption-review-creation.mjs`.
+The implementer is correcting frozen creation metadata/identity through safe
+retirement and queued-tail sync, with real-handler regression coverage replacing
+the insufficient unconditional-POST stub. Integration remains gated on correction
+and independent review; no source loss or tutor-input defect is asserted.
+
+R5 correction delivered as `86dff1dd55d757fe34b334d0e8c45e36753a8ce7` on
+`implement/handwriting-47-menu-fix`. Implementer reports atomic metadata adoption
+and creation-action retirement, clean tree, 39 focused tests, 13 actual-server/
+native lifecycle cases, existing native checks, handwriting browser, typecheck,
+lint and build completed successfully. Independent Spec and Standards incremental
+reviews are dispatched against this exact commit. Independent **Standards PASS**
+at `86dff1d`: no new breaches or heuristic findings; N1/S2/S3/H1 remain closed.
+Report: `/home/bjorn/.cache/opencode/issue4/47-creation-review-standards.md`.
+Independent **Spec PASS** at the same exact commit: R5 closed, R1–R4 remain
+closed; independent reproduction, 13 actual-server/native lifecycle cases,
+existing native checks and two targeted contract tests passed. No new blocker
+found. Report: `/home/bjorn/.cache/opencode/issue4/47-creation-review-spec.md`.
+Both independent gates approve `86dff1d`; integration is next. S1 remains
+owner-deferred to #51, not fixed or blocking; physical #48 acceptance remains
+separate.
