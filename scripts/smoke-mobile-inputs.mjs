@@ -1306,9 +1306,9 @@ try {
 	assert.ok(JSON.stringify(selectionRecord).includes("The force stays the same."));
 	assert.equal(selectionRecord.details.confidence, 50, "Untouched confidence retains its existing meaning");
 	await page.goto(`${origin}/chat/mobile_other_answer`, { waitUntil: "networkidle2" });
-	await page.waitForSelector('[data-testid="other-option"] input');
+	await page.waitForSelector('[data-testid="other-option"] [data-file-path-input]');
 	await page.locator('[role="checkbox"]').filter(button => button.textContent.includes("Start with force")).click();
-	await fill('[data-testid="other-option"] input', "Compare both areas.");
+	await fill('[data-testid="other-option"] [data-file-path-input]', "Compare both areas.");
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "My custom reasoning.");
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
