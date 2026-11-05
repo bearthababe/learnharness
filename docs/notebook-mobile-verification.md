@@ -3,12 +3,15 @@
 Authoritative combined verification record for #28/#18. Review baseline:
 `d161c0d707e605e2a6ea5761b4f40bbd78dc0c58`. Notebook checkpoint: `2d43b41`.
 
-**Current-line editing, attachment indicator and clarification Close verified and deployed.**
-Source `eee28e1`, production build `bwOO-o-0BGBnIxGb30hd1`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
+**Terra/Sol reasoning controls and numbered, selectable expressions verified and deployed.**
+Source `73878eb`, production build `_Hk4ZaeJveuA2XxOX61c3`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
 The current fork's native Electron app remains open; use **Reload preview** to
 load the update. Physical phone and owner-learning acceptance are still pending.
 
-Current tracker receipt: [#28 current-line/Close](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6652921783),
+Current tracker receipt: [#28 expression/picker deployment](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6657245951),
+linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6657248245).
+
+Earlier tracker receipt: [#28 current-line/Close](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6652921783),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6652925481).
 
 Earlier tracker receipt: [#28 menu review](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6644717383),
@@ -72,10 +75,42 @@ through Providers. Native window reopening confirmed in `native-restored.log`.
 - A later verification rerun encountered the `/tmp` per-user quota (`EDQUOT`,
   confirmed by a direct write probe and `usrquota` mount option). The branch's older
   `.next` cache was retained at
-  `/home/bjorn/.cache/opencode/notebook-28-worktree-next-archive-20261105` with the
-  original path linked to it. No learner files removed. Affected checks then passed.
+  `/home/bjorn/.cache/opencode/notebook-28-worktree-next-archive-20261105`; generated
+  type declarations were retained locally. No learner files removed. Affected
+  checks then passed.
 
-Build/payload and deployment verification are in progress.
+### Production package
+
+- Source **`73878eb`**, build **`_Hk4ZaeJveuA2XxOX61c3`**, staged from exact committed
+  source at `/home/bjorn/.cache/opencode/notebook-28-build-73878eb`.
+- Production build, payload packaging and Electron bundled-Node smoke passed:
+  `check-28-expression-{build,payload,electron-smoke}.log`. Provider runtime checks
+  made zero network attempts.
+- Compiled Notebook prompt equals the six-call frozen prompt byte for byte:
+  `check-28-expression-bundle.json`.
+- Replaced only verified slot1 PID3757905 after confirming no pending Notebook
+  operations. New server PID4045168, task `sh_1ab89e6b8001eUNDXkrrpUkYbL`, log
+  `notebook-expression-production.log`. Existing main-repo data/auth paths retained.
+  Native dev-shell PID4029903 reopened at the original local URL. Slot2 PID3484369,
+  slot3 PID3458594 and all Tailscale mappings retained.
+
+### Actual deployment verification
+
+`check-28-expression-preview.json` and `check-28-expression-preview.log` verify
+local/HTTPS HTTP200 and exact build identity, curated model/reasoning choices,
+Off→Sol/Medium, fractional/mixed-relation expression taps, and actual **Reload
+preview** retaining fixture choice/draft. Stable manifest/Apple metadata/icons,
+phone-emulated keyboard visibility, history/edge/header/input gestures and
+blur/desktop release passed with zero owner writes and no page errors. Production
+phone/picker screenshots inspected in `check-28-expression-production-{phone,picker}.png`.
+Pre/post fingerprints confirm main-repo auth and settings files unchanged.
+
+Use the existing Home Screen icon and **Reload preview**; no reinstall required.
+If installing for the first time: Safari → Share → Add to Home Screen → Open as Web
+App → Add. Reload preserves saved Notebook work, choices and drafts. Live preview
+editing requires connecting ChatGPT through Providers; no subscription credentials
+were copied. The six isolated checks used the separately authorized native account.
+Physical-device and owner real-learning acceptance remain pending; #28/#18 stay open.
 
 ## Owner follow-up: interpretation and latency — 2026-11-05
 
