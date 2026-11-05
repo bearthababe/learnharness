@@ -98,13 +98,13 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 			return groups;
 		});
 	}
-	function choose(input: NotebookSpeechInput, allowClarification = false): Promise<void> {
+	function choose(input: NotebookSpeechInput, closing = false): Promise<void> {
 		if (handoff) return handoff;
 		if (selected?.kind === "notebook" && input.kind === "notebook") return Promise.resolve();
 		if (selected?.kind === "tutor" && input.kind === "tutor" && sameDraftOwner(selected.owner, input.owner)) {
 			const latest = session.tutor.draft(input.owner)?.parts.at(-1)?.id;
 			const currentPart = active?.source.kind === "tutor" ? active.source.partId : selected.partId ?? latest;
-			if (currentPart === (input.partId ?? latest)) return Promise.resolve();
+			if (currentPart === (input.partId ?? latest) && !(closing && active)) return Promise.resolve();
 		}
 		const returning = selected?.kind === "notebook" && input.kind === "tutor";
 		if (!active && !returning) { selected = input; config.select(input); publish(null); return Promise.resolve(); }
@@ -114,10 +114,10 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 				await config.finish();
 				if (active) throw new Error("Finish dictation before switching inputs.");
 			}
-			await session.settle(allowClarification);
+			await session.settle(closing);
 			if (returning && input.kind === "tutor") {
 				target(input);
-				await session.tutor.returnToTutor(input.owner, allowClarification && session.getSnapshot().view?.problem?.status === "clarification");
+				await session.tutor.returnToTutor(input.owner, closing && session.getSnapshot().view?.problem?.status === "clarification");
 				input = { ...input, partId: undefined };
 			}
 			selected = input;
@@ -270,6 +270,11 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 	return { begin, choose, adopt, configure(next: typeof config) { config = next; }, isActive: () => active !== null, async idle() { await tail; },
 		async closeNotebook(input: Extract<NotebookSpeechInput, { kind: "tutor" }>) {
 			await choose(input, true);
+			// A reloaded page may not have selected either field yet. Closing
+			// still owns a settled attachment boundary; repeated capture dedupes.
+			await session.settle(true);
+			target(input);
+			await session.tutor.returnToTutor(input.owner, session.getSnapshot().view?.problem?.status === "clarification");
 			await session.dispatch({ type: "visibility", visible: false });
 		},
 		apply() {

@@ -11,6 +11,30 @@ const { chatStore } = await import("../src/store/chats.ts");
 const { createNotebookService } = await import("../src/server/notebook.ts");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
+test("close also finalizes a recording already owned by Tutor without sending it", async () => {
+	const chat = chatStore.createChat("Tutor recording close");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor call"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	const input = { kind: "tutor" as const, owner: { kind: "ordinary" as const }, text: "Before." };
+	session.tutor.updateText(input.owner, input.text); await session.tutor.idle();
+	await session.speech.choose(input);
+	const capture = await session.speech.begin({ id: "tutor-close", now: () => 0 });
+	let finishes = 0;
+	session.speech.configure({ tutor: () => input, select() {}, finish: async () => {
+		finishes++;
+		capture.final({ id: "late", text: "Tutor words", start: 0, end: 1, words: [{ text: "Tutor words", start: 0, end: 0.9 }], speechFinal: true });
+		await capture.end("stop");
+	} });
+	try {
+		await session.speech.closeNotebook(input);
+		assert.equal(finishes, 1); assert.equal(session.speech.isActive(), false);
+		assert.equal(session.getSnapshot().view!.visible, false);
+		assert.match(JSON.stringify(session.tutor.draft(input.owner)), /Before. Tutor words/);
+		assert.deepEqual(chatStore.getChat(chat.id)!.messages, []);
+	} finally { session.dispose(); }
+});
+
 test("close waits for a running edit and can finish when that edit returns a clarification", async () => {
 	const chat = chatStore.createChat("Close pending edit");
 	let release!: () => void; const gate = new Promise<void>(resolve => { release = resolve; });
@@ -30,6 +54,30 @@ test("close waits for a running edit and can finish when that edit returns a cla
 		assert.equal(session.getSnapshot().draftText, "Change the symbol");
 		assert.equal(session.getSnapshot().view!.snapshots!.length, 0, "No working means nothing to attach");
 	} finally { release(); session.dispose(); }
+});
+
+test("closing immediately after reload still attaches completed working without prior field focus", async () => {
+	const chat = chatStore.createChat("Reloaded clarification");
+	const faux = createFauxCore({});
+	faux.setResponses([
+		() => fauxAssistantMessage('{"action":"edit","operations":[{"op":"insert","after":null,"id":"L1","latex":"x=1"}]}'),
+		() => fauxAssistantMessage('{"action":"question","question":"Which symbol?"}'),
+	]);
+	const service = createNotebookService({ chatStore, engine: async () => ({ engine: { model: faux.getModel(), streamFn: faux.streamSimple }, model: "faux:editor" }) });
+	const transport: typeof fetch = async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id);
+	let session = createNotebookSession(chat.id, transport);
+	await session.refresh(); await session.dispatch({ type: "visibility", visible: true });
+	for (const text of ["Write x=1", "Change the symbol"]) {
+		await session.dispatch({ type: "draft", text }); await session.dispatch({ type: "apply" }); await service.settled(chat.id); await session.refresh();
+	}
+	session.dispose(); session = createNotebookSession(chat.id, transport); await session.refresh();
+	try {
+		await session.speech.closeNotebook({ kind: "tutor", owner: { kind: "ordinary" }, text: "Retain my explanation" });
+		assert.equal(session.getSnapshot().view!.visible, false);
+		assert.equal(session.getSnapshot().view!.snapshots!.length, 1);
+		assert.deepEqual(session.getSnapshot().view!.snapshots![0]!.lines, [{ id: "L1", latex: "x=1" }]);
+		assert.equal(session.getSnapshot().view!.problem!.status, "clarification");
+	} finally { session.dispose(); }
 });
 
 test("close during clarification finishes original speech, attaches completed working once and retains the unresolved edit on reload", async () => {

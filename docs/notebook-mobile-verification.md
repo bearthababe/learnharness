@@ -66,6 +66,16 @@ Verification before deployment:
   ordinary speech switching and other error handling retain their existing gates.
   The indicator and optional review use one activity filter.
 
+Close edge-case review also found that immediately after reload there may be no
+selected speech destination. A close now independently settles and deduplicates
+the attachment after selecting Tutor, so it cannot silently skip the snapshot.
+The reload case went red in `check-28-close-reload-red.log`; the browser now reloads
+with clarification before clicking the close icon and passed in
+`check-28-line-close-browser-final.log`. A recording already owned by Tutor is also
+explicitly finalized on Close, even though its destination need not change.
+Both paths, the running-edit race and original Notebook recording are covered by
+`tests/notebook-close.test.ts`. No further live calls were made.
+
 ## Menu review and input-toolbar follow-up — verified and deployed
 
 Owner approved removal of inline previews, menu-only **Review attached working**,

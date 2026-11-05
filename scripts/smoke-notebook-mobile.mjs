@@ -168,6 +168,8 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.type('#notebook-instruction', 'Clarify fixture target');
 	await page.click('.notebook-panel button[type="submit"]');
 	await page.waitForSelector('.notebook-notice summary');
+	await page.reload({ waitUntil: 'networkidle2' });
+	await page.waitForSelector('.notebook-notice summary');
 	await page.click('[aria-label="Close notebook"]');
 	await page.waitForFunction(() => document.querySelector('.notebook-slot').hidden);
 	assert.ok(await page.$('[aria-label="Working attached"]'));
