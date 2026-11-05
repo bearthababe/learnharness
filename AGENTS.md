@@ -8,11 +8,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# No guessing
+## UI experiments
 
-All design authority belongs to the human. **Never guess a design or implementation decision.** If anything is ambiguous — naming, behavior, data shapes, UX, defaults, scope boundaries, prompt wording — STOP and ask with the ask-user-question tool before proceeding. If you are "a little unsure," you are unsure: ask. A wrong guess is far more expensive than a question. Ask early, ask specific, one question per call.
-
-Concretely: first investigate and plan rigorously (asking the user design questions along the way), get the plan approved by the user, and only then implement. Implementation should be mechanical execution of an approved plan — not interpretation.
+In an authorized UI experiment, ordinary UI design and implementation choices are delegated to implementers, and independent reviewers decide promotion. Existing interface mechanics are baseline evidence, not settled design requirements. Approved product requirements, teaching policies and explicit technical constraints remain binding.
 
 ## Browser verification
 
