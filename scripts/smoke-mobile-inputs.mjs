@@ -514,7 +514,7 @@ try {
 	assert.equal((await upload("mobile_conversation")).status, 201);
 	await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	assert.equal((await (await fetch(`${origin}/api/chats/mobile_conversation`)).json()).messages.filter(m => m.role === "user").length, 2, "Image arrival does not submit a tutor turn");
-	const previews = '.lh-shared-writing [data-testid="shared-writing-images"] button';
+	const previews = '.lh-shared-writing [data-testid="shared-writing-images"] button[aria-label^="Open handwritten working "]';
 	const notifications = async blocked => assert.equal((await fetch(`${origin}/api/events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ blocked }) })).status, 200);
 	const opens = await page.evaluate(() => window.notificationOpens);
 	await notifications(true);
