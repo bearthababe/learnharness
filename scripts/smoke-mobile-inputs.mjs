@@ -487,15 +487,42 @@ try {
 	// Exercise actual opening animation and split native touch press/release.
 	// A backdrop removed on pointerdown lets the release click the trigger below.
 	const cardTouch = await page.createCDPSession();
+	const captureCardExit = () => page.evaluate(() => {
+		const animate = Element.prototype.animate, effects = [];
+		const clock = Object.getOwnPropertyDescriptor(Animation.prototype, "startTime");
+		window.__lhExitStarts = null;
+		Element.prototype.animate = function (...args) {
+			const animation = animate.apply(this, args);
+			if (this.matches('[data-lh-menu][data-closing="true"], [data-testid="phone-menu-backdrop"]')) {
+				const effect = { animation, start: null };
+				effects.push(effect);
+				// Pause at the real shared start, before a remote round trip or a
+				// settings read can outlast the 400ms interval under inspection.
+				Object.defineProperty(animation, "startTime", {
+					configurable: true,
+					get() { return clock.get.call(animation); },
+					set(value) {
+						clock.set.call(animation, value);
+						effect.start = value;
+						animation.pause();
+						delete animation.startTime;
+						if (effects.length === 2 && effects.every(e => e.start !== null)) window.__lhExitStarts = effects.map(e => e.start);
+					},
+				});
+				if (effects.length === 2) Element.prototype.animate = animate;
+			}
+			return animation;
+		};
+	});
 	const assertCardExit = async (trigger, card) => {
+		await page.waitForFunction(() => !!window.__lhExitStarts);
 		await page.waitForSelector(`[data-testid="${card}"][data-closing="true"]`);
-		await page.waitForFunction(card => document.querySelector(`[data-testid="${card}"]`)?.getAnimations()[0]?.startTime != null, {}, card);
 		const exit = await page.evaluate(({ trigger, card }) => {
 			const menu = document.querySelector(`[data-testid="${card}"]`), backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
 			const animation = menu.getAnimations()[0], blur = backdrop.getAnimations()[0];
-			const starts = [animation.startTime, blur.startTime], timings = [animation.effect.getTiming(), blur.effect.getTiming()];
+			const starts = window.__lhExitStarts, timings = [animation.effect.getTiming(), blur.effect.getTiming()];
 			animation.pause(); blur.pause();
-			const samples = [0, 180, 360, 400].map(time => {
+			const samples = [0, 100, 200, 300, 400].map(time => {
 				animation.currentTime = time; blur.currentTime = time;
 				const r = menu.getBoundingClientRect(), css = getComputedStyle(menu);
 				return { top: r.top, bottom: r.bottom, height: r.height, width: r.width, opacity: Number(css.opacity), fontSize: css.fontSize,
@@ -507,16 +534,18 @@ try {
 		}, { trigger, card });
 		assert.ok(exit.starts[0] !== null);
 		assert.equal(exit.starts[0], exit.starts[1], "Exit card and blur share a start time");
-		for (const timing of exit.timings) assert.equal(timing.duration, 400);
-		assert.equal(exit.timings[1].easing, "cubic-bezier(0.4, 0, 0.2, 1)");
-		const [start, mid, line, end] = exit.samples;
-		assert.ok(start.height > mid.height && mid.height > line.height, "Card collapses downward to its fixed bottom edge");
-		assert.ok(line.height <= 2 && line.opacity === 1, "Closing reaches a visible bottom line at 360ms");
-		assert.equal(end.height, line.height); assert.equal(end.opacity, 0, "Only the line fades in the final 40ms");
+		for (const timing of exit.timings) { assert.equal(timing.duration, 400); assert.equal(timing.easing, "linear"); }
+		const start = exit.samples[0], end = exit.samples.at(-1);
+		assert.ok(end.height <= 2, "Card collapses to its fixed bottom edge");
+		for (const [index, sample] of exit.samples.entries()) {
+			const progress = index / (exit.samples.length - 1);
+			assert.ok(Math.abs(sample.height - (start.height + (end.height - start.height) * progress)) <= 1, "Closing height follows elapsed time linearly");
+			assert.equal(sample.blur, 4 * (1 - progress), "Closing blur shares linear progress");
+			assert.equal(sample.opacity, 1, "No separate line-fade phase");
+		}
 		assert.ok(exit.samples.every(s => Math.abs(s.bottom - start.bottom) <= 1 && s.bottom <= exit.buttonTop - 3), "Bottom edge stays above the button for the whole close");
 		assert.ok(exit.samples.every(s => s.width === start.width && s.fontSize === start.fontSize), "Card width and text size stay constant");
 		assert.equal(start.blur, 4); assert.equal(end.blur, 0);
-		assert.ok(mid.blur > 0 && mid.blur < 4, "Blur fades across the shared 400ms");
 		assert.ok(exit.locked && exit.cardInert, "Lesson and departing options cannot receive input");
 		assert.ok(exit.samples.every(sample => sample.shellHeight === start.shellHeight), "Lesson remains stationary through exit");
 		await page.keyboard.press("Escape");
@@ -555,11 +584,21 @@ try {
 					window.__lhBlurEntrance = animation;
 					// Capture in the browser after the shared start frame, rather than
 					// racing a remote poll against a shorter, already-finished effect.
-					requestAnimationFrame(() => requestAnimationFrame(() => {
-						const card = window.__lhCardEntrance, blur = window.__lhBlurEntrance;
-						window.__lhEntranceStarts = [card.startTime, blur.startTime];
-						card.pause(); blur.pause();
-					}));
+					requestAnimationFrame(() => {
+						// Also delay execution within the frame: its supplied timestamp
+						// can now be stale even though it is a newly requested frame.
+						if (!window.__lhDelayedCallbackChecked) {
+							const until = performance.now() + 450;
+							while (performance.now() < until) { /* controlled callback delay */ }
+							window.__lhDelayedCallbackChecked = true;
+						}
+						window.__lhBeforeStartCallback = performance.now();
+						requestAnimationFrame(() => {
+							const card = window.__lhCardEntrance, blur = window.__lhBlurEntrance;
+							window.__lhEntranceStarts = [card.startTime, blur.startTime];
+							card.pause(); blur.pause();
+						});
+					});
 				}
 				return animation;
 			};
@@ -573,7 +612,7 @@ try {
 			const button = document.querySelector(`[data-testid="${trigger}"]`);
 			const startTimes = window.__lhEntranceStarts;
 			animation.pause(); blur.pause();
-			const samples = [0, 40, 220, 400].map(time => {
+			const samples = [0, 100, 200, 300, 400].map(time => {
 				animation.currentTime = time; blur.currentTime = time;
 				const r = menu.getBoundingClientRect(), css = getComputedStyle(menu);
 				return { top: r.top, bottom: r.bottom, height: r.height, width: r.width, opacity: Number(css.opacity), fontSize: css.fontSize,
@@ -581,23 +620,28 @@ try {
 			});
 			const timings = [animation.effect.getTiming(), blur.effect.getTiming()];
 			animation.finish(); blur.finish(); window.__lhRestoreAnimate(); delete window.__lhCardEntrance; delete window.__lhBlurEntrance; delete window.__lhEntranceStarts;
-			return { samples, timings, startTimes, createdAt: window.__lhCreatedAt, buttonTop: button.getBoundingClientRect().top };
+			return { samples, timings, startTimes, createdAt: window.__lhCreatedAt, callbackAt: window.__lhBeforeStartCallback, buttonTop: button.getBoundingClientRect().top };
 		}, { trigger, card });
 		assert.ok(entrance.startTimes[0] !== null);
 		assert.ok(entrance.startTimes[0] >= entrance.createdAt - 20, "Fresh shared start does not backdate through a blocked frame");
+		assert.ok(entrance.startTimes[0] >= entrance.callbackAt - 1, "Shared start excludes delay within the frame callback");
 		assert.equal(entrance.startTimes[0], entrance.startTimes[1], "Card and blur share the same animation start");
 		for (const timing of entrance.timings) {
 			assert.equal(timing.duration, 400);
+			assert.equal(timing.easing, "linear");
 		}
-		assert.equal(entrance.timings[1].easing, "cubic-bezier(0.4, 0, 0.2, 1)");
-		const [start, line, mid, end] = entrance.samples;
-		assert.ok(start.height <= 2 && start.opacity === 0 && line.height === start.height && line.opacity === 1, "First 40ms reveals only the bottom line");
-		assert.ok(line.height < mid.height && mid.height < end.height, "Card expands upward over the remaining 360ms");
+		const start = entrance.samples[0], end = entrance.samples.at(-1);
+		assert.ok(start.height <= 2, "Card begins at its bottom edge");
+		for (const [index, sample] of entrance.samples.entries()) {
+			const progress = index / (entrance.samples.length - 1);
+			assert.ok(Math.abs(sample.height - (start.height + (end.height - start.height) * progress)) <= 1, "Opening height follows elapsed time linearly");
+			assert.equal(sample.blur, 4 * progress, "Opening blur shares linear progress");
+			assert.equal(sample.opacity, 1, "Expansion starts immediately without a line-reveal phase");
+		}
 		assert.ok(entrance.samples.every(s => Math.abs(s.bottom - end.bottom) <= 1 && s.bottom <= entrance.buttonTop - 3), "Bottom edge never moves or crosses the opener");
 		assert.ok(entrance.samples.every(s => s.width === end.width && s.fontSize === end.fontSize), "Growing card keeps full width and normal-sized text");
 		assert.equal(entrance.samples[0].blur, 0, "Background starts clear");
 		assert.equal(end.blur, 4, "Background settles at lighter blur");
-		assert.ok(mid.blur > 0 && mid.blur < 4, "Blur grows throughout the shared interval");
 		await assertCardBackdrop();
 		const foreground = await page.evaluate(trigger => {
 			const original = document.querySelector(`[data-testid="${trigger}"]`), button = document.querySelector('[data-testid="phone-menu-trigger"]');
@@ -613,6 +657,7 @@ try {
 			await cardTouch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ id: 1, ...point }] });
 			await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 			assert.ok(await page.$(`[data-testid="${card}"]`), "Press does not remove the card before release");
+			if (!cancel) await captureCardExit();
 			await cardTouch.send("Input.dispatchTouchEvent", { type: cancel ? "touchCancel" : "touchEnd", touchPoints: [] });
 		};
 		await tapAt(trigger, true);
@@ -629,7 +674,7 @@ try {
 		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Outside tap cannot activate another card underneath");
 	}
 	await cardTouch.detach();
-	// Closing during either the line reveal or expansion stays continuous.
+	// Closing during early or later expansion stays continuous.
 	for (const time of [20, 100]) {
 		await page.locator('[data-testid="stats-model"]').click();
 		await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]')?.getAnimations()[0]?.startTime != null);
@@ -638,16 +683,17 @@ try {
 			for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = time; }
 			return { top: menu.getBoundingClientRect().top, opacity: getComputedStyle(menu).opacity, blur: getComputedStyle(backdrop).backdropFilter };
 		}, time);
+		await captureCardExit();
 		await page.keyboard.press("Escape");
-		await page.waitForSelector('[data-testid="model-menu"][data-closing="true"]');
-		await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]')?.getAnimations()[0]?.startTime != null);
+		await page.waitForFunction(() => !!window.__lhExitStarts);
+		assert.ok(await page.$('[data-testid="model-menu"][data-closing="true"]'), "Quick close remains mounted while captured");
 		const exitStart = await page.$eval('[data-testid="model-menu"]', menu => {
 			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
 			for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = 0; }
 			return { top: menu.getBoundingClientRect().top, opacity: getComputedStyle(menu).opacity, blur: getComputedStyle(backdrop).backdropFilter };
 		});
 		assert.ok(Math.abs(partial.top - exitStart.top) <= 1, "Quick close starts from the current expansion height");
-		assert.equal(exitStart.opacity, partial.opacity, "Quick close retains line opacity");
+		assert.equal(exitStart.opacity, partial.opacity, "Quick close retains full opacity");
 		assert.equal(exitStart.blur, partial.blur, "Quick close starts from the current blur");
 		await page.evaluate(() => {
 			Object.defineProperty(visualViewport, "height", { configurable: true, get: () => innerHeight - 100 });
@@ -697,6 +743,7 @@ try {
 		await page.$eval(modelRow, e => e.scrollIntoView({ block: "nearest" }));
 		await fitPanel('[data-testid="model-menu"]');
 		const pickedModel = page.waitForResponse(r => new URL(r.url()).pathname === "/api/chats/mobile_panels/settings" && r.request().method() === "PUT" && r.ok());
+		await captureCardExit();
 		await page.locator(modelRow).click();
 		await pickedModel;
 		await assertCardExit("stats-model", "model-menu");
@@ -708,6 +755,7 @@ try {
 		assert.deepEqual(await page.$$eval('[data-testid="thinking-menu"] button', buttons => buttons.map(e => e.querySelector('span').textContent)), longModel.supportedLevels, "Every supported thinking level is retained");
 		const level = longModel.supportedLevels.at(-1);
 		const pickedLevel = page.waitForResponse(r => new URL(r.url()).pathname === "/api/chats/mobile_panels/settings" && r.request().method() === "PUT" && r.ok());
+		await captureCardExit();
 		await page.locator(`[data-testid="thinking-option-${level}"]`).click();
 		await pickedLevel;
 		const settings = (await (await fetch(`${origin}/api/chats/mobile_panels`)).json()).settings;
@@ -724,6 +772,7 @@ try {
 		await page.$eval('[data-testid="stats-detail"] li:last-child', e => e.scrollIntoView({ block: "nearest" }));
 		const lastUsageVisible = await page.$eval('[data-testid="stats-detail"] li:last-child', e => { const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return e.contains(hit) && r.bottom <= innerHeight; });
 		assert.ok(lastUsageVisible, "Usage's overflowed final turn is reachable and visible");
+		await captureCardExit();
 		await page.keyboard.press("Escape");
 		await assertCardExit("stats-summary", "stats-detail");
 		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Card dismissal restores lesson interaction");
@@ -989,7 +1038,7 @@ try {
 	await page.click('[data-testid="stats-model"]');
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
 	await page.keyboard.press("Escape");
-	console.log("PASS: fixed-bottom-edge 400ms opening/closing with 40ms line reveal/fade, normal-sized text, shared 4px blur, selection exits, quick-close continuity, repeated-close guards, viewport interruption/reduced motion, safe taps, stationary lesson, keyboard/query/results, Plan pinch/pan and drafts");
+	console.log("PASS: linear fixed-edge 400ms opening/closing and blur with no separate line phase, normal-sized text, selection exits, quick-close continuity, repeated-close guards, viewport interruption/reduced motion, safe taps, stationary lesson, keyboard/query/results, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	assert.equal((await upload("mobile_panels")).status, 201);

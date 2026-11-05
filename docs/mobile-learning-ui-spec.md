@@ -120,6 +120,12 @@ the owner selected **400ms total**, preserving the same proportions: **40ms line
 reveal + 360ms expansion**, reversed on close. Opening, closing and matching blur
 all use 400ms; this supersedes the 600ms fixed-edge timing above.
 
+**Linear expansion trial — owner approved 2026-11-05:** remove the separate
+40ms line reveal/fade. The owner selected **“Yes, linear throughout”**: immediate
+constant-speed expansion and collapse over the full **400ms**, with linear blur
+over the same interval. Keep the fixed bottom edge and normal-sized contents.
+There is no pause or opacity phase at the collapsed edge.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),

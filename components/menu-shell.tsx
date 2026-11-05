@@ -45,13 +45,13 @@ const CAP_VH = 0.6; // 60vh — the graph pattern's cap
 const MIN_USABLE = 96; // floor: a shorter cap is an unusable sliver; the
 // cap then overflows the edge instead of crushing the menu
 const PHONE_DURATION = 400;
-const PHONE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
+const PHONE_EASING = "linear";
 
 /** Animate the real frame's height about its existing bottom anchor. Give its
  * contents their resting layout throughout so text never scales or squashes.
  * At rest the wrapper is display:contents and the inherited layout takes over. */
 function animatePhoneFrame(menu: HTMLDivElement, content: HTMLDivElement, backdrop: HTMLDivElement,
-	closing = false, fromHeight?: number, fromOpacity = "1", fromBlur = "blur(4px)") {
+	closing = false, fromHeight?: number, fromBlur = "blur(4px)") {
 	const css = getComputedStyle(menu);
 	const height = menu.getBoundingClientRect().height;
 	const lineHeight = parseFloat(css.borderTopWidth) + parseFloat(css.borderBottomWidth);
@@ -60,26 +60,27 @@ function animatePhoneFrame(menu: HTMLDivElement, content: HTMLDivElement, backdr
 	Object.assign(content.style, { ...layout, position: "absolute", top: "0", left: "0", right: "0", height: `${height - lineHeight}px`, boxSizing: "border-box" });
 	menu.style.padding = "0";
 	menu.style.overflow = "hidden";
-	const line = { height: `${lineHeight}px`, opacity: "1" };
 	const frames = closing ? [
-		{ height: `${fromHeight ?? height}px`, opacity: fromOpacity, offset: 0, easing: PHONE_EASING },
-		{ ...line, opacity: fromOpacity, offset: .9, easing: "linear" },
-		{ ...line, opacity: "0", offset: 1 },
+		{ height: `${fromHeight ?? height}px` },
+		{ height: `${lineHeight}px` },
 	] : [
-		{ ...line, opacity: "0", offset: 0, easing: "linear" },
-		{ ...line, offset: .1, easing: PHONE_EASING },
-		{ height: `${height}px`, opacity: "1", offset: 1 },
+		{ height: `${lineHeight}px` },
+		{ height: `${height}px` },
 	];
-	const animation = menu.animate(frames, { duration: PHONE_DURATION, fill: "forwards" });
+	const animation = menu.animate(frames, { duration: PHONE_DURATION, easing: PHONE_EASING, fill: "both" });
 	const blur = backdrop.animate([
 		{ backdropFilter: closing ? fromBlur : "blur(0px)" },
 		{ backdropFilter: closing ? "blur(0px)" : getComputedStyle(backdrop).backdropFilter },
-	], { duration: PHONE_DURATION, easing: PHONE_EASING, fill: "forwards" });
+	], { duration: PHONE_DURATION, easing: PHONE_EASING, fill: "both" });
 	// Layout can run long after the last timeline tick. Backdating to that tick
 	// skips the beginning (or all) of the motion. Start together on a fresh frame.
 	animation.pause(); blur.pause();
 	animation.currentTime = 0; blur.currentTime = 0;
-	const frame = requestAnimationFrame(startTime => {
+	const frame = requestAnimationFrame(frameTime => {
+		// A busy frame can delay this callback after its timestamp was sampled.
+		// Both clocks use this document's time origin; never count that delay.
+		// Backwards fill holds the initial frame until the timeline catches up.
+		const startTime = Math.max(frameTime, performance.now());
 		animation.play(); blur.play();
 		animation.startTime = startTime; blur.startTime = startTime;
 	});
@@ -300,10 +301,9 @@ export function MenuShell({
 			return;
 		}
 		const fromHeight = menu.getBoundingClientRect().height;
-		const fromOpacity = getComputedStyle(menu).opacity;
 		const fromBlur = getComputedStyle(backdrop).backdropFilter;
 		entranceRef.current?.cancel();
-		const motion = animatePhoneFrame(menu, content, backdrop, true, fromHeight, fromOpacity, fromBlur);
+		const motion = animatePhoneFrame(menu, content, backdrop, true, fromHeight, fromBlur);
 		let active = true;
 		const finish = () => { if (active) { active = false; onClosed(); } };
 		finishExitRef.current = finish;
