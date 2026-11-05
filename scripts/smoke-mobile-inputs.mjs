@@ -1317,7 +1317,7 @@ try {
 		for (const [name, chat] of [["smoke-question-reveal", "mobile_reveal_regression"], ["smoke-mobile-layout", "mobile_panels"]]) {
 			console.log(`RUN: ${name}`);
 			const test = processes.spawn(process.execPath, [`scripts/${name}.mjs`], {
-				cwd: root, env: { ...process.env, LH_SMOKE_URL: origin, LH_SMOKE_CHAT_ID: chat }, stdio: ["ignore", "pipe", "pipe"],
+				cwd: root, env: { ...process.env, LH_SMOKE_URL: origin, LH_SMOKE_CHAT_ID: chat, LH_SMOKE_NOTEBOOK_FIXTURE: "1" }, stdio: ["ignore", "pipe", "pipe"],
 			});
 			captureOutput(test, path.join(dir, `${name}.log`));
 			await completed(test);
