@@ -3,18 +3,21 @@
 Authoritative combined verification record for #28/#18. Review baseline:
 `d161c0d707e605e2a6ea5761b4f40bbd78dc0c58`. Notebook checkpoint: `2d43b41`.
 
-**Menu review and input-toolbar toggle verified and deployed.** Source `dedc04f`,
-production build `-z6WGr6Dicog2N6G3hDO1`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
+**Current-line editing, attachment indicator and clarification Close verified and deployed.**
+Source `eee28e1`, production build `bwOO-o-0BGBnIxGb30hd1`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
 The current fork's native Electron app remains open; use **Reload preview** to
 load the update. Physical phone and owner-learning acceptance are still pending.
 
-Current tracker receipt: [#28 menu review](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6644717383),
+Current tracker receipt: [#28 current-line/Close](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6652921783),
+linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6652925481).
+
+Earlier tracker receipt: [#28 menu review](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6644717383),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6644720461).
 
 Earlier tracker receipt: [#28 continuation fix](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6643703927),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6643706613).
 
-## Current-line, attachment indicator and clarification-close follow-up — verification in progress
+## Current-line, attachment indicator and clarification-close follow-up — verified and deployed
 
 Owner approved the exact additional current-line paragraph in
 `src/agent/notebook-editor.ts`, a small non-clickable paperclip beside the Notebook
@@ -49,12 +52,11 @@ and deduplication paths. Regression went red (`check-28-close-red.log`) and gree
 (`check-28-close-green.log`), covering original recording ownership, no Apply/Send,
 retained question/instruction, repeated close, and durable reopening.
 
-Verification before deployment:
-- **126 affected tests passed** (`check-28-line-close-tests.log`). An additional
-  running-edit→clarification close race was then added; both close tests passed
-  (`check-28-close-green.log`), giving **127 distinct affected tests** covered.
+Final verification before deployment:
+- **129 affected tests passed**, zero failures (`check-28-line-close-tests-final.log`),
+  including all four close regressions.
 - Typecheck/lint passed (`check-28-line-close-{types,lint}.log`).
-- Scripted-browser Notebook and layout checks passed (`check-28-line-close-browser.log`):
+- Scripted-browser Notebook and layout checks passed (`check-28-line-close-browser-final.log`):
   paperclip absent before attachment, present beside the toggle after capture,
   removed after accepted Send; actual icon and menu Close with clarification;
   one completed snapshot across repeated close; question/instruction retained on
@@ -75,6 +77,30 @@ with clarification before clicking the close icon and passed in
 explicitly finalized on Close, even though its destination need not change.
 Both paths, the running-edit race and original Notebook recording are covered by
 `tests/notebook-close.test.ts`. No further live calls were made.
+
+### Final follow-up deployment receipt — 2026-11-05
+
+- Feature `82e0916`, final close refinement **`eee28e1`**, build
+  **`bwOO-o-0BGBnIxGb30hd1`**, staged from exact committed source at
+  `/home/bjorn/.cache/opencode/notebook-28-build-eee28e1`.
+- Production build, payload packaging and Electron bundled-Node smoke passed:
+  `check-28-line-close-{build,payload,electron-smoke}-final.log` under
+  `/tmp/opencode/notebook-integration/`. Provider runtime smoke made zero network attempts.
+- Built prompt matches the four-call live receipt: SHA-256
+  `278e7d2f5fb02014ab8081dd0d62c54cf3c21a426e6bf5b9f38dfde9eaa35fd3`.
+  Identity receipt: `check-28-line-close-bundle-final.json`.
+- Actual local/HTTPS build identity, toolbar/review/empty indicator, **Reload preview**,
+  retained fixture choice/draft, stable Home Screen manifest/icons, emulated phone
+  keyboard/gestures and blur/desktop release passed with **zero owner writes** and
+  no page errors: `check-28-combined-preview.json`, `check-28-line-close-preview-final.log`.
+- Replaced only verified intermediate slot-1 PID3748703. Final observed server
+  **PID3757905**, task `sh_1aaba8cef001ot712VBzdDtsj6`, log
+  `notebook-line-close-production-final.log`; serves the final standalone directory.
+  Existing main-repo data/auth paths retained. Native current-fork Electron
+  PID3540725 was confirmed running; **Reload preview** loads this update.
+- Slot2 PID3484369, slot3 PID3458594 and all Tailscale mappings retained.
+  Same **3000/8444** URL and Home Screen identity. Physical iOS and owner real-learning
+  acceptance remain pending; #28/#18 stay open. All authorized live-call budgets exhausted.
 
 ## Menu review and input-toolbar follow-up — verified and deployed
 
@@ -128,7 +154,7 @@ reuse the existing draft writer and speech handoff; no server/schema/model chang
 Review scope is current activity, snapshot order/source stay immutable, and the
 shared menu's keyboard viewport option is opt-in for this editable review.
 
-### Current deployment receipt
+### Earlier menu-review deployment receipt
 
 - Feature `ecb2afb`, focus correction **`dedc04f`**, build **`-z6WGr6Dicog2N6G3hDO1`**.
   Built from exact committed source in
