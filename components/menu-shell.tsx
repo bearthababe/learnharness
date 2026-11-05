@@ -166,9 +166,10 @@ export function MenuShell({
 	phoneTriggerTestid?: string;
 }) {
 	const menuRef = useRef<HTMLDivElement>(null);
+	const phoneBackdropRef = useRef<HTMLDivElement>(null);
 	const [placed, setPlaced] = useState<MenuPlacement | null>(null);
 	const focusedOnceRef = useRef(false);
-	const entranceRef = useRef<Animation | null>(null);
+	const entranceRef = useRef<Animation[]>([]);
 	const searchFocusedRef = useRef(false);
 	const placePhoneRef = useRef<(() => void) | null>(null);
 	const setSearchFocused = (focused: boolean) => {
@@ -213,17 +214,27 @@ export function MenuShell({
 	useLayoutEffect(() => {
 		if (!fitVisualViewport || !placed || !phoneTriggerTestid || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 		const menu = menuRef.current;
+		const backdrop = phoneBackdropRef.current;
 		const trigger = document.querySelector(`[data-testid="${phoneTriggerTestid}"]`);
-		if (!menu || !trigger) return;
+		if (!menu || !trigger || !backdrop) return;
 		const distance = Math.max(0, trigger.getBoundingClientRect().top - menu.getBoundingClientRect().top);
+		const timing = { duration: 350, easing: "cubic-bezier(0.4, 0, 0.2, 1)" };
 		// Rise through the opening edge without moving the positioned shell's
 		// viewport anchor. Individual translate composes with its placement transform.
 		const animation = menu.animate([
 			{ translate: `0 ${distance}px`, clipPath: `inset(0 0 ${distance}px 0)` },
 			{ translate: "0 0", clipPath: "inset(0 0 0 0)" },
-		], { duration: 160, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
-		entranceRef.current = animation;
-		return () => { animation.cancel(); entranceRef.current = null; };
+		], timing);
+		const blur = backdrop.animate([
+			{ backdropFilter: "blur(0px)" },
+			{ backdropFilter: getComputedStyle(backdrop).backdropFilter },
+		], timing);
+		// Both effects use one start time as well as one duration/easing. The
+		// backdrop reaches its resting blur exactly when the card finishes rising.
+		const startTime = document.timeline.currentTime;
+		if (startTime !== null) { animation.startTime = startTime; blur.startTime = startTime; }
+		entranceRef.current = [animation, blur];
+		return () => { animation.cancel(); blur.cancel(); entranceRef.current = []; };
 	}, [placed, fitVisualViewport, phoneTriggerTestid]);
 
 	// The standard arrow machine for menus WITHOUT a search (owner: when a
@@ -296,7 +307,7 @@ export function MenuShell({
 				const height = viewport?.height ?? innerHeight, width = viewport?.width ?? innerWidth;
 				const offsetTop = viewport?.offsetTop ?? 0, offsetLeft = viewport?.offsetLeft ?? 0;
 				const nextViewport = [height, width, offsetTop, offsetLeft].join(",");
-				if (viewportSignature && nextViewport !== viewportSignature) entranceRef.current?.cancel();
+				if (viewportSignature && nextViewport !== viewportSignature) entranceRef.current.forEach(animation => animation.cancel());
 				viewportSignature = nextViewport;
 				if (innerWidth !== layoutWidth) { layoutWidth = innerWidth; expandedHeight = Math.max(height, innerHeight); keyboardHeight = expandedHeight; }
 				expandedHeight = Math.max(expandedHeight, height);
@@ -388,7 +399,7 @@ export function MenuShell({
 	// The menu is positioned ONCE and then only re-anchored — no flash.
 	return createPortal(
 		<>
-		{fitVisualViewport && onClose && <PhoneMenuBackdrop onClose={onClose} triggerTestid={phoneTriggerTestid} />}
+		{fitVisualViewport && onClose && <PhoneMenuBackdrop onClose={onClose} triggerTestid={phoneTriggerTestid} backdropRef={phoneBackdropRef} />}
 		<div
 			ref={menuRef}
 			data-testid={testid}

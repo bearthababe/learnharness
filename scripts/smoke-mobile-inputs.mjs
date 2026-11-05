@@ -474,8 +474,8 @@ try {
 		await page.waitForSelector('[data-testid="phone-menu-backdrop"]', { visible: true });
 		assert.ok(await page.$eval('[data-testid="phone-menu-backdrop"]', e => {
 			const css = getComputedStyle(e);
-			return css.backdropFilter !== "none" && css.backgroundColor === "rgba(0, 0, 0, 0)" && css.clipPath.startsWith("polygon(evenodd,");
-		}), "Phone card blurs without dimming and leaves a clear opener aperture");
+			return css.backdropFilter === "blur(4px)" && css.backgroundColor === "rgba(0, 0, 0, 0)" && css.clipPath.startsWith("polygon(evenodd,");
+		}), "Phone card uses lighter 4px blur without dimming and leaves a clear opener aperture");
 		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), true, "Lesson is inactive under the card");
 	};
 	// Exercise actual opening animation and split native touch press/release.
@@ -491,27 +491,40 @@ try {
 			window.__lhRestoreAnimate = () => { Element.prototype.animate = animate; };
 			Element.prototype.animate = function (...args) {
 				const animation = animate.apply(this, args);
-				if (this.matches("[data-lh-menu]")) { animation.pause(); window.__lhCardEntrance = animation; }
+				if (this.matches("[data-lh-menu]")) window.__lhCardEntrance = animation;
+				if (this.matches('[data-testid="phone-menu-backdrop"]')) window.__lhBlurEntrance = animation;
 				return animation;
 			};
 		});
 		await page.locator(`[data-testid="${trigger}"]`).click();
-		await page.waitForFunction(() => !!window.__lhCardEntrance);
+		await page.waitForFunction(() => !!window.__lhCardEntrance && !!window.__lhBlurEntrance);
 		const entrance = await page.evaluate(({ trigger, card }) => {
-			const animation = window.__lhCardEntrance;
+			const animation = window.__lhCardEntrance, blur = window.__lhBlurEntrance;
 			const menu = document.querySelector(`[data-testid="${card}"]`);
+			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
 			const button = document.querySelector(`[data-testid="${trigger}"]`);
-			const samples = [0, 80, 160].map(time => {
-				animation.currentTime = time;
-				return { top: menu.getBoundingClientRect().top, clip: getComputedStyle(menu).clipPath };
+			const startTimes = [animation.startTime, blur.startTime];
+			animation.pause(); blur.pause();
+			const samples = [0, 175, 350].map(time => {
+				animation.currentTime = time; blur.currentTime = time;
+				return { top: menu.getBoundingClientRect().top, blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]) };
 			});
-			const duration = animation.effect.getTiming().duration;
-			animation.finish(); window.__lhRestoreAnimate(); delete window.__lhCardEntrance;
-			return { samples, duration, buttonTop: button.getBoundingClientRect().top };
+			const timings = [animation.effect.getTiming(), blur.effect.getTiming()];
+			animation.finish(); blur.finish(); window.__lhRestoreAnimate(); delete window.__lhCardEntrance; delete window.__lhBlurEntrance;
+			return { samples, timings, startTimes, buttonTop: button.getBoundingClientRect().top };
 		}, { trigger, card });
-		assert.equal(entrance.duration, 160);
+		assert.ok(entrance.startTimes[0] !== null);
+		assert.equal(entrance.startTimes[0], entrance.startTimes[1], "Card and blur share the same animation start");
+		for (const timing of entrance.timings) {
+			assert.equal(timing.duration, 350);
+			assert.equal(timing.easing, "cubic-bezier(0.4, 0, 0.2, 1)");
+		}
 		assert.ok(Math.abs(entrance.samples[0].top - entrance.buttonTop) <= 1, "Card starts at its own opener");
 		assert.ok(entrance.samples[0].top > entrance.samples[1].top && entrance.samples[1].top > entrance.samples[2].top, "Card visibly rises into place");
+		assert.equal(entrance.samples[0].blur, 0, "Background starts clear");
+		assert.equal(entrance.samples[2].blur, 4, "Background settles at lighter blur");
+		const cardProgress = (entrance.samples[0].top - entrance.samples[1].top) / (entrance.samples[0].top - entrance.samples[2].top);
+		assert.ok(Math.abs(cardProgress - entrance.samples[1].blur / 4) < .001, "Blur and card advance together at the intermediate frame");
 		await assertCardBackdrop();
 		const foreground = await page.evaluate(trigger => {
 			const original = document.querySelector(`[data-testid="${trigger}"]`), button = document.querySelector('[data-testid="phone-menu-trigger"]');
@@ -546,6 +559,8 @@ try {
 	await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
 	await page.locator('[data-testid="stats-model"]').click();
 	assert.equal(await page.$eval('[data-testid="model-menu"]', e => e.getAnimations().length), 0, "Reduced motion skips card entrance");
+	assert.equal(await page.$eval('[data-testid="phone-menu-backdrop"]', e => e.getAnimations().length), 0, "Reduced motion skips blur entrance too");
+	await assertCardBackdrop();
 	await page.keyboard.press("Escape");
 	await page.emulateMediaFeatures([]);
 	const history = '[data-smoke-panel-history="true"]';
@@ -866,7 +881,7 @@ try {
 	await page.click('[data-testid="stats-model"]');
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
 	await page.keyboard.press("Escape");
-	console.log("PASS: blur-only phone cards, visible close-toggle openers, rise-from-button entrance/reduced motion, completed taps without click-through, stationary lesson, coordinated keyboard frames, preserved query/results, Plan pinch/pan and drafts");
+	console.log("PASS: lighter 4px blur and 350ms synchronized entrance/reduced motion, visible close-toggle openers, completed taps without click-through, stationary lesson, coordinated keyboard frames, preserved query/results, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	assert.equal((await upload("mobile_panels")).status, 201);

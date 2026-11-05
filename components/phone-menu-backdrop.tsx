@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, type RefObject } from "react";
 import { fitPhoneViewport } from "@/components/use-phone-viewport";
 import { useBackdropDismiss } from "@/components/backdrop-dismiss";
 
@@ -10,8 +10,7 @@ let restore: (() => void) | undefined;
 /** Portaled cards stay interactive while the lesson holds its opening geometry.
  * Count ownership so overlapping menus cannot release another menu's backdrop
  * lock. Preserve any existing inertness and inline sizing on cleanup. */
-export function PhoneMenuBackdrop({ onClose, triggerTestid }: { onClose: () => void; triggerTestid?: string }) {
-	const backdropRef = useRef<HTMLDivElement>(null);
+export function PhoneMenuBackdrop({ onClose, triggerTestid, backdropRef }: { onClose: () => void; triggerTestid?: string; backdropRef: RefObject<HTMLDivElement | null> }) {
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const dismiss = useBackdropDismiss(onClose);
 	useLayoutEffect(() => {
@@ -56,10 +55,10 @@ export function PhoneMenuBackdrop({ onClose, triggerTestid }: { onClose: () => v
 		};
 		place();
 		return () => cancelAnimationFrame(frame);
-	}, [triggerTestid]);
+	}, [triggerTestid, backdropRef]);
 	return <>
 		<div ref={backdropRef} data-testid="phone-menu-backdrop" aria-hidden="true"
-			className="fixed inset-0 z-50 backdrop-blur-sm"
+			className="fixed inset-0 z-50 backdrop-blur-xs"
 			{...dismiss}
 			onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }} />
 		{triggerTestid && <button ref={triggerRef} type="button" data-testid="phone-menu-trigger"

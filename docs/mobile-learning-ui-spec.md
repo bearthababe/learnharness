@@ -85,6 +85,14 @@ instantly. Skip this entrance with reduced motion; viewport changes interrupt
 entrance motion so keyboard geometry remains coordinated. Preserve search state,
 stationary lesson, compact placement and the inherited desktop behavior.
 
+**Gentler shared entrance — owner approved 2026-11-05:** the owner found the
+8px blur too strong and the 160ms entrance too quick to follow. Reduce resting
+blur to **4px**, still without a dark/coloured overlay. Use **350ms** with the
+existing ease-in-out curve for both effects: the card rises from its opener as
+blur grows from 0px to 4px, sharing one start time and finishing together. Keep
+the opener sharp and lesson stationary. Reduced motion skips both effects;
+viewport changes cancel both together to retain coordinated keyboard placement.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),
