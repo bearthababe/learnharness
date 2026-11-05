@@ -952,3 +952,18 @@ remain recorded. No live provider/speech calls, public-preview changes, push,
 PR or issue closure occurred. R5 is an implemented correction awaiting parent-owned
 independent review at the final clean hash; overall #47 and physical #48 acceptance
 are not claimed.
+
+#### R5 committed integration handoff
+
+R5 implementation, maintained real-server/native regressions and completed
+verification were committed as `0ac7ea70328cb10ecd00c7360030a28240cfcdfa`.
+`git merge --no-edit integration/handwriting-45` then reported **Already up to
+date** at the latest committed integration tip
+`674e3da638d87e4d6405fa34db785568fca70a1f`. Both earlier receipt histories remain
+inherited. Integration ancestry, diff checks and empty porcelain status passed
+after that commit.
+
+This final receipt-only commit supplies the clean delivery pin in the handoff,
+after fresh ancestry and original-worktree isolation verification. R1–R4 and the
+prior Standards approvals remain recorded above; R5 awaits parent-owned
+independent review. S1 remains deferred to #51; physical #48 remains pending.
