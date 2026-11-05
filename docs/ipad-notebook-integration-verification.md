@@ -516,3 +516,20 @@ commit is the final receipt tip, not the merge commit. The historical pending
 integration/re-review statements above describe their earlier checkpoints and
 are superseded by this completion. **#47 is ready for its owner-approved
 implementation.** Physical iPad acceptance remains open as recorded above.
+
+### #47 keyboard follow-up — owner scope decision
+
+Independent Standards review of delivery
+`56a26fc6ed81e19c87db21ceac51a6d168242666` identified S1: new notebook,
+snapshot and annotation actions are not keyboard-reachable under the existing
+custom Tab model. The owner explicitly declined the proposed local Tab/menu
+navigation extension and requested an app-wide keyboard-interaction overhaul,
+including key bindings and shortcuts, as a separate feature.
+
+Created [#51 — Overhaul keyboard interactions, key bindings and shortcuts](https://github.com/bearthababe/learnharness/issues/51),
+including the exact deferred S1 actions, current evidence and required owner
+planning/approval. S1 is deferred by owner decision, not fixed or keyboard-ready,
+and is not a blocker for continuing #47/#48. No new keyboard bindings or Tab
+navigation are authorized in this delivery. Existing Escape-priority regressions
+and other non-deferred review findings still require correction and verification.
+Review: `/home/bjorn/.cache/opencode/issue4/47-review-standards.md`.
