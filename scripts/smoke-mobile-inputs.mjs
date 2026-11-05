@@ -462,6 +462,10 @@ try {
 	assert.ok(!await page.evaluate(() => [...document.querySelectorAll('button')].some(e => /Attach handwriting|Choose from app|Take photo/.test(e.textContent))), "Deferred image actions are not advertised");
 	await page.goto(`${origin}/chat/mobile_panels`, { waitUntil: "networkidle2" });
 	await page.waitForSelector(input);
+	// The real channel's first open can wait for its 25s heartbeat. Its
+	// subscription resync invalidates selectable models; finish that startup
+	// before attributing list changes or missed picks to card/keyboard actions.
+	await page.waitForFunction(() => window.notifications?.readyState === EventSource.OPEN, { timeout: 45000 });
 	const catalog = await (await fetch(`${origin}/api/models`)).json();
 	const longModel = catalog.models.filter(m => m.supportedLevels.length > 1).sort((a, b) => b.name.length - a.name.length)[0];
 	assert.ok(longModel, "Installed catalog supplies a long-label model with thinking options");
