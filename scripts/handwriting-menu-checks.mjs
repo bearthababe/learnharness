@@ -94,5 +94,29 @@ export async function checkHandwritingMenus({ page, origin }) {
 	assert.equal(await working(), beforeDecision); assert.deepEqual(await page.evaluate(() => window.menuCancellation), beforeModal); assert.equal(await page.evaluate(() => window.speech.readyState), 1);
 	await page.keyboard.press("Escape"); await page.waitForFunction(() => window.speech.readyState === 3);
 	console.log("PASS N1 native viewer/menu and snapshot-decision modal retain Escape priority over notebook menus without mutation or underlying cancellation");
+	// Both accepted notebooks share the current session without taking over
+	// each other's layout, ink, explanation or pending snapshot.
+	await page.setViewport({ width: 1180, height: 1000, isMobile: true, hasTouch: true });
+	await page.locator('button[data-input-owner="notebook"][aria-expanded]').click();
+	await page.waitForSelector('#notebook-instruction', { visible: true });
+	await page.waitForFunction(() => !document.querySelector('.session-workspace').inert);
+	const combined = await page.evaluate(() => {
+		const workspace = document.querySelector('.session-workspace');
+		return {
+			containers: getComputedStyle(workspace).containerName,
+			ink: document.querySelector('[data-testid="handwriting-notebook"]').checkVisibility(),
+			equation: document.querySelector('[aria-label="Equation Notebook"]').checkVisibility(),
+			layout: getComputedStyle(document.querySelector('.hw-splitLayout')).flexDirection,
+		};
+	});
+	assert.equal(combined.ink && combined.equation, true, "Pencil and equation notebooks coexist");
+	assert.match(combined.containers, /handwriting-workspace/);
+	assert.match(combined.containers, /equation-notebook/);
+	assert.equal(combined.layout, "row", "The handwriting landscape container survives the equation shell");
+	assert.equal(await working(), beforeDecision, "Opening equations preserves exact Pencil history");
+	assert.equal(await page.$eval(field, element => element.textContent), "Keep my typed explanation.");
+	assert.ok(await page.$(snapshotTrigger), "The reviewed handwriting snapshot survives equation navigation");
+	assert.equal((await (await fetch(`${origin}/api/chats/mobile_notebook_menus`)).json()).messages.filter(message => message.role === "user").length, 0);
+	console.log("PASS combined Pencil/equation notebook layout, draft, ink and pending review with no implicit Send");
 	await cdp.detach();
 }
