@@ -10,7 +10,7 @@ let restore: (() => void) | undefined;
 /** Portaled cards stay interactive while the lesson holds its opening geometry.
  * Count ownership so overlapping menus cannot release another menu's backdrop
  * lock. Preserve any existing inertness and inline sizing on cleanup. */
-export function PhoneMenuBackdrop({ onClose, triggerTestid, backdropRef }: { onClose: () => void; triggerTestid?: string; backdropRef: RefObject<HTMLDivElement | null> }) {
+export function PhoneMenuBackdrop({ onClose, triggerTestid, backdropRef, menuRef }: { onClose: () => void; triggerTestid?: string; backdropRef: RefObject<HTMLDivElement | null>; menuRef: RefObject<HTMLDivElement | null> }) {
 	const triggerRef = useRef<HTMLButtonElement>(null);
 	const dismiss = useBackdropDismiss(onClose);
 	useLayoutEffect(() => {
@@ -40,14 +40,20 @@ export function PhoneMenuBackdrop({ onClose, triggerTestid, backdropRef }: { onC
 		let frame = 0, previous = "";
 		const place = () => {
 			const r = source.getBoundingClientRect();
+			const menu = menuRef.current, card = menu?.getBoundingClientRect();
+			const clipTop = menu ? parseFloat(getComputedStyle(menu).clipPath.match(/^inset\(([^p]+)px/)?.[1] ?? "0") : 0;
+			const covered = !!card && r.left < card.right && r.right > card.left && r.top < card.bottom && r.bottom > card.top + clipTop;
 			const label = source.getAttribute("aria-label") ?? source.textContent ?? "";
-			const signature = [r.left, r.top, r.width, r.height, label].join(",");
+			const signature = [r.left, r.top, r.width, r.height, label, covered].join(",");
 			if (signature !== previous) {
 				previous = signature;
 				// The original opener stays in the frozen lesson, visible through a
 				// clear aperture. Its inert ancestor still protects the lesson; this
 				// foreground target supplies only the opener's close-toggle action.
-				backdrop.style.clipPath = `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${r.left}px ${r.top}px, ${r.left}px ${r.bottom}px, ${r.right}px ${r.bottom}px, ${r.right}px ${r.top}px, ${r.left}px ${r.top}px)`;
+				// A keyboard-docked search may cover the frozen opener. Its proxy
+				// must not intercept the results; restore the aperture when uncovered.
+				button.hidden = covered;
+				backdrop.style.clipPath = covered ? "none" : `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${r.left}px ${r.top}px, ${r.left}px ${r.bottom}px, ${r.right}px ${r.bottom}px, ${r.right}px ${r.top}px, ${r.left}px ${r.top}px)`;
 				Object.assign(button.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
 				button.setAttribute("aria-label", label);
 			}
@@ -55,7 +61,7 @@ export function PhoneMenuBackdrop({ onClose, triggerTestid, backdropRef }: { onC
 		};
 		place();
 		return () => cancelAnimationFrame(frame);
-	}, [triggerTestid, backdropRef]);
+	}, [triggerTestid, backdropRef, menuRef]);
 	return <>
 		<div ref={backdropRef} data-testid="phone-menu-backdrop" aria-hidden="true"
 			className="fixed inset-0 z-50 backdrop-blur-xs"

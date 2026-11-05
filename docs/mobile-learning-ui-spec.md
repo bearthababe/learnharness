@@ -136,6 +136,16 @@ small heights. The frame retains enough height for its corners and clips only
 the unrevealed top until normal height growth can take over, at the same visible
 speed. Interrupted closes start from the current revealed height.
 
+**Keyboard-open entry correction — owner approved 2026-11-05:** when Model opens
+while the composer's keyboard is already visible, keep browsing above the actual
+frozen opener rather than adding a viewport-height offset. If search is then
+focused, the owner selected **“Dock search”**: attach the card to the keyboard
+boundary even when this covers the opener. Hide/disable the covered opener's
+foreground close target and remove its clear aperture; restore both when the
+card uncovers it. Keyboard dismissal returns continuously to the frozen browsing
+anchor while retaining query/results. This resolves the earlier sharp-opener rule
+where it conflicts with focused search covering the composer controls.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),

@@ -860,10 +860,55 @@ try {
 	assert.ok(await page.$eval('[data-testid="model-list"] button', e => {
 		const r = e.getBoundingClientRect(); return e.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
 	}), "An actual model result remains reachable instead of hitting the opener's close target");
+	await page.click('[data-testid="model-search"]');
+	await page.evaluate(async () => {
+		Object.defineProperty(visualViewport, "height", { configurable: true, get: () => 350 });
+		Object.defineProperty(visualViewport, "offsetTop", { configurable: true, get: () => 36 });
+		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
+		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+	});
+	const entrySearch = await page.$eval('[data-testid="model-menu"]', e => ({ bottom: e.getBoundingClientRect().bottom, keyboardTop: visualViewport.offsetTop + visualViewport.height }));
+	assert.ok(Math.abs(entrySearch.bottom - entrySearch.keyboardTop) <= 1, `Search after keyboard-open entry docks at the keyboard: ${JSON.stringify(entrySearch)}`);
+	assert.ok(await page.$eval('[data-testid="phone-menu-trigger"]', e => e.hidden), "Covered opener is hidden and cannot intercept search results");
+	assert.equal(await page.$eval('[data-testid="phone-menu-backdrop"]', e => getComputedStyle(e).clipPath), "none", "Covered opener has no clear backdrop aperture");
+	assert.ok(await page.$eval('[data-testid="stats-model"]', e => {
+		const r = e.getBoundingClientRect();
+		return document.querySelector('[data-testid="model-menu"]').contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+	}), "The covered opener's location receives card input, not Close");
+	await fill('[data-testid="model-search"]', "a");
+	const entryResults = await page.$$eval('[data-testid="model-list"] button', buttons => buttons.map(e => e.dataset.testid));
+	await page.click('[data-testid="model-hide-keyboard"]');
+	const entryReturn = await page.evaluate(async () => {
+		const frames = [];
+		for (const height of [350, 400, 475, 550, 625, 700]) {
+			Object.defineProperty(visualViewport, "height", { configurable: true, get: () => height });
+			Object.defineProperty(visualViewport, "offsetTop", { configurable: true, get: () => 36 * (700 - height) / 350 });
+			visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
+			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+			const card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
+			const opener = document.querySelector('[data-testid="stats-model"]').getBoundingClientRect();
+			frames.push({ height, bottom: card.bottom, openerTop: opener.top, hidden: document.querySelector('[data-testid="phone-menu-trigger"]').hidden });
+		}
+		delete visualViewport.height; delete visualViewport.offsetTop;
+		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
+		return frames;
+	});
+	for (const frame of entryReturn) {
+		const resting = frame.openerTop - 4;
+		assert.ok(Math.abs(frame.bottom - (resting + (entrySearch.bottom - resting) * (700 - frame.height) / 350)) <= 1, "Search returns continuously to its frozen browsing anchor");
+		assert.equal(frame.hidden, frame.bottom > frame.openerTop, "Opener restores only when the card uncovers it");
+	}
+	assert.equal(await page.$eval('[data-testid="model-search"]', e => e.value), "a");
+	assert.deepEqual(await page.$$eval('[data-testid="model-list"] button', buttons => buttons.map(e => e.dataset.testid)), entryResults, "Search dismissal retains results after keyboard-open entry");
+	assert.ok(await page.$eval('[data-testid="phone-menu-backdrop"]', e => getComputedStyle(e).clipPath.startsWith("polygon(evenodd,")), "Uncovered opener regains its clear aperture");
 	await page.keyboard.press("Escape");
 	await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
 	assert.equal(await page.$eval(input, e => e.value), "Already-open keyboard preserves this draft.");
 	assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false);
+	await page.evaluate(() => {
+		delete visualViewport.height; delete visualViewport.offsetTop;
+		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
+	});
 	console.log("PASS: Model opened with the composer keyboard visible keeps its frozen opener anchor through keyboard dismissal");
 	// End keyboard-open entry regression.
 	// iOS keyboards shrink the VISUAL viewport without changing innerHeight.

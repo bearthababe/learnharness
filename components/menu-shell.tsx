@@ -390,6 +390,7 @@ export function MenuShell({
 			const dismiss = menu.querySelector<HTMLButtonElement>("[data-testid='model-hide-keyboard']");
 			let expandedHeight = Math.max(viewport?.height ?? innerHeight, innerHeight);
 			let keyboardHeight = expandedHeight;
+			let keyboardBottom = expandedHeight;
 			let layoutWidth = innerWidth;
 			let hadSearch = false;
 			let shown = false;
@@ -418,7 +419,7 @@ export function MenuShell({
 				if (entranceRef.current?.active) return;
 				if (innerWidth !== layoutWidth) { layoutWidth = innerWidth; expandedHeight = Math.max(height, innerHeight); keyboardHeight = expandedHeight; }
 				expandedHeight = Math.max(expandedHeight, height);
-				if (searchFocusedRef.current) { hadSearch = true; keyboardHeight = height; }
+				if (searchFocusedRef.current) { hadSearch = true; keyboardHeight = height; keyboardBottom = offsetTop + height; }
 				// Keep the search layout through blur; the keyboard's actual visible
 				// area, rather than a second focus-driven layout, owns its release.
 				const progress = hadSearch && keyboardHeight < expandedHeight
@@ -435,7 +436,11 @@ export function MenuShell({
 					// The opener is frozen even if the composer keyboard was already
 					// visible at entry. Its real position needs no viewport-height delta.
 					const restingBottom = rect.top - GAP;
-					p.style.top = Math.min(restingBottom, offsetTop + height);
+					// If the lesson froze with the composer keyboard open, its opener
+					// can be above the search keyboard boundary. Dock search there, then
+					// return continuously to the real opener as the keyboard dismisses.
+					const searchBottom = restingBottom + Math.max(0, keyboardBottom - restingBottom) * progress;
+					p.style.top = Math.min(searchBottom, offsetTop + height);
 					p.maxHeight = Math.max(0, Math.min(CAP_VH * height, Number(p.style.top) - offsetTop - EDGE));
 					input.style.width = `calc(100% - ${48 * progress}px)`;
 					input.style.height = `${inputHeight + (44 - inputHeight) * progress}px`;
@@ -508,7 +513,7 @@ export function MenuShell({
 	// The menu is positioned ONCE and then only re-anchored — no flash.
 	return createPortal(
 		<>
-		{fitVisualViewport && onClose && <PhoneMenuBackdrop onClose={() => { if (!closing) onClose(); }} triggerTestid={phoneTriggerTestid} backdropRef={phoneBackdropRef} />}
+		{fitVisualViewport && onClose && <PhoneMenuBackdrop onClose={() => { if (!closing) onClose(); }} triggerTestid={phoneTriggerTestid} backdropRef={phoneBackdropRef} menuRef={menuRef} />}
 		<div
 			ref={menuRef}
 			data-testid={testid}
