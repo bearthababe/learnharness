@@ -1,6 +1,122 @@
 # Compact phone learning inputs — implementation evidence
 
-2026-11-04 · #37 / #39 / #40 / #41; physical acceptance remains #42.
+2026-11-04–05 · #37 / #39 / #40 / #41 / #42.
+
+**Final owner acceptance — 2026-11-05:** the owner accepted the integrated phone
+learning experience at `47887cd`: **“It's good enough to accept.”** This supersedes
+the earlier pending-acceptance entries below. Closure was verified for
+[#42](https://github.com/bearthababe/learnharness/issues/42#issuecomment-6660266480)
+and parent [#37](https://github.com/bearthababe/learnharness/issues/37#issuecomment-6660270703).
+
+The accepted corrections include `49f34f4` (actual frozen-opener anchoring and
+retired sheet code) and `b4e200d` (owner-selected keyboard-docked search with
+covered-opener hit-target/aperture protection). Independent correction re-review
+reported zero documented Standards breaches and zero remaining Spec findings;
+two nonblocking maintainability advisories remain. Overall card polish, a ~200ms
+trial and raised-opener Usage placement remain in #50. Historical intermittent
+browser/dictation findings are retained; acceptance does not claim every manual
+check was individually performed.
+
+## Actual main integration — 2026-11-05
+
+The owner explicitly requested merging into the branch named `main`, then
+approved adapting the phone/Notebook integration to main's file-aware editors.
+`0348296` (upstream v0.5.0) and accepted source `47887cd` diverged in 29 files.
+Resolution was performed in the isolated `integration/accepted-mobile-main`
+checkout, retaining both histories. Merge resolution: `d335a37`.
+
+Compatibility preserves upstream attachment/path editing, exact question
+occurrence identity, CLI context/cache accounting, provider features and atomic
+storage alongside Notebook persistence, compact dictation and the accepted
+400ms card/4px blur behavior. Notebook checkpoints and image snapshots both stay
+out of the ordinary chat response. The concurrent approved browser-receipt
+improvement `eb47384` is included.
+
+Validation on the isolated merged candidate:
+
+- Deterministic suite: **3,760 passed, 4 skipped, 0 failed**;
+  `/home/bjorn/.cache/opencode/accepted-mobile-main-tests-final.log`.
+- Typecheck and lint passed. Production build passed;
+  `/home/bjorn/.cache/opencode/accepted-mobile-main-build.log`.
+- Offline standalone provider-runtime gate passed: all ten native chat
+  implementations evaluated, 593 modules confined to the standalone payload,
+  zero network attempts;
+  `/home/bjorn/.cache/opencode/accepted-mobile-main-provider-runtime.log`.
+- Original checkout preservation inventory: all **316** inventoried modified or
+  untracked files unchanged; branch `integration/focused-drills`, HEAD `eb47384`.
+  Inventory: `/home/bjorn/.cache/opencode/accepted-mobile-main-original-before.json`.
+
+Retained browser attempts under
+`/home/bjorn/.cache/opencode/accepted-mobile-main-runs/`:
+
+- `mobile-input-browser-aXVdYQ`: exposed the missing file-editor focus lock;
+  corrected to recognize `[data-file-path-input]` for locking and native scrolling.
+- `mobile-input-browser-eHhOR0`: intermittent speech readiness timeout during
+  geometry checks; cause unconfirmed. The unchanged next run passed that stage.
+- Run 3 (`accepted-mobile-main-browser-3.log`): passed card/keyboard/Plan/image
+  checks; stopped at an obsolete Other-answer input selector, now corrected.
+- `mobile-input-browser-vELsEy`: passed inputs, both Notebook suites and Reveal;
+  layout stopped at the old direct-import chooser assumption. The check now opens
+  upstream's Files/Folder menu and chooses Files before awaiting the chooser.
+
+Supplementary file-path checks initially encountered a too-long Chromium socket
+path, then the desktop test selected the hidden phone Reveal button. The test now
+targets the desktop Reveal control explicitly; app behavior is unchanged by this
+selector correction. Final browser receipt and handoff are recorded below.
+
+Aggregate run 5 passed **all three suites**, including the two Notebook checks:
+`/home/bjorn/.cache/opencode/accepted-mobile-main-runs/mobile-input-browser-r0tTAC/result.json`.
+This verifies compact path-aware input, immutable Notebook snapshots, saved
+drafts/reload, dictation destination ownership, 400ms linear cards and blur,
+keyboard-docked search, Plan pinch/pan, image/modal locking, Reveal and the full
+phone layout/scroll-containment checks. This is browser emulation evidence;
+physical phone acceptance remains the owner's accepted `47887cd` experience.
+
+The supplementary Chromium path smoke passed home/new-session native editing,
+chips and full-source clipboard, explicit Enter submission, reading/question/
+practice drop routing and collapsed-draft preservation. Its first post-selector
+run exposed a click before Notebook draft loading released `inert`; navigation
+now waits for that release. Linux Electron startup also required retaining only
+the display/auth-display environment alongside the otherwise isolated profile.
+Retained logs: `accepted-mobile-main-file-paths-3.log` through `-5.log` under
+`/home/bjorn/.cache/opencode/`.
+
+### Verified mobile compatibility handoff
+
+Product correction **`887496b`** preserves the accepted mobile focus lock with
+upstream's file-aware editors. It also updates the Other-answer and import-menu
+browser selectors. All product changes were exercised by the passing aggregate.
+
+**Authoritative mobile browser receipt:**
+`/home/bjorn/.cache/opencode/accepted-mobile-main-runs/mobile-input-browser-vbjX9v/result.json`
+reports **passed** for `inputs-notebook`, `reveal` and `layout`, completed
+2026-11-05 15:44:35 UTC. Recorded source is `e3437fb` plus working changes,
+SHA-256 `224c0193005fa4d6481f7843525e43b3246884502f07e17f0f254c3537c8f470`.
+Only the supplementary file-path harness changed after this snapshot; its final
+run is recorded separately below. The combined handwriting integration must run
+its own final aggregate against its combined source.
+
+**Supplementary Chromium + actual Electron gate: passed**, all eleven checks,
+zero visual/coverage failures. Receipt:
+`/home/bjorn/.cache/opencode/accepted-mobile-main-file-paths-final-2.log`.
+This includes the production sandboxed preload resolving an OS-backed Unicode/
+backtick filename, virtual File returning empty, and a real DataTransfer drop
+staging the exact full path at the caret without submitting or reading file bytes.
+
+Earlier Electron failures were fixture-environment failures: stripped display
+variables prevented startup, and stripped UTF-8 locale caused the Unicode file
+selection to remain empty. A minimal upstream-preload probe reproduced zero files
+under the stripped environment and one correctly resolved file under `C.UTF-8`.
+The harness now retains display access and sets UTF-8; it also waits for the
+controlled Send button to enable before the explicit Enter assertion. Failed
+attempts remain in `accepted-mobile-main-file-paths-desktop*.log` and
+`accepted-mobile-main-file-paths-final.log`; no application/preload change was
+needed. Script syntax and diff whitespace checks passed.
+
+**Integration coordination:** the owner's iPad session is combining accepted
+handwriting `58280c9` with this candidate in its separate `integrate/main-ipad`
+worktree. That session owns the final actual-`main` fast-forward and publish; this
+branch supplies committed mobile compatibility corrections and verification.
 
 Latest completion pass: [integrated #39 merge and #40/#41 regression evidence](verification/mobile-input-37-integration.md).
 

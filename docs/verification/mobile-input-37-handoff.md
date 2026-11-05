@@ -1,5 +1,11 @@
 # Mobile input #37 — integration and phone handoff
 
+**Final status — 2026-11-05:** the owner accepted the combined phone-learning
+experience: **“It's good enough to accept.”** #42 and parent #37 are closed.
+The [canonical verification record](../mobile-learning-ui-verification.md)
+contains the acceptance receipts and actual-main integration status. Earlier
+pending-acceptance statements below are historical. Card polish remains in #50.
+
 2026-11-04. The owner approved completing the existing mobile implementation on
 `integration/focused-drills`, preserving the later iPhone corrections and
 concurrent notebook work. Implementation evidence is in
