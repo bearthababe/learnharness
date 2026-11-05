@@ -9,6 +9,10 @@ export type SubmissionAttempt = { version: 1; chatId: string; submissionId: stri
 export type CaptureRecord = { version: 1; chatId: string; pageId: string; writingId: string; expectedPageRevision: number; sourceJson: string; sourceFingerprint: string; contentFingerprint: string; capturedAt: string; explanationDraft: Pick<DurableDraft, "targetKey" | "draftId" | "revision">; raster?: { width: 1400; height: 1800; rgba: ArrayBuffer }; png?: Blob; state: "captured" | "ready" | "uploading" | "failed" | "conflicted"; error?: string };
 export type CaptureReceipt = { version: 1; chatId: string; pageId: string; sourceFingerprint: string; contentFingerprint: string; writingId: string; pageRevision: number; createdAt: string };
 export type TransferSnapshot = { captures: CaptureRecord[]; submissions: SubmissionAttempt[]; drafts: DurableDraft[]; captureReceipts: CaptureReceipt[] };
+/** Positive terminal evidence, distinct from a failed device write. */
+export class CaptureRetiredError extends Error {
+	constructor() { super("This capture has already settled or its page revision has advanced."); }
+}
 type Session = { version: 1; chatId: string; generation: number; deleted: boolean };
 export interface TransferDevice {
 	open(chatId: string): Promise<number>;
@@ -86,6 +90,11 @@ export class IndexedTransferDevice implements TransferDevice {
 	saveCapture(chatId: string, generation: number, capture: CaptureRecord, draft?: DurableDraft) { return this.transaction("readwrite", async tx => {
 		await this.guard(tx, chatId, generation); validateCapture(capture);
 		if (capture.chatId !== chatId || (draft && draft.chatId !== chatId)) throw new Error("Wrong session");
+		const completed = await request(tx.objectStore("captureReceipts").get([chatId, capture.pageId]));
+		if (completed !== undefined) {
+			const receipt = receiptSchema.parse(completed);
+			if (receipt.writingId === capture.writingId || receipt.pageRevision > capture.expectedPageRevision) throw new CaptureRetiredError();
+		}
 		const existing = await request(tx.objectStore("captures").getAll(IDBKeyRange.bound([chatId], [chatId, []])));
 		for (const raw of existing) {
 			const old = validateCapture(raw);

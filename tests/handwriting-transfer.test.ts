@@ -3,7 +3,7 @@ import { it } from "node:test";
 import { HandwritingAttachment } from "../components/handwriting/attachment.ts";
 import { HandwritingSubmission } from "../components/handwriting/submission-recovery.ts";
 import type { TransferDevice, TransferSnapshot, CaptureRecord, DurableDraft, SubmissionAttempt, CaptureReceipt } from "../components/handwriting/transfer-device.ts";
-import { notebookSource, emptyHandwriting } from "../src/core/handwriting.ts";
+import { notebookSource, emptyHandwriting, appendHandwriting, handwritingFingerprints } from "../src/core/handwriting.ts";
 import { writingSubmissionReceipt } from "../src/server/writing-submission.ts";
 import { parseChatInput } from "../src/core/input-events.ts";
 import { readFileSync } from "node:fs";
@@ -77,6 +77,49 @@ it("automatic capture recovery retains but never uploads oversized, conflicted o
 		const model = new HandwritingAttachment("chat", { ...deps, device: local, fetch: async () => { uploads++; throw new Error("Must not upload"); } });
 		await model.open(); await model.recover();
 		assert.equal(uploads, 0); assert.equal((await local.read("chat", 0)).captures[0]!.writingId, original.writingId);
+	}
+});
+
+it("remount joins the running capture, preserves unresolved failure and permits the next Attach after settlement", async () => {
+	for (const failOriginal of [false, true]) {
+		const local = device(), save = local.saveCapture;
+		local.saveCapture = async (chat, generation, capture, draft) => {
+			const saved = await local.read(chat, generation);
+			assert.ok(!saved.captures.some(old => old.pageId === capture.pageId && old.writingId !== capture.writingId && old.state !== "conflicted"), "A different unresolved capture must not be overwritten");
+			await save(chat, generation, capture, draft);
+		};
+		const source = notebookSource(emptyHandwriting()), newer = notebookSource(appendHandwriting(source.journal, { id: "later", kind: "stroke", stroke: { tool: "pen", colour: "#2563eb", penScale: 1, width: 38, points: [{ x: 100, y: 200, pressure: 0.6 }] } }));
+		const draft: DurableDraft = { version: 1, chatId: "chat", targetKey: "composer", draftId: "draft", revision: 1, editor: { text: "Original" } };
+		let release!: () => void, started!: () => void, restored!: () => void;
+		const held = new Promise<void>(resolve => { release = resolve; }), posting = new Promise<void>(resolve => { started = resolve; }), reopening = new Promise<void>(resolve => { restored = resolve; });
+		const requests: FormData[] = []; let active = 0, maximum = 0;
+		let review: import("../components/handwriting/attachment.ts").AttachmentReview = { pending: [], pageAttachments: {} };
+		const deps = { device: local, fetch: async (_url: RequestInfo | URL, init?: RequestInit) => {
+			const form = init!.body as FormData; requests.push(form); active++; maximum = Math.max(maximum, active);
+			try {
+				if (requests.length === 1) { started(); await held; if (failOriginal) throw new Error("Original lost response"); }
+				const captured = JSON.parse(await (form.get("source") as Blob).text()), fingerprints = await handwritingFingerprints(captured);
+				const writing = { id: String(form.get("writingId")), createdAt: "2026-11-05", notebook: { pageId: "page_initial", pageRevision: Number(form.get("expectedPageRevision")) + 1, contentFingerprint: fingerprints.contentFingerprint } };
+				review = { pending: [writing], pageAttachments: { page_initial: { revision: writing.notebook.pageRevision, writingId: writing.id, contentFingerprint: fingerprints.contentFingerprint } } };
+				return Response.json({ writing });
+			} finally { active--; }
+		}, encode: async () => new Blob(["immutable PNG"]), refresh: async () => review, reveal() {}, changed() {} };
+		const first = new HandwritingAttachment("chat", deps); await first.open();
+		const original = first.attach({ pageId: "page_initial", head: undefined, valid: () => true, finish: async () => true, freeze: () => ({ source, draft, raster: { width: 1400, height: 1800, rgba: new ArrayBuffer(1400 * 1800 * 4) } }) });
+		await posting; first.dispose();
+		await local.saveDraft("chat", 0, { ...draft, revision: 2, editor: { text: "Newer" } });
+		const second = new HandwritingAttachment("chat", { ...deps, changed() { restored(); } });
+		const opened = second.open(); await reopening; await new Promise(resolve => setImmediate(resolve));
+		try { assert.equal(requests.length, 1, "Reopening cannot overlap the original POST"); }
+		finally { release(); await Promise.all([original, opened]); }
+		assert.equal(maximum, 1);
+		assert.equal(requests.length, failOriginal ? 2 : 1);
+		if (failOriginal) { assert.equal(requests[1]!.get("writingId"), requests[0]!.get("writingId")); assert.equal(await (requests[1]!.get("source") as Blob).text(), await (requests[0]!.get("source") as Blob).text()); }
+		assert.equal((await local.read("chat", 0)).captures.length, 0);
+		await second.attach({ pageId: "page_initial", head: review.pageAttachments.page_initial, valid: () => true, finish: async () => true, freeze: () => ({ source: newer, draft: { ...draft, revision: 2, editor: { text: "Newer" } }, raster: { width: 1400, height: 1800, rgba: new ArrayBuffer(1400 * 1800 * 4) } }) });
+		const saved = await local.read("chat", 0);
+		assert.equal(saved.captures.length, 0); assert.equal(saved.captureReceipts[0]!.pageRevision, 2); assert.equal(saved.drafts[0]!.editor.text, "Newer");
+		second.dispose();
 	}
 });
 

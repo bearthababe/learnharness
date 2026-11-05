@@ -309,3 +309,63 @@ preserving newer working and stopping at review without automatic Send.
 Delivery `a7715563170f2877b336699991472caf091aff2c` includes those corrections;
 final independent Standards/Spec re-review is dispatched against that exact
 commit. Integration of corrections and those final review outcomes remain pending.
+
+### C1 remount correction after independent final review of `a771556`
+
+Parent reported **R1 PASS, R2 PASS and Standards S1/H1/H2 APPROVED** at
+`a7715563170f2877b336699991472caf091aff2c`. The independent Spec report
+`46-final-review-spec.md` withheld overall approval for one new P2, **C1**.
+Its `46-final-review-remount-boundary.log` reproduces two overlapping uploads
+after dispose/reopen, followed by a late failure resurrecting retired A and
+blocking newer Attach B. These reports and all logs below are under
+`/home/bjorn/.cache/opencode/issue4/`.
+
+The correction implements the already-approved one-flight/retention invariants:
+
+- Transfer ownership is shared across controllers using the same device port,
+  session and page. Application remounts share `handwritingTransferDevice`.
+  A replacement waits for the original owner's preparation/transport/cleanup,
+  then reloads durable state. It only retries a genuinely unresolved capture,
+  with its exact identity, source, PNG and revision precondition.
+- Native `IndexedTransferDevice.saveCapture` checks the page's terminal receipt
+  **inside the write transaction**. The same completed identity or an advanced
+  page revision rejects a stale capture write before either capture or draft
+  can change. The controller recognizes terminal rejection and reloads recovery
+  instead of reporting a new failed capture. Monotone receipts and identity-only
+  capture deletion preserve B when A's old success arrives late.
+- Disposal retains unresolved work; recovery still stops at review. Newer drafts
+  and working remain intact, and no automatic tutor Send is introduced.
+
+**Red/green evidence:** the actual-controller remount test failed before the fix
+with `2 !== 1` overlapping POSTs (`46-c1-controller-red.log`), then passed
+(`46-c1-controller-green.log`). Native browser/IndexedDB assertions failed before
+the fix with `resurrectedCaptures: 1`, `nextCaptureSaved: false` and
+`retiredWriteBlocked: false` (`46-c1-native-red.log`). The corrected adapter and
+real-controller browser fixture pass (`46-c1-native-green.log`). Native assertions
+also cover old failure after a newer identity's terminal receipt, atomic draft
+preservation and late old success while B remains saved.
+
+The disposable browser fixture constructs the real old/new attachment controllers
+against native IndexedDB, holds the original transport across dispose/reopen,
+and uses actual HTTP/store receipts. It checks success, failure before acceptance
+and lost accepted ACK: one concurrent request, exact replay when needed, retired
+A, revision-2 Attach B, persisted receipts, preserved newer draft/working and no
+tutor input. This is controller-lifecycle coverage in a browser, distinct from a
+physical iPad navigation acceptance claim.
+
+| C1 final-code check | Completed result / cache-root evidence |
+|---|---|
+| Focused suites | **187 passed, 0 failed**, `46-c1-focused.log` |
+| Typecheck / lint | Passed, `46-c1-typecheck.log`, `46-c1-lint.log` |
+| Native-IDB remount and adapter regression | Passed, `46-c1-native-green.log`; fixture `mobile-input-browser-46-c1-green` |
+| Full mobile browser suite | Passed including all three remount outcomes, existing R1/R2 and upload-recovery checks; `46-c1-browser-mobile.log`, fixture `mobile-input-browser-46-c1-full` |
+| Full handwriting browser suite | Passed, `46-c1-browser-handwriting.log`, fixture `handwriting-browser-bJV9cx` |
+| Production build | Passed, `46-c1-build.log`, disposable `build-46-c1`; environment-only `turbopack.root` and four existing dynamic filesystem tracing warnings |
+| Integration / whitespace | Committed integration tip `1946bcb7071a4cecaf874de7e6425867cfbfa4f1` merged cleanly; both receipt histories retained; `git diff --check` passed |
+
+No required check remains running. Parent's uncommitted integration review notes
+were not edited. This C1 production delta requires **parent-owned independent
+incremental re-review of the final delivery hash**; implementer checks do not grant
+Spec approval. Earlier approval hashes and physical acceptance gates remain as
+recorded. No live provider/speech calls, public-preview changes, pushes or issue
+closure occurred during this correction.

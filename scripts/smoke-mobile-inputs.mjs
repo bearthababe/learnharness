@@ -28,7 +28,7 @@ const assistant = (content, id = "assistant") => ({ role: "assistant", content, 
 const conversation = { id: "mobile_conversation", title: "Mobile browser conversation", createdAt: now, updatedAt: now, messages: [assistant([{ type: "text", text: "Explain how pressure changes with area." }])] };
 await writeFile(path.join(dir, "data/chats/mobile_conversation.json"), JSON.stringify(conversation));
 await writeFile(path.join(dir, "data/chats/mobile_other.json"), JSON.stringify({ ...conversation, id: "mobile_other", title: "Other isolated session" }));
-for (const id of ["mobile_transfer_capture_attach", "mobile_transfer_capture_reopen", "mobile_transfer_capture_online", "mobile_transfer_unknown", "mobile_transfer_accepted", "mobile_transfer_resend", "mobile_transfer_race"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id }));
+for (const id of ["mobile_remount_success", "mobile_remount_failure", "mobile_remount_lost-ack", "mobile_transfer_capture_attach", "mobile_transfer_capture_reopen", "mobile_transfer_capture_online", "mobile_transfer_unknown", "mobile_transfer_accepted", "mobile_transfer_resend", "mobile_transfer_race"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id }));
 const call = (name, args, id) => assistant([{ type: "toolCall", name, arguments: args, id }], `assistant_${id}`);
 const result = (name, details, id) => ({ role: "toolResult", toolName: name, toolCallId: id, id: `result_${id}`, content: [{ type: "text", text: "Ready." }], details, isError: false, timestamp: Date.now() });
 await writeFile(path.join(dir, "data/chats/mobile_transfer_speech.json"), JSON.stringify({ ...conversation, id: "mobile_transfer_speech", messages: [assistant([...["first", "second"].map(id => ({ type: "toolCall", name: "ask_user_question", id, arguments: { question: `${id} speech owner`, mode: "text" } }))])] }));
@@ -63,8 +63,10 @@ await mkdir(path.join(dir, "app/transfer-fixture"), { recursive: true });
 await writeFile(path.join(dir, "app/transfer-fixture/page.tsx"), `"use client";
 import { useEffect } from "react";
 import { IndexedTransferDevice } from "@/components/handwriting/transfer-device";
+import { HandwritingAttachment } from "@/components/handwriting/attachment";
+import { emptyHandwriting, notebookSource, appendHandwriting } from "@/src/core/handwriting";
 export default function Fixture() {
- useEffect(() => { Object.assign(window, { transferDevice: new IndexedTransferDevice() }); }, []);
+  useEffect(() => { Object.assign(window, { transferDevice: new IndexedTransferDevice(), HandwritingAttachment, emptyHandwriting, notebookSource, appendHandwriting }); }, []);
  return <p>Isolated native IndexedDB adapter fixture</p>;
 }`);
 const port = Number(process.env.LH_MOBILE_TEST_PORT ?? 3109);
