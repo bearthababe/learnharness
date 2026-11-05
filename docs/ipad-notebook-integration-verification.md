@@ -784,3 +784,81 @@ hash is returned after fresh clean-tree, integration-ancestry and original-workt
 isolation checks in the handoff for parent-owned Standards/Spec rereview.
 S1 remains owner-deferred to #51; independent rereview and physical #48 acceptance
 remain pending.
+
+### #47 second correction pass — N1 and R4, 2026-11-05
+
+Isolated worktree `ticket-47-menu-fix`, branch `implement/handwriting-47-menu-fix`,
+starts at `eeef5d3c6db9daa8789f7266a6a3302626ea6f9c`. The independent rereviews
+at that pin are `47-rereview-standards.md` and `47-rereview-spec.md` under
+`/home/bjorn/.cache/opencode/issue4/` (the root for evidence filenames below).
+They close **S3/H1 and original R1/R2/R3**. The original S2 focus defect is fixed,
+but Standards found **N1**, topmost nonmodal Escape ownership; Spec found **R4**,
+unsafe edit admission after failed compatible incoming adoption. **S1 remains
+owner-deferred to #51, not fixed and not blocking #47/#48.**
+
+The owner explicitly approved the N1 question: “May we fix Escape ordering with
+a small shared stack that tracks open notebook and snapshot menus, so the most
+recently opened menu closes first regardless of focus? Native dialogs keep
+priority, focus returns to the closed menu’s trigger, and we’ll verify overlapping
+menus alongside the existing Pencil/dictation behavior.” Answer: **Approve**.
+This narrow amendment is promoted into `docs/handwriting-pages-plan.md`; it adds
+no Tab/menu navigation or new binding. R4 enforces the existing
+reconciliation-before-edit invariant rather than changing owner behavior.
+
+- **N1:** `components/menu-escape.ts` shares opening-order ownership between the
+  notebook surfaces and SnapshotMenu. Stable callback updates do not reorder
+  open menus. Document capture still protects focused chat/Pencil input; only the
+  newest registered menu dismisses, native dialogs retain priority, and the
+  component restores its own trigger focus. Actual UI red: `47-menu-n1-red.log`
+  reproduces Pages→snapshot actions stealing Escape while the original S2 test
+  passes. The final targeted browser run covers Pages/options, both opening orders,
+  focus in menu/chat, two successive dismissals, live scripted speech, unchanged
+  draft/history, zero Open/Duplicate action requests, and viewer/decision modals.
+- **R4:** incoming history is retained separately from acknowledged remote state.
+  A shared adoption path blocks stale editing before asynchronous preparation,
+  reconciles retained/device/incoming history, and only activates after native
+  page/asset commitment. Abort keeps the incoming candidate and existing recovery;
+  Retry resumes adoption without requiring another GET or entering a retry/sync
+  wait cycle. Creation responses use the same path. Inspection also found the
+  existing-page GET path could skip adoption when its cached server head extended
+  local working; that path now uses the same gate. Native red evidence:
+  `47-menu-r4-red.log`, `47-menu-r4-creation-red.log`,
+  `47-menu-r4-known-get-red.log`. Maintained coverage is
+  `scripts/handwriting-adoption-checks.mjs`, invoked by the existing native runner.
+  It proves abort→refused edit→storage repair with GET unavailable→durable incoming
+  head/assets→successful next stroke, server reconciliation and reload, for PUT,
+  creation, cold load and existing-page discovery. An already-admitted stroke is
+  still completed and retained; a genuinely divergent incoming branch cannot
+  overwrite it. Existing active-controller durability tests retain ordinary
+  device-first editing when there is no unresolved incoming state.
+
+The unmodified independent R4 repro was rerun before correction:
+`47-menu-r4-exact-repro.log`. A separate `47-menu-native-feedback.mjs` changes
+only the source pin and expected success assertions, preserving the original
+review scripts/logs. Its final run confirms all three abort/repair scenarios and
+the real session-hook cancellation during controller handoff. Diagnostic logs
+are retained: the creation fixture's unrelated initial-page PUT was corrected;
+an early menu run timed out awaiting scripted speech, and a reused browser profile
+duplicated its saved draft. Final menu checks wait for the visible idle microphone
+and use a fresh profile; those diagnostic failures are not claimed as behavioral reds.
+
+| Final check after production changes settled | Completed evidence |
+|---|---|
+| Affected Pages/controller/routes/store, handwriting/history, shared-writing, Escape/sidebar keyboard and dictation-flow suites | **65 passed**, `47-menu-focused-final.log` |
+| Maintained native Pages runner | Passed all existing R1–R3/transaction/recovery cases plus the five R4 boundaries, `47-menu-native-final.log` |
+| Independent scenario feedback | Passed, `47-menu-native-feedback-final.log`; `admittedNewStroke:false`, repaired incoming head and asset, cancelled handoff with zero mutations |
+| Full handwriting Chromium suite | Passed, `47-menu-handwriting-final.log`; fixture `handwriting-browser-9gfXRh`; includes accepted-stroke ACK, recovery, Pages/import, immutable Attach and postcommit paint retry |
+| Focused actual menu/dictation Chromium suite | Passed, `47-menu-menus-final.log`; fixture `mobile-input-browser-47-menu-final`; original S2 plus N1 overlap/native-modal/decision cases, no runtime errors |
+| Typecheck / lint | Passed, `47-menu-typecheck-final.log`, `47-menu-lint-final.log` |
+| Production build | Passed, `47-menu-build-final.log`, fixture `build-47-menu`; 357 application files verified byte-identical, only established fixture `turbopack.root` variation; four existing filesystem tracing warnings |
+| Diff and isolation | `git diff --check` passed; original `ticket-47` clean at `56a26fc6ed81e19c87db21ceac51a6d168242666`, first correction `ticket-47-fixes` clean at `eeef5d3c6db9daa8789f7266a6a3302626ea6f9c` |
+
+The two browser runs were sequential. All checks above have completed. The full
+mobile/transfer and whole-repository suites were not rerun for this delta; their
+prior evidence/limitations remain recorded above. Reproduce the focused browser
+with `LH_NOTEBOOK_MENUS_ONLY=1 LH_MOBILE_TEST_DIR=<fresh mobile-input-browser-*>
+LH_MOBILE_TEST_PORT=3128 node scripts/smoke-mobile-inputs.mjs`; the full handwriting
+and native commands are unchanged. No live provider/speech calls, public-preview
+changes, push, PR or issue closure occurred. N1/R4 are implemented corrections,
+not independent approval: parent-owned Standards/Spec rereview must pin the final
+clean commit. Physical #48 acceptance remains pending.

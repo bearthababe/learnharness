@@ -16,6 +16,7 @@ import { notebookSource, normalizeHandwriting, replayHandwriting, HANDWRITING_PA
 import type { AttachmentReview } from "./attachment";
 import { HandwritingSubmissionContext } from "./submission";
 import { dictationCheckpoint, finishDictation } from "../dictation";
+import { useMenuEscape } from "../menu-escape";
 import { paint, HIGHLIGHT_OPACITY, freezeHandwritingRaster } from "./render";
 
 const { width: WIDTH, height: HEIGHT } = HANDWRITING_PAGE;
@@ -57,20 +58,11 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const [colour, setColour] = useState<Stroke["colour"]>(HANDWRITING_PEN_COLOURS[0]);
 	const [penScale, setPenScale] = useState<Stroke["penScale"]>(HANDWRITING_PEN_SCALES[1]), [eraserWidth, setEraserWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]), [highlighterWidth, setHighlighterWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]);
 	const [dimPaper, setDimPaper] = useState(true), [toolsOpen, setToolsOpen] = useState(false);
-	useEffect(() => {
-		if (hidden || (!pagesOpen && !optionsOpen && !toolsOpen)) return;
-		const dismiss = (event: KeyboardEvent) => {
-			// A native modal above the notebook owns its own Escape. Otherwise
-			// claim before focused chat fields and the window cancellation chain.
-			if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
-			event.preventDefault(); event.stopImmediatePropagation();
-			const trigger = pagesOpen ? "Pages" : "Notebook options";
-			setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false);
-			controlsRef.current?.querySelector<HTMLButtonElement>(`[aria-label="${trigger}"]`)?.focus();
-		};
-		document.addEventListener("keydown", dismiss, true);
-		return () => document.removeEventListener("keydown", dismiss, true);
-	}, [hidden, pagesOpen, optionsOpen, toolsOpen]);
+	useMenuEscape(hidden ? null : pagesOpen ? "pages" : optionsOpen ? "options" : toolsOpen ? "tools" : null, () => {
+		const trigger = pagesOpen ? "Pages" : "Notebook options";
+		setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false);
+		controlsRef.current?.querySelector<HTMLButtonElement>(`[aria-label="${trigger}"]`)?.focus();
+	});
 	const [paperSize, setPaperSize] = useState({ width: 1, height: 1 });
 	const viewRef = useRef({ expanded, paperSize }); viewRef.current = { expanded, paperSize };
 	const paperPositions = useRef<{ split: number; full?: number }>({ split: 0 }), restorePaperPosition = useRef<number | null>(null);

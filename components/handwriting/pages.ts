@@ -14,6 +14,7 @@ const blank = () => initialHandwritingPage({ version: 1, operations: [] });
 const deviceFailure = "Couldn’t save the current page on this device. It is still open. Retry before switching.";
 const loadFailure = "Couldn’t load this snapshot’s editable history. Your current page is unchanged.";
 const syncFailure = "Saved on this device; couldn’t save to LearnHarness";
+const adoptionFailure = "Couldn’t open saved handwriting. Your working is retained. Retry before editing.";
 const conflictNotice = "Handwriting histories differ. Current working stays on this page and saved copies are unchanged. Keep this page open; Retry checks again without replacing them.";
 class PageReadError extends Error { constructor(readonly page: HandwritingPage) { super("Unreadable device working"); } }
 class CheckpointWriteError extends Error {}
@@ -26,6 +27,7 @@ export class HandwritingPages {
 	private summaries = new Map<string, PageSummary>();
 	private assets = new Map<string, BackgroundPixels>();
 	private remote = new Map<string, HandwritingPage | null>();
+	private incoming = new Map<string, { page: HandwritingPage; metadata: boolean }>();
 	private actions = new Map<string, PageAction>();
 	private listeners = new Set<() => void>();
 	private generation: number | null = null;
@@ -95,7 +97,7 @@ export class HandwritingPages {
 		const page = handwritingPageSchema.parse(await response.json()); if (page.id !== pageId) throw new Error("Wrong page"); this.remote.set(pageId, page); return page;
 	}
 	private unavailable() { this.blocked.add(this.state.page.id); this.update({ ready: false, notice: "This session is unavailable. Your device recovery has been kept." }); }
-	open() { if (this.state.ready) return Promise.resolve(); return this.opening ??= this.load().finally(() => { this.opening = null; }); }
+	open() { if (this.incoming.has(this.state.page.id)) return this.sync(this.state.page.id); if (this.state.ready) return Promise.resolve(); return this.opening ??= this.load().finally(() => { this.opening = null; }); }
 	private async load() {
 		if (!this.alive()) return;
 		try {
@@ -145,6 +147,7 @@ export class HandwritingPages {
 		} catch (error) { this.listFailed = true; if (this.state.ready) this.update({ notice: "Couldn’t load pages. Your current page is unchanged." }); throw error; }
 	}
 	async readPage(pageId: string): Promise<HandwritingPage | null> {
+		if (this.incoming.has(pageId)) { await this.sync(pageId); if (this.incoming.has(pageId)) throw new Error("Incoming working is not yet durable"); }
 		const saved = await this.localRead(), persisted = saved.pages.find(page => page.id === pageId);
 		let page = this.pages.get(pageId);
 		let compact: HandwritingPage | undefined;
@@ -333,9 +336,36 @@ export class HandwritingPages {
 		const running = this.flights.get(pageId); if (running) return running;
 		const flight = this.flush(pageId).finally(() => { this.flights.delete(pageId); }); this.flights.set(pageId, flight); return flight;
 	}
-	private async flush(pageId: string) {
-		if (!this.alive() || this.blocked.has(pageId) || this.generation === null) return;
+	/** Incoming knowledge is not an acknowledged save. Keep it across aborts and
+	 * gate edits on the ancestor until the reconciled page and assets are durable. */
+	private async adoptIncoming(pageId: string): Promise<boolean> {
+		const incoming = this.incoming.get(pageId)!;
+		this.blocked.add(pageId);
+		this.update({ ready: this.state.page.id === pageId ? false : this.state.ready, notice: adoptionFailure });
+		if (this.strokes || this.state.busy || !this.alive() || this.generation === null) return false;
+		this.update({ busy: true });
 		try {
+			await this.localFlight.catch(() => {});
+			const saved = await this.localRead(), old = saved.pages.find(item => item.id === pageId);
+			const current = this.reconcileDevice(this.pages.get(pageId)!);
+			const reconcile = incoming.metadata ? adoptHandwritingPageMetadata : reconcileHandwritingPage;
+			let next = reconcile(current, incoming.page);
+			if (old) next = incoming.metadata ? adoptHandwritingPageMetadata(old, next) : reconcileHandwritingPage(next, old);
+			await this.deps.prepare(next);
+			await this.deps.device.commit(this.chatId, this.generation, { pages: [next], expected: { [pageId]: old ? { head: old.journal.head } : null }, ...(incoming.metadata ? { adoptMetadata: [pageId] } : {}), valid: () => this.alive() });
+			if (!this.alive()) return false;
+			this.remember(next); this.localSaved.add(pageId); this.blocked.delete(pageId);
+			this.mirror(next, incoming.metadata);
+			this.remote.set(pageId, incoming.page); this.incoming.delete(pageId);
+			if (this.state.page.id === pageId) this.activate(next, null, true);
+			return true;
+		} finally { this.update({ busy: false }); }
+	}
+	private async flush(pageId: string) {
+		if (!this.alive() || this.generation === null) return;
+		try {
+			if (this.incoming.has(pageId) && !await this.adoptIncoming(pageId)) return;
+			if (this.blocked.has(pageId)) return;
 			let page = this.pages.get(pageId); if (!page) return;
 			for (const action of this.actions.values()) if (action.pageId === pageId) await this.deps.device.markAction(this.chatId, this.generation, action.actionId, "syncing");
 			if (!this.alive()) return;
@@ -367,25 +397,21 @@ export class HandwritingPages {
 				if (!handwritingPrefix(result.journal, page.journal) && !handwritingPrefix(page.journal, result.journal)) { this.conflict(pageId); return; }
 				const reconciled = adoptHandwritingPageMetadata(page, result);
 				if (canonicalHandwriting(pageSummary(page)) !== canonicalHandwriting(pageSummary(result)) || reconciled.journal.head !== page.journal.head) {
-					if (this.strokes || this.state.busy) return;
-					this.update({ busy: true });
-					try {
-						await this.localFlight.catch(() => {});
-						const saved = await this.localRead(), old = saved.pages.find(item => item.id === pageId);
-						if (!old || !this.alive()) return;
-						page = adoptHandwritingPageMetadata(this.reconcileDevice(this.pages.get(pageId)!), result);
-						await this.deps.prepare(page);
-						await this.deps.device.commit(this.chatId, this.generation, { pages: [page], expected: { [pageId]: { head: old.journal.head } }, adoptMetadata: [pageId], valid: () => this.alive() });
-						if (!this.alive()) return;
-						this.remember(page); this.mirror(page, true); if (this.state.page.id === pageId) this.activate(page, null, true);
-					} finally { this.update({ busy: false }); }
+					this.incoming.set(pageId, { page: result, metadata: true });
+					if (!await this.adoptIncoming(pageId)) return;
 				}
 				this.remote.set(pageId, result);
 				await this.deps.device.finishAction(this.chatId, this.generation, creation.actionId); this.actions.delete(creation.actionId);
 			}
 			while (this.alive() && !this.blocked.has(pageId)) {
 				page = this.pages.get(pageId)!; const acknowledged = this.remote.get(pageId);
-				if (acknowledged && handwritingPrefix(page.journal, acknowledged.journal)) break;
+				if (acknowledged && handwritingPrefix(page.journal, acknowledged.journal)) {
+					if (page.journal.head !== acknowledged.journal.head) {
+						this.incoming.set(pageId, { page: acknowledged, metadata: false });
+						if (!await this.adoptIncoming(pageId)) return;
+					}
+					break;
+				}
 				const response = await this.deps.fetch(`/api/chats/${encodeURIComponent(this.chatId)}/handwriting/pages/${encodeURIComponent(pageId)}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(page) });
 				const remote = await this.syncResponse(response, pageId); if (!this.alive()) return;
 				const current = this.pages.get(pageId)!;
@@ -393,18 +419,8 @@ export class HandwritingPages {
 				if (!handwritingPrefix(page.journal, remote.journal)) { this.conflict(pageId); return; }
 				const next = reconcileHandwritingPage(current, remote);
 				if (next.journal.head !== current.journal.head) {
-					if (this.strokes || this.state.busy) { this.conflict(pageId); return; }
-					this.update({ busy: true });
-					try {
-						await this.localFlight.catch(() => {});
-						const saved = await this.localRead(), old = saved.pages.find(item => item.id === pageId);
-						if (this.reconcileDevice(next).journal.head !== next.journal.head) throw new HandwritingConflict("Newer local working");
-						await this.deps.prepare(next);
-						await this.deps.device.commit(this.chatId, this.generation, { pages: [next], expected: { [pageId]: old ? { head: old.journal.head } : null }, valid: () => this.alive() });
-						if (!this.alive()) return;
-						this.remember(next); this.localSaved.add(pageId); this.mirror(next);
-						if (this.state.page.id === pageId) this.activate(next);
-					} finally { this.update({ busy: false }); }
+					this.incoming.set(pageId, { page: remote, metadata: false });
+					if (!await this.adoptIncoming(pageId)) return;
 				}
 				this.remote.set(pageId, remote);
 				for (const action of this.actions.values()) if (action.pageId === pageId && action.kind === "restore" && action.eventId && remote.journal.events[action.eventId]) { await this.deps.device.finishAction(this.chatId, this.generation, action.actionId); this.actions.delete(action.actionId); }

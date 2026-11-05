@@ -5,6 +5,7 @@ import { sharedWritingImageUrl, type LhMessage, type SharedWriting, type PageAtt
 import { useServerEvent, useServerResync } from "@/components/server-events";
 import { HandwritingPagesContext } from "./handwriting/pages-context";
 import type { OpenChoice, SnapshotWriting } from "./handwriting/pages";
+import { useMenuEscape } from "./menu-escape";
 
 export function useSharedWriting(chatId: string, messages: readonly LhMessage[]) {
 	const submittedKey = messages.flatMap((m) => m.sharedWriting?.map((w) => w.id) ?? []).join(",");
@@ -71,7 +72,8 @@ export function SharedWritingImages({ chatId, writing }: { chatId: string; writi
 
 function SnapshotMenu({ open, duplicate, close }: { open: () => void; duplicate: () => void; close: () => void }) {
 	const menu = useRef<HTMLDivElement>(null); useEffect(() => { menu.current?.focus(); }, []);
-	return <div ref={menu} tabIndex={-1} className="rounded border bg-background p-2 text-xs" data-testid="snapshot-menu" onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); } }}>
+	useMenuEscape("snapshot", close);
+	return <div ref={menu} tabIndex={-1} className="rounded border bg-background p-2 text-xs" data-testid="snapshot-menu">
 		<button type="button" className="block min-h-11 w-full px-3 text-left" onClick={open}>Open in notebook</button>
 		<button type="button" className="block min-h-11 w-full px-3 text-left" onClick={duplicate}>Duplicate</button>
 		<p>Duplicate opens an editable copy. It is not attached.</p>

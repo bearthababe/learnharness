@@ -46,6 +46,22 @@ Pages/options own dismissal independently of chat focus, preserve Pencil/typing
 behavior, and restore trigger focus. This clarification does not reopen the
 approved storage, activation, cancellation or #46 recovery contracts.
 
+### Owner-approved N1 correction amendment — 2026-11-05
+
+The owner explicitly approved a small shared Escape-ownership stack for open
+notebook and snapshot menus: the most recently opened nonmodal menu closes first
+regardless of focus. Native dialogs retain priority; focus returns to the closed
+menu's trigger. Verify overlapping menus alongside the existing Pencil/dictation
+behavior. This is the narrow topmost-dismissal correction, with S1 still deferred
+to #51 and no new bindings, Tab cycle or menu navigation.
+
+R4 applies the existing reconciliation-before-edit rule: a known compatible
+incoming history must remain retained after failed native adoption, and the stale
+ancestor must not accept new edits until reconciliation and durable adoption
+succeed. This includes compatible creation responses; genuinely reconciled
+device-first working and already-admitted completed strokes retain their existing
+guarantees.
+
 ## 2. Settled behavior
 
 One Open flow for pending and sent source-backed snapshots finds the original

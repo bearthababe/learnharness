@@ -4,7 +4,8 @@ import { build } from "esbuild";
 import puppeteer from "puppeteer-core";
 import { mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
-const bundle = await build({ stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {useHandwritingSession} from './components/handwriting/session.tsx';import {IndexedPagesDevice} from './components/handwriting/pages-device.ts';import {HandwritingPages} from './components/handwriting/pages.ts';import {initialHandwritingPage} from './src/core/handwriting-pages.ts';import {appendHandwriting,copyHandwriting,restoreHandwriting,replayHandwriting,importHandwritingBackground,notebookSource} from './src/core/handwriting.ts';Object.assign(window,{React,createRoot,useHandwritingSession,IndexedPagesDevice,HandwritingPages,initialHandwritingPage,appendHandwriting,copyHandwriting,restoreHandwriting,replayHandwriting,importHandwritingBackground,notebookSource});`, resolveDir: process.cwd(), loader: "ts" }, bundle: true, write: false, format: "iife", platform: "browser", plugins: [{ name: "unused-node-imports", setup(build) { build.onResolve({ filter: /^node:/ }, args => ({ path: args.path, external: true, sideEffects: false })); } }] });
+import { checkHandwritingAdoption } from "./handwriting-adoption-checks.mjs";
+const bundle = await build({ stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import {useHandwritingSession} from './components/handwriting/session.tsx';import {IndexedPagesDevice} from './components/handwriting/pages-device.ts';import {HandwritingPages} from './components/handwriting/pages.ts';import {initialHandwritingPage,reconcileHandwritingPage} from './src/core/handwriting-pages.ts';import {appendHandwriting,copyHandwriting,restoreHandwriting,replayHandwriting,importHandwritingBackground,notebookSource} from './src/core/handwriting.ts';Object.assign(window,{React,createRoot,useHandwritingSession,IndexedPagesDevice,HandwritingPages,initialHandwritingPage,reconcileHandwritingPage,appendHandwriting,copyHandwriting,restoreHandwriting,replayHandwriting,importHandwritingBackground,notebookSource});`, resolveDir: process.cwd(), loader: "ts" }, bundle: true, write: false, format: "iife", platform: "browser", plugins: [{ name: "unused-node-imports", setup(build) { build.onResolve({ filter: /^node:/ }, args => ({ path: args.path, external: true, sideEffects: false })); } }] });
 const profile = await mkdtemp(path.join(process.env.LH_HANDWRITING_TEST_ROOT ?? "/home/bjorn/.cache/opencode/issue4", "pages-device-"));
 const browser = await puppeteer.launch({ executablePath: "/usr/bin/chromium", userDataDir: profile, headless: true, args: ["--no-sandbox"] });
 try {
@@ -181,4 +182,5 @@ try {
 		if (phase === "initial-read") { assert.equal(cancelled.mutations, 0); assert.equal(cancelled.sourceReads, 0); } else assert.ok(cancelled.mutations > 0);
 	}
 	console.log("PASS R3 real lazy-session Open/Duplicate cancellation before initialization and after native acceptance");
+	await checkHandwritingAdoption(page);
 } finally { await browser.close(); await rm(profile, { recursive: true, force: true }); }

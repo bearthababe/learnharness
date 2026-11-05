@@ -389,7 +389,7 @@ try {
 	await checkHandwritingMenus({ page, origin });
 	}
 	assert.deepEqual(errors, [], "No browser runtime errors");
-	console.log("PASS: conversation, reading/reveal, free-text/selection/Other answers, practice/drills, real persisted submissions, speech recovery, image review, panels, phone geometry and focus/gesture containment.");
+	console.log(process.env.LH_NOTEBOOK_MENUS_ONLY ? "PASS: focused notebook/snapshot menu, modal and scripted-dictation Escape checks; no browser runtime errors." : "PASS: conversation, reading/reveal, free-text/selection/Other answers, practice/drills, real persisted submissions, speech recovery, image review, panels, phone geometry and focus/gesture containment.");
 } catch (error) {
 	if (browser) {
 		const page = (await browser.pages()).at(-1);
