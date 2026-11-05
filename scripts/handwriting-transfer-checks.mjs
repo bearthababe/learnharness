@@ -87,7 +87,7 @@ export async function checkHandwritingTransfers({ page, origin, transferFaults }
 	const rejectId = "mobile_transfer_reject";
 	await page.goto(`${origin}/chat/${rejectId}`, { waitUntil: "networkidle2" });
 	await page.locator('[role="checkbox"]').filter(button => button.textContent.includes("Start with force")).click();
-	await fill('[data-testid="other-option"] input', "Compare both areas.");
+	await fill('[data-testid="other-option"] [data-file-path-input]', "Compare both areas.");
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "Initial reasoning.");
 	await open(); await draw(); const a = await attach(), frozenA = await source(rejectId, a);
 	const raw = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=", "base64");
@@ -97,7 +97,7 @@ export async function checkHandwritingTransfers({ page, origin, transferFaults }
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("You can edit it and submit again"));
 	assert.equal(await page.$eval('[data-testid="thinking-field"] [data-file-path-input]', element => element.textContent), "Initial reasoning.");
-	assert.equal(await page.$eval('[data-testid="other-option"] input', element => element.value), "Compare both areas.");
+	assert.equal(await page.$eval('[data-testid="other-option"] [data-file-path-input]', element => element.textContent), "Compare both areas.");
 	assert.equal(await page.$eval('[data-testid="question-dock"] button[type="submit"]', element => element.disabled), false);
 	assert.equal((await device("submissions", rejectId)).length, 0);
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "Corrected reasoning.");
@@ -105,7 +105,7 @@ export async function checkHandwritingTransfers({ page, origin, transferFaults }
 	assert.deepEqual(new Set((await review(rejectId)).pending.map(image => image.id)), new Set([b.id, external.writing.id]));
 	await page.reload({ waitUntil: "networkidle2" });
 	await page.waitForFunction(() => document.querySelector('[data-testid="thinking-field"] [data-file-path-input]')?.textContent === "Corrected reasoning.");
-	assert.equal(await page.$eval('[data-testid="other-option"] input', element => element.value), "Compare both areas.");
+	assert.equal(await page.$eval('[data-testid="other-option"] [data-file-path-input]', element => element.textContent), "Compare both areas.");
 	transferFaults.handle = null;
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));

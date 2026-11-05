@@ -100,8 +100,9 @@ export function useHandwritingEditor(targetKey: string, read: () => EditorSnapsh
 		} else if (draft && lastDraft.current && canonicalHandwriting(draft.editor) !== lastDraft.current && canonicalHandwriting(mirrors.current.read()) === lastDraft.current) {
 			mirrors.current.restore(draft.editor);
 		}
-		lastDraft.current = draft ? canonicalHandwriting(draft.editor) : null;
-		model.edit(targetKey, mirrors.current.read());
+		// Compare future recovery against the edit we just recorded, not the
+		// previous revision: typing back to earlier text is still a new edit.
+		lastDraft.current = canonicalHandwriting(model.edit(targetKey, mirrors.current.read()).editor);
 	}, [bridge?.ready, bridge?.model, bridge?.epoch, targetKey, snapshot]);
 	return bridge;
 }

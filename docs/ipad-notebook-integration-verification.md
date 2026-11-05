@@ -1487,3 +1487,24 @@ files are not completion evidence. The clean native sequence replaces those
 ambiguous logs. Final delivery remains pending the full unit/browser outcomes.
 Parent owns the single
 combined PR, remote merge and local main update.
+
+### Combined draft-edit correction
+
+Aggregates `mobile-input-browser-EAUQro/result.json`,
+`mobile-input-browser-JCyh3R/result.json` and
+`mobile-input-browser-xrLNMb/result.json` exposed the same returned-session
+editing failure after interrupted dictation. Waiting for the outgoing keyed
+editor to detach did not fix it. The last run's input trace proves the browser
+inserted the new text before application recovery restored the earlier suffix.
+The maintained hook regression reproduced exactly that restoration
+(`editor-red.log`). `useHandwritingEditor` had retained the comparison snapshot
+from before its own `model.edit`; it now records the resulting local revision.
+Changing text back to an earlier value remains a new edit, and genuine recovery
+updates still reach an unchanged field. The mounted-hook and adjacent transfer
+tests pass, 16/16 (`editor-green2.log`); typecheck/lint pass again
+(`typecheck-editor.log`, `lint-editor.log`).
+
+The transfer browser fixture's remaining Other-answer selectors now use the
+upstream contenteditable input. Product/browser revalidation after this correction
+is pending below; earlier successful whole-unit/build/browser results above are
+retained as pre-correction evidence, not substituted for affected final checks.
