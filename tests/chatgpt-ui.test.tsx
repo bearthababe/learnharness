@@ -14,6 +14,9 @@ import { graphCostSummary as foldGraphCostSummary, type CostSummaryInput } from 
 const graphCostSummary = (input: CostSummaryInput) => foldGraphCostSummary(input, () => null);
 import type { ModelCatalogResponse, ChatGPTStatus } from "../src/core/index.ts";
 const dom = parseHTML("<html><body></body></html>");
+// This fixture exercises the desktop sidebar provider; phone geometry and
+// media-query transitions are covered by the real-browser mobile smoke test.
+Object.assign(globalThis, { matchMedia: (media: string) => ({ media, matches: false, addEventListener() {}, removeEventListener() {} }) });
 Object.assign(globalThis, { window: dom.window, document: dom.document, Element: dom.window.Element, HTMLElement: dom.window.HTMLElement, CustomEvent: dom.window.CustomEvent, IS_REACT_ACT_ENVIRONMENT: true, localStorage: { getItem: () => null, setItem() {} } });
 const originalFetch = globalThis.fetch;
 let root: Root | undefined, host: HTMLDivElement | undefined;

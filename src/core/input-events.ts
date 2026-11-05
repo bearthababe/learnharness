@@ -44,11 +44,18 @@ import {
 	pendingProblemDismissalOf,
 } from "./native-messages.ts";
 import { QUESTION_TOOLS, toolQuestionKind } from "./pending.ts";
+import type { LearnerExplanation, NotebookSubmission, TutorDraftOwner } from "./contracts/notebook.ts";
+import { parseNotebookInput, parseNotebookAnswer } from "./notebook-content.ts";
+export interface NotebookInputFields { explanation?: LearnerExplanation; submission?: NotebookSubmission }
+function notebookFields(input: Record<string, unknown>, owner?: TutorDraftOwner): NotebookInputFields {
+	try { return parseNotebookInput(input, owner); }
+	catch { throw new ChatInputError("Invalid notebook explanation or submission"); }
+}
 
 /** One client-originated input event (the POST body's `input`). */
 export type ChatInput =
-	| { type: "text"; text: string }
-	| { type: "answer"; toolCallId: string; answer: QuestionAnswerData }
+	| ({ type: "text"; text: string; writingIds?: string[] } & NotebookInputFields)
+	| { type: "answer"; toolCallId: string; answer: QuestionAnswerData; submission?: NotebookSubmission; writingIds?: string[] }
 	| { type: "continue" }
 	/** The failed-turn retry (issue #110): the banner's Retry button. */
 	| { type: "retry" }
@@ -58,7 +65,7 @@ export type ChatInput =
 	 *  thinking on the ACTIVE problem — one lane (owner 2026-10-05):
 	 *  whether it claims an answer is read from the text. One
 	 *  problem may carry many submissions; each is its own turn. */
-	| { type: "thinking"; problemCallId: string; text: string }
+	| ({ type: "thinking"; problemCallId: string; text: string; writingIds?: string[] } & NotebookInputFields)
 	/** The practice move-on signal (owner round 16): the learner's
 	 *  explicit go-ahead during the between-problems pause — the Next
 	 *  chip or Enter on an empty composer. Practice sessions only, and
@@ -82,7 +89,7 @@ export type TurnInput = ChatInput | SteerInput;
  *  wake-free. Parallel question calls each get their own dismiss event;
  *  results reference their calls by id, so the appends stay independent. */
 export type DismissInput =
-	| { type: "dismiss"; toolCallId: string; answer: QuestionAnswerData }
+	| { type: "dismiss"; toolCallId: string; answer: QuestionAnswerData; submission?: NotebookSubmission }
 	/** The problem discard (practice, owner 2026-10-04): ask-style — the
 	 *  silent route appends the UI-only marker and wakes nothing; the
 	 *  conclude pair rides the user's NEXT input (inputAppends). */
@@ -109,7 +116,8 @@ export function parseDismissInput(input: unknown): DismissInput {
 	if (answer.dismissed !== true) {
 		throw new ChatInputError("dismiss input's answer must be a dismissal (dismissed: true)");
 	}
-	return { type: "dismiss", toolCallId: i.toolCallId, answer };
+	try { return { type: "dismiss", toolCallId: i.toolCallId, answer, ...parseNotebookAnswer(answer, i.submission, i.toolCallId) }; }
+	catch { throw new ChatInputError("Invalid notebook dismissal or submission"); }
 }
 
 /** A mid-turn steer (owner arc 2026-10-03): the learner's composer message
@@ -119,7 +127,7 @@ export function parseDismissInput(input: unknown): DismissInput {
  *  (a send with no live turn is a plain text send, which already exists).
  *  The id is client-minted (steer_<localid>): the queued indicator keys on
  *  it, and the drain's message events upsert the real card by the same id. */
-export type UserSteerInput = { type: "steer"; id: string; text: string };
+export type UserSteerInput = { type: "steer"; id: string; text: string } & NotebookInputFields;
 
 /** Parse and validate a steer event off a request body. */
 export function parseUserSteerInput(input: unknown): UserSteerInput {
@@ -129,10 +137,11 @@ export function parseUserSteerInput(input: unknown): UserSteerInput {
 	if (typeof i.id !== "string" || i.id.length === 0) {
 		throw new ChatInputError("steer input requires a client-minted id");
 	}
-	if (typeof i.text !== "string" || i.text.trim().length === 0) {
+	const notebook = notebookFields(i);
+	if (typeof i.text !== "string" || (!notebook.explanation && i.text.trim().length === 0)) {
 		throw new ChatInputError("steer input requires non-empty text");
 	}
-	return { type: "steer", id: i.id, text: i.text };
+	return { type: "steer", id: i.id, text: i.text, ...notebook };
 }
 
 /** The native appends a dismissal makes (pure — same orphan discipline
@@ -159,16 +168,30 @@ export function dismissAppends(record: { messages: LhMessage[] }, input: Dismiss
 /** A malformed input event (the honest 400 — the orphan-trap discipline). */
 export class ChatInputError extends Error {}
 
+function parseWritingIds(raw: unknown): { writingIds?: string[] } {
+	if (raw === undefined) return {};
+	if (!Array.isArray(raw) || raw.some((id) => typeof id !== "string" || !/^writing_[A-Za-z0-9_-]+$/.test(id)) || new Set(raw).size !== raw.length) {
+		throw new ChatInputError("writingIds must contain unique shared-writing ids");
+	}
+	return raw.length ? { writingIds: raw } : {};
+}
+
 /** Parse and validate an input event off a request body. */
 export function parseChatInput(input: unknown): ChatInput {
 	if (typeof input !== "object" || input === null) throw new ChatInputError("input must be an object");
 	const i = input as Record<string, unknown>;
+	const writing = parseWritingIds(i.writingIds);
+	if (writing.writingIds && !["text", "answer", "thinking"].includes(String(i.type))) {
+		throw new ChatInputError("Shared writing requires a learner submission");
+	}
 	switch (i.type) {
-		case "text":
-			if (typeof i.text !== "string" || (i.text as string).trim().length === 0) {
+		case "text": {
+			const notebook = notebookFields(i);
+			if (typeof i.text !== "string" || (!notebook.explanation && !i.text.trim() && !writing.writingIds)) {
 				throw new ChatInputError("text input requires non-empty text");
 			}
-			return { type: "text", text: i.text };
+			return { type: "text", text: i.text, ...notebook, ...writing };
+		}
 		case "answer":
 			if (typeof i.toolCallId !== "string" || i.toolCallId.length === 0) {
 				throw new ChatInputError("answer input requires toolCallId");
@@ -176,7 +199,8 @@ export function parseChatInput(input: unknown): ChatInput {
 			if (typeof i.answer !== "object" || i.answer === null) {
 				throw new ChatInputError("answer input requires the graded answer object");
 			}
-			return { type: "answer", toolCallId: i.toolCallId, answer: i.answer as QuestionAnswerData };
+			try { return { type: "answer", toolCallId: i.toolCallId, answer: i.answer as QuestionAnswerData, ...parseNotebookAnswer(i.answer as QuestionAnswerData, i.submission, i.toolCallId), ...writing }; }
+			catch { throw new ChatInputError("Invalid notebook answer or submission"); }
 		case "continue":
 			return { type: "continue" };
 		case "retry":
@@ -187,14 +211,16 @@ export function parseChatInput(input: unknown): ChatInput {
 				throw new ChatInputError("retry-question input requires an exact question occurrence");
 			}
 			return { type: "retry-question", messageId: i.messageId, contentIndex: i.contentIndex, toolCallId: i.toolCallId };
-		case "thinking":
+		case "thinking": {
 			if (typeof i.problemCallId !== "string" || i.problemCallId.length === 0) {
 				throw new ChatInputError("thinking input requires problemCallId");
 			}
-			if (typeof i.text !== "string" || i.text.trim().length === 0) {
+			const notebook = notebookFields(i, { kind: "practice", problemCallId: i.problemCallId });
+			if (typeof i.text !== "string" || (!notebook.explanation && !i.text.trim() && !writing.writingIds)) {
 				throw new ChatInputError("thinking input requires non-empty text");
 			}
-			return { type: "thinking", problemCallId: i.problemCallId, text: i.text };
+			return { type: "thinking", problemCallId: i.problemCallId, text: i.text, ...notebook, ...writing };
+		}
 		case "next":
 			return { type: "next" };
 		default:
@@ -217,7 +243,7 @@ export function inputAppends(
 ): LhMessage[] {
 	switch (input.type) {
 		case "text":
-			return [...dismissalConclusion(record), newUserMessage(input.text)];
+			return [...dismissalConclusion(record), newUserMessage(input.text, input.explanation, input.submission?.id)];
 		case "answer": {
 			const pending = danglingQuestionOf(record.messages);
 			if (!pending || pending.toolCallId !== input.toolCallId) {
@@ -238,7 +264,7 @@ export function inputAppends(
 			if (!active || active.toolCallId !== input.problemCallId) {
 				throw new ChatInputError("thinking input targets no active problem");
 			}
-			return [...dismissalConclusion(record), newThinkingMessage(input.problemCallId, input.text)];
+			return [...dismissalConclusion(record), newThinkingMessage(input.problemCallId, input.text, input.explanation, input.submission?.id)];
 		}
 		case "next": {
 			// Honest 400s, the thinking gate's discipline: the signal is a

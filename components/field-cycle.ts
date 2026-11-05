@@ -20,6 +20,7 @@ import { useEffect } from "react";
 export function useFieldCycle(fields: () => readonly HTMLElement[]) {
 	useEffect(() => {
 		const onCycle = () => {
+			if (document.querySelector('[data-session-destination="notebook"]')) return;
 			const list = fields().filter((el) => el.isConnected);
 			if (list.length === 0) return;
 			const active = document.activeElement;

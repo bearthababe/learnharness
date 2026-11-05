@@ -5,6 +5,8 @@ import { ArrowRightIcon, CornerDownLeftIcon, SquareIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PathInput } from "@/components/path-input";
 import { AttachFilesButton } from "@/components/attach-files-button";
+import { CompactLearningInput } from "@/components/compact-learning-input";
+import type { Dictation } from "@/components/dictation";
 
 /**
  * The chat composer — content row ONLY (the persistent rounded shell lives in
@@ -52,6 +54,8 @@ export function ChatSessionComposer({
 	onStop,
 	sendAllowed,
 	dictationActive,
+	dictation,
+	hasContent = false,
 	autoFocus,
 	inputRef,
 	onEscape,
@@ -67,6 +71,8 @@ export function ChatSessionComposer({
 	onStop: () => void;
 	sendAllowed: boolean;
 	dictationActive: boolean;
+	dictation?: Dictation;
+	hasContent?: boolean;
 	autoFocus?: boolean;
 	inputRef?: React.RefObject<HTMLDivElement | null>;
 	onEscape?: () => void;
@@ -76,7 +82,7 @@ export function ChatSessionComposer({
 }) {
 	const [draft, setDraft] = useState(value);
 	useLayoutEffect(() => { setDraft(value); }, [revision, value]);
-	const canSend = sendAllowed && (draft.trim().length > 0 || dictationActive);
+	const canSend = sendAllowed && (draft.trim().length > 0 || dictationActive || hasContent);
 	const applyDraft = useCallback((next: string) => {
 		setDraft(next);
 		onChange(next);
@@ -84,6 +90,7 @@ export function ChatSessionComposer({
 
 	return (
 		<Composer
+			dictation={dictation}
 			busy={busy}
 			value={draft}
 			onChange={applyDraft}
@@ -113,6 +120,7 @@ export function Composer({
 	placeholder = "Ask, answer, or steer the lesson…",
 	nextProblem = false,
 	onNext,
+	dictation,
 }: {
 	busy: boolean;
 	value: string;
@@ -138,6 +146,7 @@ export function Composer({
 	/** The signal's dispatcher (send({type:"next"})) — the chip and the
 	 *  empty-Enter share it. */
 	onNext?: () => void;
+	dictation?: Dictation;
 }) {
 	const act = () => {
 		const action = enterAction({ busy, canSend, nextProblem });
@@ -150,13 +159,13 @@ export function Composer({
 	return (
 		<form
 			data-testid="composer"
-			className="flex items-end gap-1.5 p-1.5"
+			className={cn("flex items-end gap-1.5 p-1.5", dictation && "lh-compact-row")}
 			onSubmit={(e) => {
 				e.preventDefault();
 				act();
 			}}
 		>
-			<PathInput
+			<CompactLearningInput dictation={dictation} enabled={!!dictation}><PathInput
 				ref={editorRef}
 				value={value}
 				onValueChange={onChange}
@@ -183,7 +192,7 @@ export function Composer({
 				placeholder={placeholder}
 				autoFocus={autoFocus}
 				className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
-			/>
+			/></CompactLearningInput>
 			<AttachFilesButton editorRef={editorRef} />
 			{/* The button follows the text (owner report 2026-10-03): while
 				 a turn runs WITH text typed it stays the SEND affordance

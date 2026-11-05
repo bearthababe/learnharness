@@ -10,6 +10,7 @@ export function SearchMenuList<T>({
 	items, itemKey, searchTerms, compare, prioritize, isSelected, onPick, renderItem,
 	searchTestid, listTestid, optionTestid, placeholder, ariaLabel, loading, empty,
 	disabled = false,
+	focusSearch = true,
 }: {
 	items: readonly T[] | undefined;
 	itemKey: (item: T) => string;
@@ -30,13 +31,14 @@ export function SearchMenuList<T>({
 	loading?: string;
 	empty: string;
 	disabled?: boolean;
+	focusSearch?: boolean;
 }) {
 	const [query, setQuery] = useState("");
 	const [menuIdx, setMenuIdx] = useState<number | null>(null);
 	const searchRef = useRef<HTMLInputElement>(null);
 	const listRef = useRef<HTMLUListElement>(null);
 
-	useEffect(() => { searchRef.current?.focus(); }, []);
+	useEffect(() => { if (focusSearch) searchRef.current?.focus({ preventScroll: true }); }, [focusSearch]);
 	useEffect(() => {
 		if (menuIdx === null) return;
 		listRef.current?.querySelector(`[data-idx="${menuIdx}"]`)?.scrollIntoView({ block: "nearest" });

@@ -311,7 +311,7 @@ export function serializeForSummary(messages: readonly LhMessage[]): string {
 	for (const m of messages) {
 		const role = (m as { role?: string }).role;
 		if (role === "user") {
-			lines.push(`[LEARNER] ${(m as { content: string }).content}`);
+			lines.push(`[LEARNER] ${m.explanation ? serializeLearnerExplanation(m.explanation) : (m as { content: string }).content}`);
 		} else if (role === "assistant") {
 			const assistant = m as AssistantMessage;
 			const blocks: string[] = [];
@@ -329,13 +329,13 @@ export function serializeForSummary(messages: readonly LhMessage[]): string {
 				.join("\n");
 			lines.push(
 				`[RESULT for ${result.toolName}${result.isError ? " (error)" : ""}] ${
-					text.length > SUMMARY_TOOL_RESULT_TRUNCATE ? `${text.slice(0, SUMMARY_TOOL_RESULT_TRUNCATE)}…[truncated]` : text
+					!hasNotebookAnswer(result.details) && text.length > SUMMARY_TOOL_RESULT_TRUNCATE ? `${text.slice(0, SUMMARY_TOOL_RESULT_TRUNCATE)}…[truncated]` : text
 				}`,
 			);
 		} else if (role === "custom") {
 			const marker = m as LhMarkerMessage;
 			if (marker.customType === "plan-block") continue; // UI-only
-			lines.push(`[SYSTEM NOTE] ${marker.content}`);
+			lines.push(`[${marker.customType === "practice-thinking" ? "LEARNER" : "SYSTEM NOTE"}] ${marker.content}`);
 		}
 	}
 	return lines.join("\n\n");
@@ -385,6 +385,9 @@ export function buildCompactionPrompt(input: {
 	const drillPreservation = input.kind === "practice" && input.practiceMode === "drill"
 		? "\n\nThis is a focused drill. Preserve its current target and learner preferences, useful mental models and whether the learner applied them, significant errors and corrections, the help actually given, independent successes, unresolved difficulties, outstanding retests or commitments, and the current problem and agreed next step. Keep uncertainty explicit; immediate success is not evidence of delayed retention."
 		: "";
+	const notebookPreservation = input.spanText.includes("Notebook-assisted working")
+		? "\n\nPreserve the distinction between learner explanations and notebook-assisted working; do not infer independent understanding from assisted edits alone."
+		: "";
 	return `You are compacting the earlier part of a tutoring session — writing the summary your future self will read INSTEAD of that transcript. Everything before the cut is replaced by what you write; everything after stays verbatim. The learner's transcript below labels the learner as [LEARNER], the tutoring agent as [TUTOR], tool traffic as [RESULT …]/[SYSTEM NOTE].
 
 Write the summary with EXACTLY these sections, in this order:
@@ -403,9 +406,10 @@ ${planSection}
 ## The current moment
 What is happening RIGHT NOW at the cut: any question or problem awaiting the learner's answer, any commitment the agent has made that a later turn must honor, and the immediate next step.
 
-Rules: no praise, no filler, no speculation beyond the transcript. Every claim about the learner must be traceable to what they actually said or answered. Keep every identifier (proposition ids, node ids, file paths) exact.${drillPreservation}
+Rules: no praise, no filler, no speculation beyond the transcript. Every claim about the learner must be traceable to what they actually said or answered. Keep every identifier (proposition ids, node ids, file paths) exact.${drillPreservation}${notebookPreservation}
 
 TRANSCRIPT TO SUMMARIZE:
 
 ${input.spanText}`;
 }
+import { serializeLearnerExplanation, hasNotebookAnswer } from "./notebook-content.ts";

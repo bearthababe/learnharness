@@ -5,8 +5,12 @@
  */
 
 export * from "./chat-handler.ts";
+export * from "./shared-writing.ts";
 export * from "./events-stream.ts";
 export * from "./chats.ts";
+export { handleNotebookRequest, initializeNotebookRecovery } from "./notebook.ts";
+export { commitNotebookInput, notebookSubmissionAccepted, validateNotebookSubmission } from "./notebook-submissions.ts";
+export { NotebookDraftConflict } from "../core/notebook-drafts.ts";
 export * from "./graph.ts";
 export * from "./source-organization.ts";
 export * from "./source-deletion.ts";
@@ -55,3 +59,4 @@ export { claudeCodeInstallationResponse } from "./claude-code.ts";
 // No import side effects; the boot sync lives in stores.ts.
 export * from "./custom-provider.ts";
 export { customProviderGet, customProviderMutation } from "./custom-provider-http.ts";
+export { submitNotebookSteer } from "./notebook-steer.ts";

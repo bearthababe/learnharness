@@ -20,7 +20,7 @@ const { subscriptionControlsResponse, subscriptionBrowserResponse } = await impo
 const chat = await import("../src/agent/chatgpt-bridge.ts");
 const native = await import("../src/agent/subscription-bridge.ts");
 const { piModels } = await import("../src/agent/models.ts");
-const { refreshConnectionCatalog } = await import("../src/server/model-catalog.ts");
+const { refreshConnectionCatalog, ensureConnectionModel } = await import("../src/server/model-catalog.ts");
 const model = piModels().getModels("openai").find((entry) => entry.api === "openai-responses")!;
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input) => {
@@ -47,6 +47,18 @@ test("ordinary web restores configured sibling credentials, private runtime leas
 	const publicState = await response.text();
 	for (const secret of ["fixture-chatgpt-access", "fixture-chatgpt-refresh", "fixture-id-token", "fixture-xai-access", "fixture-refresh"]) assert(!publicState.includes(secret));
 	assert(publicState.includes("fixture@example.invalid"));
+});
+
+test("native selected models reuse current authority while a missing model refreshes the owner's snapshot", async t => {
+	const owner = webSubscriptionOwner();
+	const snapshot = t.mock.method(owner.native, "snapshot");
+	const model = native.nativeSubscriptionModels().find(entry => entry.provider === "xai-subscription")!;
+	await ensureConnectionModel(model.provider, model.id);
+	assert.equal(snapshot.mock.callCount(), 0, "known current models do not require another snapshot");
+	assert.equal((await native.subscriptionLease(native.subscriptionScope("xai", model.id), false)).apiKey, "fixture-xai-access");
+	await ensureConnectionModel(model.provider, "not-in-the-catalog");
+	assert.equal(snapshot.mock.callCount(), 1);
+	assert.throws(() => native.subscriptionScope("xai", "not-in-the-catalog"), /catalog/);
 });
 
 test("web background OFF immediately aborts background streams, retains foreground and rejects private background leases", async () => {

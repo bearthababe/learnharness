@@ -4,6 +4,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 	const { id } = await params;
 	const chat = getChat(id);
 	if (!chat) return Response.json({ error: "Not found" }, { status: 404 });
+	// The dedicated notebook endpoint projects learner-visible state; executor
+	// checkpoints and raw outputs never ride the conversation response.
 	// turnInFlight lets a returning client re-attach to a running turn
 	// (chat-handler write-ahead + registry — see src/server/turn-liveness.ts).
 	// coverage (extraction-UX redesign, 2026-09-24): the chat view's ring
@@ -15,7 +17,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 	// (core/view.ts projectView). turnInFlight lets a returning client
 	// re-attach to a running turn; coverage is the chat view's ring meter.
 	// Snapshot bytes have a session-scoped endpoint; do not resend the whole image pool on every poll.
-	const { imageSnapshots: _imageSnapshots, ...record } = chat;
+	const { imageSnapshots: _imageSnapshots, notebook: _notebook, ...record } = chat;
 	return Response.json({
 		...record,
 		messages: chat.messages,
@@ -98,4 +100,3 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 		graphRevision: outcome.graphRevision,
 	});
 }
-

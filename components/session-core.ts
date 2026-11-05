@@ -137,6 +137,7 @@ export function pendingCallTool(messages: readonly LhMessage[], toolCallId: stri
  * absorbed (live turn content is never dropped).
  */
 export function absorbed(m: LhMessage, record: readonly LhMessage[]): boolean {
+	if (m.explanation) return record.some((saved) => saved.id === m.id);
 	if (typeof m.id !== "string" || !m.id.startsWith("c_")) return false;
 	const role = (m as { role?: string }).role;
 	if (role === "user") {
@@ -697,12 +698,12 @@ export class SessionModel {
 		// write-ahead will persist (inputAppends), with LOCAL ids so
 		// adoption can tell them from the record's absorbed copies.
 		const optimistic: LhMessage[] = [];
-		if (input.type === "text") optimistic.push({ ...newUserMessage(input.text), id: localId() });
+		if (input.type === "text") optimistic.push({ ...newUserMessage(input.text, input.explanation), id: input.submission?.id ?? localId() });
 		else if (input.type === "thinking") {
 			// The practice submissions (2026-10-04): the marker lands
 			// optimistically — the card renders from its details the
 			// moment the button fires.
-			optimistic.push({ ...newThinkingMessage(input.problemCallId, input.text), id: localId() });
+			optimistic.push({ ...newThinkingMessage(input.problemCallId, input.text, input.explanation), id: input.submission?.id ?? localId() });
 		} else if (input.type === "next") {
 			// The move-on signal (owner round 16): the NEXT PROBLEM line
 			// renders the instant the chip/Enter fires.
@@ -779,7 +780,7 @@ export class SessionModel {
 			// existing setup recovery. A newer send/reattach ALWAYS owns errors
 			// and status instead, even if that request has since been stopped.
 			// Ordinary text and answer teardown behavior stays unchanged.
-			if (input.type === "answer") {
+			if (input.type === "answer" || ((input.type === "text" || input.type === "thinking") && input.submission)) {
 				const ids = new Set(optimistic.map(m => m.id));
 				this.mutate(() => {
 					this.tail = this.tail.filter(m => !ids.has(m.id));
@@ -807,11 +808,12 @@ export class SessionModel {
 	 *  settled mid-send (the race): fall back to the plain text send —
 	 *  the entry is dropped and send() pushes its own optimistic card.
 	 */
-	async steer(text: string): Promise<void> {
+	async steer(text: string, notebook?: Pick<Extract<ChatInput, { type: "text" }>, "explanation" | "submission">): Promise<boolean> {
 		const t = text.trim();
-		if (!t) return;
-		const id = `steer_${localId()}`;
-		this.steerQueueValue = [...this.steerQueueValue, { id, text: t }];
+		if (!t && !notebook?.explanation) return false;
+		const fields = { explanation: notebook?.explanation, submission: notebook?.submission };
+		const id = notebook?.submission?.id ?? `steer_${localId()}`;
+		if (!this.steerQueueValue.some((entry) => entry.id === id)) this.steerQueueValue = [...this.steerQueueValue, { id, text: t || "Notebook-assisted working" }];
 		this.onChange?.();
 		const dropSteer = () => {
 			this.steerQueueValue = this.steerQueueValue.filter((s) => s.id !== id);
@@ -821,13 +823,12 @@ export class SessionModel {
 			const res = await this.fetch(`/api/chats/${this.chatId}/steer`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ input: { type: "steer", id, text: t } }),
+				body: JSON.stringify({ input: { type: "steer", id, text: t, ...fields } }),
 			});
-			if (res.ok) return; // parked or delivered — the stream lands the card
+			if (res.ok) return true; // parked or delivered — the stream lands the card
 			if (res.status === 409) {
 				dropSteer();
-				await this.send({ type: "text", text: t }); // the settle race: plain send
-				return;
+				return this.send({ type: "text", text: t, ...fields }); // preserve notebook identity through the settle race
 			}
 			dropSteer();
 			this.setError((await res.text()) || `The steer failed (${res.status}).`);
@@ -835,13 +836,14 @@ export class SessionModel {
 			dropSteer();
 			this.setError((err as Error).message);
 		}
+		return false;
 	}
 
 	/** The answer path (the dock): the answer IS the question call's tool
 	 *  result (fork 1), riding as its input event. */
-	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string): Promise<void> {
+	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission" | "writingIds">): Promise<void> {
 		void tool;
-		return this.send({ type: "answer", toolCallId, answer: output }, undefined, questionKey).then(() => undefined);
+		return this.send({ type: "answer", toolCallId, answer: output, submission: fields?.submission, writingIds: fields?.writingIds }, undefined, questionKey).then(() => undefined);
 	}
 
 	/** The dismissal path (owner design 2026-10-03, "A2"): the skipped
@@ -850,7 +852,7 @@ export class SessionModel {
 	 * user's choice; the next plain send is the wake. On failure the
 	 * durable record wins: the error surfaces, the record-changed sync
 	 * (or any later refetch) replaces the optimistic append with truth. */
-	async dismissQuestion(toolCallId: string, answer: QuestionAnswerData, questionKey?: string): Promise<void> {
+	async dismissQuestion(toolCallId: string, answer: QuestionAnswerData, questionKey?: string, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission">): Promise<void> {
 		if (!this.readyRef) return;
 		const subject = pendingQuestionOf([...this.base, ...this.tail]);
 		if (questionKey !== undefined && (subject?.key !== questionKey || subject.toolCallId !== toolCallId)) return;
@@ -862,7 +864,7 @@ export class SessionModel {
 			const res = await this.fetch(`/api/chats/${this.chatId}/dismiss`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ input: { type: "dismiss", toolCallId, answer } }),
+				body: JSON.stringify({ input: { type: "dismiss", toolCallId, answer, submission: fields?.submission } }),
 			});
 			if (!res.ok) throw new Error(`The dismissal failed (${res.status}).`);
 		} catch (err) {

@@ -32,6 +32,54 @@ jobs:
       - run: npm test
       - run: npm run lint
 
+  mobile-browser:
+    name: Mobile browser regressions (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LH_MOBILE_TEST_DIR: ${{ runner.temp }}/mobile-browser-artifacts
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "26"
+          cache: npm
+      - run: npm ci
+      - name: Install Puppeteer's supported Chrome
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          import { install, Browser } from '@puppeteer/browsers';
+          import { PUPPETEER_REVISIONS } from 'puppeteer-core';
+          const browser = await install({
+            browser: Browser.CHROME,
+            buildId: PUPPETEER_REVISIONS.chrome,
+            cacheDir: `${process.env.RUNNER_TEMP}/mobile-chrome`,
+          });
+          console.log(`Chrome ${PUPPETEER_REVISIONS.chrome}: ${browser.executablePath}`);
+          appendFileSync(process.env.GITHUB_ENV, `CHROMIUM_PATH=${browser.executablePath}\n`);
+          NODE
+      # These scripts are intentionally outside ESLint's scope.
+      - name: Check browser harness syntax
+        run: |
+          node --check scripts/mobile-browser-runner.mjs
+          node --check scripts/run-mobile-checks.mjs
+          node --check scripts/smoke-mobile-inputs.mjs
+          node --check scripts/smoke-question-reveal.mjs
+          node --check scripts/smoke-mobile-layout.mjs
+      - run: npm run test:mobile
+      - name: Retain browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-browser-failure-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/mobile-browser-artifacts/**/*.log
+            ${{ runner.temp }}/mobile-browser-artifacts/**/failure.png
+            ${{ runner.temp }}/mobile-browser-artifacts/**/failure.txt
+          if-no-files-found: warn
+          retention-days: 7
+
   standalone:
     name: Standalone (${{ matrix.platform }})
     strategy:

@@ -1,0 +1,7 @@
+{
+  "finishedAt": "2026-10-31T22:08:18.878Z",
+  "completedTurns": 29,
+  "mechanicalMatches": 29,
+  "failure": null,
+  "note": "Every clarification and non-exact output requires correctness review; a mechanical match is not independent validation. API dollar cost is not measured."
+}
