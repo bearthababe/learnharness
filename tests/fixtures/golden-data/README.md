@@ -116,6 +116,18 @@ SHA-256: `6b45bd9bd02722a8b64e1a621d670c1e201691aac64a29b6092427192940f108`.
 Re-running captures an additional record with new IDs/timestamps. Replace the
 intended capture deliberately and update provenance; preserve legacy fixtures.
 
+### Expression references and model picker capture — 2026-11-05
+
+`chats/chat_mw3ijz8j_84a00882.json` was captured with
+`node --import tsx scripts/capture-notebook-golden.ts` after the expression/picker
+review corrections. The existing isolated production-writer flow now selects the
+empty second expression of `p=` before completing it. The verbatim record captures
+`modelPickerVersion: 2`, Terra/medium and frozen expression selection in both the
+accepted operation and execution input, alongside the existing Undo, drafts,
+snapshots, submission and completed recording. Two scripted editor responses and
+one scripted Tutor response; zero network/live calls. Legacy captures retained.
+SHA-256: `6aa1de57258acb43d45033eccf2c1ead97be67297cf9bd575769a3f078dfb65b`.
+
 ### Legacy stamps
 
 These files are deliberately the UNSTAMPED legacy shape (schema-stamp wave,

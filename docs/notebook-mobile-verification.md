@@ -6,7 +6,8 @@ Authoritative combined verification record for #28/#18. Review baseline:
 **Terra/Sol reasoning controls and numbered, selectable expressions verified and deployed.**
 Source `73878eb`, production build `_Hk4ZaeJveuA2XxOX61c3`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
 The current fork's native Electron app remains open; use **Reload preview** to
-load the update. Physical phone and owner-learning acceptance are still pending.
+load the update. **Owner phone and real-learning acceptance completed 2026-11-05**;
+final reviewed integration is in progress.
 
 Current tracker receipt: [#28 expression/picker deployment](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6657245951),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6657248245).
@@ -21,6 +22,33 @@ Earlier tracker receipt: [#28 continuation fix](https://github.com/bearthababe/l
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6643706613).
 
 ## Terra/Sol controls and expression references — 2026-11-05
+
+### Owner acceptance and final review
+
+The owner confirms the physical-phone/real-learning walkthrough is done: “I have
+been using it for a while and it works decently enough.” This is owner-reported
+acceptance after continued use, not a claim of newly instrumented device measurements.
+They authorized final review, integration into the main combined app, and closure
+of #28/#18. Prompt tuning is explicitly deferred to
+[#52](https://github.com/bearthababe/learnharness/issues/52).
+Acceptance receipt: [#28](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6657651662).
+
+Two independent review axes examined `3376401...ad48115`:
+- **Standards:** missing golden capture for new persisted fields; model policy in
+  the server rather than core; duplicated KaTeX fallback (maintainability suggestion).
+- **Spec:** delimiter aliases/Unicode groups and annotated relations could produce
+  incorrect expression addresses.
+
+Corrections move picker migration/eligibility policy into core, share rendering
+fallback, and capture new application-written picker/selection data with provenance.
+Grouping aliases now remain intact; annotated relations conservatively use whole-line
+addressing and rendering. Parser regression went red before the fix; targeted
+expression/model/UI/golden checks passed (`check-28-review-grouping-red.log`,
+`check-28-review-fixes-final.log`). Both reviewers rechecked the corrections:
+**zero unresolved Standards findings, zero unresolved Spec findings**. No live calls.
+
+The owner approved staging the combined merge separately, preserving/backing up the
+main checkout's local work and restoring it as uncommitted changes after integration.
 
 Owner approved the complete implementation and deployment plan: separate Model
 and Reasoning under ⋯ → Model; Terra/medium default for new and existing sessions;

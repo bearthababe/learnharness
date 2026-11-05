@@ -3,6 +3,11 @@
 import katex from "katex";
 import { notebookExpressions, type NotebookExpressionSelection, type NotebookLine } from "@/src/core";
 
+function renderWorking(source: string): string | null {
+	try { return katex.renderToString(source, { throwOnError: true, trust: false, displayMode: true }); }
+	catch { return null; /* Exact source remains the fallback. */ }
+}
+
 export function NotebookWorking({ lines, selectedLineId, expressionSelection, onSelect, onSelectExpression }: {
 	lines: readonly NotebookLine[];
 	selectedLineId?: string | null;
@@ -14,9 +19,7 @@ export function NotebookWorking({ lines, selectedLineId, expressionSelection, on
 		{lines.map((line, index) => {
 			const expressions = notebookExpressions(line.latex);
 			const rendered = expressions?.map(part => {
-				let expression: string | null = null;
-				try { expression = katex.renderToString(part.text, { throwOnError: true, trust: false, displayMode: true }); } catch { /* Retain exact source and the shared address. */ }
-				return { expression, relation: part.relationAfter ? katex.renderToString(part.relationAfter, { throwOnError: true, trust: false }) : "" };
+				return { expression: renderWorking(part.text), relation: part.relationAfter ? katex.renderToString(part.relationAfter, { throwOnError: true, trust: false }) : "" };
 			});
 			if (expressions && rendered) return <li key={line.id} className="notebook-working-line flex min-w-0 items-center gap-2">
 				{onSelect ? <button type="button" aria-label={`Select line ${index + 1}`} aria-pressed={selectedLineId === line.id && !expressionSelection} className="min-h-11 shrink-0 rounded px-2 text-xs text-muted-foreground hover:bg-accent aria-pressed:bg-accent" onClick={() => onSelect(line.id)}>{index + 1}.</button>
@@ -31,8 +34,7 @@ export function NotebookWorking({ lines, selectedLineId, expressionSelection, on
 					</span>;
 				})}</span>
 			</li>;
-			let html: string | null = null;
-			try { html = katex.renderToString(line.latex, { throwOnError: true, trust: false, displayMode: true }); } catch { /* Exact source is the fallback. */ }
+			const html = renderWorking(line.latex);
 			const content = <><span className="shrink-0 text-xs text-muted-foreground">{index + 1}.</span>
 				{html === null ? <code data-notebook-source="" className="whitespace-pre-wrap break-all">{line.latex}</code> : <span className="min-w-0 overflow-x-auto" dangerouslySetInnerHTML={{ __html: html }} />}</>;
 			return <li key={line.id}>{onSelect ? <button type="button" aria-label={`Select line ${index + 1}`} aria-pressed={selectedLineId === line.id}

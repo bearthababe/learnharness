@@ -32,6 +32,7 @@ try {
 	const owner = { kind: "ordinary" as const };
 	session.tutor.updateText(owner, "Pressure is force per area."); await session.tutor.idle();
 	for (const text of ["Write p=", "Complete the formula with F/A"]) {
+		if (session.getSnapshot().view?.lines.length) session.selectExpression("L1", 2);
 		await session.dispatch({ type: "draft", text }); await session.dispatch({ type: "apply" });
 		await service.settled(chat.id); await session.refresh(); await session.tutor.returnToTutor(owner);
 	}

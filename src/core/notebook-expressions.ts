@@ -5,7 +5,7 @@ export const notebookExpressionSelectionSchema = z.object({ lineId: z.string().m
 export type NotebookExpressionSelection = z.infer<typeof notebookExpressionSelectionSchema>;
 export interface NotebookExpression { number: number; text: string; start: number; end: number; relationAfter: string }
 const relations = new Set(["=", "≈", "≠", "<", ">", "≤", "≥", "\\approx", "\\ne", "\\neq", "\\lt", "\\gt", "\\le", "\\leq", "\\ge", "\\geq"]);
-const delimiters: Record<string, string> = { "\\rangle": "\\langle", "\\rvert": "\\lvert", "\\rVert": "\\lVert", "\\rbrace": "\\lbrace", "\\rfloor": "\\lfloor", "\\rceil": "\\lceil" };
+const delimiters: Record<string, string> = { "\\rangle": "\\langle", "\\rvert": "\\lvert", "\\rVert": "\\lVert", "\\rbrace": "\\lbrace", "\\rfloor": "\\lfloor", "\\rceil": "\\lceil", "\\rparen": "\\lparen", "\\rbrack": "\\lbrack", "⟩": "⟨", "⌋": "⌊", "⌉": "⌈" };
 
 /** Source-preserving addresses, not algebra. Uncertain grouping has no expression
  * map: rendering and the editor both retain whole-line addressing instead. */
@@ -20,7 +20,7 @@ export function notebookExpressions(source: string): NotebookExpression[] | null
 			const command = /^[a-zA-Z]+|[^a-zA-Z]/.exec(source.slice(i))?.[0];
 			if (!command) return null;
 			token += command; i += command.length;
-			if (["\\begin", "\\end", "\\\\", "\\def", "\\newcommand", "\\verb", "\\color", "\\displaystyle", "\\textstyle", "\\over", "\\atop", "\\choose", "\\not"].includes(token)) return null;
+			if (["\\begin", "\\end", "\\\\", "\\def", "\\newcommand", "\\verb", "\\color", "\\displaystyle", "\\textstyle", "\\over", "\\atop", "\\choose", "\\not", "\\overset", "\\underset", "\\stackrel"].includes(token)) return null;
 			if (/^\\(?:big|Big|bigg|Bigg)[lrm]?$/.test(token)) return null;
 			if (token === "\\left" || token === "\\right") {
 				if (token === "\\left") stack.push("left"); else if (stack.pop() !== "left") return null;

@@ -9,7 +9,7 @@ import { stores, effectiveSettings } from "./stores.ts";
 import { initAuthEnv } from "./keys.ts";
 import { ensureConnectionModel } from "./model-catalog.ts";
 import { callCost } from "./pricing.ts";
-import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, NOTEBOOK_MODEL_PICKER_VERSION, notebookCandidateSchema, type NotebookCandidate } from "../core/notebook-models.ts";
+import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, NOTEBOOK_MODEL_PICKER_VERSION, migrateNotebookModelPicker, notebookCandidateSelectable, notebookCandidateSchema, type NotebookCandidate } from "../core/notebook-models.ts";
 import { notebookExpressionSelectionSchema, selectedNotebookExpression } from "../core/notebook-expressions.ts";
 import { ownedTutorDraftSchema, tutorDraftOwnerSchema } from "../core/notebook-content.ts";
 import { changeNotebookDraft, NotebookDraftConflict } from "../core/notebook-drafts.ts";
@@ -83,11 +83,7 @@ export function createNotebookService({ chatStore, engine }: {
 	function read(chatId: string) {
 		const chat = chatStore.getChat(chatId);
 		if (!chat) throw new NotebookRefusal("Session not found", 404);
-		if (chat.notebook && (chat.notebook.modelPickerVersion ?? 0) < NOTEBOOK_MODEL_PICKER_VERSION) {
-			// One-time owner-approved default migration. Accepted operation pairs,
-			// including legacy shared-slot operations, remain frozen as recorded.
-			chat.notebook.candidate = DEFAULT_NOTEBOOK_CANDIDATE;
-			chat.notebook.modelPickerVersion = NOTEBOOK_MODEL_PICKER_VERSION;
+		if (chat.notebook && migrateNotebookModelPicker(chat.notebook)) {
 			chat.notebook = chatStore.saveNotebook(chatId, chat.notebook.revision, chat.notebook);
 		}
 		if (chat.notebook?.submissions?.some((receipt) => receipt.status === "pending")) {
@@ -202,7 +198,7 @@ export function createNotebookService({ chatStore, engine }: {
 		}
 		const saved = mutate(chatId, (record) => {
 			if (command.type === "candidate") {
-				if (command.candidate === "deepseek-low") throw new NotebookRefusal("Choose Terra or Sol for new Notebook work", 400);
+				if (!notebookCandidateSelectable(command.candidate)) throw new NotebookRefusal("Choose Terra or Sol for new Notebook work", 400);
 				if (record.operations.some(outstanding) || record.speechRuns?.some(run => run.status === "recording")) throw new NotebookRefusal("Finish recording and applying before changing the Notebook model", 409);
 				const current = record.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE;
 				if (current !== command.expectedCandidate && current !== command.candidate) throw new NotebookRefusal("Notebook model changed; refresh before selecting", 409);

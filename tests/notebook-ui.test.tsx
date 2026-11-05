@@ -50,7 +50,7 @@ test("model and reasoning controls save separately and Sol never offers Off", as
 
 test("expression labels are distinct from math and tapping expressions or line numbers changes the reference", async () => {
 	const { NotebookWorking } = await import("../components/notebook-working.tsx");
-	const lines = [{ id: "L1", latex: String.raw`x^2 = \frac{2+2}{5} =` }, { id: "L2", latex: String.raw`x=\badmacro` }, { id: "L3", latex: String.raw`x=\frac{1}{` }];
+	const lines = [{ id: "L1", latex: String.raw`x^2 = \frac{2+2}{5} =` }, { id: "L2", latex: String.raw`x=\badmacro` }, { id: "L3", latex: String.raw`x=\frac{1}{` }, { id: "L4", latex: String.raw`x\overset{?}=y` }];
 	const selected: unknown[] = []; const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
 	try {
 		await act(async () => root.render(<NotebookWorking lines={lines} onSelect={id => selected.push(id)} onSelectExpression={(id, number) => selected.push([id, number])} />));
@@ -61,6 +61,9 @@ test("expression labels are distinct from math and tapping expressions or line n
 		assert.deepEqual(selected, [["L1", 3], "L1"]);
 		assert.match(host.querySelector('[aria-label="Select expression 2 on line 2"]')!.textContent!, /\\badmacro/);
 		assert.equal(host.querySelector('[aria-label="Select expression 1 on line 3"]'), null);
+		assert.equal(host.querySelector('[aria-label="Select expression 1 on line 4"]'), null);
+		assert.ok(host.querySelector('[aria-label="Select line 4"] .katex'));
+		assert.equal(host.querySelector('[aria-label="Select line 4"] [data-notebook-source]'), null, "Valid annotated relations retain full mathematical rendering");
 	} finally { await act(async () => root.unmount()); host.remove(); }
 });
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { after, test } from "node:test";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai";
+import katex from "katex";
 import { notebookExpressions, notebookExpressionMap, type NotebookExpressionSelection } from "../src/core/notebook-expressions.ts";
 import { createNotebookSession } from "../components/notebook-session.ts";
 
@@ -10,6 +11,19 @@ process.env.LH_DATA_DIR = dir; process.env.LH_AUTH_FILE = `${dir}/auth.json`;
 const { chatStore } = await import("../src/store/chats.ts");
 const { createNotebookService } = await import("../src/server/notebook.ts");
 after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+test("valid delimiter aliases and Unicode grouping retain whole expressions; annotated relations fall back", () => {
+	for (const grouped of [String.raw`\lparen a=b\rparen`, String.raw`\lbrack a=b\rbrack`, "⟨a=b⟩"]) {
+		const source = `${grouped} = c`;
+		assert.doesNotThrow(() => katex.renderToString(source, { throwOnError: true }));
+		assert.deepEqual(notebookExpressions(source)?.map(part => part.text), [`${grouped} `, " c"]);
+	}
+	for (const source of [String.raw`x\overset{?}=y`, String.raw`x\underset{?}=y`, String.raw`x\stackrel{?}=y`]) {
+		assert.doesNotThrow(() => katex.renderToString(source, { throwOnError: true }));
+		assert.equal(notebookExpressions(source), null);
+		assert.equal(notebookExpressionMap([{ id: "L1", latex: source }])[0]!.expressions, null);
+	}
+});
 
 test("numbered expressions preserve source across relations, grouping, fractions and unfinished slots", () => {
 	for (const [source, expected] of [

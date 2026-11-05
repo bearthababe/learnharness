@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { NotebookRecord } from "./contracts/notebook.ts";
 
 /** Frozen model/effort pairs. Legacy pairs remain resolvable for accepted work. */
 export const notebookCandidateSchema = z.enum(["deepseek-low", "terra-off", "terra-low", "terra-medium", "terra-high", "terra-xhigh", "terra-max", "sol-low", "sol-medium", "sol-high", "sol-xhigh", "sol-max"]);
@@ -21,4 +22,16 @@ export type NotebookPickerModel = keyof typeof NOTEBOOK_PICKER_MODELS;
 export function notebookPickerModel(candidate: NotebookCandidate): NotebookPickerModel { return candidate.startsWith("sol-") ? "sol" : "terra"; }
 export function notebookCandidateFor(model: NotebookPickerModel, current: NotebookCandidate): NotebookCandidate {
 	return NOTEBOOK_PICKER_MODELS[model].candidates.find(id => NOTEBOOK_CANDIDATES[id].thinkingLevel === NOTEBOOK_CANDIDATES[current].thinkingLevel) ?? `${model}-medium`;
+}
+
+export function notebookCandidateSelectable(candidate: NotebookCandidate): boolean {
+	return Object.values(NOTEBOOK_PICKER_MODELS).some(model => model.candidates.some(id => id === candidate));
+}
+
+/** One-time owner-approved default; accepted operation pairs stay frozen. */
+export function migrateNotebookModelPicker(record: NotebookRecord): boolean {
+	if ((record.modelPickerVersion ?? 0) >= NOTEBOOK_MODEL_PICKER_VERSION) return false;
+	record.candidate = DEFAULT_NOTEBOOK_CANDIDATE;
+	record.modelPickerVersion = NOTEBOOK_MODEL_PICKER_VERSION;
+	return true;
 }

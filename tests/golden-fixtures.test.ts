@@ -174,6 +174,18 @@ test("an app-written Notebook retains Undo, unsent drafts and immutable submitte
 	}
 });
 
+test("an app-written Notebook retains its picker version and frozen selected-expression execution", () => {
+	const record = chatStore.listChats().map(chat => chatStore.getChat(chat.id)!).find(chat => chat.notebook?.modelPickerVersion === 2);
+	assert.ok(record, "Picker/selection format changes require an application-written fixture");
+	assert.equal(record.notebook!.candidate, "terra-medium");
+	const operation = record.notebook!.operations.find(op => op.expressionSelection);
+	assert.ok(operation);
+	assert.deepEqual(operation.expressionSelection, { lineId: "L1", number: 2, lineSource: "p=", text: "" });
+	assert.deepEqual(operation.execution?.input.expressionSelection, operation.expressionSelection);
+	assert.equal(operation.candidate, "terra-medium");
+	assert.equal(operation.status, "applied");
+});
+
 
 test("tools: the core tool surface appears in real fixture data", () => {
 	// A living inventory, not an exhaustive pin: teach tools in the teach
