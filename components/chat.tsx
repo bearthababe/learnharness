@@ -509,7 +509,7 @@ export function Chat({
 			const problem = activeProblemRef.current;
 			if (!problem) return;
 			const images = reviewed ?? sharedWriting.pending;
-			if (images.length) void handwritingSubmission.submit({ type: "thinking", problemCallId: problem.toolCallId, text, writingIds: images.map(image => image.id) }, images, `problem:${problem.toolCallId}`);
+			if (images.length || handwritingSubmission.hasAttempt()) void handwritingSubmission.submit({ type: "thinking", problemCallId: problem.toolCallId, text, writingIds: images.map(image => image.id) }, images, `problem:${problem.toolCallId}`);
 			else if (!handwritingSubmission.blocked()) void send({ type: "thinking", problemCallId: problem.toolCallId, text });
 		},
 		[send, handwritingSubmission, sharedWriting],
@@ -714,6 +714,7 @@ export function Chat({
 		// Ref-first (see textRef): the join is computed from the mirror so a
 		// send resuming after `await finish()` reads the dictated tail.
 		append: (t) => applyText(joinDictation(textRef.current, t)),
+		retain: () => handwritingSubmission.retainSpeech("composer", "text"),
 	});
 	/* When a dictation run ends, the bare composer takes focus (owner
 	 * 2026-10-01) — the hands are already on the keyboard from the stop.
@@ -757,7 +758,7 @@ export function Chat({
 	const retryable = (status === "ready" || status === "error") && !busy && !compacting && endsInFailedTurn(nativeMessages);
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
 	const canSend =
-		(text.trim().length > 0 || dictation.active || hasSharedWriting) && !pending && !activeProblem && !compacting && !(hasSharedWriting && busy);
+		(text.trim().length > 0 || dictation.active || hasSharedWriting || handwritingSubmission.hasAttempt()) && !pending && !activeProblem && !compacting && !((hasSharedWriting || handwritingSubmission.hasAttempt()) && busy);
 
 	/* THE PRACTICE PAUSE (owner round 16): between problems — practice
 	 * kind, nothing active, nothing in flight, and at least one problem
@@ -1222,7 +1223,7 @@ export function Chat({
 	const doSend = (reviewed = handwritingSubmission.reviewed()) => {
 		if (busy || pending || compacting || handwritingSubmission.blocked()) return;
 		const t = textRef.current.trim();
-		if (!t && !reviewed.length) return;
+		if (!t && !reviewed.length && !handwritingSubmission.hasAttempt()) return;
 		if (zeroKeys) {
 			setSetupOpen(true);
 			return;
@@ -1235,7 +1236,7 @@ export function Chat({
 			deliverOpeningPrompt(t);
 			return;
 		}
-		if (reviewed.length) {
+		if (reviewed.length || handwritingSubmission.hasAttempt()) {
 			draftRef.current = null;
 			void handwritingSubmission.submit({ type: "text", text: t, writingIds: reviewed.map(image => image.id) }, reviewed, "composer");
 			return;
@@ -1256,7 +1257,7 @@ export function Chat({
 	 * plain send; a raced settle 409s and falls back to exactly that. */
 	const doSteerOrSend = (reviewed = handwritingSubmission.reviewed()) => {
 		if (pending || compacting || handwritingSubmission.blocked()) return;
-		if (reviewed.length) { if (!busy) doSend(reviewed); return; }
+		if (reviewed.length || handwritingSubmission.hasAttempt()) { if (!busy) doSend(reviewed); return; }
 		const t = textRef.current.trim();
 		if (!t) return;
 		if (busy) {
@@ -1710,7 +1711,7 @@ export function Chat({
 				<DockOverlay
 					fullQuestionWidth={handwriting.open}
 					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} /></>}
-					hasSharedWriting={hasSharedWriting}
+					hasSharedWriting={hasSharedWriting || handwritingSubmission.hasAttempt()}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.toolCallId)?.form : undefined}
 					onSaveQuestionDraft={(form) => { if (pending) saveQuestionDraft(pending.toolCallId, { form }); }}
@@ -1789,7 +1790,7 @@ export function Chat({
 						// The pending-id effect clears this only when the question
 						// actually leaves. An offline preflight keeps the draft visible.
 						const images = reviewed ?? sharedWriting.pending, answer = reading ? { ...output, readingThinking: reading } : output;
-						if (images.length && !output.dismissed) void handwritingSubmission.submit({ type: "answer", toolCallId: pending.toolCallId, answer, writingIds: images.map(image => image.id) }, images, `question:${pending.toolCallId}`, { readingThinking: readingThinkingRef.current });
+						if ((images.length || handwritingSubmission.hasAttempt()) && !output.dismissed) void handwritingSubmission.submit({ type: "answer", toolCallId: pending.toolCallId, answer, writingIds: images.map(image => image.id) }, images, `question:${pending.toolCallId}`, { readingThinking: readingThinkingRef.current });
 						else if (!handwritingSubmission.blocked()) submitAnswer(pending.tool, pending.toolCallId, answer);
 					}}
 				/>

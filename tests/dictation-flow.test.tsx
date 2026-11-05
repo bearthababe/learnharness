@@ -2,7 +2,7 @@ import React, { act } from "react";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { parseHTML } from "linkedom";
-import { useDictation, type Dictation } from "../components/dictation.tsx";
+import { useDictation, useDictationTarget, dictationCheckpoint, type Dictation } from "../components/dictation.tsx";
 import { notifySettingsSaved } from "../components/settings-signal.ts";
 import { useDictationLanguage } from "../components/dictation-preference.ts";
 import { isDictationActive, useDictationActive } from "../components/dictation-state.ts";
@@ -58,6 +58,8 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 		captures: 0,
 		stops: 0,
 		appends: [] as string[],
+		target: "first" as "first" | "second",
+		fields: { first: [] as string[], second: [] as string[] },
 	};
 	Socket.all = [];
 	const previous = new Map<string, PropertyDescriptor | undefined>();
@@ -96,8 +98,11 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 	const { createRoot } = await import("react-dom/client");
 	let latest!: Dictation;
 	let setting!: ReturnType<typeof useDictationLanguage>;
+	const targets = { first: (text: string) => state.fields.first.push(text), second: (text: string) => state.fields.second.push(text) };
+	let claim = false;
 	function Harness() {
 		latest = useDictation({ append: (text) => state.appends.push(text) });
+		useDictationTarget(targets[state.target], claim);
 		setting = useDictationLanguage();
 		state.active = useDictationActive();
 		return null;
@@ -119,6 +124,7 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 		get dictation() { return latest; },
 		get setting() { return setting; },
 		mount,
+		claim: async (target: "first" | "second") => { claim = true; state.target = target; await mount(); },
 		unmount: () => dispose!(),
 		remount: async () => {
 			await dispose!();
@@ -129,6 +135,19 @@ async function fixture(language: "pl" | "en" = "pl", delayedRead?: Promise<Respo
 }
 
 afterEach(async () => { await dispose?.(); restore?.(); dispose = undefined; restore = undefined; });
+
+test("finalization pins its original actual hook owner before a replacement field can receive late speech", async () => {
+	const f = await fixture("en"); await f.claim("first");
+	await act(async () => { f.dictation.toggle(); });
+	const socket = Socket.all[0]!; await act(async () => socket.open());
+	const valid = dictationCheckpoint(); let finished!: Promise<void>;
+	await act(async () => { finished = f.dictation.finish(); });
+	await f.claim("second");
+	await act(async () => { socket.final("Tail belonging to first question"); socket.end(); await finished; });
+	assert.equal(valid(), false);
+	assert.deepEqual(f.state.fields, { first: ["Tail belonging to first question"], second: [] });
+	assert.deepEqual(f.state.appends, []);
+});
 
 test("waits for the saved language; reconnect preserves it and finals still flush exactly once", async () => {
 	const read = deferred<Response>();

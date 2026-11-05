@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, it } from "node:test";
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, existsSync } from "node:fs";
 import { Resvg } from "@resvg/resvg-js";
-import { appendHandwriting, notebookSource, emptyHandwriting, canonicalHandwriting } from "../src/core/handwriting.ts";
+import { appendHandwriting, notebookSource, emptyHandwriting, canonicalHandwriting, importHandwritingBackground } from "../src/core/handwriting.ts";
 
 const data = mkdtempSync("/home/bjorn/.cache/opencode/issue4/46-attachment-test-");
 process.env.LH_DATA_DIR = data;
@@ -12,14 +12,23 @@ after(() => rmSync(data, { recursive: true, force: true }));
 const png = new Resvg('<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1800"><rect width="1400" height="1800" fill="white"/></svg>').render().asPng();
 const source = notebookSource(emptyHandwriting());
 const revised = notebookSource(appendHandwriting(source.journal, { id: "ink", kind: "stroke", stroke: { tool: "pen", colour: "#2563eb", penScale: 1, width: 38, points: [{ x: 100, y: 200, pressure: 0.6 }] } }));
-function capture(chatId: string, writingId: string, expectedPageRevision: number, value = source) {
+function capture(chatId: string, writingId: string, expectedPageRevision: number, value = source, image: Uint8Array = png) {
 	const form = new FormData();
 	form.set("writingId", writingId); form.set("pageId", value.journal.pageId); form.set("expectedPageRevision", String(expectedPageRevision));
 	form.set("source", new Blob([canonicalHandwriting(value)], { type: "application/json" }), "source.json");
-	form.set("image", new Blob([new Uint8Array(png)], { type: "image/png" }), "image.png");
+	form.set("image", new Blob([new Uint8Array(image)], { type: "image/png" }), "image.png");
 	return sharedWritingResponse(new Request("http://test/writing", { method: "POST", body: form }), chatId);
 }
 const identity = () => `writing_${crypto.randomUUID()}`;
+it("import and multipart publication reject the same wrong-sized or truncated full-page PNGs", async () => {
+	const chat = stores.chatStore.createChat("PNG boundary parity");
+	const wrongSize = Buffer.from(png); wrongSize.writeUInt32BE(800, 16);
+	for (const bytes of [png.subarray(0, 24), wrongSize]) {
+		await assert.rejects(importHandwritingBackground(emptyHandwriting(), { mediaType: "image/png", width: 1400, height: 1800, data: bytes.toString("base64") }, "import"), /Invalid background PNG/);
+		assert.equal((await capture(chat.id, identity(), 0, source, bytes)).status, 415);
+	}
+	assert.deepEqual(stores.sharedWritingStore.list(chat.id), []);
+});
 it("same-page Attach replaces only its pending head; exact old retries never promote it and its source stays readable", async () => {
 	const chat = stores.chatStore.createChat("Immutable capture"), a = identity(), b = identity(), c = identity();
 	assert.equal((await capture(chat.id, a, 0)).status, 201);

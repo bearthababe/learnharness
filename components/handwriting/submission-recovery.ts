@@ -1,9 +1,12 @@
-import { canonicalHandwriting, canonicalWritingInput, handwritingSha256, matchWritingSubmission, activeProblemOf, danglingQuestionOf, type ChatInput, type LhMessage, type SharedWriting, type WritingInputOutcome } from "../../src/core/index.ts";
+import { canonicalHandwriting, canonicalWritingInput, handwritingSha256, matchWritingSubmission, writingInputObsolete, activeProblemOf, danglingQuestionOf, type ChatInput, type LhMessage, type SharedWriting, type WritingInputOutcome } from "../../src/core/index.ts";
 import type { AttachmentReview } from "./attachment.ts";
 import type { DurableDraft, EditorSnapshot, SubmissionAttempt, TransferDevice } from "./transfer-device.ts";
 
 type Dependencies = { device: TransferDevice; fetch: typeof fetch; review: () => Promise<AttachmentReview>; changed: () => void };
 export type ImageSend = (input: ChatInput, outcome: (value: WritingInputOutcome) => void) => Promise<unknown>;
+class ReviewedImagesChanged extends Error {
+	constructor() { super("Reviewed snapshots changed. Review them before submitting."); }
+}
 
 /** Normal drafts own editing; only uncertain delivery owns a frozen attempt. */
 export class HandwritingSubmission {
@@ -14,6 +17,7 @@ export class HandwritingSubmission {
 	private deleted = false;
 	private disposed = false;
 	private rejectedCleanup?: SubmissionAttempt;
+	private checking?: Promise<"accepted" | "not_accepted" | "unknown">;
 	attempt?: SubmissionAttempt;
 	notice: string | null = null;
 	busy = false;
@@ -59,11 +63,26 @@ export class HandwritingSubmission {
 	}
 	/** Enable durability before Attach's async work so newer edits get revisions. */
 	checkpoint(targetKey: string, editor: EditorSnapshot) { const draft = this.edit(targetKey, editor); this.durable.add(targetKey); return draft; }
+	retainSpeech(targetKey: string, editor: EditorSnapshot, field: "text" | "thinking" | "readingThinking", text: string) {
+		const current = this.drafts.get(targetKey)?.editor ?? editor;
+		const previous = current[field] ?? "";
+		const draft = this.checkpoint(targetKey, { ...current, [field]: previous ? `${previous.replace(/\s+$/, "")} ${text}` : text });
+		this.queueDraft(draft); this.update();
+	}
 	async flush() { await this.writes; }
 	async submit(input: ChatInput, images: SharedWriting[], draft: DurableDraft, send: ImageSend): Promise<boolean> {
-		if (this.attempt || this.busy || this.deleted) return false;
+		if (this.busy || this.deleted) return false;
 		this.busy = true; this.update();
 		try {
+			if (this.attempt) {
+				const result = await this.check();
+				if (result === "accepted") return true;
+				if (this.attempt) {
+					if (!this.canRetry) return false;
+					await this.dispatch(send, false);
+					return true;
+				}
+			}
 			if (this.generation === null || !("writingIds" in input) || !input.writingIds?.length || input.writingIds.join() !== images.map(image => image.id).join()) throw new Error("Invalid pending review");
 			if (this.rejectedCleanup) {
 				await this.flush();
@@ -71,7 +90,7 @@ export class HandwritingSubmission {
 				this.rejectedCleanup = undefined;
 			}
 			const review = await this.deps.review();
-			if (images.some(image => !review.pending.some(current => current.id === image.id))) throw new Error("Reviewed snapshots changed. Review them before submitting.");
+			if (images.some(image => !review.pending.some(current => current.id === image.id))) throw new ReviewedImagesChanged();
 			const submissionId = `submission_${crypto.randomUUID()}`;
 			const attempt: SubmissionAttempt = { version: 1, chatId: this.chatId, submissionId, input: { ...input, submissionId }, imageVersions: images.map(({ id, notebook }) => ({ writingId: id, ...(notebook ? { notebook: { pageId: notebook.pageId, pageRevision: notebook.pageRevision } } : {}) })), targetKey: draft.targetKey, draftId: draft.draftId, draftRevision: draft.revision, editor: structuredClone(draft.editor), createdAt: new Date().toISOString(), state: "prepared" };
 			this.durable.add(draft.targetKey);
@@ -80,7 +99,7 @@ export class HandwritingSubmission {
 			await this.dispatch(send, true);
 			return true;
 		} catch (error) {
-			this.update(this.attempt ? "Couldn’t confirm delivery. Your saved answer is kept on this device." : error instanceof Error && error.message.includes("Reviewed") ? error.message : "Couldn’t save this answer on this device. Nothing was sent.");
+			this.update(this.attempt ? "Couldn’t confirm delivery. Your saved answer is kept on this device." : error instanceof ReviewedImagesChanged ? error.message : "Couldn’t save this answer on this device. Nothing was sent.");
 			return false;
 		} finally { this.busy = false; this.update(); }
 	}
@@ -93,7 +112,7 @@ export class HandwritingSubmission {
 		let outcome: WritingInputOutcome = { disposition: "unknown", original };
 		try { await send(attempt.input, value => { outcome = { ...value, original: original && value.original }; }); }
 		catch { /* unknown delivery is kept, never inferred from a thrown POST */ }
-		if (this.deleted) return;
+		if (this.deleted || this.attempt?.submissionId !== attempt.submissionId) return;
 		if (outcome.disposition === "not_accepted" && outcome.original) {
 			await this.retireUnsent();
 			this.update("Your answer wasn’t sent. You can edit it and submit again.");
@@ -118,11 +137,17 @@ export class HandwritingSubmission {
 		await this.deps.device.finishSubmission(this.chatId, this.generation, attempt, accepted);
 		const draft = this.drafts.get(attempt.targetKey);
 		if (accepted && draft?.draftId === attempt.draftId && draft.revision <= attempt.draftRevision) { this.drafts.delete(attempt.targetKey); this.durable.delete(attempt.targetKey); }
-		this.attempt = undefined; this.canRetry = false; this.update(null);
+		this.attempt = undefined; this.canRetry = false; this.update(accepted ? "Your answer was sent." : "Your answer wasn’t sent. You can edit it and submit again.");
 	}
-	async check() {
+	check(): Promise<"accepted" | "not_accepted" | "unknown"> {
+		if (this.checking) return this.checking;
+		const checking = this.checkAttempt(); this.checking = checking;
+		void checking.finally(() => { if (this.checking === checking) this.checking = undefined; });
+		return checking;
+	}
+	private async checkAttempt(): Promise<"accepted" | "not_accepted" | "unknown"> {
 		const attempt = this.attempt;
-		if (!attempt || this.deleted) return;
+		if (!attempt || this.deleted) return "unknown";
 		this.canRetry = false; this.update("Checking whether your answer was received…");
 		try {
 			// Newer monotone page-head evidence MUST precede the canonical read.
@@ -131,24 +156,19 @@ export class HandwritingSubmission {
 			if (!response.ok) throw new Error("Record unavailable");
 			const record = await response.json() as { messages: LhMessage[]; turnInFlight: boolean };
 			if (!Array.isArray(record.messages) || typeof record.turnInFlight !== "boolean") throw new Error("Invalid record");
-			if (this.attempt?.submissionId !== attempt.submissionId || this.deleted) return;
+			if (this.attempt?.submissionId !== attempt.submissionId || this.deleted) return "unknown";
 			const inputSha256 = await handwritingSha256(new TextEncoder().encode(canonicalWritingInput(attempt.input)));
 			const match = matchWritingSubmission(record.messages, { id: attempt.submissionId, inputSha256 });
-			if (match === "accepted") { await this.retire(true); return; }
+			if (match === "accepted") { await this.retire(true); return "accepted"; }
 			if (match === "conflict") throw new Error("Conflicting receipt");
 			const superseded = attempt.imageVersions.some(image => image.notebook && (review.pageAttachments[image.notebook.pageId]?.revision ?? 0) > image.notebook.pageRevision);
-			if (superseded) { await this.retire(false); return; }
+			if (superseded || writingInputObsolete(record.messages, attempt.input)) { await this.retire(false); return "not_accepted"; }
 			const input = attempt.input;
 			const eligible = input.type === "text" || (input.type === "answer" && danglingQuestionOf(record.messages)?.toolCallId === input.toolCallId) || (input.type === "thinking" && activeProblemOf(record.messages)?.toolCallId === input.problemCallId);
 			this.canRetry = !record.turnInFlight && eligible && attempt.imageVersions.every(image => review.pending.some(current => current.id === image.writingId));
 		} catch { /* absence/read failure never proves a delayed original failed */ }
 		if (this.attempt) this.update("Couldn’t confirm delivery. Your saved answer is kept on this device.");
-	}
-	async retry(send: ImageSend) {
-		if (this.busy || !this.attempt || this.deleted) return;
-		this.busy = true; this.update();
-		try { await this.check(); if (this.attempt && this.canRetry) await this.dispatch(send, false); }
-		finally { this.busy = false; this.update(); }
+		return "unknown";
 	}
 	dispose() { this.disposed = true; }
 	sessionDeleted() { this.deleted = true; this.disposed = true; }

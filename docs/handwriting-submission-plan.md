@@ -4,6 +4,18 @@ Status: **owner-approved for test-first implementation** on 2026-11-04, based on
 
 Evidence: `/tmp/opencode/issue4-submission-exploration.md`; owner decisions: `/home/bjorn/.cache/opencode/issue4/owner-decisions.md`. Authoritative implementation/delivery evidence: [integration verification](ipad-notebook-integration-verification.md).
 
+**Owner-approved correction, 2026-11-05 (relayed by parent):** normal Send/Submit
+is the only submission action, including recovery. Automatically reconcile
+uncertain delivery with a status; normal Send reconciles first and, when eligible,
+replays the exact original identity/payload. Never send newer edits as that
+attempt or infer nonacceptance from a lost ACK. A verified receipt becomes sent
+while keeping later edits. Definite refusal returns to ordinary pre-send editing.
+Restore drafts/working/history automatically. No separate Check delivery, Retry
+saved answer, recovery-panel disclosure or speculative menu. Keep original
+attempted text/choices/images inspectable in normal review. This supersedes the
+earlier manual submission-recovery UI; immutable data and acceptance invariants
+below remain binding. Upload capture Retry is a distinct existing contract.
+
 ## 1. Selected behavior
 
 - Freeze the **entire drawing history**, including Undo and Redo histories and every referenced restore branch. Store imported diagrams as independent lossless background pixels; original SVG remains in the transcript.
@@ -200,12 +212,12 @@ Durable normal draft fields: `{version:1, chatId, targetKey, draftId, revision, 
 ### Unknown delivery only
 
 - Network loss, interrupted `sending`, or an outcome without a definite acceptance/refusal retains the exact attempt. On reopen/check, read existing `GET /api/chats/:chatId`: matching canonical receipt confirms acceptance; a running turn waits/reattaches; failed read keeps uncertainty. Optimistic messages or disappearance from pending are never receipt evidence.
-- No receipt + idle does **not** alone prove a delayed original POST cannot accept. If target and original images are still eligible, an explicit **Retry saved answer** may re-POST the same immutable input/identity after this read; durable receipt checks make accepted requests converge with the original. No silent resend on reload, no substituting current edits into this retry. A rejected retry leaves uncertainty about an unaccounted-for original request; retain the editable newer draft without claiming that original definitely failed.
-- Unknown state gets one inline delivery notice with **Check delivery** and collapsed **Saved answer** detail for the exact attempted text/choices/images. When eligible for explicit exact replay, label it **Retry saved answer**. Normal editing, page duplication and Attach remain possible; a conflicting new submission waits until acceptance is reconciled. One unknown image-bearing attempt per session, not a lock after every rejection.
+- No receipt + idle does **not** alone prove a delayed original POST cannot accept. Normal **Send/Submit** first reconciles the previous attempt. If target and original images remain eligible, it may re-POST that same immutable input/identity; durable receipt checks make requests converge with the original. No silent POST on reload or background checks, no substitution of current edits. A rejected retry leaves uncertainty about an unaccounted-for original request; retain newer editable drafts without claiming that the original definitely failed. If this Send discovers acceptance, acknowledge sent and preserve newer drafts rather than submitting them in the same action.
+- Unknown state gets automatic acceptance checks (mount, connection/visibility recovery, canonical record/attachment events and bounded periodic checks) with an inline status. Normal review exposes original attempted text/choices and actual immutable image previews/viewer independently of current pending snapshots. No Check delivery or Retry saved answer button, collapsed recovery disclosure or dedicated recovery panel. Normal editing, page duplication and Attach remain possible; a conflicting new payload waits for reconciliation. One unknown image-bearing attempt per session, not a lock after every rejection.
 - **Replacement during uncertainty:** permit Attach(B) for the same page; preserve the attempted A payload and both immutable sources. Reconcile before any resend. First obtain an authoritative page head with revision **strictly greater** than A's `imageVersions` revision; then fetch fresh canonical chat. If the original receipt exists, A was accepted and B stays pending. If that fresh record has no receipt, A cannot be accepted later because the final server submission gate permanently rejects its superseded ID; retire the unknown attempt as not accepted and return to normal latest draft/B. Order these reads this way (or use one synchronous server snapshot), never use a pre-supersession record read as proof. A failed read remains uncertain. This avoids adding a separate replacement-blocking UI and never silently retries B as A.
 - Keep newer editor revisions and independent-page snapshots when resolving A. Missing pending metadata alone is insufficient: prove a newer monotone page head or canonical consumption/target resolution, and verify the corresponding fresh record. External unbound images have no page-supersession proof. Do not infer success from another submission or populate another question with an obsolete draft.
 
-Draft restore uses the newest compatible saved revision in the ordinary field. Do not overwrite it with an older Attach checkpoint or attempted snapshot. If no compatible field exists, retain it behind a small **Saved draft** disclosure in the review area; no dedicated multi-card workflow. Emit persistence snapshots on meaningful text/selection/confidence changes, not pointer movement; await them before extension-owned replacement/navigation actions. A device-write failure says **Couldn’t save your latest edits on this device. Keep this page open.** Last committed draft/attempt remains intact.
+Draft restore uses the newest compatible saved revision in the ordinary field. Do not overwrite it with an older Attach checkpoint or attempted snapshot. If no compatible field exists, retain its target-bound draft and show its content in normal review without inserting it into another question or requiring a recovery disclosure. Emit persistence snapshots on meaningful text/selection/confidence changes, not pointer movement; await them before extension-owned replacement/navigation actions. A device-write failure says **Couldn’t save your latest edits on this device. Keep this page open.** Last committed draft/attempt remains intact.
 
 Durability now begins at Attach for its finalized unsent explanation, and at image-bearing Send for an externally attached image's answer; subsequent edits in those contexts remain durable. Unrelated unsent text does not acquire a blanket app-wide persistence promise. Capture success/failure/cleanup never deletes its unsent explanation. Restore and rejection transitions do not create tutor input, and their UI does not imply any earlier immutable image was modified.
 
@@ -231,17 +243,18 @@ Use existing pending panel/viewer and ordinary editable fields; same-page replac
 | Duplicate (#47) | **Duplicate** in both approved menus; immediately open independent copy with full Undo/Redo, no attachment |
 | Standard history controls | **Undo** and **Redo**, adjacent; disabled only when the corresponding replayed stack is empty or input is not ready |
 | Open mismatch (#47, pending and sent) | **Open current working / Restore snapshot / Open snapshot as copy / Cancel** |
-| Uncertain submission | **Couldn’t confirm delivery. Your saved answer is kept on this device.** — **Check delivery**; during read **Checking whether your answer was received…** |
-| Exact unknown-attempt replay offered | **Retry saved answer**; collapsed **Saved answer** detail exposes original text/choices/images before explicit replay |
+| Uncertain submission | **Couldn’t confirm delivery. Your saved answer is kept on this device.**; automatic read: **Checking whether your answer was received…** |
+| Exact unknown-attempt replay | Ordinary **Send/Submit** reconciles first; normal review exposes original text/choices/images before replay |
+| Confirmed accepted receipt | **Your answer was sent.**; preserve later edits and newer snapshots |
 | Definite rejection | **Your answer wasn’t sent. You can edit it and submit again.**; retain existing provider/setup reason and ordinary Submit, no special retry action |
-| Obsolete target with recoverable text | **This draft belongs to an earlier question.** — **Saved draft** disclosure |
-| Newer edits while delivery unknown | Normal editor stays visible; saved-attempt detail says **Later edits are not part of this saved answer.** |
+| Obsolete target with recoverable text | **This draft belongs to an earlier question.** — content remains visible in normal review |
+| Newer edits while delivery unknown | Normal editor stays visible; original-attempt review says **Later edits are not part of this answer.** |
 | Reload help | **Reload keeps your notebook, Undo and Redo, attached snapshots and explanation saved at Attach.** |
 | Source failure | **Couldn’t load this snapshot’s editable source. The saved image is unchanged.** (source API caller; Open UI belongs to #47) |
 
-Unknown-delivery Check/Retry always checks canonical acceptance first; it may discover the input was already accepted. A definite rejection needs no special reconciliation action before ordinary editing/submission. Never say “nothing was sent” based solely on missing ACK. Do not confuse upload Retry (same exact PNG/source) with normal corrected Submit (new final input after definite rejection).
+Automatic checks and normal Send always check canonical acceptance first; either may discover the input was already accepted. A definite rejection needs no special reconciliation action before ordinary editing/submission. Never say “nothing was sent” based solely on missing ACK. Do not confuse upload Retry (same exact PNG/source) with normal corrected Submit (new final input after definite rejection).
 
-Before finishing speech, snapshot target identity and keep it through finalization using existing hooks; a concurrent reveal/dismiss/Submit must not redirect the result. Abort Attach if speech is explicitly cancelled, retaining ink/current text. This is included in the approved technical package, not a new confirmation dialog or another product-design question.
+Before requesting final speech, pin the actual target receiver through finalization using existing hooks; a concurrent reveal/dismiss/canonical transition must not redirect the result. If the original field is replaced, retain its late finals in its target-bound durable draft and abort the stale Attach. Abort Attach if speech is explicitly cancelled, retaining ink/current text. This is included in the approved technical package, not a new confirmation dialog.
 
 Preserve owner mobile focus/scroll rules from `/home/bjorn/.config/opencode/docs/preview-workflow.md:33–46`: no outer-page scroll, retain native history/input scroll, keyboard containment, focus-specific release and pinch zoom. Pane changes preserve mounted notebook, field drafts, controls and reading positions.
 

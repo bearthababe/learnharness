@@ -2,7 +2,7 @@ import { ChatInputError, type TurnInput } from "../core/input-events.ts";
 import { emit } from "../core/events.ts";
 import type { LhMessage } from "../core/native-messages.ts";
 import { CaptureConflict, pendingSharedWriting, pageAttachments, type SharedWritingReference } from "../core/shared-writing.ts";
-import { notebookSourceSchema, handwritingSha256 } from "../core/handwriting.ts";
+import { notebookSourceSchema, handwritingSha256, isFullPageHandwritingPng } from "../core/handwriting.ts";
 import { stores } from "./stores.ts";
 
 /** Same file-size ceiling as the inherited PDF reader. Stream before
@@ -67,11 +67,6 @@ export async function sharedWritingResponse(request: Request, chatId: string, im
 }
 
 function captureError(status: number, code: string, error: string, extra = {}) { return Response.json({ code, error, ...extra }, { status }); }
-function fullPagePng(bytes: Uint8Array): boolean {
-	if (bytes.length < 33 || PNG_SIGNATURE.some((value, index) => bytes[index] !== value)) return false;
-	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-	return view.getUint32(8) === 13 && String.fromCharCode(...bytes.slice(12, 16)) === "IHDR" && view.getUint32(16) === 1400 && view.getUint32(20) === 1800;
-}
 async function uploadNotebook(request: Request, chatId: string, bytes: Uint8Array): Promise<Response> {
 	let form: FormData;
 	try { form = await new Response(new Uint8Array(bytes), { headers: { "Content-Type": request.headers.get("Content-Type")! } }).formData(); }
@@ -82,14 +77,14 @@ async function uploadNotebook(request: Request, chatId: string, bytes: Uint8Arra
 	if (!(image instanceof File) || !(sourceFile instanceof File) || typeof writingId !== "string" || !/^writing_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(writingId) || typeof pageId !== "string" || typeof expected !== "string" || !/^(0|[1-9][0-9]*)$/.test(expected) || !Number.isSafeInteger(Number(expected))) return captureError(400, "invalid_capture", "Invalid snapshot identity.");
 	if (image.size > MAX_WRITING_BYTES || sourceFile.size > MAX_WRITING_BYTES) return captureError(413, "capture_too_large", "Image and source must each be 25 MiB or smaller.");
 	const imageBytes = new Uint8Array(await image.arrayBuffer());
-	if (image.type !== "image/png" || !fullPagePng(imageBytes)) return captureError(415, "unsupported_image", "Snapshot must be a 1400×1800 PNG.");
+	if (image.type !== "image/png" || !isFullPageHandwritingPng(imageBytes)) return captureError(415, "unsupported_image", "Snapshot must be a 1400×1800 PNG.");
 	let source;
 	try {
 		source = notebookSourceSchema.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await sourceFile.arrayBuffer())));
 		if (source.journal.pageId !== pageId) throw new Error("Page mismatch");
 		for (const [id, background] of Object.entries(source.journal.backgrounds)) {
 			const backgroundBytes = Buffer.from(background.data, "base64");
-			if (backgroundBytes.toString("base64") !== background.data || !fullPagePng(backgroundBytes) || await handwritingSha256(backgroundBytes) !== id) throw new Error("Invalid background");
+			if (backgroundBytes.toString("base64") !== background.data || !isFullPageHandwritingPng(backgroundBytes) || await handwritingSha256(backgroundBytes) !== id) throw new Error("Invalid background");
 		}
 	} catch { return captureError(400, "invalid_capture", "Invalid editable snapshot source."); }
 	// No await through the authoritative session/index read and publication.

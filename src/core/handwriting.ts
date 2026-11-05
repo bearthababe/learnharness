@@ -3,6 +3,13 @@ import { z } from "zod";
 /** Browser-safe drawing values shared by editable rendering and format guards.
  * Display labels belong to the UI, not the persisted handwriting contract. */
 export const HANDWRITING_PAGE = { width: 1400, height: 1800 } as const;
+/** Shared byte-shape guard. Import/upload own decoding, canonical base64,
+ * asset hashes and their error responses; this does not claim PNG decoding. */
+export function isFullPageHandwritingPng(bytes: Uint8Array): boolean {
+	if (bytes.length < 33 || [137, 80, 78, 71, 13, 10, 26, 10].some((value, index) => bytes[index] !== value)) return false;
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	return view.getUint32(8) === 13 && String.fromCharCode(...bytes.slice(12, 16)) === "IHDR" && view.getUint32(16) === HANDWRITING_PAGE.width && view.getUint32(20) === HANDWRITING_PAGE.height;
+}
 export const HANDWRITING_PEN_COLOURS = ["#171717", "#2563eb", "#dc2626", "#15803d"] as const;
 export const HANDWRITING_HIGHLIGHT_COLOUR = "#facc15";
 export const HANDWRITING_PEN_SCALES = [0.5, 1, 2] as const;
@@ -185,8 +192,8 @@ export function copyHandwriting(working: Handwriting, pageId: NotebookPageId): H
 export async function importHandwritingBackground(working: Handwriting, background: BackgroundPixels, eventId: string): Promise<HandwritingV2> {
 	const graph = normalizeHandwriting(handwritingSchema.parse(working));
 	const pixels = backgroundPixelsSchema.parse(background), raw = atob(pixels.data);
-	const bytes = Uint8Array.from(raw, character => character.charCodeAt(0)), view = new DataView(bytes.buffer);
-	if (btoa(raw) !== pixels.data || bytes.length < 33 || [137, 80, 78, 71, 13, 10, 26, 10].some((value, index) => bytes[index] !== value) || view.getUint32(8) !== 13 || String.fromCharCode(...bytes.slice(12, 16)) !== "IHDR" || view.getUint32(16) !== 1400 || view.getUint32(20) !== 1800) throw new Error("Invalid background PNG");
+	const bytes = Uint8Array.from(raw, character => character.charCodeAt(0));
+	if (btoa(raw) !== pixels.data || !isFullPageHandwritingPng(bytes)) throw new Error("Invalid background PNG");
 	const backgroundId = await handwritingSha256(bytes);
 	return appendHandwriting({ ...graph, backgrounds: { ...graph.backgrounds, [backgroundId]: pixels } }, { id: eventId, kind: "import-background", backgroundId });
 }

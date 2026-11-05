@@ -103,11 +103,19 @@ export async function checkHandwritingTransfers({ page, origin, transferFaults }
 		await page.click('[data-testid="composer"] [aria-label="Send"]');
 		await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Couldn’t confirm delivery"));
 		await fill(composer, "Newer unsent explanation.");
-		transferFaults.handle = null;
+		transferFaults.handle = request => { if (request.method() === "GET" && new URL(request.url()).pathname === `/api/chats/${id}`) { void request.respond({ status: 503, contentType: "application/json", body: '{}' }); return true; } return false; };
 		if (accepted) { assert.equal((await fetch(`${origin}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: delayed })).status, 200); }
 		await open(); await draw(450, 550); const b = await attach();
-		await page.locator('[data-testid="handwriting-delivery"] button').filter(button => button.textContent === "Check delivery").click();
-		await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Saved answer"));
+		await page.waitForFunction(id => document.querySelector('.lh-shared-writing img')?.getAttribute("src")?.endsWith(`/${id}`), {}, b.id);
+		assert.ok((await page.$eval('[data-testid="handwriting-attempt-review"] img', image => image.getAttribute("src"))).endsWith(`/${a.id}`), "Failed reconciliation keeps the original A preview");
+		assert.ok((await page.$eval('.lh-shared-writing img', image => image.getAttribute("src"))).endsWith(`/${b.id}`), "Normal pending review independently shows B");
+		await page.click('[data-testid="handwriting-attempt-review"] button');
+		await page.waitForSelector('[data-testid="shared-writing-viewer"]');
+		assert.ok((await page.$eval('[data-testid="shared-writing-viewer"] img', image => image.getAttribute("src"))).endsWith(`/${a.id}`));
+		await page.keyboard.press("Escape");
+		transferFaults.handle = null;
+		await page.evaluate(() => window.dispatchEvent(new Event("online")));
+		await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-attempt-review"]'));
 		assert.equal(await page.$eval(composer, element => element.value), "Newer unsent explanation.");
 		assert.deepEqual((await review(id)).pending.map(image => image.id), [b.id]);
 		if (!accepted) { assert.equal((await fetch(`${origin}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: delayed })).status, 400, "Delayed original cannot accept after page supersession"); }
@@ -115,5 +123,58 @@ export async function checkHandwritingTransfers({ page, origin, transferFaults }
 		assert.equal(saved.messages.filter(message => message.sharedWriting?.some(image => image.id === a.id)).length, accepted ? 1 : 0);
 	}
 	console.log("PASS both uncertain-A / Attach-B orderings preserve newer edits and B; delayed stale original refused");
+
+	// Ordinary keyboard Send is the sole submission recovery action. The live
+	// app's Tab trap/field cycle and Enter handler run, not synthetic clicks.
+	const resendId = "mobile_transfer_resend";
+	await page.goto(`${origin}/chat/${resendId}`, { waitUntil: "networkidle2" });
+	await fill(composer, "Original keyboard answer."); await open(); await draw(); const originalImage = await attach();
+	let originalRequest, replayRequest;
+	transferFaults.handle = request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/chat") { originalRequest = JSON.parse(request.postData()); void request.abort("failed"); return true; } return false; };
+	await page.evaluate(() => document.activeElement?.blur());
+	await page.keyboard.press("Tab");
+	assert.equal(await page.$eval(composer, field => document.activeElement === field), true);
+	await page.keyboard.press("Enter");
+	await page.waitForSelector('[data-testid="handwriting-attempt-review"]');
+	assert.equal(await page.evaluate(() => [...document.querySelectorAll("button")].some(button => /Check delivery|Retry saved answer/.test(button.textContent))), false);
+	const originalThumbnail = await page.$eval('[data-testid="handwriting-attempt-review"] img', image => image.getAttribute("src"));
+	assert.ok(originalThumbnail.endsWith(`/${originalImage.id}`));
+	await page.click('[data-testid="handwriting-attempt-review"] button');
+	await page.waitForSelector('[data-testid="shared-writing-viewer"]');
+	assert.equal(await page.$eval('[data-testid="shared-writing-viewer"] img', image => image.getAttribute("src")), originalThumbnail);
+	await page.keyboard.press("Escape");
+	await fill(composer, "Later keyboard edits.");
+	transferFaults.handle = request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/chat") replayRequest = JSON.parse(request.postData()); return false; };
+	await page.keyboard.press("Enter");
+	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Your answer was sent."));
+	assert.deepEqual(replayRequest, originalRequest, "Normal Send retries only the exact original payload and stable identity");
+	assert.equal(await page.$eval(composer, field => field.value), "Later keyboard edits.");
+	assert.equal((await record(resendId)).messages.filter(message => message.writingSubmission).length, 1);
+	assert.equal((await device("submissions", resendId)).length, 0);
+	console.log("PASS app keyboard Tab/Enter normal Send retries exact identity, displays original image/viewer and preserves later edits");
+
+	// An actual canonical parallel-question transition unmounts the original
+	// field while Attach is waiting for final speech. The late tail must be
+	// durably retained for first, never appended to second or the composer.
+	transferFaults.handle = null;
+	const speechId = "mobile_transfer_speech";
+	await page.goto(`${origin}/chat/${speechId}`, { waitUntil: "networkidle2" });
+	await fill('[data-testid="question-dock"] textarea', "Original first draft.");
+	await page.click('[data-testid="question-dock"] [aria-label="Start dictation"]'); await page.waitForFunction(() => window.speech?.readyState === 1);
+	await open(); await draw();
+	await page.click('[data-testid="notebook-attach"]'); await page.waitForFunction(() => window.speech.finishing);
+	const changed = await fetch(`${origin}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chatId: speechId, input: { type: "answer", toolCallId: "first", answer: { kind: "ask", questionText: "first speech owner", dontKnow: false, answers: [], text: "Answered on another client", answeredAt: new Date().toISOString() } } }) });
+	assert.equal(changed.status, 200);
+	await page.waitForFunction(() => document.querySelector('[data-testid="question-dock"]')?.textContent.includes("second speech owner"));
+	await page.evaluate(() => { window.speech.final("Late words for first only."); window.speech.close(); });
+	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Late words for first only."));
+	assert.equal(await page.$eval('[data-testid="question-dock"] textarea', field => field.value), "");
+	assert.equal((await device("captures", speechId)).length, 0, "Changed target aborts Attach without freezing the wrong question");
+	const retained = (await device("drafts", speechId)).find(draft => draft.targetKey === "question:first");
+	assert.equal(retained.editor.text, "Original first draft. Late words for first only.");
+	await page.reload({ waitUntil: "networkidle2" });
+	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Late words for first only."));
+	assert.equal(await page.$eval('[data-testid="question-dock"] textarea', field => field.value), "");
+	console.log("PASS actual target unmount during Attach finalization retains old speech durably and never retargets");
 	transferFaults.handle = null;
 }

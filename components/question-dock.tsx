@@ -396,6 +396,7 @@ function QuestionDockForm({
 		// Released while a teach check sits unrevealed (owner 2026-10-03):
 		// the reading-thinking field owns dictated speech during the reading.
 		dictationClaim,
+		() => transfer?.retainSpeech(`question:${toolCallId}`, qd.mode === "text" ? "text" : "thinking"),
 	);
 
 	const toggle = (idx: number) => setSel(toggleOption(selectMode, sel, idx));

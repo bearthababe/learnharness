@@ -108,8 +108,9 @@ were verified by focused red/green tests after the browser snapshots were copied
 Self-review used `AGENTS.md`, `docs/architecture.md`, the approved plan's
 explicit browser-recovery seams and surrounding conventions. No outstanding
 documented-standard breach was identified; lint enforces import boundaries.
-Independent Standards review **remains pending**: the code-review skill's
-subagent call was refused with `Subagent depth limit reached (1)`.
+The implementation session's delegated review was blocked by `Subagent depth
+limit reached (1)`; the parent subsequently completed independent Standards
+review of `12f444a`. Findings and correction status are recorded below.
 
 #### Spec review
 
@@ -117,14 +118,66 @@ Self-review against the complete approved plan found and corrected the three
 boundary defects above and missing speech target/review-freezing guards.
 No additional product choices were introduced. #47 retains Pages/Open/Restore/
 Duplicate/import UI ownership, using the supplied graph/source contracts.
-Independent Spec review **remains pending** for the same harness depth limit.
-The parent should review `git diff e0035d4...implement/handwriting-46` before
-declaring the integration review gate complete.
+The parent subsequently completed independent Spec review of `12f444a`.
+Its findings and correction status are recorded below; independent correction
+re-review remains parent-owned.
 
 Existing partial server-deletion cleanup limitations are retained as approved;
 normal bundle deletion and late-upload refusal pass. The full repository suite
 was not rerun: #45's documented baseline failures are not claimed fixed. Automated
 checks used isolated data and deterministic providers/speech; no live spending.
+
+### Independent #46 review corrections — 2026-11-05
+
+Parent-owned reviews of `12f444a`:
+`46-review-spec.md` (three findings) and `46-review-standards.md` (one documented
+violation, two heuristics), under the cache root above. Full evidence was read.
+
+**Superseding owner approval, relayed by parent:** normal Send/Submit is the only
+submission action, including retry after uncertainty. Automatically reconcile
+with status; Send reconciles first and replays only the original immutable
+identity/payload when eligible. A verified receipt becomes sent without deleting
+later edits. Definite failure restores ordinary pre-send editing. No separate
+Check delivery, Retry saved answer, recovery disclosure or speculative menu.
+Original attempted data remains available in normal review. This amendment is
+also recorded in [the approved plan](handwriting-submission-plan.md).
+
+| Independent finding | Implementation correction / evidence |
+|---|---|
+| Spec P1: late speech retargeted before Attach's post-finish guard | Speech finalization pins the actual receiver before requesting finals. A replaced/unmounted field retains late finals in its original target-bound durable draft; stale Attach aborts. The regression uses actual speech hooks and the browser test replaces the question through the real canonical parallel-question path. |
+| Spec P2: another input consumes image/resolves target, leaving uncertainty stuck | Pure canonical-obsolescence evidence handles image consumption and resolved question/problem targets, after exact receipt matching. Missing pending data, missing targets and failed reads alone remain insufficient. Newer drafts stay intact. |
+| Spec P2: original images represented only by IDs | Normal unconfirmed-answer review reuses actual immutable image thumbnails and the existing viewer, independently of current pending B. Browser assertions cover retained A while canonical reads fail and B is pending. |
+| Standards S1: manual recovery controls unreachable under the Tab trap | Submission Check/Retry/disclosures removed per owner approval. App-controlled Tab + ordinary Enter/Send now reconcile/retry the original payload and retain newer edits. **Remaining clarification:** existing upload Retry/Refresh and image-thumbnail viewer entry still have no approved keyboard-only entry route; parent guidance requested, no shortcut or Tab contract invented. |
+| Standards H1: English notice substrings determine controls | Typed attachment notice kinds expose explicit retry/refresh capabilities; one mapping owns wording. Source/image size errors and changed-review failures use typed errors, not English matching. |
+| Standards H2: duplicated full-page PNG validation | One browser-safe core byte predicate is used by import and multipart upload; canonical base64, hash, transport limits and error responses stay at their boundaries. |
+
+Red/green evidence: `46-review-fixes-red.log` reproduces speech retargeting,
+normal-Send retry rejection and missing canonical-obsolescence handling;
+`46-review-fixes-green-progress.log` passes those boundaries. Added coverage also
+proves Send discovering an already-accepted receipt dispatches nothing and
+retains newer edits. Browser corrections use actual target replacement and the
+app keyboard path, native IndexedDB, actual HTTP/store handlers, scripted speech
+and deterministic providers.
+
+Correction verification:
+
+| Check | Result / cache-root evidence |
+|---|---|
+| Focused actual-hook/controller/store/server tests | **182 passed, 0 failed**, `46-review-focused-final.log` |
+| Typecheck, lint, diff whitespace | Passed; `46-review-typecheck-final.log`, `46-review-lint-final.log`; `git diff --check` |
+| Disposable production build | Passed; `46-review-build-final.log`. Existing dynamic tracing warnings; environment-only `turbopack.root` in the disposable copy. |
+| First correction mobile browser run | Passed; `46-review-browser-mobile-1.log` |
+| Final mobile browser rerun | **Passed**, `46-review-browser-mobile-3.log`, including original A review/viewer while B is pending and canonical reads fail. Previous run timed out before transfer scenarios: 30-second ready wait versus 31-second cold compilation; retained in `46-review-browser-mobile-final.log`, `mobile-input-browser-46-review2/server.log`. |
+| Final handwriting browser run | First nine scenarios passed; exported-background assertion failed because captured source contains two **pen** strokes, not pen then eraser. Offscreen background pixel is correct. Five targeted tool-activation runs passed (`46-eraser-click-diagnostic.log`). Test now waits for Eraser's selected state before the next stroke; full rerun in progress. Original evidence: `46-review-browser-handwriting-final.log`, `handwriting-browser-VcaswB/`. |
+
+One focused run hit filesystem quota (`EDQUOT`) in
+old `/tmp/opencode` fixtures (`46-review-focused-edquot.log`); the handwriting
+fixtures now accept `LH_HANDWRITING_TEST_ROOT` and run under the cache root.
+No source/data deletion or public-preview change was used to bypass that limit.
+
+These are implementer corrections and automated evidence, **not independent
+re-review approval**. Parent reviewers retain that gate. Physical iPad acceptance
+also remains open.
 
 ### Coordinated preview and physical acceptance
 

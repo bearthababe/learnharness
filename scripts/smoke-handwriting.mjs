@@ -390,7 +390,9 @@ try {
 	});
 	await page.goto(`${origin}/chat/handwriting_background`, { waitUntil: "networkidle2" });
 	await page.click('[data-testid="open-notebook"]'); await ready();
-	await draw(); await action("Eraser"); await draw();
+	await draw(); await action("Eraser");
+	await page.waitForFunction(() => document.querySelector('[aria-label="Eraser"]')?.getAttribute("aria-pressed") === "true");
+	await draw();
 	const backgroundCapture = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/writing") && response.status() === 201);
 	await page.click('[data-testid="notebook-attach"]');
 	const imageId = (await (await backgroundCapture).json()).writing.id;

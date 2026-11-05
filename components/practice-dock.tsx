@@ -73,6 +73,7 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 			[],
 		),
 		true,
+		() => transfer?.retainSpeech(`problem:${problemCallId}`, "thinking"),
 	);
 
 	const submit = async () => {
@@ -84,7 +85,7 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 			if (!alive.current || current.current.problemCallId !== target || current.current.compactionRunning || !valid() || transfer?.blocked()) return;
 			const text = thinkingRef.current.trim();
 			if (!text && !(reviewed?.length ?? current.current.hasSharedWriting)) return;
-			if (!reviewed?.length) { thinkingRef.current = ""; setThinking(""); }
+			if (!reviewed?.length && !transfer?.hasAttempt()) { thinkingRef.current = ""; setThinking(""); }
 			onSubmit(text, reviewed);
 		} finally { submitting.current = false; }
 	};
