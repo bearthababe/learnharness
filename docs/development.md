@@ -85,6 +85,7 @@ For frontend failures, inspect the actual UI, requests, console, and state. A st
 
 ```sh
 npm test               # node:test via tsx; injected engines, fixtures, fake transports
+npm run test:mobile    # disposable Chromium UI: inputs, Reveal, mobile layout
 npm run typecheck      # tsc --noEmit
 npm run lint           # ESLint, including import restrictions
 npm run build          # Next production build
@@ -101,5 +102,15 @@ Additional runtime gates have prerequisites:
 | `node scripts/smoke-provider-runtime.mjs` | Fresh build; traced provider payload/runtime paths with fixtures. Also used during packaging. |
 | `node scripts/smoke-web-subscriptions.mjs` | Build, no dev server running; isolated synthetic connection checks, external traffic blocked. Briefly changes/restores a source mtime to exercise reload. |
 | Other `scripts/smoke-*.mjs` | Standalone/native renderers, image workers, demo helper, compression, file paths, opening. Read each script and the [release guide](desktop-release.md) before running. |
+
+For an existing development preview, use the read-only
+[mobile preview command](verification/mobile-preview-checks.md) to verify launch
+metadata, the manifest/icon and the actual Reload control. The
+[retrospective tooling record](verification/retro-mobile-tooling.md) records the
+verification and global workflow changes that introduced these commands.
+
+For browser prerequisites, retained diagnostics and fresh-checkout reruns, see
+[Mobile browser checks](verification/mobile-browser-checks.md). This gate runs
+separately from the deterministic suite above.
 
 Run checks proportionate to the change. Offline gates prove exercised contracts, not live entitlements or model-authored lesson quality.

@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import { WaypointsIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
+import { usePhoneLayout } from "./use-phone-viewport";
 import { createNotesImportQueue, EMPTY_IMPORT_QUEUE, notesPath } from "./notes-import-queue";
 
 export { MAX_IMPORT_BYTES } from "@/lib/notes-import-limits.ts";
@@ -88,6 +89,7 @@ export function useNotesImport(callbacks: { onStart?: () => void; onFinish?: () 
 /** PR198's shared Files / Folder native picker. Unlike the donor, it remains
  * available while work is running; later selections join the SAME queue. */
 export function NotesImportControl({ importing, onImportFiles }: { importing: boolean; onImportFiles: (files: FileList | null) => void }) {
+	const phone = usePhoneLayout();
 	const filesRef = useRef<HTMLInputElement>(null);
 	const folderRef = useRef<HTMLInputElement>(null);
 	const [open, setOpen] = useState(false);
@@ -98,12 +100,12 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	};
 	const choices = [["Files", filesRef], ["Folder", folderRef]] as const;
 	return (
-		<div className="relative shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur"
+		<div className="lh-graph-import relative shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur"
 			onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
 			onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
 			<input ref={filesRef} type="file" multiple accept=".md,.markdown,.txt,.pdf" className="hidden" onChange={onChange} />
 			<input ref={folderRef} type="file" {...{ webkitdirectory: "" }} className="hidden" onChange={onChange} />
-			<Hint label="Extract files into the graph" side="bottom">
+			<Hint label="Extract files into the graph" side="bottom" disabled={phone}>
 				<button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu" data-testid="import-notes"
 					className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
 					<WaypointsIcon className="size-3" />{importing ? "Extracting…" : "Extract files…"}

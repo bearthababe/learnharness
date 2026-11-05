@@ -19,6 +19,7 @@ import type { LhMessage } from "../core/native-messages.ts";
 import { activeProblemOf, danglingQuestionOf } from "../core/native-messages.ts";
 import { phaseAt3Lh } from "../core/phases.ts";
 import { removeLeftoverTemps, writeFileAtomicSync } from "./atomic-write.ts";
+import type { NotebookRecord } from "../core/contracts/notebook.ts";
 
 function chatFile(id: string): string {
 	if (!/^[A-Za-z0-9_-]+$/.test(id)) throw new Error(`Invalid chat id: ${id}`);
@@ -64,6 +65,28 @@ function writeChat(record: ChatRecord): void {
 	writeFileAtomicSync(chatFile(record.id), JSON.stringify({ ...record, version: CURRENT_CHAT_VERSION }, null, "\t"), { allowInPlaceFallback: true });
 }
 
+function saveNotebook(id: string, expectedRevision: number, notebook: NotebookRecord): NotebookRecord {
+	const record = getChat(id);
+	if (!record) throw new Error(`Chat not found: ${id}`);
+	if ((record.notebook?.revision ?? 0) !== expectedRevision) throw new Error("Notebook revision conflict");
+	const next = structuredClone({ ...notebook, revision: expectedRevision + 1 });
+	writeChat({ ...record, notebook: next });
+	emit("notebook-changed", { chatId: id });
+	return next;
+}
+
+function commitNotebookSubmission(id: string, expectedRevision: number, notebook: NotebookRecord, appends: LhMessage[]): void {
+	const record = getChat(id);
+	if (!record) throw new Error(`Chat not found: ${id}`);
+	if (record.notebook?.revision !== expectedRevision) throw new Error("Notebook revision conflict");
+	record.notebook = structuredClone({ ...notebook, revision: expectedRevision + 1 });
+	const ids = new Set(record.messages.map((message) => message.id));
+	record.messages.push(...appends.filter((message) => !ids.has(message.id)));
+	if (appends.length) record.updatedAt = new Date().toISOString();
+	writeChat(record);
+	emit("notebook-changed", { chatId: id });
+}
+
 function getChat(id: string): ChatRecord | null {
 	let parsed: unknown;
 	try {
@@ -90,7 +113,7 @@ function listChats(): ChatSummary[] {
 			.filter((f) => f.endsWith(".json"))
 			.map((f) => getChat(f.slice(0, -5)))
 			.filter((r): r is ChatRecord => r !== null)
-			.map(({ messages, tree, turns, extractions, imageSnapshots: _imageSnapshots, ...summary }) => {
+			.map(({ messages, tree, turns, extractions, imageSnapshots: _imageSnapshots, notebook: _notebook, ...summary }) => {
 				// Per-record isolation (Wave B): a record whose messages fail the
 				// projection (e.g. pre-Wave-B UIMessage-format scratch — the
 				// zero-back-compat wipe makes these "corrupt") must not blank the
@@ -231,6 +254,8 @@ function saveTree(id: string, tree: PlanTree): void {
 }
 
 export const chatStore: ChatStore = {
+	commitNotebookSubmission,
+	saveNotebook,
 	createChat,
 	getChat,
 	listChats,

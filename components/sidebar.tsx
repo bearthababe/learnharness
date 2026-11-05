@@ -5,8 +5,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
+import { forgetHandwritingOnDevice } from "@/components/handwriting/device";
 import type { ChatDeleteMode } from "@/src/core";
-import { DumbbellIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon } from "lucide-react";
+import { DumbbellIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, RotateCwIcon, SearchIcon, SettingsIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -22,12 +23,11 @@ import { useServerEvent, useServerResync } from "@/components/server-events";
 import type { ChatListItem } from "@/src/core";
 import { kbdEventForAction } from "@/src/core";
 import { notifySettingsSaved } from "@/components/settings-signal";
+import { usePhoneViewport } from "@/components/use-phone-viewport";
 
 /**
- * Toggleable sidebar — NOT a modal drawer: no backdrop, no focus theft. It
- * sits inline next to the content and can stay open while working in a
- * session. Open state persists across pages (provider lives in the root
- * layout) and across reloads (localStorage).
+ * Desktop navigation sits inline and retains its open preference. On phones
+ * it is a full-width modal panel, closed on launch and after choosing a route.
  */
 
 const STORAGE_KEY = "lh:sidebar-open";
@@ -86,9 +86,11 @@ declare global {
 	}
 }
 
-const SidebarContext = createContext<{ open: boolean; toggle: () => void }>({
+const SidebarContext = createContext<{ open: boolean; phone: boolean; toggle: () => void; closePhone: () => void }>({
 	open: false,
+	phone: false,
 	toggle: () => {},
+	closePhone: () => {},
 });
 
 export function useSidebar() {
@@ -108,6 +110,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	const [open, setOpen] = useState(false);
 	const [narrow, setNarrow] = useState(false);
 	const [mounted, setMounted] = useState(false);
+	const phone = usePhoneViewport();
+	const [phoneOpen, setPhoneOpen] = useState(false);
+	const closePhone = useCallback(() => setPhoneOpen(false), []);
+	const pathname = usePathname();
+	useEffect(() => { closePhone(); }, [pathname, phone, closePhone]);
 
 	useEffect(() => {
 		// Electron shell detection (merged chrome, 2026-09-17): keys the
@@ -150,6 +157,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, []);
 
 	const toggle = useCallback(() => {
+		if (phone) {
+			if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+			setPhoneOpen((value) => !value);
+			return;
+		}
 		// Opening while narrow (auto-closed, or the user's own closed-at-
 		// narrow): ask the shell to widen to the threshold — the resize
 		// listener flips `narrow` and the sidebar appears. The preference
@@ -165,7 +177,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 			localStorage.setItem(STORAGE_KEY, v ? "0" : "1");
 			return !v;
 		});
-	}, [narrow, open]);
+	}, [narrow, open, phone]);
 
 	// ⌘B: the global shortcut dispatches kbdEventForAction("toggle-sidebar")
 	// and the context answers on exactly that name — the shared spelling
@@ -181,9 +193,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, [toggle]);
 
 	return (
-		<SidebarContext.Provider value={{ open: open && !narrow, toggle }}>
+		<SidebarContext.Provider value={{ open: phone ? phoneOpen : open && !narrow, phone, toggle, closePhone }}>
 			{/* transitions gated on mount: no slide-in flash on page load */}
-			<div className={cn("flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")}>{children}</div>
+			<div className={cn("lh-app-shell flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")}>{children}</div>
 		</SidebarContext.Provider>
 	);
 }
@@ -201,7 +213,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
  *  The icon fades with the slot and is clipped by it as it collapses —
  *  no popping in either direction. */
 export function SidebarToggle() {
-	const { open, toggle } = useSidebar();
+	const { open, phone, toggle } = useSidebar();
 	return (
 		<span
 			className={cn(
@@ -209,7 +221,7 @@ export function SidebarToggle() {
 				open ? "w-0 -mr-3" : "w-9 mr-0 lh-closed-toggle",
 			)}
 		>
-			<Hint label="Open sidebar" action="toggle-sidebar">
+			<Hint label="Open sidebar" action="toggle-sidebar" disabled={phone}>
 			<Button
 				variant="ghost"
 				size="icon"
@@ -308,9 +320,10 @@ export function SessionRow({
 			type="button"
 			onClick={onOpen}
 			onContextMenu={onContextMenu}
+			aria-current={active ? "page" : undefined}
 			data-testid={kbdSelected ? "session-row-kbd" : "session-row"}
 			className={cn(
-				"relative mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent",
+				"lh-session-row relative mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent",
 				active && "bg-accent",
 				kbdSelected && !active && "bg-accent/60 ring-1 ring-border",
 			)}
@@ -322,8 +335,8 @@ export function SessionRow({
 				    the meta line below stays JetBrains Mono (machine data). One
 				    rule, finally applied to the picker too (owner, typography
 				    round): mono = chrome, Source Sans = human words. */}
-				<span className="block truncate font-prose text-(length:--lh-prose-size)">{chat.title}</span>
-				<span className="block text-xs text-muted-foreground">{sessionMeta(chat)}</span>
+				<span className="lh-session-name block truncate font-prose text-(length:--lh-prose-size)">{chat.title}</span>
+				<span className="lh-session-meta block text-xs text-muted-foreground">{sessionMeta(chat)}</span>
 			</span>
 			{/* The dumbbell rides the FAR RIGHT (owner round 6, 2026-10-05) —
 			    was left of the name; right-aligned keeps the titles flush with
@@ -394,7 +407,21 @@ export type SessionKindFilter = "teach" | "all" | "practice";
 const KIND_FILTER_KEY = "lh:session-kind-filter";
 
 function SessionsSidebar() {
-	const { open, toggle } = useSidebar();
+	const { open, phone, toggle, closePhone } = useSidebar();
+	const sidebarRef = useRef<HTMLElement>(null);
+	useEffect(() => {
+		if (!phone || !open) return;
+		const sidebar = sidebarRef.current!;
+		sidebar.querySelector<HTMLButtonElement>('button[aria-label="Close sidebar"]')?.focus({ preventScroll: true });
+		return () => {
+			requestAnimationFrame(() => {
+				const opener = document.querySelector<HTMLButtonElement>('button[aria-label="Open sidebar"]');
+				if ((document.activeElement === document.body || sidebar.contains(document.activeElement)) && opener?.getAttribute("aria-hidden") === "false") {
+					opener.focus({ preventScroll: true });
+				}
+			});
+		};
+	}, [phone, open]);
 	const [chats, setChats] = useState<ChatListItem[] | null>(null);
 	const [query, setQuery] = useState("");
 	const [kindFilter, setKindFilter] = useState<SessionKindFilter>("all");
@@ -415,8 +442,9 @@ function SessionsSidebar() {
 	   message is sent (and that message becomes its title). Search: a
 	   client-side filter over the poll snapshot — no server round trip. */
 	const newSession = useCallback(() => {
+		closePhone();
 		router.push("/chat/new");
-	}, [router]);
+	}, [router, closePhone]);
 
 	/* FUZZY (owner round 8, 2026-10-05): subsequence match ranked by
 	 * fuzzyScore — prefix beats word-boundary beats scattered. Empty query
@@ -616,6 +644,7 @@ function SessionsSidebar() {
 	// the status poll can't see — no run ever transitions some→none).
 	const onDeleted = useCallback(
 		(id: string, _mode: ChatDeleteMode, graphRevision: number) => {
+			forgetHandwritingOnDevice(id);
 			setDeleting(null);
 			setChats((prev) => (prev ? prev.filter((c) => c.id !== id) : prev));
 			if (pathname === `/chat/${id}`) router.push("/");
@@ -651,15 +680,31 @@ function SessionsSidebar() {
 
 	return (
 		<aside
-			className={cn("sidebar-motion shrink-0 overflow-hidden duration-200", open ? "w-72" : "w-0")}
+			ref={sidebarRef}
+			className={cn("lh-sessions-panel sidebar-motion shrink-0 overflow-hidden duration-200", open ? "w-72" : "w-0")}
 			aria-hidden={!open}
+			inert={!open}
+			role={phone && open ? "dialog" : undefined}
+			aria-modal={phone && open ? true : undefined}
+			aria-label="Sessions"
+			onKeyDown={(event) => {
+				if (!phone || !open || !sidebarRef.current?.contains(event.target as Node)) return;
+				if (event.key === "Escape") {
+					event.preventDefault(); event.stopPropagation(); closePhone();
+				} else if (event.key === "Tab") {
+					const controls = [...sidebarRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), summary, [tabindex="0"]')].filter(e => e.tabIndex >= 0 && e.getClientRects().length > 0);
+					const first = controls[0], last = controls.at(-1);
+					if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+					if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+				}
+			}}
 		>
-			<div className="flex h-full w-72 flex-col border-r bg-background">
+			<div className="lh-sessions-content flex h-full w-72 flex-col border-r bg-background">
 				{/* LH wordmark — the owner's header; close toggle sits at the edge.
 				    Merged chrome (2026-09-17): in Electron this band is the
 				    window's drag surface and starts after the traffic lights
 				    (.lh-lights-gutter); in the browser those classes are inert. */}
-				<div className="lh-drag lh-lights-gutter flex items-center justify-between px-4 py-3">
+				<div className="lh-sessions-header lh-drag lh-lights-gutter flex items-center justify-between px-4 py-3">
 					{/* The owner's mark (2026-09-17) replaces the "LH" text — still the
 					    home link, still vertically centered by the band's items-center.
 					    The 92px .lh-lights-gutter keeps it clear of the traffic lights
@@ -674,24 +719,29 @@ function SessionsSidebar() {
 						label="Home"
 						action="jump-graph"
 						side="right"
+						disabled={phone}
 					>
 						<Link
 							href="/"
+							onClick={closePhone}
 							aria-label="Home"
 							className="lh-no-drag flex size-9 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50"
 						>
 							<LhMark className="size-6" />
+							<span className="lh-phone-home-label hidden">Home</span>
 						</Link>
 					</Hint>
-					<Hint label="Close sidebar" action="toggle-sidebar">
+					<h2 className="lh-sessions-title hidden">Sessions</h2>
+					<Hint label="Close sidebar" action="toggle-sidebar" disabled={phone}>
 						<Button
 							variant="ghost"
 							size="icon"
 							aria-label="Close sidebar"
 							onClick={toggle}
-							className="lh-no-drag"
+							className="lh-sessions-close lh-no-drag"
 						>
-							<PanelLeftCloseIcon className="size-4" />
+							<PanelLeftCloseIcon className="lh-desktop-close-icon size-4" />
+							<span className="lh-phone-close-label hidden">Close</span>
 						</Button>
 					</Hint>
 				</div>
@@ -700,7 +750,7 @@ function SessionsSidebar() {
 				    half/half row): full-width rows read cleaner and give the
 				    labels room; teaching keeps the original draft route,
 				    practice carries its mode. */}
-				<div className="mx-3 mb-2 flex flex-col gap-1.5">
+				<div className="lh-sessions-create mx-3 mb-2 flex flex-col gap-1.5">
 					<button
 						type="button"
 						data-testid="new-session"
@@ -714,7 +764,7 @@ function SessionsSidebar() {
 					<button
 						type="button"
 						data-testid="new-session-practice"
-						onClick={() => router.push("/chat/new?mode=practice")}
+						onClick={() => { closePhone(); router.push("/chat/new?mode=practice"); }}
 						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 					>
 						<DumbbellIcon className="size-3" />
@@ -724,7 +774,7 @@ function SessionsSidebar() {
 					<button
 						type="button"
 						data-testid="new-session-drill"
-						onClick={() => router.push("/chat/new?mode=drill")}
+						onClick={() => { closePhone(); router.push("/chat/new?mode=drill"); }}
 						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 					>
 						<DumbbellIcon className="size-3" />
@@ -733,9 +783,9 @@ function SessionsSidebar() {
 					</button>
 				</div>
 
-				<div className="mx-3 mb-2 flex items-center gap-2">
-					<span className="text-xs uppercase tracking-widest text-muted-foreground/70">Sessions</span>
-					<Hint label="Search sessions" action="sessions-search" side="bottom">
+				<div className="lh-sessions-search mx-3 mb-2 flex items-center gap-2">
+					<span className="lh-sessions-search-label text-xs uppercase tracking-widest text-muted-foreground/70">Sessions</span>
+					<Hint label="Search sessions" action="sessions-search" side="bottom" disabled={phone}>
 					<span className="relative flex-1">
 						<Input
 							ref={searchRef}
@@ -780,12 +830,13 @@ function SessionsSidebar() {
 									const target = shown![kbdIndex !== null && kbdIndex < n ? kbdIndex : 0];
 									if (!target) return;
 									e.preventDefault();
+									closePhone();
 									router.push(`/chat/${target.id}`);
 									setKbdIndex(null);
 									e.currentTarget.blur();
 								}
 							}}
-							placeholder="Search…"
+							placeholder={phone ? "Search sessions" : "Search…"}
 							aria-label="Search sessions"
 							className="h-6 rounded-sm border-border bg-background pl-6 text-xs placeholder:text-muted-foreground/60"
 						/>
@@ -820,7 +871,7 @@ function SessionsSidebar() {
 					))}
 				</div>
 
-				<div ref={listRef} className="flex-1 overflow-y-auto p-2">
+				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
 					{shown === null ? (
 						<div className="px-2 py-4 text-xs text-muted-foreground">Loading…</div>
 					) : shown.length === 0 ? (
@@ -844,6 +895,7 @@ function SessionsSidebar() {
 									kbdSelected={i === kbdIndex}
 									onOpen={() => {
 										setKbdIndex(null);
+										closePhone();
 										router.push(`/chat/${c.id}`);
 									}}
 									onContextMenu={(e) => openContext(e, c)}
@@ -863,8 +915,8 @@ function SessionsSidebar() {
 					{/* Settings entry (settings-app wave): same row language as
 					    New session — quiet, bottom-pinned, opens the centered
 					    dialog (also mod+, in the keyboard registry). */}
-					<div className="px-3 pb-3 pt-1">
-						<Hint label="Settings" action="open-settings" side="right">
+					<div className="lh-sessions-footer px-3 pb-3 pt-1">
+						<Hint label="Settings" action="open-settings" side="right" disabled={phone}>
 							<button
 								type="button"
 								onClick={() => openSettings()}
@@ -875,6 +927,14 @@ function SessionsSidebar() {
 								Settings
 							</button>
 						</Hint>
+						{process.env.NODE_ENV === "development" && <details className="lh-sessions-tools mt-1 px-2 text-xs text-muted-foreground">
+							<summary className="cursor-pointer py-1.5 uppercase tracking-wider">Tools</summary>
+							<button type="button" onClick={() => location.reload()} className="flex items-center gap-1.5 rounded-md py-1.5 hover:text-foreground">
+								<RotateCwIcon className="size-3" />
+								Reload preview
+							</button>
+							<p className="pb-1 text-[11px]">Reload keeps saved conversations and uploads. Unsent text and prototype ink reset.</p>
+						</details>}
 					</div>
 				</div>
 
@@ -958,10 +1018,14 @@ function SessionsSidebar() {
 
 /** The app frame: sidebar inline + content. Rendered once in the root layout. */
 export function AppShell({ children }: { children: React.ReactNode }) {
+	const { phone, open } = useSidebar();
+	const pathname = usePathname();
+	// Throwaway whole-shell comparison: its navigation is the subject of the trial.
+	if (process.env.NODE_ENV !== "production" && pathname.startsWith("/prototype/mobile-ui")) return <>{children}</>;
 	return (
 		<SettingsDialogProvider>
 			<SessionsSidebar />
-			<FilePathDropZone className="relative min-w-0 flex-1">{children}</FilePathDropZone>
+			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open}>{children}</FilePathDropZone>
 			{/* The single document-level keydown listener (keyboard wave A) —
 			    after the content in the tree, but it's window-level so order only
 			    matters for the events it dispatches, never for DOM priority. */}

@@ -77,6 +77,7 @@ import { MenuShell } from "@/components/menu-shell.tsx";
 import { DeleteNodeDialog } from "@/components/delete-node-dialog.tsx";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { Hint } from "@/components/ui/hint";
+import { useSidebar } from "@/components/sidebar";
 import {
 	ARROW_LENGTH_LADDER,
 	CHARGE_RANGE,
@@ -475,6 +476,7 @@ function GraphSettingsControl({
 				className={`flex size-9 items-center justify-center rounded-xl border bg-card/85 shadow-lg backdrop-blur transition-colors hover:bg-accent ${
 					open ? "text-foreground" : "text-muted-foreground hover:text-foreground"
 				}`}
+				aria-label="Graph display settings"
 			>
 				<SettingsIcon className="size-4" />
 			</button>
@@ -864,15 +866,17 @@ export function GraphChromeRow({
 	 *  2026-09-29). */
 	onOpenChains: () => void;
 }) {
+	const { phone } = useSidebar();
 	return (
 		<>
 			{!isEmpty && (
-				<div className="graph-chrome-fade-in w-56 min-w-0 shrink rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
+				<div className="lh-graph-search graph-chrome-fade-in w-56 min-w-0 shrink rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
 					<Hint
 						// ⌘F focuses node search (surface-scoped registry action).
 						label="Search nodes"
 						action="find"
 						side="bottom"
+						disabled={phone}
 					>
 					<div className="relative">
 						<SearchIcon className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -894,8 +898,8 @@ export function GraphChromeRow({
 			)}
 			{/* The chain table (chains overlay, owner plan 2026-09-29). Own
 			    container (36px band), between the search and Import. */}
-			<div className="graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
-					<Hint label="Every reasoning chain" side="bottom">
+				<div className="lh-graph-chains graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
+					<Hint label="Every reasoning chain" side="bottom" disabled={phone}>
 						<button
 							type="button"
 							onClick={onOpenChains}
@@ -916,7 +920,7 @@ export function GraphChromeRow({
 				// at the very right edge, over less of the graph. The fade wrapper
 				// is a plain shrink-0 flex child — the panel itself positions
 				// within GraphSettingsControl's own relative root, unaffected.
-				<div className="graph-chrome-fade-in shrink-0">
+				<div className="lh-graph-settings graph-chrome-fade-in shrink-0">
 					<GraphSettingsControl settings={settings} changeSettings={changeSettings} />
 				</div>
 			)}
@@ -1564,13 +1568,13 @@ export function GraphView({
 			    against the full-bleed parent) — the row NEVER wraps (owner
 			    rejected the two-row fold); in narrow windows the search is
 			    the flexible element and shrinks instead. */}
-			<div className="lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
+			<div className="lh-home-toolbar lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
 			{/* z-20 (2026-09-20): the row paints above the cost number below
 			    it — without this, the later-in-DOM cost control layered over
 			    the settings/coverage dropdowns (owner report), still hoverable
 			    and clickable on top of them. The row is a stacking context, so
 			    its open dropdowns cover the number; clicks land on the panel. */}
-			<div className="relative z-20 flex min-w-0 items-start gap-2">
+			<div className="lh-home-toolbar-actions relative z-20 flex min-w-0 items-start gap-2" data-empty={isEmpty}>
 				{/* The actions row (empty-graph chrome wave, owner 2026-09-25):
 				    Import Notes always — the empty graph's entry point; search +
 				    settings only when nodes exist, fading in on their mount. */}

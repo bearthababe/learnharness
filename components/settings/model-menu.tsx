@@ -41,6 +41,7 @@ export function ModelMenuList({
 	onPick,
 	footer,
 	vision,
+	focusSearch = true,
 }: {
 	/** The full catalog — undefined while it loads. */
 	models: ModelCatalogEntry[] | undefined;
@@ -59,6 +60,7 @@ export function ModelMenuList({
 	 *  custom-endpoint model, whose capability the endpoint may not report.
 	 *  Image-capable ones float to the top. */
 	vision?: boolean;
+	focusSearch?: boolean;
 }) {
 	// Vision slot: built-ins must report image input; custom-endpoint models
 	// stay selectable (the endpoint may not report a modality). Image-capable
@@ -70,6 +72,7 @@ export function ModelMenuList({
 		<>
 			<SearchMenuList
 				items={visionItems}
+				focusSearch={focusSearch}
 				itemKey={(m) => `${m.provider}/${m.id}`}
 				searchTerms={(m) => [m.provider, m.id, m.name]}
 				compare={(a, b) => a.id.localeCompare(b.id)}
@@ -77,6 +80,7 @@ export function ModelMenuList({
 				isSelected={(m) => m.id === effectiveId && m.provider === (effectiveProvider ?? m.provider)}
 				onPick={onPick}
 				searchTestid="model-search"
+				ariaLabel="Search models"
 				listTestid="model-list"
 				optionTestid={(m) => `model-option-${m.id.replace(/[^a-z0-9-]/gi, "_")}`}
 				placeholder="Search models…"
@@ -96,7 +100,7 @@ export function ModelMenuList({
 				</>}
 			/>
 			{footer && (
-				<div className="mt-1 border-t px-2 pt-1.5 text-xs text-muted-foreground">{footer}</div>
+				<div data-model-menu-footer="" className="mt-1 border-t px-2 pt-1.5 text-xs text-muted-foreground">{footer}</div>
 			)}
 		</>
 	);

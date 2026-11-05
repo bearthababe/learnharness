@@ -1,9 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { CLAUDE_CODE_PROVIDER, sessionCacheHitRate, subscriptionLabels, subscriptionLabel, type cliContextWindowOf, type SessionPricing, type TurnUsage } from "@/src/core";
 import { formatTokens, formatUsd, planCostLabel, prettyModel } from "@/components/usage-format";
 import { ModelControl, catalogLimits, useModelCatalog } from "@/components/model-picker";
+import { MenuShell } from "@/components/menu-shell";
+import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
+
+function UsagePanel({ children, anchorRef, onClose, closing, onClosed }: { children: ReactNode; anchorRef: RefObject<HTMLDivElement | null>; onClose: () => void; closing: boolean; onClosed: () => void }) {
+	const phone = usePhoneLayout();
+	if (phone) return <MenuShell anchorRef={anchorRef} testid="stats-detail" preferredSide="up" align="left"
+		closing={closing} onClosed={onClosed}
+		fitVisualViewport matchAnchorWidth onClose={onClose} phoneTriggerTestid="stats-summary"
+		menuClass="rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</MenuShell>;
+	return <div data-testid="stats-detail" className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</div>;
+}
 
 export function formatContextMeasurement(tokens: number | null, limit: number | null): string {
 	const numerator = tokens === null ? "?" : formatTokens(tokens);
@@ -46,6 +58,8 @@ export function StatsBar({
 	chatId,
 	leadingSlot,
 	onModelChange,
+	compactInput = false,
+	phonePlan,
 }: {
 	turns: TurnUsage[];
 	contextTokens?: number | null;
@@ -67,8 +81,12 @@ export function StatsBar({
 	 *  composer's teach | practice switch rides here — before the session
 	 *  data (which renders nothing pre-chat on that surface). */
 	leadingSlot?: ReactNode;
+	compactInput?: boolean;
+	phonePlan?: ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
+	const phone = usePhoneLayout();
+	const presence = usePhoneMenuPresence(open ? "usage" : null, phone);
 	const [selectedModel, setSelectedModel] = useState<string | undefined>();
 	const modelChanged = useCallback((model: string | undefined) => {
 		setSelectedModel(model);
@@ -77,9 +95,11 @@ export function StatsBar({
 	// Same dropdown discipline as the model control (owner, df4433f treatment,
 	// stats round 1): close on any pointerdown outside the bar or on Escape.
 	const barRef = useRef<HTMLDivElement>(null);
+	const statsRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
 		if (!open) return;
 		const onPointerDown = (e: PointerEvent) => {
+			if (e.target instanceof Element && e.target.closest('[data-testid="stats-detail"]')) return;
 			if (barRef.current && !barRef.current.contains(e.target as Node)) setOpen(false);
 		};
 		const onKeyDown = (e: KeyboardEvent) => {
@@ -116,11 +136,12 @@ export function StatsBar({
 	return (
 		<div
 			data-testid="stats-bar"
+			ref={statsRef}
 			// pointer-events-auto: the sticky composer wrapper is pointer-events-none
 			// (so its transparent gradient area never blocks scrolling) — this row
 			// must re-enable events or every control on it is dead (the model-
 			// control wave caught this live: buttons rendered, clicks never landed).
-			className="pointer-events-auto relative flex items-center justify-between gap-3 px-3 pt-2 text-xs text-muted-foreground"
+			className={`lh-stats-bar ${compactInput ? "lh-compact-stats" : ""} pointer-events-auto relative flex items-center justify-between gap-3 px-3 pt-2 text-xs text-muted-foreground`}
 		>
 			{/* The summary button + its popover: the popover anchors to this
 			    wrapper, CENTERED over the button itself (owner, stats round 2)
@@ -131,10 +152,11 @@ export function StatsBar({
 			{/* The leading slot (2026-10-04): the leftmost control surface —
 			    the home composer's mode switch. */}
 			{leadingSlot}
+			{phonePlan}
 			{/* The left side: the session-data summary — only once a session
 			    exists (turns). Pre-chat renders nothing (see the header). */}
 			{(chatId || turns.length > 0) && (
-			<div ref={barRef} className="relative">
+			<div ref={barRef} className="lh-usage relative">
 				{/* No tooltip — the numbers describe themselves and the popover
 			    speaks on click (owner, subtlety round 2026-09-25). */}
 			<button
@@ -142,19 +164,19 @@ export function StatsBar({
 				onClick={() => setOpen((o) => !o)}
 				aria-expanded={open}
 				data-testid="stats-summary"
+				aria-label="Usage"
 				className="flex items-center gap-1.5 tabular-nums transition-colors hover:text-foreground"
 			>
-				<span data-testid="stats-context">
+				<span className="lh-phone-usage-label">Usage</span>
+				<span className="lh-usage-numbers contents"><span data-testid="stats-context">
 					{contextLabel}
 				</span>
 				<span aria-hidden>·</span>
 				<span data-testid="stats-cost">{costLabel}</span>
+				</span>
 			</button>
-				{open && (
-					<div
-						data-testid="stats-detail"
-						className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl"
-					>
+				{presence.value && (
+					<UsagePanel anchorRef={statsRef} onClose={() => setOpen(false)} closing={presence.closing} onClosed={presence.onClosed}>
 						<div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 							Session stats
 						</div>
@@ -209,7 +231,7 @@ export function StatsBar({
 								</ul>
 							</>
 						)}
-					</div>
+					</UsagePanel>
 				)}
 			</div>
 			)}
@@ -217,7 +239,7 @@ export function StatsBar({
 			    meter expand into the row's free width; justify-center keeps the
 			    lone idle mic button visually centered. */}
 			{dictationSlot && (
-				<div className="flex min-w-0 flex-1 items-center justify-center">{dictationSlot}</div>
+				<div className="lh-dictation-slot flex min-w-0 flex-1 items-center justify-center">{dictationSlot}</div>
 			)}
 			{/* The model + thinking control — one controller for the conversation
 			    agents (prober/teacher); the record's `turns` above still folds

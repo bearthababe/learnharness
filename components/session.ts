@@ -102,16 +102,16 @@ export function useChatSession({ chatId, initialMessages, initialError, initiall
 		[model],
 	);
 
-	const send = useCallback((input: ChatInput, onAccepted?: () => void) => model.send(input, onAccepted), [model]);
+	const send = useCallback((input: ChatInput, onAccepted?: () => void, onWritingOutcome?: Parameters<SessionModel["send"]>[3]) => model.send(input, onAccepted, undefined, onWritingOutcome), [model]);
 	const continueIfOwed = useCallback((record: readonly LhMessage[]) => void model.continueIfOwed(record), [model]);
-	const steer = useCallback((text: string) => void model.steer(text), [model]);
+	const steer = useCallback((text: string, notebook?: Parameters<SessionModel["steer"]>[1]) => model.steer(text, notebook), [model]);
 	const submitAnswer = useCallback(
-		(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string) =>
-			void model.submitAnswer(tool, toolCallId, output, questionKey),
+		(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission" | "writingIds">) =>
+			model.submitAnswer(tool, toolCallId, output, questionKey, fields),
 		[model],
 	);
 	const dismissQuestion = useCallback(
-		(toolCallId: string, answer: QuestionAnswerData, questionKey?: string) => void model.dismissQuestion(toolCallId, answer, questionKey),
+		(toolCallId: string, answer: QuestionAnswerData, questionKey?: string, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission">) => model.dismissQuestion(toolCallId, answer, questionKey, fields),
 		[model],
 	);
 	const dismissProblem = useCallback(

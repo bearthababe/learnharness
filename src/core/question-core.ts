@@ -19,6 +19,7 @@
 
 import { Type, type Static } from "typebox";
 import { stripModelValueDebris } from "./value-debris.ts";
+import { serializeLearnerExplanation } from "./notebook-content.ts";
 
 // ─── shared types ───────────────────────────────────────────────────────────
 
@@ -434,6 +435,9 @@ export interface QuestionData {
  *  NO questionId (owner, tool-result diet 2026-10-02): it was the
  *  toolCallId restated — the toolResult message already carries it. */
 export interface QuestionAnswerData {
+	textContent?: import("./contracts/notebook.ts").LearnerExplanation;
+	thinkingContent?: import("./contracts/notebook.ts").LearnerExplanation;
+	readingThinkingContent?: import("./contracts/notebook.ts").LearnerExplanation;
 	kind: QuestionKind;
 	/** The persisted call's tool NAME (owner, 2026-10-09): probe-phase
 	 *  calls are `probe`/`recall`, teach calls `quiz`/`explain` — the
@@ -777,14 +781,15 @@ export function dismissedAnswer(kind: QuestionKind, questionText: string): Quest
 }
 
 export function compactAnswerForModel(ad: QuestionAnswerData): Record<string, unknown> {
-	if (ad.dismissed) return { kind: ad.kind, dismissed: true };
+	if (ad.dismissed) return { kind: ad.kind, dismissed: true, ...(ad.readingThinkingContent ? { thinkingWhileReading: serializeLearnerExplanation(ad.readingThinkingContent) } : ad.readingThinking ? { thinkingWhileReading: ad.readingThinking } : {}) };
 	const out: Record<string, unknown> = { kind: ad.kind };
 	if (ad.dontKnow) out.dontKnow = true;
 	// Array.isArray: the seam is called with `unknown` answers (test
 	// fixtures, foreign records) — degrade to omission, never crash.
 	if (Array.isArray(ad.answers) && ad.answers.length > 0)
 		out.answers = ad.answers.map((a) => ({ index: a.index, label: a.label }));
-	if (ad.text) out.text = ad.text;
+	if (ad.textContent) out.text = serializeLearnerExplanation(ad.textContent);
+	else if (ad.text) out.text = ad.text;
 	if (ad.other) out.other = ad.other;
 	// The verdict + stated confidence are the learner's PERFORMANCE — new
 	// information the model needs for its next move. (dontKnow implies
@@ -796,7 +801,9 @@ export function compactAnswerForModel(ad: QuestionAnswerData): Record<string, un
 	// thinking while reading the teaching. `note` is the pre-rename key —
 	// old records replay through here too, so both feed `thinking`.
 	const thinking = ad.thinking ?? ad.note;
-	if (thinking) out.thinking = thinking;
-	if (ad.readingThinking) out.thinkingWhileReading = ad.readingThinking;
+	if (ad.thinkingContent) out.thinking = serializeLearnerExplanation(ad.thinkingContent);
+	else if (thinking) out.thinking = thinking;
+	if (ad.readingThinkingContent) out.thinkingWhileReading = serializeLearnerExplanation(ad.readingThinkingContent);
+	else if (ad.readingThinking) out.thinkingWhileReading = ad.readingThinking;
 	return out;
 }

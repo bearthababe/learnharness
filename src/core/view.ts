@@ -182,22 +182,32 @@ export function projectView(messages: readonly LhMessage[], live?: LiveTurnState
 		}
 
 		if (role === "user") {
+			if (m.explanation) {
+				out.push({ id: m.id, role: "user", parts: [{ type: "data-learner-explanation", data: m.explanation }, ...(m.sharedWriting?.length ? [{ type: "data-shared-writing", data: m.sharedWriting }] : [])] });
+				continue;
+			}
 			const content = m.content as string | Array<{ type: string; text?: string }>;
 			const texts =
 				typeof content === "string"
 					? [content]
 					: content.filter((c) => c.type === "text").map((c) => (c as { text: string }).text);
-			out.push({ id: m.id, role: "user", parts: texts.map(textPart) });
+			out.push({ id: m.id, role: "user", parts: [...texts.map(textPart), ...(m.sharedWriting?.length ? [{ type: "data-shared-writing", data: m.sharedWriting }] : [])] });
 			continue;
 		}
 
 		if (role === "custom") {
 			projectMarker(m as LhMarkerMessage, out);
+			if (m.sharedWriting?.length) out.at(-1)?.parts.push({ type: "data-shared-writing", data: m.sharedWriting });
 			continue;
 		}
 
 		if (role === "toolResult") {
-			applyResultTo(findToolPart((m as ToolResultMessage).toolCallId), m as ToolResultMessage);
+			const part = findToolPart((m as ToolResultMessage).toolCallId);
+			applyResultTo(part, m as ToolResultMessage);
+			if (part && m.sharedWriting?.length) {
+				const group = out.find((g) => g.parts.includes(part));
+				group?.parts.splice(group.parts.indexOf(part) + 1, 0, { type: "data-shared-writing", data: m.sharedWriting });
+			}
 			continue;
 		}
 

@@ -17,6 +17,7 @@
 
 export * from "./contracts.ts";
 export { embedLearnerImage } from "./learner-image-svg.ts";
+export type { NotebookLine, NotebookState, NotebookHistoryEntry, NotebookExchange, NotebookEditorInput, NotebookResponse, NotebookRecord, NotebookOperation, NotebookAttemptRecord, NotebookCommand, NotebookCommandReceipt, NotebookView, NotebookUsage } from "./contracts/notebook.ts";
 export * from "./ports.ts";
 export * from "./chains.ts";
 export * from "./source-organization.ts";
@@ -44,10 +45,18 @@ export * from "./math-delims.ts";
 // and the input-events contract — all
 // pure logic, browser-safe.
 export * from "./native-messages.ts";
+export * from "./notebook-content.ts";
+export * from "./notebook-models.ts";
+export * from "./notebook-expressions.ts";
+export * from "./notebook-speech.ts";
+export type { NotebookSpeechRun, NotebookSpeechFragment, NotebookSpeechTarget } from "./contracts/notebook.ts";
+export type { NotebookSpeechApply } from "./contracts/notebook.ts";
+export type { LearnerExplanation, LearnerExplanationPart, OwnedTutorDraft, TutorDraftOwner, WorkingSnapshot, NotebookSubmission, NotebookSubmissionReceipt } from "./contracts/notebook.ts";
 export * from "./compaction.ts";
 export * from "./input-events.ts";
 export { parseFilePaths, quoteFilePath, filePathLabel, isDirectoryReference, directoryReferencePath } from "./file-paths.ts";
 export type { FilePathPart } from "./file-paths.ts";
+export * from "./shared-writing.ts";
 // Wave D (owner-approved 2026-09-26): the client view model — the grouping
 // canon (one continuous assistant document, step separators) ported from
 // the deleted server projection to the client side. Pure, browser-safe.
@@ -68,6 +77,7 @@ export * from "./fuzzy.ts";
 export * from "./settings.ts";
 export * from "./file-access.ts";
 export * from "./dictation.ts";
+export * from "./dictation-capture.ts";
 // graph-deletion.ts (wave 6): the whole module is PURE but storage-port
 // driven — the deletion RUNS server-side only. The shell needs exactly one
 // two type-only things from it: the ChatDeleteMode union (the delete
@@ -89,3 +99,6 @@ export * from "./coverage.ts";
 // ONE session→markdown formatter — the extractor's view and the user-facing
 // export share it. Pure, browser-safe.
 export * from "./session-markdown.ts";
+export * from "./handwriting.ts";
+export * from "./writing-submission.ts";
+export * from "./handwriting-pages.ts";

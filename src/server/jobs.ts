@@ -291,6 +291,12 @@ function handOffEligible(chatId: string, agent: Agent): void {
  *  never happens inside the constructor call. */
 export function registerLiveAgent(chatId: string, agent: Agent, allowDeferred = true, wakeSteerIds?: ReadonlySet<string>): void {
 	state().liveAgents.set(chatId, agent);
+	const restored = pendingNotebookSteers(stores.chatStore, chatId);
+	if (restored.length) {
+		const queue = state().userSteers.get(chatId) ?? [];
+		for (const message of restored) if (!queue.some((entry) => entry.message.id === message.id)) queue.push({ message });
+		state().userSteers.set(chatId, queue);
+	}
 	restorePendingDeliveries(chatId);
 	for (const entry of state().queues.get(chatId) ?? []) {
 		if (allowDeferred) entry.deferred = false;
@@ -315,11 +321,13 @@ export interface UserSteerEntry {
  *  is the stranding safety net: if this agent dies undelivered (question
  *  termination, abort), reconcileUserSteers keeps it parked for the
  *  chat's next run. */
-export function steerLiveChat(chatId: string, message: LhMessage): boolean {
+export function steerLiveChat(chatId: string, message: LhMessage, acceptNotebook?: () => void): boolean {
 	const agent = state().liveAgents.get(chatId);
 	if (!agent) return false;
+	acceptNotebook?.();
 	const entry: UserSteerEntry = { message };
 	const q = state().userSteers.get(chatId) ?? [];
+	if (acceptNotebook && q.some((entry) => entry.message.id === message.id)) return true;
 	q.push(entry);
 	state().userSteers.set(chatId, q);
 	agent.steer(message);
@@ -329,8 +337,9 @@ export function steerLiveChat(chatId: string, message: LhMessage): boolean {
 
 /** TURN SETTLEMENT RECONCILIATION for user steers: delivered ids drop
  *  (the record holds them); undelivered stay parked for the next run.
- *  Memory-only by design (same tradeoff as job markers): a server
- *  restart drops parked steers — and the whole turn dies with it anyway. */
+ *  Plain text retains its existing memory-only lifetime. Notebook-bearing
+ *  steers also have durable receipts/outbox ownership and restore at the next
+ *  foreground registration, filtered against the canonical saved ids. */
 export function reconcileUserSteers(chatId: string, persisted: readonly LhMessage[]): void {
 	const q = state().userSteers.get(chatId);
 	if (!q || q.length === 0) return;
@@ -766,3 +775,4 @@ export function listJobs(chatId: string): JobRecord[] {
 	if (process.env.NODE_ENV !== "test") recoverStaleJobs();
 	return stores.jobStore.listJobs(chatId);
 }
+import { pendingNotebookSteers } from "./notebook-submissions.ts";

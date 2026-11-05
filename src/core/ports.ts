@@ -28,10 +28,43 @@ import type {
 	NotesSource,
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
+import type { NotebookRecord } from "./contracts/notebook.ts";
+import type { Handwriting, NotebookSource } from "./handwriting.ts";
+import type { HandwritingPage, PageCreation, PageSummary } from "./handwriting-pages.ts";
+import type { SharedWriting, NotebookCapture, NotebookCaptureReceipt, WritingSnapshot } from "./shared-writing.ts";
+
+export interface SharedWritingStore {
+	put(chatId: string, bytes: Uint8Array): SharedWriting;
+	list(chatId: string): SharedWriting[];
+	read(chatId: string, id: string): Uint8Array;
+	filePath(chatId: string, id: string): string;
+	putNotebook(chatId: string, capture: NotebookCapture): NotebookCaptureReceipt;
+	readSource(chatId: string, id: string): NotebookSource | null;
+	readSnapshot(chatId: string): WritingSnapshot;
+	deleteChat(chatId: string): void;
+}
+
+/** Session-owned editable ink, never part of chat/sidebar projections. */
+export interface HandwritingStore {
+	/** Missing is empty; unreadable/corrupt/future formats throw. */
+	read(chatId: string): Handwriting;
+	/** Atomically extend a matching causal journal. Older retries acknowledge
+	 * current truth; divergent histories throw without replacing either copy. */
+	save(chatId: string, working: Handwriting): Handwriting;
+	listPages(chatId: string): PageSummary[];
+	readPage(chatId: string, pageId: string): HandwritingPage | null;
+	createPageIfAbsent(chatId: string, page: HandwritingPage, creation: PageCreation): { page: HandwritingPage; existing: boolean };
+	savePage(chatId: string, page: HandwritingPage): HandwritingPage;
+	deleteChat(chatId: string): void;
+}
 
 // ─── ChatStore — the session record's home (data/chats) ─────────────────────
 
 export interface ChatStore {
+	/** Compare-and-write only the notebook; retain latest conversation fields. */
+	saveNotebook(id: string, expectedRevision: number, notebook: NotebookRecord): NotebookRecord;
+	/** Atomically accept notebook input/outbox and consume its owned draft. */
+	commitNotebookSubmission(id: string, expectedRevision: number, notebook: NotebookRecord, appends: LhMessage[]): void;
 	/** Create a session record (persisted immediately). */
 	/** Create a session record; kind "practice" marks a practice session
 	 *  (absent = teach, the default). */

@@ -97,6 +97,7 @@ async function open(target, route) {
 	await target.waitForSelector(inputSelector);
 	await target.waitForFunction(() => !document.querySelector('[data-testid="setup-cta"], [data-testid="setup-cta-keys"]'));
 	await target.waitForFunction(() => document.querySelector('[data-testid="file-path-drop-zone"]'));
+	await target.waitForFunction(() => !document.querySelector('[data-file-path-input]')?.closest('[inert]'));
 }
 async function read(target, selector = inputSelector) {
 	return target.$eval(selector, element => [...element.childNodes].map(node => node.nodeType === 1 ? node.getAttribute("data-file-path-source") ?? node.textContent : node.textContent).join(""));
@@ -305,6 +306,7 @@ try {
 	}
 	// Only an explicit Enter may initiate a send; agent endpoint is refused.
 	await fill(page, "explicit synthetic send `/synthetic/one.pdf`");
+	await page.waitForSelector('[data-testid="composer"] button[aria-label="Send"]:not(:disabled)');
 	await page.keyboard.press("Enter");
 	await page.waitForFunction(() => /^\/chat\/chat_/.test(location.pathname));
 	await new Promise((resolve, reject) => {
@@ -319,7 +321,7 @@ try {
 	const question = '[data-testid="thinking-field"] [data-file-path-input]';
 	const practice = '[data-testid="practice-thinking-field"] [data-file-path-input]';
 	await open(page, "/chat/path_teach");
-	await page.waitForSelector('[data-testid="teach-check-reveal"]', { visible: true });
+	await page.waitForSelector('.lh-question-reveal[data-testid="teach-check-reveal"]', { visible: true });
 	assert.equal(await page.$eval('[data-testid="user-message"] [role="img"]', chip => chip.title), "/synthetic/transcript notes.pdf");
 	assert.equal(await page.$eval('[data-testid="user-message"] [role="img"]', chip => chip.textContent), "transcript notes.pdf");
 	checks.push("Seeded sent learner message renders a filename chip with full-path title; raw record retains quoted full path");
@@ -327,7 +329,7 @@ try {
 	await expectValue(page, "`/synthetic/reading.pdf`", reading);
 	assert.equal(await read(page, question), "");
 	checks.push("Unrevealed teaching check: unfocused drop lands in reading-thinking via dictation registry");
-	await page.locator('[data-testid="teach-check-reveal"]').click();
+	await page.locator('.lh-question-reveal[data-testid="teach-check-reveal"]').click();
 	await page.waitForSelector(question, { visible: true });
 	await fill(page, "AB", reading); await caret(page, 1, reading);
 	await syntheticDrop(page, ["/synthetic/focused-reading.pdf"]);
@@ -372,7 +374,8 @@ try {
 	fs.mkdirSync(path.join(home, "desktop-profile"), { recursive: true });
 	fs.mkdirSync(path.join(home, "desktop-profile-dev"), { recursive: true });
 	fs.writeFileSync(launcher, `const {app,session}=require('electron');\napp.setPath('home',${JSON.stringify(home)});\napp.setPath('userData',${JSON.stringify(path.join(home, "desktop-profile"))});\napp.commandLine.appendSwitch('remote-debugging-port',${JSON.stringify(String(debugPort))});\napp.commandLine.appendSwitch('disable-background-networking');\napp.commandLine.appendSwitch('disable-sync');\napp.whenReady().then(()=>session.defaultSession.webRequest.onBeforeRequest((details,cb)=>{let u;try{u=new URL(details.url)}catch{return cb({cancel:true})}cb({cancel:!(${JSON.stringify(origin)}===u.origin||(u.protocol==='ws:'&&u.host===${JSON.stringify(new URL(origin).host)})||['about:','data:','devtools:'].includes(u.protocol))});}));\nrequire(${JSON.stringify(path.join(root, "electron", "main.cjs"))});\nconsole.log('LH_FILE_PATH_PROFILE '+JSON.stringify({home:app.getPath('home'),userData:app.getPath('userData')}));\n`);
-	const electron = spawn(require("electron"), [launcher], { cwd: root, env: { ...env, LH_DEV_URL: origin }, stdio: ["ignore", "pipe", "pipe"] }); children.push(electron);
+	// Linux needs its display connection and a UTF-8 locale to select the Unicode fixture.
+	const electron = spawn(require("electron"), [launcher], { cwd: root, env: { ...env, DISPLAY: process.env.DISPLAY, XAUTHORITY: process.env.XAUTHORITY, LANG: "C.UTF-8", LH_DEV_URL: origin }, stdio: ["ignore", "pipe", "pipe"] }); children.push(electron);
 	const captureElectron = data => { electronLogs = (electronLogs + data).slice(-24000); }; electron.stdout.on("data", captureElectron); electron.stderr.on("data", captureElectron);
 	await startup(electron, () => electronLogs, /DevTools listening on (ws:\/\/[^\s]+)/, 45000);
 	const profile = JSON.parse(electronLogs.match(/LH_FILE_PATH_PROFILE ([^\r\n]+)/)[1]);

@@ -8,6 +8,7 @@ import { stores } from "./stores.ts";
 import { isTurnRunning } from "./turn-liveness.ts";
 import { clearTurnFailure } from "./turn-runs.ts";
 import { discardChatDeliveries } from "./jobs.ts";
+import { notebookService } from "./notebook.ts";
 
 /**
  * Server-side chat entries for the transport layer (app/api/chats*,
@@ -35,7 +36,7 @@ const WIND_DOWN_POLL_MS = 50;
 /** What deleteChatSession did — the route maps it straight to HTTP. */
 export type ChatDeleteOutcome =
 	| { ok: false; status: 404; code: "not_found"; error: string }
-	| { ok: false; status: 409; code: "turn_in_flight" | "jobs_running"; error: string; jobIds: string[] }
+	| { ok: false; status: 409; code: "turn_in_flight" | "jobs_running" | "notebook_running"; error: string; jobIds: string[] }
 	| { ok: false; status: 503; code: "extraction_winding_down"; error: string }
 	| {
 			ok: true;
@@ -69,6 +70,9 @@ export type ChatDeleteOutcome =
  *      nothing merged.
  */
 export function runningWorkBlocker(chatId: string): Extract<ChatDeleteOutcome, { status: 409 }> | null {
+	if (notebookService().busy(chatId)) {
+		return { ok: false, status: 409, code: "notebook_running", error: "Notebook work is running — try again when it finishes", jobIds: [] };
+	}
 	if (isTurnRunning(chatId)) {
 		return {
 			ok: false,
@@ -149,7 +153,11 @@ function finishChatDeletion(chatId: string, mode: ChatDeleteMode): Extract<ChatD
 
 function finishChatRecordDeletion(chatId: string): number {
 	const jobsRemoved = stores.jobStore.deleteJobsForChat(chatId);
+	// Remove editable working before the session's final deletion. A failed
+	// cleanup leaves a deletable session; delayed saves recheck its existence.
+	stores.handwritingStore.deleteChat(chatId);
 	if (stores.chatStore.deleteChat(chatId)) {
+		stores.sharedWritingStore.deleteChat(chatId);
 		discardChatDeliveries(chatId);
 		clearTurnFailure(chatId);
 	}

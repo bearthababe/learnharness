@@ -11,6 +11,7 @@ import { DispatchCard } from "@/components/artifacts/dispatch-card";
 import { SvgImage } from "@/components/artifacts/svg-image";
 import { embedLearnerImage, type ArtifactPartProps, type VisualResult } from "@/src/core";
 import { useImageSnapshot } from "./use-image-snapshot";
+import { HandwritingPagesContext } from "@/components/handwriting/pages-context";
 
 /**
  * Visual artifact card (W6 → ack protocol): the tool part's output is the
@@ -56,6 +57,7 @@ export function VisualOutputCard({
 	const svg = result?.image && snapshot.image ? embedLearnerImage(result.svg, snapshot.image) : result?.svg ?? "";
 	const overlay = useSessionMermaid();
 	const actions = useContext(ChatActionsContext);
+	const notebook = useContext(HandwritingPagesContext), [notebookNotice, setNotebookNotice] = useState<string | null>(null), [importing, setImporting] = useState(false);
 	// Brightness inversion (owner, 2026-10-07): the switch state PERSISTS on
 	// the steer record (details.ui.inverted) — seeded here, written through
 	// the silent artifact-ui route on toggle; without a chat page (tests,
@@ -142,6 +144,7 @@ export function VisualOutputCard({
 			}>
 				<div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Figure</div>
 				<div className={!invertible ? "ml-auto flex items-center gap-1.5" : "flex items-center gap-1.5"}>
+					{notebook && <button type="button" className="min-h-11 rounded px-2 text-xs hover:bg-accent" disabled={importing} onClick={() => { setImporting(true); void notebook.annotate(result.svg).then(result => setNotebookNotice(result.kind === "failed" ? result.notice : null)).finally(() => setImporting(false)); }}>Annotate in notebook</button>}
 					{/* The invert affordance (owner round, 2026-10-07): the disc IS
 					    the half-filled contrast circle; the tooltip names it. */}
 					{invertible && (
@@ -177,6 +180,7 @@ export function VisualOutputCard({
 					)}
 				</div>
 			</div>
+			{notebookNotice && <p role="status" className="text-xs">{notebookNotice}</p>}
 		</div>
 	);
 }

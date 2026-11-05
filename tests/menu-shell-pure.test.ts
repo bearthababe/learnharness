@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { computeMenuPlacement, type MenuSide } from "../components/menu-shell.tsx";
+import { computeMenuPlacement, computeVisibleMenuPlacement, type MenuSide } from "../components/menu-shell.tsx";
 
 /**
  * The shared menu shell's placement decision (fix wave chunk B): the
@@ -12,6 +12,43 @@ import { computeMenuPlacement, type MenuSide } from "../components/menu-shell.ts
 
 const rect = (top: number, bottom: number) => ({ top, bottom, left: 100, right: 300 });
 const viewport = (height: number) => ({ width: 1280, height });
+
+describe("phone visual-viewport placement", () => {
+	it("docks focused search to the visible bottom instead of reserving the composer and model bar", () => {
+		for (const height of [250, 350]) {
+			for (const offsetTop of [0, 36]) {
+				const view = { width: 375, height, offsetTop, offsetLeft: 0 };
+				const p = computeVisibleMenuPlacement(rect(180, 224), view, 500, 352, "up", "right", true);
+				assert.equal(p.side, "up");
+				assert.equal(p.style.top, height + offsetTop, "Whole card ends at the visible keyboard/accessory boundary");
+				assert.equal(p.style.transform, "translateY(-100%)");
+				assert.ok(Number(p.style.top) - p.maxHeight >= offsetTop + 8);
+				assert.equal(p.maxHeight, height * .6, "Retains compact sizing as native controls reduce the available area");
+			}
+		}
+	});
+	it("keeps an offscreen anchor's menu above a visual-only keyboard with offsets", () => {
+		const p = computeVisibleMenuPlacement(rect(600, 644), { width: 320, height: 350, offsetTop: 36, offsetLeft: 12 }, 500, 352, "up", "right");
+		assert.equal(p.side, "up");
+		assert.equal(p.style.top, 374);
+		assert.equal(p.maxHeight, 210);
+		assert.equal(p.style.left, 20);
+		assert.equal(p.style.maxWidth, 304);
+		assert.equal(p.style.transform, "translateY(-100%)");
+	});
+	it("fits a tiny visible area instead of forcing the desktop 96px floor", () => {
+		const p = computeVisibleMenuPlacement(rect(100, 144), { width: 375, height: 80, offsetTop: 0, offsetLeft: 0 }, 500, 352, "up", "right");
+		assert.ok(p.maxHeight < 96);
+		assert.ok(Number(p.style.top) - p.maxHeight >= 8);
+		assert.ok(Number(p.style.top) <= 72);
+	});
+	it("flips below an anchor above the visible viewport", () => {
+		const p = computeVisibleMenuPlacement(rect(0, 20), { width: 375, height: 350, offsetTop: 80, offsetLeft: 0 }, 500, 352, "up", "right");
+		assert.equal(p.side, "down");
+		assert.equal(p.style.top, 92);
+		assert.ok(Number(p.style.top) + p.maxHeight <= 422);
+	});
+});
 
 describe("computeMenuPlacement — side", () => {
 	it("keeps the preferred side when it shows the whole menu", () => {

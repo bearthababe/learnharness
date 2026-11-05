@@ -1,0 +1,2529 @@
+{
+  "startedAt": "2026-10-31T22:06:28.589Z",
+  "selectedFrom": "models.cheap",
+  "requested": {
+    "provider": "chatgpt",
+    "id": "gpt-6-luna",
+    "thinkingLevel": "medium"
+  },
+  "effective": {
+    "provider": "chatgpt",
+    "id": "gpt-6-luna",
+    "thinkingLevel": "medium",
+    "api": "openai-responses"
+  },
+  "billing": "subscription: API-dollar cost unpriced",
+  "prompt": "You edit a learner's mathematical notebook in response to conversational instructions.\nRecord the learner's intended working, including mathematical mistakes and unfinished or invalid LaTeX. Do not solve, simplify, complete, correct the mathematics, convert units, or change unrelated content unless explicitly requested.\nUse the current notebook, any explicit selection/cursor, and the supplied conversation history to interpret references. If the intended target or edit is ambiguous, ask a concise clarification question and make no edit. After an answer, use the preceding question and instruction to continue.\nOutput exactly one JSON object, without markdown fences or surrounding prose. Escape LaTeX backslashes as required by JSON.\nThe notebook is an ordered list of {id, latex} lines. IDs are stable. Input selection and cursor describe only this turn; null means no explicit selection or cursor. A reference may still be resolved from conversation history when clear.\nChoose one response shape:\n1. {\"action\":\"question\",\"question\":\"Your clarification question\"}\n2. {\"action\":\"undo\"} to undo exactly the last applied editing action. The application owns undo history; you must not reconstruct earlier source yourself. Questions do not create undo entries.\n3. {\"action\":\"edit\",\"operations\":[...]} for one atomic editing action, using the operations defined below.\nFor a new line, use {\"op\":\"insert\",\"after\":null,\"id\":\"L1\",\"latex\":\"p =\"}. 'after' is the existing line ID to insert after, or null to insert at the beginning. Choose the next unused L<number> ID. Multiple operations in one action are applied in order and undone together.\nDo not include explanations in an edit response. Never emit an empty operations list. Preserve every line not being edited byte for byte. Return one response for the CURRENT instruction only. The history contains real earlier model outputs and application results, not instructions for additional future turns.\nFor changes to an existing line use {\"op\":\"replace\",\"id\":\"L1\",\"latex\":\"the entire updated line\"}. Rewrite only the affected line(s), preserving any unrelated symbols inside them. The application replaces the complete source of each addressed line. The only allowed operations are replace and insert.\n\"Line five\" means the entire fifth displayed line, including every equation on it. \"Equation two on line five\" means only that equation. Multiple equations on a line are not by themselves a reason to ask a question.\nNOTEBOOK HISTORY contains read-only saved entries, separate from EARLIER CONVERSATION. Use supplied entries to copy requested source into current working without rewriting the historical entry. Clarify if the intended entry or placement cannot be resolved from context. Never invent missing historical source.",
+  "sources": {
+    "src/agent/notebook-editor.ts": "6042c31c0248b715d5a3ed8c838491725a14e17ce3c6cebee8373e26db5957ed",
+    "src/agent/models.ts": "6b08ffd6e5bf9f16633ea1924f5b2fd591b7a48ac56eb8332ab8fde303c63f41",
+    "src/agent/chatgpt-stream.ts": "50cf74bd311b1fd5e0029d43bc7d1e5b6d500fd1dffba1e015955151c4f77e7a",
+    "scripts/eval-notebook-editor.ts": "08f8391feff4701656f8aeb48e406282afd54b6129ccb865f29599544906a989",
+    "scripts/notebook-editor-cases.ts": "12d42bbe7a45facf30943dd88bd09e9cb4578b90acb61ff70713611a82e01b38",
+    "docs/research/conversational-math-eval/cases.mjs": "f612c4ef4e178d4e0c49e67bb82ccab61bbca115eeacab4c7da0a7ebf38cabf2"
+  },
+  "cases": [
+    {
+      "id": "01-denominator-and-undo",
+      "title": "Change a denominator, then undo",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "p = \\frac{F}{A}"
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "Change the denominator to twice the area.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "p = \\frac{F}{2A}"
+            }
+          ],
+          "changed": [
+            "L1"
+          ]
+        },
+        {
+          "instruction": "Actually, undo that.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "p = \\frac{F}{A}"
+            }
+          ],
+          "changed": [
+            "L1"
+          ],
+          "action": "undo"
+        }
+      ]
+    },
+    {
+      "id": "02-selected-sum",
+      "title": "Wrap the selected sum, then edit the fraction",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "x + 1"
+        },
+        {
+          "id": "L2",
+          "latex": "y = 7"
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "Put all of that over rho.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "\\frac{x + 1}{\\rho}"
+            },
+            {
+              "id": "L2",
+              "latex": "y = 7"
+            }
+          ],
+          "changed": [
+            "L1"
+          ],
+          "selection": {
+            "lineId": "L1",
+            "text": "x + 1"
+          }
+        },
+        {
+          "instruction": "No, change the denominator to five.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "\\frac{x + 1}{5}"
+            },
+            {
+              "id": "L2",
+              "latex": "y = 7"
+            }
+          ],
+          "changed": [
+            "L1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "03-two-denominators",
+      "title": "Ask which fraction, then use the answer",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "p = \\frac{F}{A}"
+        },
+        {
+          "id": "L2",
+          "latex": "q = \\frac{V}{t}"
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "Change the denominator to five.",
+          "expected": null,
+          "changed": [],
+          "action": "question"
+        },
+        {
+          "instruction": "The flow equation, q.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "p = \\frac{F}{A}"
+            },
+            {
+              "id": "L2",
+              "latex": "q = \\frac{V}{5}"
+            }
+          ],
+          "changed": [
+            "L2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "04-previous-line",
+      "title": "Use the cursor to identify the previous line",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "p = \\frac{F}{A}"
+        },
+        {
+          "id": "L2",
+          "latex": "q = \\frac{V}{t}"
+        },
+        {
+          "id": "L3",
+          "latex": "W = Fd"
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "On the previous line, change t to two t.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "p = \\frac{F}{A}"
+            },
+            {
+              "id": "L2",
+              "latex": "q = \\frac{V}{2t}"
+            },
+            {
+              "id": "L3",
+              "latex": "W = Fd"
+            }
+          ],
+          "changed": [
+            "L2"
+          ],
+          "cursorLineId": "L3"
+        }
+      ]
+    },
+    {
+      "id": "05-create-and-continue",
+      "title": "Add unfinished working and continue it",
+      "initial": [],
+      "steps": [
+        {
+          "instruction": "New line: lowercase p equals. Leave the right side blank for now.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "p ="
+            }
+          ],
+          "changed": [
+            "L1"
+          ]
+        },
+        {
+          "instruction": "On that line, put F over A after the equals sign.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "p = \\frac{F}{A}"
+            }
+          ],
+          "changed": [
+            "L1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "06-preserve-wrong-and-partial",
+      "title": "Keep mistakes and broken source when adding a line",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "2 + 2 = 5"
+        },
+        {
+          "id": "L2",
+          "latex": "\\frac{a}{"
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "Add a new line at the end: W equals F times d, written as W = Fd. Leave the existing working alone.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "2 + 2 = 5"
+            },
+            {
+              "id": "L2",
+              "latex": "\\frac{a}{"
+            },
+            {
+              "id": "L3",
+              "latex": "W = Fd"
+            }
+          ],
+          "changed": [
+            "L3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "07-correct-the-last-edit",
+      "title": "Correct a change and undo only the correction",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "p = \\frac{F}{A}"
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "Replace F with m times g.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "p = \\frac{mg}{A}"
+            }
+          ],
+          "changed": [
+            "L1"
+          ]
+        },
+        {
+          "instruction": "No, make the whole right-hand side rho times g times h instead.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "p = \\rho gh"
+            }
+          ],
+          "changed": [
+            "L1"
+          ]
+        },
+        {
+          "instruction": "Undo just that last change.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "p = \\frac{mg}{A}"
+            }
+          ],
+          "changed": [
+            "L1"
+          ],
+          "action": "undo"
+        }
+      ]
+    },
+    {
+      "id": "08-repeated-text",
+      "title": "Target the last of two identical equations",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "p = \\frac{F}{A}"
+        },
+        {
+          "id": "L2",
+          "latex": "x = 2"
+        },
+        {
+          "id": "L3",
+          "latex": "p = \\frac{F}{A}"
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "On the last line only, change A to twice A.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "p = \\frac{F}{A}"
+            },
+            {
+              "id": "L2",
+              "latex": "x = 2"
+            },
+            {
+              "id": "L3",
+              "latex": "p = \\frac{F}{2A}"
+            }
+          ],
+          "changed": [
+            "L3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "09-ambiguous-that",
+      "title": "Ask what 'that' refers to, then wrap the intended line",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "x + y"
+        },
+        {
+          "id": "L2",
+          "latex": "a + b"
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "Put that over rho.",
+          "expected": null,
+          "changed": [],
+          "action": "question"
+        },
+        {
+          "instruction": "I mean the whole first line.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "\\frac{x + y}{\\rho}"
+            },
+            {
+              "id": "L2",
+              "latex": "a + b"
+            }
+          ],
+          "changed": [
+            "L1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "10-case-units-and-no-solving",
+      "title": "Keep unit case and an incorrect value",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "P = 100\\,\\mathrm{kPa}"
+        },
+        {
+          "id": "L2",
+          "latex": "p = 100000\\,\\mathrm{Pa}"
+        },
+        {
+          "id": "L3",
+          "latex": "1\\,\\mathrm{kPa} = 10\\,\\mathrm{Pa}"
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "On the second line change only 100000 to 120000. Keep everything else exactly as I wrote it.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "P = 100\\,\\mathrm{kPa}"
+            },
+            {
+              "id": "L2",
+              "latex": "p = 120000\\,\\mathrm{Pa}"
+            },
+            {
+              "id": "L3",
+              "latex": "1\\,\\mathrm{kPa} = 10\\,\\mathrm{Pa}"
+            }
+          ],
+          "changed": [
+            "L2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "11-whole-line-vs-equation",
+      "title": "Target a whole multi-equation line, then one equation",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "a=1"
+        },
+        {
+          "id": "L2",
+          "latex": "b=2"
+        },
+        {
+          "id": "L3",
+          "latex": "c=3"
+        },
+        {
+          "id": "L4",
+          "latex": "d=4"
+        },
+        {
+          "id": "L5",
+          "latex": "p=\\frac{F}{A};\\quad q=\\frac{V}{t}"
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "Copy the whole of line five onto a new line at the end.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "a=1"
+            },
+            {
+              "id": "L2",
+              "latex": "b=2"
+            },
+            {
+              "id": "L3",
+              "latex": "c=3"
+            },
+            {
+              "id": "L4",
+              "latex": "d=4"
+            },
+            {
+              "id": "L5",
+              "latex": "p=\\frac{F}{A};\\quad q=\\frac{V}{t}"
+            },
+            {
+              "id": "L6",
+              "latex": "p=\\frac{F}{A};\\quad q=\\frac{V}{t}"
+            }
+          ],
+          "changed": [
+            "L6"
+          ]
+        },
+        {
+          "instruction": "On line six, change only the denominator of equation two to 5. Leave equation one alone.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "a=1"
+            },
+            {
+              "id": "L2",
+              "latex": "b=2"
+            },
+            {
+              "id": "L3",
+              "latex": "c=3"
+            },
+            {
+              "id": "L4",
+              "latex": "d=4"
+            },
+            {
+              "id": "L5",
+              "latex": "p=\\frac{F}{A};\\quad q=\\frac{V}{t}"
+            },
+            {
+              "id": "L6",
+              "latex": "p=\\frac{F}{A};\\quad q=\\frac{V}{5}"
+            }
+          ],
+          "changed": [
+            "L6"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "12-history-whole-line",
+      "title": "Copy a whole historical line",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "2+2=5"
+        }
+      ],
+      "notebookHistory": [
+        {
+          "id": "pressure",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=1"
+            },
+            {
+              "id": "L2",
+              "latex": "b=2"
+            },
+            {
+              "id": "L3",
+              "latex": "c=3"
+            },
+            {
+              "id": "L4",
+              "latex": "d=4"
+            },
+            {
+              "id": "L5",
+              "latex": "p=\\frac{F}{A};\\quad q=\\frac{V}{t}"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "From the pressure history entry, copy the whole of line five to a new line after my current line one.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "2+2=5"
+            },
+            {
+              "id": "L2",
+              "latex": "p=\\frac{F}{A};\\quad q=\\frac{V}{t}"
+            }
+          ],
+          "changed": [
+            "L2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "13-history-one-equation",
+      "title": "Copy only one historical equation",
+      "initial": [],
+      "notebookHistory": [
+        {
+          "id": "pressure",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=1"
+            },
+            {
+              "id": "L2",
+              "latex": "b=2"
+            },
+            {
+              "id": "L3",
+              "latex": "c=3"
+            },
+            {
+              "id": "L4",
+              "latex": "d=4"
+            },
+            {
+              "id": "L5",
+              "latex": "p=\\frac{F}{A};\\quad q=\\frac{V}{t}"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "Copy only equation two on line five of pressure history into a new first line.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "q=\\frac{V}{t}"
+            }
+          ],
+          "changed": [
+            "L1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "14-history-clarification",
+      "title": "Disambiguate the history entry and continue",
+      "initial": [],
+      "notebookHistory": [
+        {
+          "id": "pressure",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=1"
+            },
+            {
+              "id": "L2",
+              "latex": "b=2"
+            },
+            {
+              "id": "L3",
+              "latex": "c=3"
+            },
+            {
+              "id": "L4",
+              "latex": "d=4"
+            },
+            {
+              "id": "L5",
+              "latex": "p=\\frac{F}{A};\\quad q=\\frac{V}{t}"
+            }
+          ]
+        },
+        {
+          "id": "velocity",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "v=d/t"
+            },
+            {
+              "id": "L2",
+              "latex": "x=vt"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "Copy line one from history into a new first line.",
+          "expected": null,
+          "changed": [],
+          "action": "question"
+        },
+        {
+          "instruction": "The velocity entry.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "v=d/t"
+            }
+          ],
+          "changed": [
+            "L1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "15-long-notebook",
+      "title": "Edit and undo amid 100 lines with wrong and unfinished work",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "2+2=5"
+        },
+        {
+          "id": "L2",
+          "latex": "\\frac{a}{"
+        },
+        {
+          "id": "L3",
+          "latex": "x_{3}=3"
+        },
+        {
+          "id": "L4",
+          "latex": "x_{4}=4"
+        },
+        {
+          "id": "L5",
+          "latex": "x_{5}=5"
+        },
+        {
+          "id": "L6",
+          "latex": "x_{6}=6"
+        },
+        {
+          "id": "L7",
+          "latex": "x_{7}=7"
+        },
+        {
+          "id": "L8",
+          "latex": "x_{8}=8"
+        },
+        {
+          "id": "L9",
+          "latex": "x_{9}=9"
+        },
+        {
+          "id": "L10",
+          "latex": "x_{10}=10"
+        },
+        {
+          "id": "L11",
+          "latex": "x_{11}=11"
+        },
+        {
+          "id": "L12",
+          "latex": "x_{12}=12"
+        },
+        {
+          "id": "L13",
+          "latex": "x_{13}=13"
+        },
+        {
+          "id": "L14",
+          "latex": "x_{14}=14"
+        },
+        {
+          "id": "L15",
+          "latex": "x_{15}=15"
+        },
+        {
+          "id": "L16",
+          "latex": "x_{16}=16"
+        },
+        {
+          "id": "L17",
+          "latex": "x_{17}=17"
+        },
+        {
+          "id": "L18",
+          "latex": "x_{18}=18"
+        },
+        {
+          "id": "L19",
+          "latex": "x_{19}=19"
+        },
+        {
+          "id": "L20",
+          "latex": "x_{20}=20"
+        },
+        {
+          "id": "L21",
+          "latex": "x_{21}=21"
+        },
+        {
+          "id": "L22",
+          "latex": "x_{22}=22"
+        },
+        {
+          "id": "L23",
+          "latex": "x_{23}=23"
+        },
+        {
+          "id": "L24",
+          "latex": "x_{24}=24"
+        },
+        {
+          "id": "L25",
+          "latex": "x_{25}=25"
+        },
+        {
+          "id": "L26",
+          "latex": "x_{26}=26"
+        },
+        {
+          "id": "L27",
+          "latex": "x_{27}=27"
+        },
+        {
+          "id": "L28",
+          "latex": "x_{28}=28"
+        },
+        {
+          "id": "L29",
+          "latex": "x_{29}=29"
+        },
+        {
+          "id": "L30",
+          "latex": "x_{30}=30"
+        },
+        {
+          "id": "L31",
+          "latex": "x_{31}=31"
+        },
+        {
+          "id": "L32",
+          "latex": "x_{32}=32"
+        },
+        {
+          "id": "L33",
+          "latex": "x_{33}=33"
+        },
+        {
+          "id": "L34",
+          "latex": "x_{34}=34"
+        },
+        {
+          "id": "L35",
+          "latex": "x_{35}=35"
+        },
+        {
+          "id": "L36",
+          "latex": "x_{36}=36"
+        },
+        {
+          "id": "L37",
+          "latex": "x_{37}=37"
+        },
+        {
+          "id": "L38",
+          "latex": "x_{38}=38"
+        },
+        {
+          "id": "L39",
+          "latex": "x_{39}=39"
+        },
+        {
+          "id": "L40",
+          "latex": "x_{40}=40"
+        },
+        {
+          "id": "L41",
+          "latex": "x_{41}=41"
+        },
+        {
+          "id": "L42",
+          "latex": "x_{42}=42"
+        },
+        {
+          "id": "L43",
+          "latex": "x_{43}=43"
+        },
+        {
+          "id": "L44",
+          "latex": "x_{44}=44"
+        },
+        {
+          "id": "L45",
+          "latex": "x_{45}=45"
+        },
+        {
+          "id": "L46",
+          "latex": "x_{46}=46"
+        },
+        {
+          "id": "L47",
+          "latex": "x_{47}=47"
+        },
+        {
+          "id": "L48",
+          "latex": "x_{48}=48"
+        },
+        {
+          "id": "L49",
+          "latex": "x_{49}=49"
+        },
+        {
+          "id": "L50",
+          "latex": "p=\\frac{F}{A}"
+        },
+        {
+          "id": "L51",
+          "latex": "x_{51}=51"
+        },
+        {
+          "id": "L52",
+          "latex": "x_{52}=52"
+        },
+        {
+          "id": "L53",
+          "latex": "x_{53}=53"
+        },
+        {
+          "id": "L54",
+          "latex": "x_{54}=54"
+        },
+        {
+          "id": "L55",
+          "latex": "x_{55}=55"
+        },
+        {
+          "id": "L56",
+          "latex": "x_{56}=56"
+        },
+        {
+          "id": "L57",
+          "latex": "x_{57}=57"
+        },
+        {
+          "id": "L58",
+          "latex": "x_{58}=58"
+        },
+        {
+          "id": "L59",
+          "latex": "x_{59}=59"
+        },
+        {
+          "id": "L60",
+          "latex": "x_{60}=60"
+        },
+        {
+          "id": "L61",
+          "latex": "x_{61}=61"
+        },
+        {
+          "id": "L62",
+          "latex": "x_{62}=62"
+        },
+        {
+          "id": "L63",
+          "latex": "x_{63}=63"
+        },
+        {
+          "id": "L64",
+          "latex": "x_{64}=64"
+        },
+        {
+          "id": "L65",
+          "latex": "x_{65}=65"
+        },
+        {
+          "id": "L66",
+          "latex": "x_{66}=66"
+        },
+        {
+          "id": "L67",
+          "latex": "x_{67}=67"
+        },
+        {
+          "id": "L68",
+          "latex": "x_{68}=68"
+        },
+        {
+          "id": "L69",
+          "latex": "x_{69}=69"
+        },
+        {
+          "id": "L70",
+          "latex": "x_{70}=70"
+        },
+        {
+          "id": "L71",
+          "latex": "x_{71}=71"
+        },
+        {
+          "id": "L72",
+          "latex": "x_{72}=72"
+        },
+        {
+          "id": "L73",
+          "latex": "x_{73}=73"
+        },
+        {
+          "id": "L74",
+          "latex": "x_{74}=74"
+        },
+        {
+          "id": "L75",
+          "latex": "x_{75}=75"
+        },
+        {
+          "id": "L76",
+          "latex": "x_{76}=76"
+        },
+        {
+          "id": "L77",
+          "latex": "x_{77}=77"
+        },
+        {
+          "id": "L78",
+          "latex": "x_{78}=78"
+        },
+        {
+          "id": "L79",
+          "latex": "x_{79}=79"
+        },
+        {
+          "id": "L80",
+          "latex": "x_{80}=80"
+        },
+        {
+          "id": "L81",
+          "latex": "x_{81}=81"
+        },
+        {
+          "id": "L82",
+          "latex": "x_{82}=82"
+        },
+        {
+          "id": "L83",
+          "latex": "x_{83}=83"
+        },
+        {
+          "id": "L84",
+          "latex": "x_{84}=84"
+        },
+        {
+          "id": "L85",
+          "latex": "x_{85}=85"
+        },
+        {
+          "id": "L86",
+          "latex": "x_{86}=86"
+        },
+        {
+          "id": "L87",
+          "latex": "x_{87}=87"
+        },
+        {
+          "id": "L88",
+          "latex": "x_{88}=88"
+        },
+        {
+          "id": "L89",
+          "latex": "x_{89}=89"
+        },
+        {
+          "id": "L90",
+          "latex": "x_{90}=90"
+        },
+        {
+          "id": "L91",
+          "latex": "x_{91}=91"
+        },
+        {
+          "id": "L92",
+          "latex": "x_{92}=92"
+        },
+        {
+          "id": "L93",
+          "latex": "x_{93}=93"
+        },
+        {
+          "id": "L94",
+          "latex": "x_{94}=94"
+        },
+        {
+          "id": "L95",
+          "latex": "x_{95}=95"
+        },
+        {
+          "id": "L96",
+          "latex": "x_{96}=96"
+        },
+        {
+          "id": "L97",
+          "latex": "x_{97}=97"
+        },
+        {
+          "id": "L98",
+          "latex": "x_{98}=98"
+        },
+        {
+          "id": "L99",
+          "latex": "x_{99}=99"
+        },
+        {
+          "id": "L100",
+          "latex": "x_{100}=100"
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "On line fifty change the denominator to twice A. Leave all other lines alone.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "2+2=5"
+            },
+            {
+              "id": "L2",
+              "latex": "\\frac{a}{"
+            },
+            {
+              "id": "L3",
+              "latex": "x_{3}=3"
+            },
+            {
+              "id": "L4",
+              "latex": "x_{4}=4"
+            },
+            {
+              "id": "L5",
+              "latex": "x_{5}=5"
+            },
+            {
+              "id": "L6",
+              "latex": "x_{6}=6"
+            },
+            {
+              "id": "L7",
+              "latex": "x_{7}=7"
+            },
+            {
+              "id": "L8",
+              "latex": "x_{8}=8"
+            },
+            {
+              "id": "L9",
+              "latex": "x_{9}=9"
+            },
+            {
+              "id": "L10",
+              "latex": "x_{10}=10"
+            },
+            {
+              "id": "L11",
+              "latex": "x_{11}=11"
+            },
+            {
+              "id": "L12",
+              "latex": "x_{12}=12"
+            },
+            {
+              "id": "L13",
+              "latex": "x_{13}=13"
+            },
+            {
+              "id": "L14",
+              "latex": "x_{14}=14"
+            },
+            {
+              "id": "L15",
+              "latex": "x_{15}=15"
+            },
+            {
+              "id": "L16",
+              "latex": "x_{16}=16"
+            },
+            {
+              "id": "L17",
+              "latex": "x_{17}=17"
+            },
+            {
+              "id": "L18",
+              "latex": "x_{18}=18"
+            },
+            {
+              "id": "L19",
+              "latex": "x_{19}=19"
+            },
+            {
+              "id": "L20",
+              "latex": "x_{20}=20"
+            },
+            {
+              "id": "L21",
+              "latex": "x_{21}=21"
+            },
+            {
+              "id": "L22",
+              "latex": "x_{22}=22"
+            },
+            {
+              "id": "L23",
+              "latex": "x_{23}=23"
+            },
+            {
+              "id": "L24",
+              "latex": "x_{24}=24"
+            },
+            {
+              "id": "L25",
+              "latex": "x_{25}=25"
+            },
+            {
+              "id": "L26",
+              "latex": "x_{26}=26"
+            },
+            {
+              "id": "L27",
+              "latex": "x_{27}=27"
+            },
+            {
+              "id": "L28",
+              "latex": "x_{28}=28"
+            },
+            {
+              "id": "L29",
+              "latex": "x_{29}=29"
+            },
+            {
+              "id": "L30",
+              "latex": "x_{30}=30"
+            },
+            {
+              "id": "L31",
+              "latex": "x_{31}=31"
+            },
+            {
+              "id": "L32",
+              "latex": "x_{32}=32"
+            },
+            {
+              "id": "L33",
+              "latex": "x_{33}=33"
+            },
+            {
+              "id": "L34",
+              "latex": "x_{34}=34"
+            },
+            {
+              "id": "L35",
+              "latex": "x_{35}=35"
+            },
+            {
+              "id": "L36",
+              "latex": "x_{36}=36"
+            },
+            {
+              "id": "L37",
+              "latex": "x_{37}=37"
+            },
+            {
+              "id": "L38",
+              "latex": "x_{38}=38"
+            },
+            {
+              "id": "L39",
+              "latex": "x_{39}=39"
+            },
+            {
+              "id": "L40",
+              "latex": "x_{40}=40"
+            },
+            {
+              "id": "L41",
+              "latex": "x_{41}=41"
+            },
+            {
+              "id": "L42",
+              "latex": "x_{42}=42"
+            },
+            {
+              "id": "L43",
+              "latex": "x_{43}=43"
+            },
+            {
+              "id": "L44",
+              "latex": "x_{44}=44"
+            },
+            {
+              "id": "L45",
+              "latex": "x_{45}=45"
+            },
+            {
+              "id": "L46",
+              "latex": "x_{46}=46"
+            },
+            {
+              "id": "L47",
+              "latex": "x_{47}=47"
+            },
+            {
+              "id": "L48",
+              "latex": "x_{48}=48"
+            },
+            {
+              "id": "L49",
+              "latex": "x_{49}=49"
+            },
+            {
+              "id": "L50",
+              "latex": "p=\\frac{F}{2A}"
+            },
+            {
+              "id": "L51",
+              "latex": "x_{51}=51"
+            },
+            {
+              "id": "L52",
+              "latex": "x_{52}=52"
+            },
+            {
+              "id": "L53",
+              "latex": "x_{53}=53"
+            },
+            {
+              "id": "L54",
+              "latex": "x_{54}=54"
+            },
+            {
+              "id": "L55",
+              "latex": "x_{55}=55"
+            },
+            {
+              "id": "L56",
+              "latex": "x_{56}=56"
+            },
+            {
+              "id": "L57",
+              "latex": "x_{57}=57"
+            },
+            {
+              "id": "L58",
+              "latex": "x_{58}=58"
+            },
+            {
+              "id": "L59",
+              "latex": "x_{59}=59"
+            },
+            {
+              "id": "L60",
+              "latex": "x_{60}=60"
+            },
+            {
+              "id": "L61",
+              "latex": "x_{61}=61"
+            },
+            {
+              "id": "L62",
+              "latex": "x_{62}=62"
+            },
+            {
+              "id": "L63",
+              "latex": "x_{63}=63"
+            },
+            {
+              "id": "L64",
+              "latex": "x_{64}=64"
+            },
+            {
+              "id": "L65",
+              "latex": "x_{65}=65"
+            },
+            {
+              "id": "L66",
+              "latex": "x_{66}=66"
+            },
+            {
+              "id": "L67",
+              "latex": "x_{67}=67"
+            },
+            {
+              "id": "L68",
+              "latex": "x_{68}=68"
+            },
+            {
+              "id": "L69",
+              "latex": "x_{69}=69"
+            },
+            {
+              "id": "L70",
+              "latex": "x_{70}=70"
+            },
+            {
+              "id": "L71",
+              "latex": "x_{71}=71"
+            },
+            {
+              "id": "L72",
+              "latex": "x_{72}=72"
+            },
+            {
+              "id": "L73",
+              "latex": "x_{73}=73"
+            },
+            {
+              "id": "L74",
+              "latex": "x_{74}=74"
+            },
+            {
+              "id": "L75",
+              "latex": "x_{75}=75"
+            },
+            {
+              "id": "L76",
+              "latex": "x_{76}=76"
+            },
+            {
+              "id": "L77",
+              "latex": "x_{77}=77"
+            },
+            {
+              "id": "L78",
+              "latex": "x_{78}=78"
+            },
+            {
+              "id": "L79",
+              "latex": "x_{79}=79"
+            },
+            {
+              "id": "L80",
+              "latex": "x_{80}=80"
+            },
+            {
+              "id": "L81",
+              "latex": "x_{81}=81"
+            },
+            {
+              "id": "L82",
+              "latex": "x_{82}=82"
+            },
+            {
+              "id": "L83",
+              "latex": "x_{83}=83"
+            },
+            {
+              "id": "L84",
+              "latex": "x_{84}=84"
+            },
+            {
+              "id": "L85",
+              "latex": "x_{85}=85"
+            },
+            {
+              "id": "L86",
+              "latex": "x_{86}=86"
+            },
+            {
+              "id": "L87",
+              "latex": "x_{87}=87"
+            },
+            {
+              "id": "L88",
+              "latex": "x_{88}=88"
+            },
+            {
+              "id": "L89",
+              "latex": "x_{89}=89"
+            },
+            {
+              "id": "L90",
+              "latex": "x_{90}=90"
+            },
+            {
+              "id": "L91",
+              "latex": "x_{91}=91"
+            },
+            {
+              "id": "L92",
+              "latex": "x_{92}=92"
+            },
+            {
+              "id": "L93",
+              "latex": "x_{93}=93"
+            },
+            {
+              "id": "L94",
+              "latex": "x_{94}=94"
+            },
+            {
+              "id": "L95",
+              "latex": "x_{95}=95"
+            },
+            {
+              "id": "L96",
+              "latex": "x_{96}=96"
+            },
+            {
+              "id": "L97",
+              "latex": "x_{97}=97"
+            },
+            {
+              "id": "L98",
+              "latex": "x_{98}=98"
+            },
+            {
+              "id": "L99",
+              "latex": "x_{99}=99"
+            },
+            {
+              "id": "L100",
+              "latex": "x_{100}=100"
+            }
+          ],
+          "changed": [
+            "L50"
+          ]
+        },
+        {
+          "instruction": "Add a final line: z equals, with the right side unfinished.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "2+2=5"
+            },
+            {
+              "id": "L2",
+              "latex": "\\frac{a}{"
+            },
+            {
+              "id": "L3",
+              "latex": "x_{3}=3"
+            },
+            {
+              "id": "L4",
+              "latex": "x_{4}=4"
+            },
+            {
+              "id": "L5",
+              "latex": "x_{5}=5"
+            },
+            {
+              "id": "L6",
+              "latex": "x_{6}=6"
+            },
+            {
+              "id": "L7",
+              "latex": "x_{7}=7"
+            },
+            {
+              "id": "L8",
+              "latex": "x_{8}=8"
+            },
+            {
+              "id": "L9",
+              "latex": "x_{9}=9"
+            },
+            {
+              "id": "L10",
+              "latex": "x_{10}=10"
+            },
+            {
+              "id": "L11",
+              "latex": "x_{11}=11"
+            },
+            {
+              "id": "L12",
+              "latex": "x_{12}=12"
+            },
+            {
+              "id": "L13",
+              "latex": "x_{13}=13"
+            },
+            {
+              "id": "L14",
+              "latex": "x_{14}=14"
+            },
+            {
+              "id": "L15",
+              "latex": "x_{15}=15"
+            },
+            {
+              "id": "L16",
+              "latex": "x_{16}=16"
+            },
+            {
+              "id": "L17",
+              "latex": "x_{17}=17"
+            },
+            {
+              "id": "L18",
+              "latex": "x_{18}=18"
+            },
+            {
+              "id": "L19",
+              "latex": "x_{19}=19"
+            },
+            {
+              "id": "L20",
+              "latex": "x_{20}=20"
+            },
+            {
+              "id": "L21",
+              "latex": "x_{21}=21"
+            },
+            {
+              "id": "L22",
+              "latex": "x_{22}=22"
+            },
+            {
+              "id": "L23",
+              "latex": "x_{23}=23"
+            },
+            {
+              "id": "L24",
+              "latex": "x_{24}=24"
+            },
+            {
+              "id": "L25",
+              "latex": "x_{25}=25"
+            },
+            {
+              "id": "L26",
+              "latex": "x_{26}=26"
+            },
+            {
+              "id": "L27",
+              "latex": "x_{27}=27"
+            },
+            {
+              "id": "L28",
+              "latex": "x_{28}=28"
+            },
+            {
+              "id": "L29",
+              "latex": "x_{29}=29"
+            },
+            {
+              "id": "L30",
+              "latex": "x_{30}=30"
+            },
+            {
+              "id": "L31",
+              "latex": "x_{31}=31"
+            },
+            {
+              "id": "L32",
+              "latex": "x_{32}=32"
+            },
+            {
+              "id": "L33",
+              "latex": "x_{33}=33"
+            },
+            {
+              "id": "L34",
+              "latex": "x_{34}=34"
+            },
+            {
+              "id": "L35",
+              "latex": "x_{35}=35"
+            },
+            {
+              "id": "L36",
+              "latex": "x_{36}=36"
+            },
+            {
+              "id": "L37",
+              "latex": "x_{37}=37"
+            },
+            {
+              "id": "L38",
+              "latex": "x_{38}=38"
+            },
+            {
+              "id": "L39",
+              "latex": "x_{39}=39"
+            },
+            {
+              "id": "L40",
+              "latex": "x_{40}=40"
+            },
+            {
+              "id": "L41",
+              "latex": "x_{41}=41"
+            },
+            {
+              "id": "L42",
+              "latex": "x_{42}=42"
+            },
+            {
+              "id": "L43",
+              "latex": "x_{43}=43"
+            },
+            {
+              "id": "L44",
+              "latex": "x_{44}=44"
+            },
+            {
+              "id": "L45",
+              "latex": "x_{45}=45"
+            },
+            {
+              "id": "L46",
+              "latex": "x_{46}=46"
+            },
+            {
+              "id": "L47",
+              "latex": "x_{47}=47"
+            },
+            {
+              "id": "L48",
+              "latex": "x_{48}=48"
+            },
+            {
+              "id": "L49",
+              "latex": "x_{49}=49"
+            },
+            {
+              "id": "L50",
+              "latex": "p=\\frac{F}{2A}"
+            },
+            {
+              "id": "L51",
+              "latex": "x_{51}=51"
+            },
+            {
+              "id": "L52",
+              "latex": "x_{52}=52"
+            },
+            {
+              "id": "L53",
+              "latex": "x_{53}=53"
+            },
+            {
+              "id": "L54",
+              "latex": "x_{54}=54"
+            },
+            {
+              "id": "L55",
+              "latex": "x_{55}=55"
+            },
+            {
+              "id": "L56",
+              "latex": "x_{56}=56"
+            },
+            {
+              "id": "L57",
+              "latex": "x_{57}=57"
+            },
+            {
+              "id": "L58",
+              "latex": "x_{58}=58"
+            },
+            {
+              "id": "L59",
+              "latex": "x_{59}=59"
+            },
+            {
+              "id": "L60",
+              "latex": "x_{60}=60"
+            },
+            {
+              "id": "L61",
+              "latex": "x_{61}=61"
+            },
+            {
+              "id": "L62",
+              "latex": "x_{62}=62"
+            },
+            {
+              "id": "L63",
+              "latex": "x_{63}=63"
+            },
+            {
+              "id": "L64",
+              "latex": "x_{64}=64"
+            },
+            {
+              "id": "L65",
+              "latex": "x_{65}=65"
+            },
+            {
+              "id": "L66",
+              "latex": "x_{66}=66"
+            },
+            {
+              "id": "L67",
+              "latex": "x_{67}=67"
+            },
+            {
+              "id": "L68",
+              "latex": "x_{68}=68"
+            },
+            {
+              "id": "L69",
+              "latex": "x_{69}=69"
+            },
+            {
+              "id": "L70",
+              "latex": "x_{70}=70"
+            },
+            {
+              "id": "L71",
+              "latex": "x_{71}=71"
+            },
+            {
+              "id": "L72",
+              "latex": "x_{72}=72"
+            },
+            {
+              "id": "L73",
+              "latex": "x_{73}=73"
+            },
+            {
+              "id": "L74",
+              "latex": "x_{74}=74"
+            },
+            {
+              "id": "L75",
+              "latex": "x_{75}=75"
+            },
+            {
+              "id": "L76",
+              "latex": "x_{76}=76"
+            },
+            {
+              "id": "L77",
+              "latex": "x_{77}=77"
+            },
+            {
+              "id": "L78",
+              "latex": "x_{78}=78"
+            },
+            {
+              "id": "L79",
+              "latex": "x_{79}=79"
+            },
+            {
+              "id": "L80",
+              "latex": "x_{80}=80"
+            },
+            {
+              "id": "L81",
+              "latex": "x_{81}=81"
+            },
+            {
+              "id": "L82",
+              "latex": "x_{82}=82"
+            },
+            {
+              "id": "L83",
+              "latex": "x_{83}=83"
+            },
+            {
+              "id": "L84",
+              "latex": "x_{84}=84"
+            },
+            {
+              "id": "L85",
+              "latex": "x_{85}=85"
+            },
+            {
+              "id": "L86",
+              "latex": "x_{86}=86"
+            },
+            {
+              "id": "L87",
+              "latex": "x_{87}=87"
+            },
+            {
+              "id": "L88",
+              "latex": "x_{88}=88"
+            },
+            {
+              "id": "L89",
+              "latex": "x_{89}=89"
+            },
+            {
+              "id": "L90",
+              "latex": "x_{90}=90"
+            },
+            {
+              "id": "L91",
+              "latex": "x_{91}=91"
+            },
+            {
+              "id": "L92",
+              "latex": "x_{92}=92"
+            },
+            {
+              "id": "L93",
+              "latex": "x_{93}=93"
+            },
+            {
+              "id": "L94",
+              "latex": "x_{94}=94"
+            },
+            {
+              "id": "L95",
+              "latex": "x_{95}=95"
+            },
+            {
+              "id": "L96",
+              "latex": "x_{96}=96"
+            },
+            {
+              "id": "L97",
+              "latex": "x_{97}=97"
+            },
+            {
+              "id": "L98",
+              "latex": "x_{98}=98"
+            },
+            {
+              "id": "L99",
+              "latex": "x_{99}=99"
+            },
+            {
+              "id": "L100",
+              "latex": "x_{100}=100"
+            },
+            {
+              "id": "L101",
+              "latex": "z="
+            }
+          ],
+          "changed": [
+            "L101"
+          ]
+        },
+        {
+          "instruction": "Undo only the new unfinished line.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "2+2=5"
+            },
+            {
+              "id": "L2",
+              "latex": "\\frac{a}{"
+            },
+            {
+              "id": "L3",
+              "latex": "x_{3}=3"
+            },
+            {
+              "id": "L4",
+              "latex": "x_{4}=4"
+            },
+            {
+              "id": "L5",
+              "latex": "x_{5}=5"
+            },
+            {
+              "id": "L6",
+              "latex": "x_{6}=6"
+            },
+            {
+              "id": "L7",
+              "latex": "x_{7}=7"
+            },
+            {
+              "id": "L8",
+              "latex": "x_{8}=8"
+            },
+            {
+              "id": "L9",
+              "latex": "x_{9}=9"
+            },
+            {
+              "id": "L10",
+              "latex": "x_{10}=10"
+            },
+            {
+              "id": "L11",
+              "latex": "x_{11}=11"
+            },
+            {
+              "id": "L12",
+              "latex": "x_{12}=12"
+            },
+            {
+              "id": "L13",
+              "latex": "x_{13}=13"
+            },
+            {
+              "id": "L14",
+              "latex": "x_{14}=14"
+            },
+            {
+              "id": "L15",
+              "latex": "x_{15}=15"
+            },
+            {
+              "id": "L16",
+              "latex": "x_{16}=16"
+            },
+            {
+              "id": "L17",
+              "latex": "x_{17}=17"
+            },
+            {
+              "id": "L18",
+              "latex": "x_{18}=18"
+            },
+            {
+              "id": "L19",
+              "latex": "x_{19}=19"
+            },
+            {
+              "id": "L20",
+              "latex": "x_{20}=20"
+            },
+            {
+              "id": "L21",
+              "latex": "x_{21}=21"
+            },
+            {
+              "id": "L22",
+              "latex": "x_{22}=22"
+            },
+            {
+              "id": "L23",
+              "latex": "x_{23}=23"
+            },
+            {
+              "id": "L24",
+              "latex": "x_{24}=24"
+            },
+            {
+              "id": "L25",
+              "latex": "x_{25}=25"
+            },
+            {
+              "id": "L26",
+              "latex": "x_{26}=26"
+            },
+            {
+              "id": "L27",
+              "latex": "x_{27}=27"
+            },
+            {
+              "id": "L28",
+              "latex": "x_{28}=28"
+            },
+            {
+              "id": "L29",
+              "latex": "x_{29}=29"
+            },
+            {
+              "id": "L30",
+              "latex": "x_{30}=30"
+            },
+            {
+              "id": "L31",
+              "latex": "x_{31}=31"
+            },
+            {
+              "id": "L32",
+              "latex": "x_{32}=32"
+            },
+            {
+              "id": "L33",
+              "latex": "x_{33}=33"
+            },
+            {
+              "id": "L34",
+              "latex": "x_{34}=34"
+            },
+            {
+              "id": "L35",
+              "latex": "x_{35}=35"
+            },
+            {
+              "id": "L36",
+              "latex": "x_{36}=36"
+            },
+            {
+              "id": "L37",
+              "latex": "x_{37}=37"
+            },
+            {
+              "id": "L38",
+              "latex": "x_{38}=38"
+            },
+            {
+              "id": "L39",
+              "latex": "x_{39}=39"
+            },
+            {
+              "id": "L40",
+              "latex": "x_{40}=40"
+            },
+            {
+              "id": "L41",
+              "latex": "x_{41}=41"
+            },
+            {
+              "id": "L42",
+              "latex": "x_{42}=42"
+            },
+            {
+              "id": "L43",
+              "latex": "x_{43}=43"
+            },
+            {
+              "id": "L44",
+              "latex": "x_{44}=44"
+            },
+            {
+              "id": "L45",
+              "latex": "x_{45}=45"
+            },
+            {
+              "id": "L46",
+              "latex": "x_{46}=46"
+            },
+            {
+              "id": "L47",
+              "latex": "x_{47}=47"
+            },
+            {
+              "id": "L48",
+              "latex": "x_{48}=48"
+            },
+            {
+              "id": "L49",
+              "latex": "x_{49}=49"
+            },
+            {
+              "id": "L50",
+              "latex": "p=\\frac{F}{2A}"
+            },
+            {
+              "id": "L51",
+              "latex": "x_{51}=51"
+            },
+            {
+              "id": "L52",
+              "latex": "x_{52}=52"
+            },
+            {
+              "id": "L53",
+              "latex": "x_{53}=53"
+            },
+            {
+              "id": "L54",
+              "latex": "x_{54}=54"
+            },
+            {
+              "id": "L55",
+              "latex": "x_{55}=55"
+            },
+            {
+              "id": "L56",
+              "latex": "x_{56}=56"
+            },
+            {
+              "id": "L57",
+              "latex": "x_{57}=57"
+            },
+            {
+              "id": "L58",
+              "latex": "x_{58}=58"
+            },
+            {
+              "id": "L59",
+              "latex": "x_{59}=59"
+            },
+            {
+              "id": "L60",
+              "latex": "x_{60}=60"
+            },
+            {
+              "id": "L61",
+              "latex": "x_{61}=61"
+            },
+            {
+              "id": "L62",
+              "latex": "x_{62}=62"
+            },
+            {
+              "id": "L63",
+              "latex": "x_{63}=63"
+            },
+            {
+              "id": "L64",
+              "latex": "x_{64}=64"
+            },
+            {
+              "id": "L65",
+              "latex": "x_{65}=65"
+            },
+            {
+              "id": "L66",
+              "latex": "x_{66}=66"
+            },
+            {
+              "id": "L67",
+              "latex": "x_{67}=67"
+            },
+            {
+              "id": "L68",
+              "latex": "x_{68}=68"
+            },
+            {
+              "id": "L69",
+              "latex": "x_{69}=69"
+            },
+            {
+              "id": "L70",
+              "latex": "x_{70}=70"
+            },
+            {
+              "id": "L71",
+              "latex": "x_{71}=71"
+            },
+            {
+              "id": "L72",
+              "latex": "x_{72}=72"
+            },
+            {
+              "id": "L73",
+              "latex": "x_{73}=73"
+            },
+            {
+              "id": "L74",
+              "latex": "x_{74}=74"
+            },
+            {
+              "id": "L75",
+              "latex": "x_{75}=75"
+            },
+            {
+              "id": "L76",
+              "latex": "x_{76}=76"
+            },
+            {
+              "id": "L77",
+              "latex": "x_{77}=77"
+            },
+            {
+              "id": "L78",
+              "latex": "x_{78}=78"
+            },
+            {
+              "id": "L79",
+              "latex": "x_{79}=79"
+            },
+            {
+              "id": "L80",
+              "latex": "x_{80}=80"
+            },
+            {
+              "id": "L81",
+              "latex": "x_{81}=81"
+            },
+            {
+              "id": "L82",
+              "latex": "x_{82}=82"
+            },
+            {
+              "id": "L83",
+              "latex": "x_{83}=83"
+            },
+            {
+              "id": "L84",
+              "latex": "x_{84}=84"
+            },
+            {
+              "id": "L85",
+              "latex": "x_{85}=85"
+            },
+            {
+              "id": "L86",
+              "latex": "x_{86}=86"
+            },
+            {
+              "id": "L87",
+              "latex": "x_{87}=87"
+            },
+            {
+              "id": "L88",
+              "latex": "x_{88}=88"
+            },
+            {
+              "id": "L89",
+              "latex": "x_{89}=89"
+            },
+            {
+              "id": "L90",
+              "latex": "x_{90}=90"
+            },
+            {
+              "id": "L91",
+              "latex": "x_{91}=91"
+            },
+            {
+              "id": "L92",
+              "latex": "x_{92}=92"
+            },
+            {
+              "id": "L93",
+              "latex": "x_{93}=93"
+            },
+            {
+              "id": "L94",
+              "latex": "x_{94}=94"
+            },
+            {
+              "id": "L95",
+              "latex": "x_{95}=95"
+            },
+            {
+              "id": "L96",
+              "latex": "x_{96}=96"
+            },
+            {
+              "id": "L97",
+              "latex": "x_{97}=97"
+            },
+            {
+              "id": "L98",
+              "latex": "x_{98}=98"
+            },
+            {
+              "id": "L99",
+              "latex": "x_{99}=99"
+            },
+            {
+              "id": "L100",
+              "latex": "x_{100}=100"
+            }
+          ],
+          "changed": [
+            "L101"
+          ],
+          "action": "undo"
+        }
+      ]
+    },
+    {
+      "id": "16-many-history-entries",
+      "title": "Retrieve specified working among ten saved entries",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "p="
+        }
+      ],
+      "notebookHistory": [
+        {
+          "id": "entry-1",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=1"
+            },
+            {
+              "id": "L2",
+              "latex": "b=11"
+            }
+          ]
+        },
+        {
+          "id": "entry-2",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=2"
+            },
+            {
+              "id": "L2",
+              "latex": "b=12"
+            }
+          ]
+        },
+        {
+          "id": "entry-3",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=3"
+            },
+            {
+              "id": "L2",
+              "latex": "b=13"
+            }
+          ]
+        },
+        {
+          "id": "entry-4",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=4"
+            },
+            {
+              "id": "L2",
+              "latex": "b=14"
+            }
+          ]
+        },
+        {
+          "id": "entry-5",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=5"
+            },
+            {
+              "id": "L2",
+              "latex": "b=15"
+            }
+          ]
+        },
+        {
+          "id": "entry-6",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=6"
+            },
+            {
+              "id": "L2",
+              "latex": "b=16"
+            }
+          ]
+        },
+        {
+          "id": "entry-7",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=7"
+            },
+            {
+              "id": "L2",
+              "latex": "b=17"
+            }
+          ]
+        },
+        {
+          "id": "entry-8",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=8"
+            },
+            {
+              "id": "L2",
+              "latex": "b=18"
+            }
+          ]
+        },
+        {
+          "id": "entry-9",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=9"
+            },
+            {
+              "id": "L2",
+              "latex": "b=19"
+            }
+          ]
+        },
+        {
+          "id": "entry-10",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "a=10"
+            },
+            {
+              "id": "L2",
+              "latex": "b=20"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "Replace my current first line with line two from history entry-8.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "b=18"
+            }
+          ],
+          "changed": [
+            "L1"
+          ]
+        },
+        {
+          "instruction": "On that line change b to beta, using the Greek letter. Keep its value unchanged.",
+          "expected": [
+            {
+              "id": "L1",
+              "latex": "\\beta=18"
+            }
+          ],
+          "changed": [
+            "L1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "17-missing-history",
+      "title": "Do not invent absent historical source",
+      "initial": [
+        {
+          "id": "L1",
+          "latex": "p="
+        }
+      ],
+      "notebookHistory": [
+        {
+          "id": "velocity",
+          "lines": [
+            {
+              "id": "L1",
+              "latex": "v=d/t"
+            },
+            {
+              "id": "L2",
+              "latex": "x=vt"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "instruction": "Copy line five from the pressure entry in history onto a new last line.",
+          "expected": null,
+          "changed": [],
+          "action": "question"
+        }
+      ]
+    }
+  ],
+  "turns": 29,
+  "maxFormatRetriesPerTurn": 1,
+  "timing": "App engine call through complete response, including one visible format retry if needed; not voice/UI latency.",
+  "transport": "piEngineForSpec from the resolved Cheap slot; existing ChatGPT runtime when selected; JSON text, no tools"
+}

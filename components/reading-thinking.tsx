@@ -1,8 +1,13 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { joinDictation, useDictationTarget } from "@/components/dictation";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { PathInput } from "@/components/path-input";
+import { useHandwritingEditor } from "./handwriting/submission";
+import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+import type { NotebookSession } from "./notebook-session";
+import { useNotebookActivityDraft } from "./notebook-activity-draft";
+import { CompactLearningInput } from "@/components/compact-learning-input";
+import { ChevronRightIcon } from "lucide-react";
 
 /**
  * The reading-thinking field (owner design 2026-10-03, "two questions per
@@ -20,13 +25,19 @@ import { PathInput } from "@/components/path-input";
  * check, the dock reclaims and this field is plain typing.
  */
 export function ReadingThinkingField({
+	notebook,
+	toolCallId = "",
 	value,
 	revision,
 	onChange,
 	onEscape,
 	onOpen,
 	claim,
+	dictation,
+	targetKey = "reading",
 }: {
+	notebook?: NotebookSession;
+	toolCallId?: string;
 	value: string;
 	revision: number;
 	onChange: (v: string) => void;
@@ -39,32 +50,56 @@ export function ReadingThinkingField({
 	onOpen?: () => void;
 	/** Primary dictation claim — true while the check is behind its reveal. */
 	claim: boolean;
+	dictation?: Dictation;
+	targetKey?: string;
 }) {
 	const [draft, setDraft] = useState(value);
-	// Appends may arrive back-to-back before React commits. Like Chat's
-	// submit mirror, this ref includes every edit synchronously.
-	const draftRef = useRef(value);
-	useLayoutEffect(() => { draftRef.current = value; setDraft(value); }, [revision, value]);
-	const applyDraft = useCallback((next: string) => {
-		draftRef.current = next;
-		setDraft(next);
-		onChange(next);
-	}, [onChange]);
+	useLayoutEffect(() => { setDraft(value); }, [revision, value]);
+	const owner = { kind: "question" as const, toolCallId, channel: "reading-thinking" as const };
+	const owned = useNotebookActivityDraft(notebook, owner);
+	const text = owned.enabled && owned.draft ? owned.text : draft;
+	const textRef = useRef(text); textRef.current = text;
+	const mounted = useRef(true);
+	useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+	const activated = useRef(false);
+	useEffect(() => {
+		if (!owned.enabled || activated.current) return;
+		activated.current = true;
+		if (!owned.draft) notebook!.tutor.updateText(owner, value);
+	}, [owned.enabled, owned.draft, notebook, toolCallId, value]);
+	const change = (value: string) => {
+		textRef.current = value;
+		if (notebook?.getSnapshot().view?.contextId) notebook.tutor.updateText(owner, value);
+		if (mounted.current) { setDraft(value); onChange(value); }
+	};
+	const transfer = useHandwritingEditor(targetKey, () => ({ readingThinking: textRef.current }), draft => change(draft.readingThinking ?? ""), claim);
 	useDictationTarget(
-		useCallback((text: string) => applyDraft(joinDictation(draftRef.current, text)), [applyDraft]),
+		useCallback(
+			(t: string) => {
+				change(joinDictation(textRef.current, t));
+			},
+			[notebook, toolCallId, onChange],
+		),
 		claim,
+		() => transfer?.retainSpeech(targetKey, "readingThinking"),
 	);
 	return (
 		<div
+			data-input-owner="tutor"
+			data-notebook-question={toolCallId}
+			data-notebook-channel="reading-thinking"
+			data-reading-claim={claim}
 			data-testid="reading-thinking-field"
-			className="pointer-events-auto mb-2 rounded-2xl border bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50"
+			className="lh-reading-input pointer-events-auto mb-2 rounded-2xl border bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50"
 		>
 			<div className="pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 				Thinking while reading
 			</div>
-			<PathInput
-				value={draft}
-				onValueChange={applyDraft}
+			{owned.state.error && <p role="alert" className="text-xs text-destructive">{owned.state.error}</p>}
+			<div className="lh-compact-row"><CompactLearningInput dictation={claim ? dictation : undefined}><PathInput
+				aria-label="Thinking while reading"
+				value={text}
+				onValueChange={change}
 				/* py-0.5 (owner round, 2026-10-07): the scrollbar fix. Source
 				   Sans 3's font box is 22px at 16px; lh-input's 1.25 leading
 				   gives a 20px line box — the content area sticks 1px below the
@@ -91,7 +126,7 @@ export function ReadingThinkingField({
 					if (e.key === "Enter" && onOpen !== undefined && (!e.shiftKey || e.metaKey || e.ctrlKey)) {
 						e.preventDefault();
 						e.stopPropagation();
-						onOpen();
+						if (!transfer?.preparing) onOpen();
 						return;
 					}
 					// The dock's dumping convention: plain Enter is a newline.
@@ -104,7 +139,9 @@ export function ReadingThinkingField({
 				}}
 				placeholder="Whatever comes to mind as you read."
 				className="field-sizing-content lh-input max-h-40 w-full resize-none bg-transparent py-0.5 outline-none placeholder:text-muted-foreground/70"
-			/>
+			/></CompactLearningInput>
+			{claim && onOpen && <button type="button" className="lh-phone-reveal bg-primary text-primary-foreground" aria-label="Check your understanding" data-testid="teach-check-reveal" onClick={onOpen}><ChevronRightIcon size={20} /></button>}
+			</div>
 		</div>
 	);
 }

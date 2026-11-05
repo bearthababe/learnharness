@@ -2,7 +2,7 @@
 
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
-import type { ArtifactPartProps } from "@/src/core";
+import type { ArtifactPartProps, LearnerExplanation } from "@/src/core";
 
 /**
  * The practice transcript cards (practice sessions, owner design
@@ -49,6 +49,7 @@ function nodeNameMap(): Promise<Record<string, string>> {
 
 /** The practice-thinking marker's details (native-messages.ts). */
 export interface PracticeThinkingData {
+	explanation?: LearnerExplanation;
 	problemCallId: string;
 	/** Legacy records (pre 2026-10-05) carry the old two-lane flag; ignored. */
 	commit?: boolean;
@@ -294,5 +295,5 @@ export function ThinkingCard({ data }: { data: PracticeThinkingData }) {
 	// 50%-italic quote block on expand. Legacy records' commit flag is
 	// deliberately unread (one lane now). A TRANSCRIPT row (owner round,
 	// 2026-10-07): full-width band + rail, arriving expanded.
-	return <ThinkingBlock testId="thinking-card" label="YOUR THINKING" text={data.text} defaultOpen />;
+	return <ThinkingBlock testId="thinking-card" label="YOUR THINKING" text={data.text} content={data.explanation} defaultOpen />;
 }

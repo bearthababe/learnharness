@@ -1,10 +1,16 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { ChevronRightIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronRightIcon, CornerDownLeftIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
-import { joinDictation, useDictationTarget } from "@/components/dictation";
+import { finishDictation, dictationCheckpoint, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+import { explanationHasContent, type NotebookInputFields } from "@/src/core";
+import type { NotebookSession } from "./notebook-session";
+import { useNotebookActivityDraft } from "./notebook-activity-draft";
+import { useHandwritingEditor } from "./handwriting/submission";
+import type { SharedWriting } from "@/src/core";
+import { CompactLearningInput } from "@/components/compact-learning-input";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { PathInput } from "@/components/path-input";
 import { cn } from "@/lib/utils";
@@ -19,9 +25,9 @@ import { cn } from "@/lib/utils";
  * from the thinking itself; the agent reads it. One problem may carry
  * many submissions; each starts a turn.
  *
- * Collapse (scroll-up → slim bar) is owned by the DockOverlay; this
- * component is content only, and the expanded form stays MOUNTED while
- * collapsed (hidden) so a half-written trace survives scrolling.
+ * Collapse is owned by DockOverlay. Keep the learner's field mounted so
+ * scrolling cannot reset capture feedback or editor state. On phones only
+ * the problem statement collapses; wide layouts retain their slim bar.
  *
  * The commitment (modelSolution, decisionPoints, …) rides the tool call's
  * arguments and is NOT rendered here — only the statement is the
@@ -30,6 +36,8 @@ import { cn } from "@/lib/utils";
  */
 
 export interface PracticeDockProps {
+	dictation?: Dictation;
+	hasSharedWriting?: boolean;
 	/** The active problem's tool-call id (submissions target it). */
 	problemCallId: string;
 	/** The pose's arguments — only the statement is the learner's (the
@@ -39,7 +47,8 @@ export interface PracticeDockProps {
 	expanded: boolean;
 	onExpand: () => void;
 	/** text — POST {type:"thinking"} (one lane; the register is read from the text). */
-	onSubmit: (text: string) => void;
+	onSubmit: (text: string, problemCallId: string, fields?: NotebookInputFields, reviewed?: SharedWriting[]) => void | Promise<boolean>;
+	notebook?: NotebookSession;
 	/** Escape in the thinking field stops dictation (threaded from the page). */
 	onEscape?: () => void;
 	/** Compaction is running for this chat (owner round 14): the thinking
@@ -49,32 +58,65 @@ export interface PracticeDockProps {
 	compactionRunning?: boolean;
 }
 
-export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmit, onEscape, compactionRunning = false }: PracticeDockProps) {
+export function PracticeDock({ dictation, problemCallId, input, expanded, onExpand, onSubmit, onEscape, notebook, compactionRunning = false, hasSharedWriting = false }: PracticeDockProps) {
+	const owner = { kind: "practice" as const, problemCallId };
+	const owned = useNotebookActivityDraft(notebook, owner);
 	const [thinking, setThinking] = useState("");
 	// Ref MIRRORS the field ("nothing gets lost", the question-dock
 	// discipline): a submit resuming after `await finishDictation()` reads
 	// the tail, never a stale closure.
 	const thinkingRef = useRef("");
+	const sending = useRef(false);
+	const activated = useRef<string | null>(null);
+	useEffect(() => {
+		if (!owned.enabled || activated.current === problemCallId) return;
+		activated.current = problemCallId;
+		if (!owned.draft && thinkingRef.current) notebook!.tutor.updateText({ kind: "practice", problemCallId }, thinkingRef.current);
+	}, [notebook, problemCallId, owned.enabled, owned.draft]);
+	const update = (text: string) => {
+		thinkingRef.current = text; setThinking(text);
+		if (owned.enabled) notebook!.tutor.updateText(owner, text);
+	};
+	const alive = useRef(true), current = useRef({ problemCallId, compactionRunning, hasSharedWriting }); current.current = { problemCallId, compactionRunning, hasSharedWriting };
+	useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+	if (owned.enabled && owned.draft) thinkingRef.current = owned.text;
+	const transfer = useHandwritingEditor(`problem:${problemCallId}`, () => ({ thinking: thinkingRef.current }), draft => update(draft.thinking ?? ""), true);
 
 	useDictationTarget(
 		useCallback(
 			(t: string) => {
-				const v = joinDictation(thinkingRef.current, t);
-				thinkingRef.current = v;
-				setThinking(v);
+				const part = notebook?.tutor.draft({ kind: "practice", problemCallId })?.parts.at(-1);
+				update(joinDictation(part?.kind === "text" ? part.text : thinkingRef.current, t));
 			},
-			[],
+			[notebook, problemCallId, owned.enabled],
 		),
 		true,
+		() => transfer?.retainSpeech(`problem:${problemCallId}`, "thinking"),
 	);
 
-	const submit = () => {
-		if (compactionRunning) return;
-		const text = thinkingRef.current.trim();
-		if (text.length === 0) return;
-		thinkingRef.current = "";
-		setThinking("");
-		onSubmit(text);
+	const submit = async () => {
+		if (compactionRunning || sending.current || notebook?.getSnapshot().sendBlocked || transfer?.blocked()) return;
+		const reviewed = transfer?.reviewed(), recovery = transfer?.recoveryAction(), valid = dictationCheckpoint(), target = problemCallId;
+		sending.current = true;
+		// Capture this problem and adapter before finalization can change activity.
+		try {
+			await finishDictation();
+			if ((reviewed?.length || recovery) && (!alive.current || current.current.problemCallId !== target || current.current.compactionRunning || !valid() || transfer?.blocked())) return;
+			if (recovery) { await recovery(); return; }
+			if (notebook?.getSnapshot().view?.contextId && (!hasSharedWriting || explanationHasContent(notebook.tutor.draft(owner)?.parts ?? []))) {
+				const prepared = await notebook!.tutor.prepareSubmission(owner);
+				try { await onSubmit(prepared.text, problemCallId, prepared, reviewed); }
+				finally { await notebook!.tutor.reconcile(prepared.submission.id); }
+			} else {
+				// An owned draft was already checked above. Image-only submission
+				// must not revive the legacy field after that draft was consumed.
+				const text = notebook?.getSnapshot().view?.contextId ? "" : thinkingRef.current.trim();
+				if (!text && !hasSharedWriting) return;
+				const accepted = await onSubmit(text, problemCallId, undefined, reviewed);
+				if (accepted !== false && !reviewed?.length && !transfer?.hasAttempt() && thinkingRef.current.trim() === text) update("");
+			}
+		} catch { /* The shared draft model exposes recoverable save failures. */ }
+		finally { sending.current = false; }
 	};
 
 	/* ENTER SUBMITS FROM ANYWHERE (owner round 6, 2026-10-05): dictation
@@ -83,12 +125,13 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 	 * while the dock is — collapsed bar included (the trace survives). */
 	useEnterSubmits(submit);
 
-	/* ── the collapsed bar ── */
-	if (!expanded) {
-		return (
+	return (
+		<div data-testid="practice-dock" data-input-owner="tutor" data-problem={problemCallId} data-tutor-owner={JSON.stringify(owner)}>
+			{!expanded ? (
 			<button
 				type="button"
 				data-testid="practice-dock-bar"
+				data-input-owner="tutor" data-problem={problemCallId}
 				onClick={onExpand}
 				className="flex w-full cursor-pointer items-center gap-2 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:text-foreground"
 			>
@@ -96,37 +139,29 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 				<span className="font-medium">Problem</span>
 				<span className="min-w-0 flex-1 truncate">{input.statement}</span>
 			</button>
-		);
-	}
-
-	/* ── the expanded form ── */
-	return (
-		<div data-testid="practice-dock" data-problem={problemCallId}>
-			{/* The agent's half: the 'Problem' eyebrow (mirroring the quiz
-			    cards' label row — owner round, 2026-10-05) + the statement,
-			    markdown + LaTeX rendered, capped by the measured column
-			    (--dock-max-h; the old fixed 40vh cut long problems short). */}
+			) : (
 			<div data-dock-scroll-area="" className="max-h-[var(--dock-max-h,40vh)] overflow-y-auto px-4 pt-3 pb-2">
 				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Problem</div>
 				<div className="lh-prose text-[15px]">
 					<ToolContentResponse>{input.statement}</ToolContentResponse>
 				</div>
 			</div>
+			)}
 
 			{/* The learner's half: Enter SENDS (owner round 2, 2026-10-05);
 			    Shift+Enter makes a newline — less to decide about. */}
 			<div
 				data-testid="practice-thinking-field"
-				className="m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
+				className={cn("lh-question-input m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50", !expanded && "lh-practice-collapsed")}
 			>
-				<div className="px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+				<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					YOUR THINKING
 				</div>
-				<PathInput
-					value={thinking}
+				<CompactLearningInput dictation={dictation}><PathInput
+					aria-label="Your thinking"
+					value={owned.enabled ? owned.text : thinking}
 					onValueChange={(value) => {
-						thinkingRef.current = value;
-						setThinking(value);
+						update(value);
 					}}
 					onKeyDown={(e) => {
 						// Esc ends dictation — stopPropagation claims it (the
@@ -148,23 +183,24 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 					className={cn(
 						"field-sizing-content lh-input max-h-64 min-h-16 w-full resize-none bg-transparent px-2.5 pb-2 outline-none placeholder:text-muted-foreground",
 					)}
-				/>
+				/></CompactLearningInput>
 				{/* The submit row (owner round 4, 2026-10-05): IDENTICAL to the
 				    question dock's — hint left, the SAME Button (h-9, px-3.5),
 				    one p-1 row. Corner radii concentric: shell 16 − m-1.5 (6) =
 				    field 10 − p-1 (4) = button 6. */}
-				<div className="flex items-center justify-between gap-2 p-1">
+				<div className="lh-question-submit flex items-center justify-between gap-2 p-1">
 					<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
 						{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 					</span>
 					<Button
 						type="button"
 						data-testid="practice-send"
-						disabled={thinking.trim().length === 0 || compactionRunning}
+						aria-label="Submit thinking"
+						disabled={owned.blocked || (!(owned.enabled ? explanationHasContent(owned.draft?.parts ?? []) : thinking.trim().length > 0) && !isDictationActive() && !hasSharedWriting && !transfer?.hasAttempt()) || compactionRunning}
 						onClick={() => submit()}
 						className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 					>
-						Submit thinking
+						<span className="lh-wide-submit-label">Submit thinking</span><CornerDownLeftIcon className="lh-phone-submit-icon" size={20} />
 					</Button>
 				</div>
 			</div>

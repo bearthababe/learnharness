@@ -24,6 +24,7 @@ import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { GraphCostControl } from "@/components/graph-view.tsx";
 import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
 import { Hint } from "@/components/ui/hint";
+import { useSidebar } from "@/components/sidebar";
 import type { ChatSummary, GraphCostSummary, GraphSnapshot } from "@/src/core";
 
 /** The quiet centered summary — a pure body (props in, markup out) so
@@ -94,6 +95,7 @@ export function MinimalHome({
 	onPracticeSelectionChange?: (nodes: { id: string; name: string; statement: string }[]) => void;
 	onChainSelectClose?: () => void;
 }) {
+	const { phone } = useSidebar();
 	const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
 	const [costs, setCosts] = useState<GraphCostSummary | null>(null);
 	const [chats, setChats] = useState<ChatSummary[]>([]);
@@ -154,10 +156,10 @@ export function MinimalHome({
 			    window instead. Node search and the render-settings gear are
 			    canvas things and stay gone; Import ALWAYS renders (the
 			    entry law). */}
-			<div className="lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
-				<div className="flex min-w-0 items-start gap-2">
-					<div className="graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
-						<Hint label="Every reasoning chain" side="bottom">
+			<div className="lh-home-toolbar lh-home-toolbar-minimal lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
+				<div className="lh-home-toolbar-actions flex min-w-0 items-start gap-2">
+					<div className="lh-graph-chains graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
+						<Hint label="Every reasoning chain" side="bottom" disabled={phone}>
 							<button
 								type="button"
 								onClick={() => setChainsOpen(true)}

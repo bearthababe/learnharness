@@ -157,6 +157,36 @@ test("markers: the fixture pair covers EVERY custom-marker kind of the current c
 	for (const kind of EXPECTED) assert.ok(seen.has(kind), `marker ${kind} appears in real fixture data`);
 });
 
+test("an app-written Notebook retains Undo, unsent drafts and immutable submitted working", () => {
+	const records = chatStore.listChats().map(chat => chatStore.getChat(chat.id)!).filter(chat => !!chat.notebook);
+	assert.ok(records.length >= 1, "Notebook format changes require an app-written fixture");
+	for (const record of records) {
+	assert.equal(record.version, 2);
+	assert.deepEqual(record.notebook!.current.state.lines, [{ id: "L1", latex: "p=F/A" }]);
+	assert.ok(record.notebook!.current.state.undo.some(lines => lines[0]?.latex === "p="));
+	assert.equal(record.notebook!.notebookDraft.text, "Next unsent instruction.");
+	assert.match(JSON.stringify(record.notebook!.tutorDrafts), /Unsent next thought/);
+	assert.equal(record.notebook!.submissions?.length, 1);
+	const learner = record.messages.find(message => message.role === "user")!;
+	assert.deepEqual(learner.explanation?.filter(part => part.kind === "working").map(part => part.lines[0]?.latex), ["p=", "p=F/A"]);
+	assert.match(JSON.stringify(toLlmMessages(record.messages)), /Notebook-assisted working/);
+	assert.doesNotMatch(JSON.stringify(toLlmMessages(record.messages)), /Unsent next thought|Next unsent instruction/);
+	}
+});
+
+test("an app-written Notebook retains its picker version and frozen selected-expression execution", () => {
+	const record = chatStore.listChats().map(chat => chatStore.getChat(chat.id)!).find(chat => chat.notebook?.modelPickerVersion === 2);
+	assert.ok(record, "Picker/selection format changes require an application-written fixture");
+	assert.equal(record.notebook!.candidate, "terra-medium");
+	const operation = record.notebook!.operations.find(op => op.expressionSelection);
+	assert.ok(operation);
+	assert.deepEqual(operation.expressionSelection, { lineId: "L1", number: 2, lineSource: "p=", text: "" });
+	assert.deepEqual(operation.execution?.input.expressionSelection, operation.expressionSelection);
+	assert.equal(operation.candidate, "terra-medium");
+	assert.equal(operation.status, "applied");
+});
+
+
 test("tools: the core tool surface appears in real fixture data", () => {
 	// A living inventory, not an exhaustive pin: teach tools in the teach
 	// record, practice tools in the practice record. New TOOLS don't fail

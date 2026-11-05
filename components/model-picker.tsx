@@ -7,6 +7,8 @@ import { prettyModel } from "@/components/usage-format";
 import { ModelMenuList, ThinkingMenuList } from "@/components/settings/model-menu";
 import { composeSlotModel } from "@/components/settings/agent-section";
 import { MenuShell } from "@/components/menu-shell";
+import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { Hint } from "@/components/ui/hint";
 import { notifySettingsSaved, useSettingsSaved } from "@/components/settings-signal";
 import { useModelCatalog } from "@/components/model-catalog";
@@ -38,12 +40,14 @@ export function catalogLimits(catalog: Pick<ModelCatalogResponse, "models">): Ma
  * no-factory-fallback language: the UI never presents a default model).
  */
 export function ModelControl({ chatId, onModelChange }: { chatId?: string; onModelChange?: (model: string | undefined) => void }) {
+	const phone = usePhoneLayout();
 	const { catalog, refresh } = useModelCatalog();
 	const [models, setModels] = useState<ModelsSettings | undefined>();
 	// A successful read with no settings is a legacy session; undefined
 	// means no session record is known yet, not permission to inherit Strong.
 	const [session, setSession] = useState<{ settings?: ChatSettings }>();
 	const [open, setOpen] = useState<"model" | "thinking" | null>(null);
+	const presence = usePhoneMenuPresence(open, phone);
 	const [error, setError] = useState<string | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 
@@ -272,6 +276,11 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 		if (kind === "model") refresh();
 	};
 
+	const modelMenu = <>
+		{error && <div className="mb-1.5 text-destructive">{error}</div>}
+		<ModelMenuList models={catalog?.models} effectiveId={effectiveId} effectiveProvider={effectiveProvider} onPick={pickModel} focusSearch={!phone}
+			footer={catalog && catalog.models.length === 0 ? "No models — add a provider key in Keys" : chatId ? "This session's model" : "Strong tier — the default for new sessions"} />
+	</>;
 	return (
 		<div ref={containerRef} className="relative flex items-center gap-1.5" data-testid="model-control">
 			<Hint
@@ -330,34 +339,30 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			{/* The shared dropdown body (extracted 2026-09-20): the agent
 			    settings' slot selects and the setup dialog use the exact same
 			    one. */}
-			{open === "model" && (
+			{presence.value === "model" && (
 				<MenuShell
+					closing={presence.closing} onClosed={presence.onClosed}
 					anchorRef={containerRef}
 					testid="model-menu"
+					phoneTriggerTestid="stats-model"
+					focusSearch={!phone}
+					fitVisualViewport={phone}
+					onClose={() => setOpen(null)}
 					preferredSide="up"
 					menuClass="flex w-[22rem] flex-col rounded-xl border bg-card p-2 text-xs shadow-xl"
 				>
-					{error && <div className="mb-1.5 text-destructive">{error}</div>}
-					<ModelMenuList
-						models={catalog?.models}
-						effectiveId={effectiveId}
-						effectiveProvider={effectiveProvider}
-						onPick={pickModel}
-						footer={
-							catalog && catalog.models.length === 0
-								? "No models — add a provider key in Keys"
-								: chatId
-									? "This session's model"
-									: "Strong tier — the default for new sessions"
-						}
-					/>
+					{modelMenu}
 				</MenuShell>
 			)}
 
-			{open === "thinking" && (
+			{presence.value === "thinking" && (
 				<MenuShell
+					closing={presence.closing} onClosed={presence.onClosed}
 					anchorRef={containerRef}
 					testid="thinking-menu"
+					phoneTriggerTestid="stats-thinking"
+					fitVisualViewport={phone}
+					onClose={() => setOpen(null)}
 					preferredSide="up"
 					menuClass="flex w-44 flex-col gap-0.5 rounded-xl border bg-card p-2 text-xs shadow-xl"
 				>
