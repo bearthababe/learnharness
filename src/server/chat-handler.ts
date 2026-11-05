@@ -81,6 +81,9 @@ import { resolveSharedWriting } from "./shared-writing.ts";
  * for write-ahead persistence, turn liveness, and the turn services.
  */
 
+import { commitNotebookInput, notebookSubmissionAccepted, validateNotebookSubmission } from "./notebook-submissions.ts";
+import { NotebookDraftConflict } from "../core/notebook-drafts.ts";
+
 function settlementErrorText(error: unknown): string {
 	return error instanceof TurnPersistenceError ? error.message : "An error occurred.";
 }
@@ -187,6 +190,15 @@ export async function handleChatInput(
 	if (!record) {
 		return Response.json({ error: "Unknown chat" }, { status: 404 });
 	}
+	if ((input.type === "text" || input.type === "thinking" || input.type === "answer") && input.submission) {
+		try {
+			if (notebookSubmissionAccepted(record, input)) return settledTurnResponse();
+			validateNotebookSubmission(record, input);
+		} catch (error) {
+			if (error instanceof NotebookDraftConflict) return Response.json({ error: error.message }, { status: 409 });
+			throw error;
+		}
+	}
 
 	// Refuse an ineligible Retry before catalog refresh, compaction, or any
 	// turn/write effects. Revalidate after the awaited gates below too.
@@ -277,6 +289,15 @@ export async function handleChatInput(
 	const compactedRecord = stores.chatStore.getChat(chatId);
 	if (!compactedRecord) return Response.json({ error: "Unknown chat" }, { status: 404 });
 	record = compactedRecord;
+	if ((input.type === "text" || input.type === "thinking" || input.type === "answer") && input.submission) {
+		try {
+			if (notebookSubmissionAccepted(record, input)) return settledTurnResponse();
+			validateNotebookSubmission(record, input);
+		} catch (error) {
+			if (error instanceof NotebookDraftConflict) return Response.json({ error: error.message }, { status: 409 });
+			throw error;
+		}
+	}
 	// Recompute Retry eligibility on current truth, still before beginTurn.
 	// A compaction marker or another writer may have landed during awaits.
 	// These omissions affect ONLY the agent context, never the saved record.
@@ -324,7 +345,10 @@ export async function handleChatInput(
 	// the composer gates), so adjacency holds by construction.
 	if (input.type === "answer" && danglingQuestionOf([...record.messages, ...appends]) !== null) {
 		const merged = [...record.messages, ...appends];
-		try { stores.chatStore.saveMessages(chatId, merged); }
+		try {
+			if (input.submission) commitNotebookInput(stores.chatStore, chatId, input, appends);
+			else stores.chatStore.saveMessages(chatId, merged);
+		}
 		catch (err) {
 			console.error(`[chat ${chatId}] write-ahead persist failed:`, err);
 			return new Response("Your input could not be saved. Please try again.", { status: 500 });
@@ -356,7 +380,10 @@ export async function handleChatInput(
 	const stagedAutomatic = isSubscriptionProvider(conversation.provider) && input.type === "steers";
 	let persistBaseCount = stagedAutomatic ? record.messages.length : agentMessages.length;
 	try {
-		if (!stagedAutomatic) stores.chatStore.saveMessages(chatId, merged);
+		if (!stagedAutomatic) {
+			if ((input.type === "text" || input.type === "thinking" || input.type === "answer") && input.submission) commitNotebookInput(stores.chatStore, chatId, input, appends);
+			else stores.chatStore.saveMessages(chatId, merged);
+		}
 	} catch (err) {
 		console.error(`[chat ${chatId}] write-ahead persist failed:`, err);
 		endTurn(chatId);

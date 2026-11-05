@@ -9,9 +9,10 @@
  * WHY pi MESSAGES LACK OUR `id`: pi's session format gives every ENTRY an
  * id, never the message. This app needs a per-message id for client
  * identity (React keys, append-only adoption, the continuation seam), so
- * every record message carries ONE extra field — `id` — alongside the
- * native shape. `toLlmMessages` strips it at the wire: the provider never
- * sees it (verified single site, below).
+ * every record message carries `id` alongside the native shape. Notebook
+ * user messages additionally carry app-owned `explanation` for exact display;
+ * their native content is its canonical model text. `toLlmMessages` strips
+ * both app fields at the wire.
  *
  * UI-ONLY CONTENT (owner ruling, fork 1 + the plan's custom-message
  * taxonomy): the probe→teach handoff, sub-agent steers,
@@ -44,6 +45,8 @@ import {
 } from "./contracts/chat.ts";
 import { compactAnswerForModel, type QuestionAnswerData } from "./question-core.ts";
 import { activeCompactionOf, keptIndexFor } from "./compaction.ts";
+import type { LearnerExplanation } from "./contracts/notebook.ts";
+import { serializeLearnerExplanation } from "./notebook-content.ts";
 import { sharedWritingContext, type SharedWritingReference } from "./shared-writing.ts";
 
 /** The hard-invariant wording for an aborted turn's unanswered calls —
@@ -91,7 +94,7 @@ declare module "@earendil-works/pi-agent-core" {
 }
 
 /** A record message: a native pi message (or our marker) plus the record id. */
-export type LhMessage = (UserMessage | AssistantMessage | ToolResultMessage | LhMarkerMessage) & { id: string; sharedWriting?: SharedWritingReference[] };
+export type LhMessage = (UserMessage | AssistantMessage | ToolResultMessage | LhMarkerMessage) & { id: string; explanation?: LearnerExplanation; sharedWriting?: SharedWritingReference[] };
 
 /** A record message list is assignable to the agent's context — that IS
  *  the replay (ui-stream/chat-handler assign it to initialState.messages). */
@@ -159,11 +162,12 @@ export function newMessageId(): string {
 //     core/input-events.ts; steers in core/contracts/jobs.ts) ─────────────────
 
 /** A learner-authored user message (text input, verdict note). */
-export function newUserMessage(text: string): LhMessage & UserMessage {
+export function newUserMessage(text: string, explanation?: LearnerExplanation, id?: string): LhMessage & UserMessage {
 	return {
-		id: newMessageId(),
+		id: id ?? newMessageId(),
 		role: "user",
-		content: text,
+		content: explanation ? serializeLearnerExplanation(explanation) : text,
+		...(explanation ? { explanation: structuredClone(explanation) } : {}),
 		timestamp: Date.now(),
 	};
 }
@@ -173,8 +177,8 @@ export function newUserMessage(text: string): LhMessage & UserMessage {
  *  rides agent.steer(), the live stream's message events, and the settled
  *  record, so the optimistic queued indicator and the transcript card
  *  upsert by one identity. */
-export function newUserSteer(text: string, id: string): LhMessage & UserMessage {
-	return { id, role: "user", content: text, timestamp: Date.now() };
+export function newUserSteer(text: string, id: string, explanation?: LearnerExplanation): LhMessage & UserMessage {
+	return newUserMessage(text, explanation, id);
 }
 
 /** The learner's answer — the question call's tool result (fork 1).
@@ -293,14 +297,14 @@ export function newGraphContextMessage(picks: readonly GraphContextPick[], chain
  *  content label is the single "Your thinking"; `details` keeps the raw
  *  payload for the transcript card. One problem may carry many
  *  submissions. */
-export function newThinkingMessage(problemCallId: string, text: string): LhMarkerMessage {
+export function newThinkingMessage(problemCallId: string, text: string, explanation?: LearnerExplanation, id = newMessageId()): LhMarkerMessage {
 	return {
-		id: newMessageId(),
+		id,
 		role: "custom",
 		customType: "practice-thinking",
-		content: `${THINKING_LABEL}:\n${text}`,
+		content: `${THINKING_LABEL}:\n${explanation ? serializeLearnerExplanation(explanation) : text}`,
 		display: true,
-		details: { problemCallId, text },
+		details: { problemCallId, text, ...(explanation ? { explanation } : {}) },
 		timestamp: Date.now(),
 	};
 }
@@ -619,8 +623,12 @@ export function toLlmMessages(messages: readonly AgentMessage[]): Message[] {
 			});
 			continue;
 		}
-		// Strip the record id: the wire carries the native shape only.
-		const { id: _id, sharedWriting, ...native } = m as LhMessage;
+		// Strip app-owned fields: the wire carries the native shape only.
+		const { id: _id, explanation: _explanation, sharedWriting, ...native } = m as LhMessage;
+		if (native.role === "toolResult" && (QUESTION_TOOLS as readonly string[]).includes(native.toolName) && native.details && typeof native.details === "object" && !Array.isArray(native.details)) {
+			const { textContent: _text, thinkingContent: _thinking, readingThinkingContent: _reading, ...details } = native.details as Record<string, import("@earendil-works/pi-ai").JsonValue>;
+			native.details = details;
+		}
 		if (sharedWriting?.length && (native.role === "user" || native.role === "toolResult")) {
 			native.content = [
 				...(typeof native.content === "string" ? [{ type: "text" as const, text: native.content }] : native.content),

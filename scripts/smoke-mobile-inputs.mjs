@@ -9,13 +9,15 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import puppeteer, { PUPPETEER_REVISIONS } from "puppeteer-core";
 import { createRunDirectory, processScope, captureOutput, completed } from "./mobile-browser-runner.mjs";
+import { verifyNotebookMobile } from "./smoke-notebook-mobile.mjs";
+import { verifyNotebookLayout } from "./smoke-notebook-layout.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const dir = await createRunDirectory();
 console.log(`Disposable browser app: ${dir}`);
 const executablePath = process.env.CHROMIUM_PATH ?? "/usr/bin/chromium";
 console.log(`Browser: ${executablePath}\n${execFileSync(executablePath, ["--version"], { encoding: "utf8" }).trim()}\nPuppeteer-supported Chrome: ${PUPPETEER_REVISIONS.chrome}`);
-for (const name of ["app", "components", "src", "lib", "public", "electron", "config.ts", "package.json", "package-lock.json", "tsconfig.json", "postcss.config.mjs", "next.config.ts", "node_modules"]) {
+for (const name of ["app", "components", "src", "lib", "public", "electron", "scripts", "config.ts", "package.json", "package-lock.json", "tsconfig.json", "postcss.config.mjs", "next.config.ts", "node_modules"]) {
 	await cp(path.join(root, name), path.join(dir, name), { recursive: true, mode: constants.COPYFILE_FICLONE, verbatimSymlinks: true });
 }
 await mkdir(path.join(dir, "data/chats"), { recursive: true });
@@ -26,6 +28,14 @@ const assistant = (content, id = "assistant") => ({ role: "assistant", content, 
 const conversation = { id: "mobile_conversation", title: "Mobile browser conversation", createdAt: now, updatedAt: now, messages: [assistant([{ type: "text", text: "Explain how pressure changes with area." }])] };
 await writeFile(path.join(dir, "data/chats/mobile_conversation.json"), JSON.stringify(conversation));
 await writeFile(path.join(dir, "data/chats/mobile_other.json"), JSON.stringify({ ...conversation, id: "mobile_other", title: "Other isolated session" }));
+await writeFile(path.join(dir, "data/chats/mobile_notebook_close.json"), JSON.stringify({ ...conversation, id: "mobile_notebook_close", title: "Notebook close fixture" }));
+await writeFile(path.join(dir, "data/chats/mobile_expressions.json"), JSON.stringify({ ...conversation, id: "mobile_expressions", title: "Expression references fixture",
+	notebook: { revision: 1, visible: true, current: { id: "expressions-context", revision: 1, state: { lines: [{ id: "L1", latex: "p=F/A=2+2=" }, { id: "L2", latex: "2+2=5" }], undo: [] }, exchanges: [] }, notebookDraft: { id: "expressions-draft", revision: 0, text: "" }, nextSequence: 1, operations: [] },
+}));
+await writeFile(path.join(dir, "data/chats/mobile_layout.json"), JSON.stringify({ ...conversation, id: "mobile_layout", title: "Notebook layout fixture",
+	messages: [assistant([{ type: "text", text: Array(35).fill("Explain how pressure changes with area. Keep your reasoning alongside your working.").join("\n\n") }])],
+	notebook: { revision: 1, visible: true, current: { id: "layout-context", revision: 1, state: { lines: Array.from({ length: 40 }, (_, i) => ({ id: `L${i + 1}`, latex: `p_{${i + 1}}=F/A` })), undo: [] }, exchanges: [] }, notebookDraft: { id: "layout-draft", revision: 0, text: "Keep this equation instruction." }, nextSequence: 1, operations: [] },
+}));
 const call = (name, args, id) => assistant([{ type: "toolCall", name, arguments: args, id }], `assistant_${id}`);
 const result = (name, details, id) => ({ role: "toolResult", toolName: name, toolCallId: id, id: `result_${id}`, content: [{ type: "text", text: "Ready." }], details, isError: false, timestamp: Date.now() });
 const teaching = [
@@ -91,6 +101,24 @@ export function GET() {
  }), { headers: response.headers });
 }
 `);
+// The combined check uses the real Notebook service with only its external
+// editor replaced. No saved account or live provider is available to this app.
+await writeFile(path.join(dir, "app/api/chats/[id]/notebook/route.ts"), `
+import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai";
+import { createNotebookService } from "@/src/server/notebook";
+import { chatStore } from "@/src/store/chats";
+const service = createNotebookService({ chatStore, engine: async () => {
+ const faux = createFauxCore({});
+   faux.setResponses([context => fauxAssistantMessage(JSON.stringify(String(context.messages[0].content).endsWith("CURRENT INSTRUCTION\\n\\nRemove this expression fixture")
+    ? { action: "edit", operations: [{ op: "replace", id: "L1", latex: "p=2+2=" }] }
+    : String(context.messages[0].content).endsWith("CURRENT INSTRUCTION\\n\\nClarify fixture target")
+   ? { action: "question", question: "Which occurrence should change?" }
+   : { action: "edit", operations: [{ op: "insert", after: null, id: "L1", latex: "p=F/A" }] }))]);
+ return { engine: { model: faux.getModel(), streamFn: faux.streamSimple }, model: "faux:editor" };
+} });
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) { return service.handle(req, (await params).id); }
+export const POST = GET;
+`);
 const port = Number(process.env.LH_MOBILE_TEST_PORT ?? 3109);
 assert.ok(Number.isInteger(port) && port > 0 && port <= 65535 && ![3000, 3001, 3002].includes(port), "Use a dedicated non-preview port (default 3109)");
 const origin = `http://127.0.0.1:${port}`;
@@ -115,6 +143,12 @@ try {
 	}
 	browser = await puppeteer.launch({ executablePath, headless: true, handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false, args: ["--no-sandbox", "--disable-features=BackForwardCache", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
 	processes.own(browser.process());
+	if (process.argv.includes("--layout-only")) {
+		await verifyNotebookLayout(browser, origin, dir);
+	} else if (process.argv.includes("--notebook-only")) {
+		await verifyNotebookMobile(browser, origin);
+		await verifyNotebookLayout(browser, origin, dir);
+	} else {
 	const page = await browser.newPage();
 	const errors = [];
 	page.on("pageerror", error => errors.push(error.message));
@@ -159,6 +193,9 @@ try {
 			static CONNECTING = 0;
 			readyState = 0;
 			frames = 0;
+			audioSeconds = 0;
+			cursor = 0;
+			pendingFinals = [];
 			constructor(url, protocols) {
 				super();
 				if (new URL(url).hostname !== "api.deepgram.com") return new NativeSocket(url, protocols);
@@ -167,10 +204,19 @@ try {
 			}
 			open() { this.readyState = 1; this.dispatchEvent(new Event("open")); }
 			send(value) {
-				if (typeof value !== "string") { this.frames++; return; }
+				if (typeof value !== "string") { this.frames++; this.audioSeconds += value.byteLength / 32000; this.flushFinals(); return; }
 				if (JSON.parse(value).type === "CloseStream") this.finishing = true;
 			}
-			final(text) { this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "Results", is_final: true, channel: { alternatives: [{ transcript: text }] } }) })); }
+			final(text) { this.pendingFinals.push(text); this.flushFinals(); }
+			flushFinals() {
+				// Timestamped results reference audio already sent by the real worklet,
+				// just like the production transport; they also exercise Notebook routing.
+				while (this.pendingFinals.length && this.audioSeconds >= this.cursor + .001) {
+					const text = this.pendingFinals.shift(), start = this.cursor, end = start + .001;
+					this.cursor = end;
+					this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "Results", is_final: true, speech_final: true, start, duration: .001, channel: { alternatives: [{ transcript: text, words: [{ word: text, punctuated_word: text, start, end }] }] } }) }));
+				}
+			}
 			close() { this.readyState = 3; this.dispatchEvent(new CloseEvent("close", { code: 1000 })); }
 		};
 	});
@@ -186,9 +232,11 @@ try {
 	};
 	await assertMicSpace('[data-testid="composer"] textarea');
 	const fill = async (selector, text) => {
+		await page.waitForSelector(selector, { visible: true });
 		await page.focus(selector);
 		await page.keyboard.down("Control"); await page.keyboard.press("KeyA"); await page.keyboard.up("Control");
 		await page.keyboard.sendCharacter(text);
+		assert.equal(await page.$eval(selector, field => field.value), text, "Typing reaches the visible editor before recording or submission");
 	};
 	const checkPhoneInput = async fieldSelector => {
 		const selector = `${fieldSelector} textarea`;
@@ -271,7 +319,7 @@ try {
 		field.setSelectionRange(8, 20); field.scrollTop = 70;
 		return { height: field.getBoundingClientRect().height, scroll: field.scrollTop };
 	});
-	await page.click(mic);
+	await page.locator(mic).click();
 	await page.waitForFunction(() => window.speech?.readyState === 1);
 	await page.waitForSelector('[aria-label="Cancel dictation"]');
 	assert.equal(await page.$eval(input, e => e.getBoundingClientRect().height), beforeCapture.height, "Recording preserves the grown editor height");
@@ -298,11 +346,12 @@ try {
 	assert.equal(await page.$eval(input, e => e.value), "Review before sending. Spoken working. Final reviewed words.");
 	assert.equal((await (await fetch(`${origin}/api/chats/mobile_conversation`)).json()).messages.filter(m => m.role === "user").length, 0, "Dictation Stop does not submit or start a tutor turn");
 	await fill(input, "Typed first.");
-	await page.click(mic);
+	await page.locator(mic).click();
 	await page.waitForFunction(() => window.speech.readyState === 1);
 	await page.evaluate(() => window.speech.final("Spoken middle."));
 	await page.click('[data-testid="composer"] [aria-label="Send"]');
 	await page.waitForFunction(() => window.speech.finishing);
+	await page.$eval('[data-testid="composer"]', form => form.requestSubmit());
 	await page.evaluate(() => { window.speech.final("Spoken end."); window.speech.close(); });
 	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
 	const saved = await (await fetch(`${origin}/api/chats/mobile_conversation`)).json();
@@ -310,12 +359,12 @@ try {
 	await page.reload({ waitUntil: "networkidle2" });
 	assert.ok(await page.evaluate(() => document.body.textContent.includes("Typed first. Spoken middle. Spoken end.")), "Submitted working survives reopening");
 	await page.evaluate(() => { window.holdConnection = true; });
-	await page.click(mic);
+	await page.locator(mic).click();
 	await page.waitForFunction(() => window.speech && window.speech.readyState === 0);
 	assert.ok(await page.evaluate(() => document.querySelector('.lh-compact-field').textContent.includes("Connecting")), "Pending connection is shown inside the input");
 	await page.click('[aria-label="Cancel dictation"]');
 	await page.evaluate(() => { window.speech.open(); window.speech.final("Cancelled connection."); window.denyMicrophone = true; });
-	await page.click(mic);
+	await page.locator(mic).click();
 	await page.waitForSelector('.lh-compact-error');
 	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /Microphone permission denied.*Retry/);
 	await page.evaluate(() => { window.denyMicrophone = false; window.holdConnection = false; });
@@ -1197,14 +1246,21 @@ try {
 		assert.match(await page.$eval('.lh-compact-recording [role="status"]', e => e.textContent), /Connecting/);
 		await page.evaluate(() => { window.holdConnection = false; window.speech.open(); });
 		await page.evaluate(() => window.speech.final("So pressure is 50 Pa."));
-		await page.click('[aria-label="Stop dictation"]');
+		if (id === "mobile_drill") {
+			await page.click('[data-testid="practice-send"]');
+			await page.click('[data-testid="practice-send"]');
+		} else await page.click('[aria-label="Stop dictation"]');
 		await page.waitForFunction(() => window.speech.finishing);
 		await page.evaluate(() => window.speech.close());
-		assert.equal(await page.$eval(thinking, e => e.value), "100 divided by 2. So pressure is 50 Pa.");
-		await page.click('[data-testid="practice-send"]');
+		await page.waitForFunction(() => !document.querySelector('.lh-compact-recording'));
+		if (id !== "mobile_drill") {
+			assert.equal(await page.$eval(thinking, e => e.value), "100 divided by 2. So pressure is 50 Pa.");
+			await page.click('[data-testid="practice-send"]');
+		}
 		await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
 		const record = await (await fetch(`${origin}/api/chats/${id}`)).json();
 		assert.ok(JSON.stringify(record.messages).includes("100 divided by 2. So pressure is 50 Pa."), "Practice/drill uses its actual persisted thinking submission");
+		assert.equal(record.messages.filter(message => message.role === "custom" && message.customType === "practice-thinking").length, 1, "Repeated Submit during finalization accepts the reasoning once");
 	}
 	await page.goto(`${origin}/chat/mobile_teaching`, { waitUntil: "networkidle2" });
 	await fill(input, longDraft);
@@ -1247,6 +1303,9 @@ try {
 	assert.equal(await page.$eval(mic, e => e.checkVisibility()), false, "Compact microphone stays phone-only");
 	assert.deepEqual(errors, [], "No browser runtime errors");
 	console.log("PASS: conversation, reading/reveal, free-text/selection/Other answers, practice/drills, real persisted submissions, speech recovery, image review, panels, phone geometry and focus/gesture containment.");
+	await page.close();
+	await verifyNotebookMobile(browser, origin);
+	await verifyNotebookLayout(browser, origin, dir);
 	await browser.close();
 	browser = undefined;
 	if (process.argv.includes("--all")) {
@@ -1259,6 +1318,7 @@ try {
 			await completed(test);
 		}
 		console.log("PASS: all three mobile browser suites");
+	}
 	}
 } catch (error) {
 	if (browser) {

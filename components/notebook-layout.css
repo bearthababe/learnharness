@@ -1,0 +1,81 @@
+/* Presentation counterpart of handwriting/notebook.css at 329677b. Keep these
+ * shell classes independent of equation content for later shared extraction. */
+.session-workspace { container: equation-notebook / inline-size; }
+.session-panes { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; --notebook-context-share: var(--notebook-share-column, 50%); }
+.session-tutor { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+.session-panes[data-notebook-open="true"] > .session-tutor { flex: 0 0 calc(var(--notebook-context-share) - 14px); }
+.notebook-slot { display: flex; flex-direction: column; }
+.notebook-slot[hidden], .notebook-split-divider[hidden] { display: none !important; }
+.notebook-frame { overscroll-behavior: contain; }
+.notebook-frame-header { display: flex; flex: none; min-height: 52px; align-items: center; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.notebook-frame-header h2 { margin-right: auto; padding-inline: 4px; font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 500; }
+.notebook-frame-header button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 8px; color: var(--muted-foreground); touch-action: manipulation; }
+.notebook-frame-header button:is(:hover, :focus-visible):not(:disabled) { color: var(--foreground); background: var(--accent); }
+.notebook-frame-header button:disabled { opacity: .35; }
+.notebook-frame-header svg { width: 16px; height: 16px; }
+.notebook-panel { flex: 1; }
+.notebook-expression { position: relative; display: inline-flex; min-width: 28px; min-height: 44px; align-items: center; justify-content: center; padding: 14px 4px 4px; }
+.notebook-expression-number { position: absolute; top: 1px; left: 4px; color: var(--muted-foreground); opacity: .7; font: 10px/1.1 var(--font-sans); font-variant-numeric: tabular-nums; pointer-events: none; }
+.notebook-expression .katex-display { margin: 0; }
+.notebook-relation { padding-top: 10px; }
+.notebook-instruction-form { flex: none; max-height: calc(100% - 52px); padding: 8px; overflow-y: auto; overscroll-behavior: contain; }
+.notebook-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px; }
+.notebook-input-row .lh-compact-field { display: flex; position: relative; min-width: 0; min-height: 54px; border: 1px solid var(--border); border-radius: 12px; background: var(--background); }
+.notebook-input-row .lh-compact-field:focus-within { border-color: var(--primary); }
+.notebook-input-row textarea { min-width: 0; min-height: 52px; max-height: min(8rem, 20dvh); padding: 12px 8px; font-size: var(--text-lg); line-height: var(--text-lg--line-height); field-sizing: content; overflow-y: auto; overscroll-behavior: contain; }
+.notebook-input-row [data-has-mic] > textarea { flex: 0 1 auto; width: calc(100% - 48px); padding-right: 0; }
+.notebook-input-row textarea:placeholder-shown { white-space: nowrap; text-overflow: ellipsis; }
+.notebook-input-row [data-recording] > textarea { visibility: hidden; height: var(--lh-capture-height); min-height: var(--lh-capture-height, 52px); }
+.notebook-input-row .lh-compact-speech { display: block; position: absolute; right: 4px; bottom: 4px; }
+.notebook-input-row [data-recording] .lh-compact-speech { left: 4px; }
+.notebook-input-row .lh-compact-speech button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; flex-shrink: 0; border-radius: 8px; }
+.notebook-input-row .lh-compact-recording { display: flex; align-items: center; min-width: 0; }
+.notebook-input-row .lh-compact-feedback { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1; padding-left: 4px; }
+.notebook-input-row .lh-compact-timer { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-variant-numeric: tabular-nums; }
+.notebook-input-row .lh-compact-meter { display: flex; align-items: center; height: 24px; flex: 1; min-width: 0; gap: 4px; overflow: hidden; }
+.notebook-input-row .lh-compact-meter > span { flex: 1; min-width: 1px; background: var(--foreground); border-radius: 4px; }
+.notebook-input-row .lh-compact-status { display: flex; align-items: center; gap: 4px; font-size: var(--text-sm); line-height: var(--text-sm--line-height); overflow-wrap: anywhere; }
+.notebook-input-row .lh-compact-error { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; color: var(--destructive); font-size: var(--text-sm); line-height: var(--text-sm--line-height); overflow-wrap: anywhere; }
+.notebook-input-row .lh-compact-error > span { flex: 1; min-width: 0; }
+.notebook-input-row .lh-compact-error button { min-height: 44px; min-width: 44px; text-decoration: underline; }
+.notebook-apply { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 44px; margin-bottom: 4px; padding-inline: 4px; border-radius: 8px; font-size: var(--text-sm); line-height: var(--text-sm--line-height); color: var(--primary); touch-action: manipulation; }
+.notebook-apply:is(:hover, :focus-visible):not(:disabled) { background: var(--accent); }
+.notebook-input-row button:disabled { opacity: .4; }
+.notebook-apply svg { width: 16px; height: 16px; }
+.notebook-notice { margin-top: 4px; padding-inline: 4px; font-size: var(--text-sm); line-height: var(--text-sm--line-height); color: var(--muted-foreground); overflow-wrap: anywhere; }
+.notebook-notice summary { cursor: pointer; padding-block: 4px; }
+.notebook-notice p { padding-block: 4px; white-space: pre-wrap; }
+.notebook-notice button { min-height: 44px; text-decoration: underline; }
+.notebook-options { width: 288px; max-width: calc(100vw - 32px); padding: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 8px 24px #0002; overscroll-behavior: contain; font-size: var(--text-sm); line-height: var(--text-sm--line-height); }
+.notebook-options :is([role="menu"], [role="group"]) > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; padding: 8px; border-radius: 8px; text-align: left; }
+.notebook-options button:is(:hover, :focus-visible):not(:disabled) { background: var(--accent); }
+.notebook-options button:disabled { opacity: .4; }
+.notebook-options button > span { max-width: 65%; color: var(--muted-foreground); text-align: right; }
+.notebook-options svg { width: 16px; height: 16px; flex: none; }
+.notebook-options-heading { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--border); }
+.notebook-options-heading button { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 8px; }
+.notebook-menu-content { padding: 8px; overflow-wrap: anywhere; }
+.notebook-menu-content article + article { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 12px; }
+.notebook-menu-content h4 { color: var(--muted-foreground); }
+.notebook-draft-review + .notebook-draft-review { margin-top: 16px; }
+.notebook-draft-review textarea { min-height: 44px; padding: 8px 0; max-height: 8rem; overflow-y: auto; overscroll-behavior: contain; }
+.notebook-split-divider { display: flex; flex: 0 0 28px; align-items: center; justify-content: center; touch-action: none; user-select: none; cursor: ns-resize; background: var(--background); border-block: 1px solid var(--border); }
+.notebook-split-divider > span { width: 40px; height: 4px; border-radius: 4px; background: var(--muted-foreground); }
+.notebook-split-divider:focus-visible { background: var(--accent); }
+.session-panes[data-notebook-expanded="true"] > :is(.session-tutor, .notebook-split-divider) { visibility: hidden; pointer-events: none; }
+.session-panes[data-notebook-expanded="true"] > .notebook-slot { z-index: 4; }
+@container equation-notebook (min-width: 980px) {
+	.session-panes { flex-direction: row; --notebook-context-share: var(--notebook-share-row, 60%); }
+	.notebook-split-divider { cursor: ew-resize; border-block: 0; border-inline: 1px solid var(--border); }
+	.notebook-split-divider > span { width: 4px; height: 40px; }
+}
+@media (max-width: 767px) {
+	.session-workspace[data-keyboard-open="true"][data-input-focused="tutor"] .session-panes { --notebook-context-share: 66.6667%; }
+	.session-workspace[data-keyboard-open="true"][data-input-focused="notebook"] .session-panes { --notebook-context-share: 33.3333%; }
+}
+html[data-session-input-locked], html[data-session-input-locked] body { overflow: hidden; overscroll-behavior: none; }
+.session-workspace[data-input-focused] {
+	position: fixed; top: calc(var(--session-viewport-top) + var(--lh-safe-top, 0px)); left: var(--session-viewport-left);
+	width: var(--session-viewport-width); height: calc(var(--session-viewport-height) - var(--lh-safe-top, 0px) - var(--lh-safe-bottom, 0px)); overflow: hidden;
+}
+.session-workspace[data-input-focused] :is(textarea, [data-notebook-scroll], [data-dock-scroll-area], [data-input-owner="tutor"] [style*="overflow"]) { overscroll-behavior: contain; }

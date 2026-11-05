@@ -85,6 +85,51 @@ output is not shared with another running app.
 
 ## Stamps
 
+### Notebook capture — 2026-11-02
+
+`chats/chat_mvzf8k96_6f85b903.json` was captured with
+`mise x node -- node --import tsx scripts/capture-notebook-golden.ts` under the
+owner-approved #28 correction plan. It uses an isolated `LH_DATA_DIR` and
+`LH_AUTH_FILE`, production Notebook command handling, native Tutor request
+parsing, normal teacher construction, and production persistence. Two scripted
+editor responses and one scripted Tutor response supply the external model
+boundary; network fetches are blocked. No live calls or credentials were used.
+
+The script copies the application's JSON bytes unchanged and checks equality.
+The record contains unfinished and completed working, Undo, two submitted
+snapshots interleaved with explanation, a submission receipt, and unsent Tutor
+and Notebook drafts. This is scripted-provider persistence evidence, not live
+provider or physical-phone acceptance. SHA-256:
+
+`cc3bc8ee2936ab4485431ad864fe53caf15e2a82eae6480d768e1ab0ce142e5c`
+
+The superseded pending-return experiment and its fixture are retained at
+`prototype/notebook-overlap-experiment`. The settled-handoff policy does not
+introduce its additional persisted fields.
+
+`chats/chat_mvzsbob5_3a6d3a3b.json` was captured with the same script after the
+settled-handoff change. It also exercises one completed recording into a fixed
+Tutor continuation, using the production capture/save path with scripted words.
+Two scripted editor responses, one scripted Tutor response, zero live calls.
+SHA-256: `6b45bd9bd02722a8b64e1a621d670c1e201691aac64a29b6092427192940f108`.
+
+Re-running captures an additional record with new IDs/timestamps. Replace the
+intended capture deliberately and update provenance; preserve legacy fixtures.
+
+### Expression references and model picker capture — 2026-11-05
+
+`chats/chat_mw3ijz8j_84a00882.json` was captured with
+`node --import tsx scripts/capture-notebook-golden.ts` after the expression/picker
+review corrections. The existing isolated production-writer flow now selects the
+empty second expression of `p=` before completing it. The verbatim record captures
+`modelPickerVersion: 2`, Terra/medium and frozen expression selection in both the
+accepted operation and execution input, alongside the existing Undo, drafts,
+snapshots, submission and completed recording. Two scripted editor responses and
+one scripted Tutor response; zero network/live calls. Legacy captures retained.
+SHA-256: `6aa1de57258acb43d45033eccf2c1ead97be67297cf9bd575769a3f078dfb65b`.
+
+### Legacy stamps
+
 These files are deliberately the UNSTAMPED legacy shape (schema-stamp wave,
 2026-10-10): lazy v1 means absence reads as current-valid, so this set pins
 the pre-stamp read path forever. Stamped writes (chat `version: 1`, the

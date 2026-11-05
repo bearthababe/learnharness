@@ -20,15 +20,28 @@
 import { clampThinkingLevel, getSupportedThinkingLevels, type Api, type Model } from "@earendil-works/pi-ai";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { piModels } from "../agent/models.ts";
-import { chatGPTConnected, chatGPTModel, chatGPTModels, refreshChatGPTModels } from "../agent/chatgpt-bridge.ts";
+import { chatGPTConnected, chatGPTModel, chatGPTModels, chatGPTScope, refreshChatGPTModels } from "../agent/chatgpt-bridge.ts";
 import { NATIVE_SUBSCRIPTIONS } from "../core/contracts/subscriptions.ts";
-import { nativeSubscriptionId, nativeSubscriptionConnected, nativeSubscriptionModel, nativeSubscriptionModels, refreshSubscriptionModels } from "../agent/subscription-bridge.ts";
+import { nativeSubscriptionId, nativeSubscriptionConnected, nativeSubscriptionModel, nativeSubscriptionModels, refreshSubscriptionModels, subscriptionScope } from "../agent/subscription-bridge.ts";
 
 export async function refreshConnectionCatalog(provider?: string): Promise<void> {
 	await Promise.all([
 		!provider || provider === "chatgpt" ? refreshChatGPTModels(piModels().getModels("openai").filter((m): m is Model<"openai-responses"> => m.api === "openai-responses")) : Promise.resolve(),
 		!provider || nativeSubscriptionId(provider) ? refreshSubscriptionModels() : Promise.resolve(),
 	]);
+}
+/** Resolve against existing account authority; only a missing/invalidated model
+ * needs discovery. Each generation still takes its normal credential lease.
+ * Explicit picker refreshes continue to use refreshConnectionCatalog directly. */
+export async function ensureConnectionModel(provider: string, id: string): Promise<void> {
+	const native = nativeSubscriptionId(provider);
+	if (provider !== "chatgpt" && !native) return; // Pi's API-key catalogs are local.
+	try {
+		if (provider === "chatgpt") chatGPTScope(id);
+		else subscriptionScope(native!, id);
+		return;
+	} catch { /* Cold, missing model or changed authority: ask the existing owner. */ }
+	await refreshConnectionCatalog(provider);
 }
 function connectionModel(provider: string, id: string): Model<Api> | undefined {
 	return provider === "chatgpt" ? chatGPTModel(id) : nativeSubscriptionId(provider) ? nativeSubscriptionModel(provider, id) : piModels().getModel(provider, id);

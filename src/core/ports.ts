@@ -27,10 +27,15 @@ import type {
 	NotesSource,
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
+import type { NotebookRecord } from "./contracts/notebook.ts";
 
 // ─── ChatStore — the session record's home (data/chats) ─────────────────────
 
 export interface ChatStore {
+	/** Compare-and-write only the notebook; retain latest conversation fields. */
+	saveNotebook(id: string, expectedRevision: number, notebook: NotebookRecord): NotebookRecord;
+	/** Atomically accept notebook input/outbox and consume its owned draft. */
+	commitNotebookSubmission(id: string, expectedRevision: number, notebook: NotebookRecord, appends: LhMessage[]): void;
 	/** Create a session record (persisted immediately). */
 	/** Create a session record; kind "practice" marks a practice session
 	 *  (absent = teach, the default). */

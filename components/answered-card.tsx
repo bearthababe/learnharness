@@ -4,10 +4,11 @@ import { useState } from "react";
 import { ConfidenceRail } from "@/components/confidence-rail";
 import { GlyphMark } from "@/components/ui/glyph-mark";
 import { ThinkingBlock } from "@/components/thinking-block";
+import { LearnerExplanation } from "@/components/learner-explanation";
 import { cn } from "@/lib/utils";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import type { QuestionAnswerData } from "@/src/core";
-import { answerForPresentation, parseAskInput, parseQuizInput } from "@/src/core";
+import { answerForPresentation, parseAskInput, parseQuizInput, explanationHasContent } from "@/src/core";
 
 /**
  * Static rendering of an answered question (tool part in `output-available`).
@@ -22,11 +23,16 @@ import { answerForPresentation, parseAskInput, parseQuizInput } from "@/src/core
 export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionAnswerData; input?: unknown }) {
 	const answer = answerForPresentation(savedAnswer, input);
 	const [whyOpen, setWhyOpen] = useState(false); // the tucked explanation (predictions, owner 2026-10-03)
+	const hasReading = answer.readingThinkingContent ? explanationHasContent(answer.readingThinkingContent) : !!answer.readingThinking;
+	const hasThinking = answer.thinkingContent ? explanationHasContent(answer.thinkingContent) : !!(answer.thinking ?? answer.note);
 	if (answer.dismissed) {
 		return (
+			<>
+			{hasReading && <ThinkingBlock testId="reading-thinking-block" label="YOUR THINKING" text={answer.readingThinking ?? ""} content={answer.readingThinkingContent} defaultOpen />}
 			<div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
 				<span className="font-medium">{answer.questionText}</span> — skipped
 			</div>
+			</>
 		);
 	}
 
@@ -51,8 +57,8 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 		    rendered as its own user-side block ABOVE the card, the unified
 		    ThinkingBlock, instead of an inset inside the answer. Same muted
 		    rail as before; the label is now plain "Your thinking". */}
-		{answer.readingThinking && (
-			<ThinkingBlock testId="reading-thinking-block" label="YOUR THINKING" text={answer.readingThinking} defaultOpen />
+		{hasReading && (
+			<ThinkingBlock testId="reading-thinking-block" label="YOUR THINKING" text={answer.readingThinking ?? ""} content={answer.readingThinkingContent} defaultOpen />
 		)}
 		{/* [&>*:last-child]:mb-0 (owner round, 2026-10-07): on ask cards the
 		    thinking row is the last child — its my-3 stacked with the card's
@@ -159,7 +165,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 				</div>
 			)}
 
-			{answer.text && <div className="lh-prose mt-2 whitespace-pre-wrap">“{answer.text}”</div>}
+			{answer.textContent ? <LearnerExplanation parts={answer.textContent} /> : answer.text && <div className="lh-prose mt-2 whitespace-pre-wrap">“{answer.text}”</div>}
 
 			{/* The confidence record (owner round 6): the slider's rail, disc
 			    removed — the missing handle itself says "this is a record, not a
@@ -180,7 +186,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 				<div className="mt-2 text-sm text-muted-foreground">Answered “I don't know”.</div>
 			)}
 
-			{(answer.thinking ?? answer.note) && (
+			{hasThinking && (
 				/* The SAME unified row (owner round, 2026-10-05): the quiz answer's
 				    thinking is the identical collapsible ThinkingBlock — one
 				    geometry, but NO band on the card (owner round five, 2026-10-07:
@@ -189,6 +195,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 					testId="your-thinking"
 					label="YOUR THINKING"
 					text={answer.thinking ?? answer.note ?? ""}
+					content={answer.thinkingContent}
 					inCard
 				/>
 			)}

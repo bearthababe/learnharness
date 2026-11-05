@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import type { NextConfig } from "next";
+import { filterInstrumentationTrace } from "./scripts/filter-instrumentation-trace.mjs";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string; homepage: string };
 
 const nextConfig: NextConfig = {
+	// Tailnet-only development preview; retain validation for other hosts.
 	allowedDevOrigins: ["thinkpad.tailfd9bf6.ts.net"],
 	devIndicators: false,
 	// Public build metadata only; no new runtime Electron version API.
@@ -14,6 +16,8 @@ const nextConfig: NextConfig = {
 	// The manual copies the docs require — public/ and .next/static — are
 	// done by scripts/build-server.mjs.
 	output: "standalone",
+	// Next copies instrumentation outside the route include/exclude pass.
+	compiler: { runAfterProductionCompile: filterInstrumentationTrace },
 	// SAFETY (empirically verified 2026-09-17): without this, output file
 	// tracing sweeps the repo's real data/ — chat records, graph ledgers —
 	// INTO the standalone bundle. A shipped desktop app would carry the
@@ -87,7 +91,7 @@ const nextConfig: NextConfig = {
 			// Public native OAuth factories load these flows through variable imports.
 			// Electron main uses the same standalone SDK; the offline runtime gate
 			// evaluates their real toAuth paths without login or provider requests.
-			"node_modules/@earendil-works/pi-ai/dist/auth/oauth/{load,github-copilot,xai,device-code}.js",
+			"node_modules/@earendil-works/pi-ai/dist/auth/oauth/{load,github-copilot,xai,device-code,trusted-url}.js",
 			"node_modules/@earendil-works/pi-ai/dist/utils/sleep.js",
 			"node_modules/@earendil-works/pi-agent-core/dist/**/*.json",
 			// Next 16.3.2 native Turbopack applies unanchored excludes while
