@@ -388,8 +388,7 @@ export function MenuShell({
 			const input = menu.querySelector<HTMLInputElement>("input");
 			const footer = menu.querySelector<HTMLElement>("[data-model-menu-footer]");
 			const dismiss = menu.querySelector<HTMLButtonElement>("[data-testid='model-hide-keyboard']");
-			const openingHeight = viewport?.height ?? innerHeight;
-			let expandedHeight = Math.max(openingHeight, innerHeight);
+			let expandedHeight = Math.max(viewport?.height ?? innerHeight, innerHeight);
 			let keyboardHeight = expandedHeight;
 			let layoutWidth = innerWidth;
 			let hadSearch = false;
@@ -433,7 +432,9 @@ export function MenuShell({
 					// The frozen lesson's trigger has one resting position. Let the
 					// keyboard push that card up, then reveal its resting position
 					// again, without an early re-anchor or a late second jump.
-					const restingBottom = rect.top - GAP + expandedHeight - openingHeight;
+					// The opener is frozen even if the composer keyboard was already
+					// visible at entry. Its real position needs no viewport-height delta.
+					const restingBottom = rect.top - GAP;
 					p.style.top = Math.min(restingBottom, offsetTop + height);
 					p.maxHeight = Math.max(0, Math.min(CAP_VH * height, Number(p.style.top) - offsetTop - EDGE));
 					input.style.width = `calc(100% - ${48 * progress}px)`;

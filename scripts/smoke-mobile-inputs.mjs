@@ -821,6 +821,51 @@ try {
 		await page.waitForFunction(() => getComputedStyle(document.body).position !== "fixed");
 		console.log(`PASS: complete Model/Thinking/Usage/Plan capabilities and focus release at ${width}×350`);
 	}
+	// Regression: open Model with the composer's keyboard ALREADY visible.
+	await page.setViewport({ width: 375, height: 700, isMobile: true, hasTouch: true });
+	await fill(input, "Already-open keyboard preserves this draft.");
+	await page.evaluate(async () => {
+		Object.defineProperty(visualViewport, "height", { configurable: true, get: () => 350 });
+		Object.defineProperty(visualViewport, "offsetTop", { configurable: true, get: () => 36 });
+		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
+		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+	});
+	const keyboardEntryShell = await page.$eval('.lh-app-shell', e => { const r = e.getBoundingClientRect(); return { top: r.top, height: r.height }; });
+	assert.equal(keyboardEntryShell.height, 350, "Composer keyboard shrinks the lesson before opening Model");
+	await page.click('[data-testid="stats-model"]');
+	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
+	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Keyboard-open entry still leaves search unfocused");
+	const keyboardEntryFrames = await page.evaluate(async () => {
+		const frames = [];
+		for (const height of [350, 400, 475, 550, 625, 700]) {
+			Object.defineProperty(visualViewport, "height", { configurable: true, get: () => height });
+			Object.defineProperty(visualViewport, "offsetTop", { configurable: true, get: () => 36 * (700 - height) / 350 });
+			visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
+			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+			const card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
+			const opener = document.querySelector('[data-testid="stats-model"]').getBoundingClientRect();
+			const shell = document.querySelector('.lh-app-shell').getBoundingClientRect();
+			frames.push({ bottom: card.bottom, openerTop: opener.top, shellTop: shell.top, shellHeight: shell.height });
+		}
+		delete visualViewport.height; delete visualViewport.offsetTop;
+		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
+		return frames;
+	});
+	for (const frame of keyboardEntryFrames) {
+		assert.ok(Math.abs(frame.bottom - (frame.openerTop - 4)) <= 1, `Keyboard-open entry stays above its frozen opener: ${JSON.stringify(frame)}`);
+		assert.equal(frame.shellTop, keyboardEntryShell.top);
+		assert.equal(frame.shellHeight, keyboardEntryShell.height, "Keyboard-open entry keeps the lesson stationary");
+	}
+	await page.$eval('[data-testid="model-list"] button', e => e.scrollIntoView({ block: "nearest" }));
+	assert.ok(await page.$eval('[data-testid="model-list"] button', e => {
+		const r = e.getBoundingClientRect(); return e.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+	}), "An actual model result remains reachable instead of hitting the opener's close target");
+	await page.keyboard.press("Escape");
+	await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
+	assert.equal(await page.$eval(input, e => e.value), "Already-open keyboard preserves this draft.");
+	assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false);
+	console.log("PASS: Model opened with the composer keyboard visible keeps its frozen opener anchor through keyboard dismissal");
+	// End keyboard-open entry regression.
 	// iOS keyboards shrink the VISUAL viewport without changing innerHeight.
 	// Whole-viewport resizing above cannot catch a menu positioned behind it.
 	await page.setViewport({ width: 375, height: 700, isMobile: true, hasTouch: true });

@@ -1006,7 +1006,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 				)}
 			</div>
 	);
-	if (phone) return <PhonePanel title="The plan" testid="plan-popup" presentation="full" onClose={onClose}>
+	if (phone) return <PhonePanel title="The plan" testid="plan-popup" onClose={onClose}>
 		<p className="mb-2 shrink-0 text-xs text-muted-foreground">live — statuses derive from your check outcomes</p>
 		{graph}
 	</PhonePanel>;

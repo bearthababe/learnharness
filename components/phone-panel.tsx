@@ -4,12 +4,11 @@ import { useId, useLayoutEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { XIcon } from "lucide-react";
 
-/** Phone supporting panels: native modal focus/inertness, a stationary header,
- * and a surface whose bottom follows the visible viewport above the keyboard. */
-export function PhonePanel({ title, testid, presentation = "sheet", onClose, children }: {
+/** Full-screen phone Plan surface: native modal focus/inertness, a stationary
+ * header and a frame that fits the visible viewport above the keyboard. */
+export function PhonePanel({ title, testid, onClose, children }: {
 	title: string;
 	testid: string;
-	presentation?: "sheet" | "full";
 	onClose: () => void;
 	children: ReactNode;
 }) {
@@ -31,9 +30,8 @@ export function PhonePanel({ title, testid, presentation = "sheet", onClose, chi
 		fit();
 		dialog.showModal();
 		document.body.style.overflow = "hidden";
-		// The shared model list mounts inside a closed dialog. Focus after showModal
-		// so its search receives focus once, without scrolling the lesson beneath it.
-		(dialog.querySelector<HTMLInputElement>("input") ?? dialog.querySelector<HTMLButtonElement>("button"))?.focus({ preventScroll: true });
+		// Focus the Close control after entering the native modal top layer.
+		dialog.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
 		const key = (event: KeyboardEvent) => {
 			if (event.key !== "Escape" || !dialog.contains(event.target as Node)) return;
 			event.preventDefault();
@@ -54,7 +52,7 @@ export function PhonePanel({ title, testid, presentation = "sheet", onClose, chi
 		};
 	}, []);
 	return createPortal(
-		<dialog ref={dialogRef} className={`lh-phone-panel lh-phone-panel-${presentation}`} aria-labelledby={titleId}
+		<dialog ref={dialogRef} className="lh-phone-panel" aria-labelledby={titleId}
 			data-testid={`${testid}-dialog`} data-lh-menu=""
 			onCancel={(event) => { event.preventDefault(); event.stopPropagation(); onClose(); }}
 			onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
