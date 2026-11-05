@@ -9,6 +9,7 @@ import path from "node:path";
 import puppeteer from "puppeteer-core";
 import { checkHandwritingTransfers } from "./handwriting-transfer-checks.mjs";
 import { checkTransferDevice } from "./handwriting-device-checks.mjs";
+import { checkHandwritingMenus } from "./handwriting-menu-checks.mjs";
 
 const root = process.cwd();
 const dir = process.env.LH_MOBILE_TEST_DIR ?? await mkdtemp("/tmp/opencode/mobile-input-browser-");
@@ -28,7 +29,7 @@ const assistant = (content, id = "assistant") => ({ role: "assistant", content, 
 const conversation = { id: "mobile_conversation", title: "Mobile browser conversation", createdAt: now, updatedAt: now, messages: [assistant([{ type: "text", text: "Explain how pressure changes with area." }])] };
 await writeFile(path.join(dir, "data/chats/mobile_conversation.json"), JSON.stringify(conversation));
 await writeFile(path.join(dir, "data/chats/mobile_other.json"), JSON.stringify({ ...conversation, id: "mobile_other", title: "Other isolated session" }));
-for (const id of ["mobile_remount_success", "mobile_remount_failure", "mobile_remount_lost-ack", "mobile_transfer_capture_attach", "mobile_transfer_capture_reopen", "mobile_transfer_capture_online", "mobile_transfer_unknown", "mobile_transfer_accepted", "mobile_transfer_resend", "mobile_transfer_race"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id }));
+for (const id of ["mobile_notebook_menus", "mobile_remount_success", "mobile_remount_failure", "mobile_remount_lost-ack", "mobile_transfer_capture_attach", "mobile_transfer_capture_reopen", "mobile_transfer_capture_online", "mobile_transfer_unknown", "mobile_transfer_accepted", "mobile_transfer_resend", "mobile_transfer_race"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id }));
 const call = (name, args, id) => assistant([{ type: "toolCall", name, arguments: args, id }], `assistant_${id}`);
 const result = (name, details, id) => ({ role: "toolResult", toolName: name, toolCallId: id, id: `result_${id}`, content: [{ type: "text", text: "Ready." }], details, isError: false, timestamp: Date.now() });
 await writeFile(path.join(dir, "data/chats/mobile_transfer_speech.json"), JSON.stringify({ ...conversation, id: "mobile_transfer_speech", messages: [assistant([...["first", "second"].map(id => ({ type: "toolCall", name: "ask_user_question", id, arguments: { question: `${id} speech owner`, mode: "text" } }))])] }));
@@ -124,6 +125,8 @@ try {
 			close() { this.readyState = 3; this.dispatchEvent(new CloseEvent("close", { code: 1000 })); }
 		};
 	});
+	if (process.env.LH_NOTEBOOK_MENUS_ONLY) await checkHandwritingMenus({ page, origin });
+	else {
 	await page.goto(`${origin}/chat/mobile_conversation`, { waitUntil: "networkidle2", timeout: 240_000 });
 	await page.waitForSelector('[data-testid="composer"] textarea');
 	const database = await page.evaluate(() => new Promise(resolve => { const request = indexedDB.open("lh-handwriting-transfer", 1); request.onsuccess = () => { request.result.close(); resolve("opened"); }; request.onerror = () => resolve(`${request.error?.name}: ${request.error?.message}`); }));
@@ -383,6 +386,8 @@ try {
 	assert.equal(await page.$eval(input, e => e.value), longDraft, "Wide-layout transition releases the focus lock without losing the draft");
 	assert.ok(await page.$eval('[data-testid="dictation-toggle"]', e => e.checkVisibility()), "Wide layouts retain their original dictation strip");
 	assert.equal(await page.$eval(mic, e => e.checkVisibility()), false, "Compact microphone stays phone-only");
+	await checkHandwritingMenus({ page, origin });
+	}
 	assert.deepEqual(errors, [], "No browser runtime errors");
 	console.log("PASS: conversation, reading/reveal, free-text/selection/Other answers, practice/drills, real persisted submissions, speech recovery, image review, panels, phone geometry and focus/gesture containment.");
 } catch (error) {

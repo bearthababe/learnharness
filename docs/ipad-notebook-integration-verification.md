@@ -643,3 +643,106 @@ This final receipt addition is documentation-only after the verified implementat
 commit. The final delivery hash is returned with a fresh clean-tree and ancestry
 check in the handoff. Parent-owned independent Standards/Spec review should pin
 that final hash; physical #48 acceptance remains pending.
+
+### #47 independent-review corrections — 2026-11-05
+
+Correction work is isolated in `ticket-47-fixes`, branch
+`implement/handwriting-47-fixes`, based on delivered
+`56a26fc6ed81e19c87db21ceac51a6d168242666`. The original `ticket-47` worktree
+remains pinned for independent review. Reports: `47-review-standards.md` and
+`47-review-spec.md` under the cache root above. Original review artifacts and
+all earlier approval/verification history are retained.
+
+**Owner scope decision:** S1 keyboard reachability is **deferred, not fixed, and
+not blocking #47/#48**, to [#51](https://github.com/bearthababe/learnharness/issues/51).
+The [recorded #47 clarification](https://github.com/bearthababe/learnharness/issues/47#issuecomment-6657588270)
+is promoted into the plan. No new keyboard binding, Tab cycle or menu-arrow
+navigation is part of these corrections. S2's existing Escape priority is retained.
+
+Corrections and focused evidence:
+
+- **R1, assets before edits:** cold server backgrounds are committed and verified
+  in native recovery before editable activation. Compatible remote extensions
+  likewise prepare/commit before mirroring or activating; failed acceptance does
+  not advance the acknowledged remote head. Native tests assert blocked admission
+  while the initial asset transaction is held, followed by immediate stroke/remount
+  with exact recovery. Red: `47-fixes-r1-red.log`; green: native final run below.
+  The extra adoption test initially constructed an invalid import over ink; that
+  fixture now uses the required Clear→import sequence. Its timeout logs are retained
+  and are not claimed as a valid behavioral red.
+- **R2, cold reads:** successful cached remote pages participate in subsequent
+  reconciliation instead of being treated as absence. Native tests exercise
+  thumbnail-read→switch and all four cold-original choices; the full browser
+  check removes only an acknowledged copy's local records and drives the actual
+  mounted thumbnail and Pages button. Red: `47-fixes-r2-red.log`.
+- **R3, cancellation:** the session captures cancellation identity before lazy
+  initialization and checks it before starting the controller action. Native
+  tests mount the real session hook, delay initial GET, cancel Open/Duplicate,
+  and verify zero source preparation, accepted snapshot pages or server mutations.
+  Cancellation after native commitment still returns the accepted action rather
+  than rolling it back. Red/green: `47-fixes-r3-{red,green}.log`.
+- **S2, Escape:** a visible notebook surface claims Escape at document capture,
+  independently of focus, while deferring to an open native modal. Actual Pencil
+  Pages/options opening retains focused chat input; Escape closes once, restores
+  the trigger, preserves typed text and live scripted dictation, and stops the
+  underlying cancellation events. A second Escape resumes the existing chain.
+  Red/green: `47-fixes-s2-{red,green}.log`.
+- **H1, activation intent:** typed `ReadingPosition` replaces English notice
+  equality in navigation. Restore/copies request top even when a compact-mirror
+  failure replaces the success notice; current working and edits preserve position.
+  Red/green: `47-fixes-h1-{red,green}.log` plus actual browser reading-position checks.
+- **S3, superseded recovery:** reference search confirmed `HandwritingRecovery`
+  had no production consumer. Its controller and obsolete tests are removed only
+  after porting the regression guarantees to the active Pages seam, as mapped below.
+  The #46 plan's historical file-path reference is retained as approval history;
+  legacy keys remain read/reconciled by Pages and retained on failure.
+
+| Retired recovery regression guarantee | Active coverage retained or ported |
+|---|---|
+| Redo/Clear across reopen; new edit abandons Redo; exhausted Undo no-op | Pages test “active page Redo, Clear and exhausted Undo…”; native working-IDB history/remount and full handwriting browser |
+| Immediate leave during held save, editable Undo after remount | Pages test “immediate remount before a held save…”; native immediate-stroke/copy remount |
+| Old/lost ACK never erases newer synchronous recovery | Pages test “held and lost working ACKs…”; existing lost frozen-creation ACK test |
+| Honest device-only / neither / server-only status and repair | Pages test “active recovery honestly distinguishes…”; full browser quota/save/retry checks |
+| Failed remote/device reads, corrupt/future/divergent records, generic 404 retain recovery | Pages test “legacy recovery remains readable…”; native corrupt asset/deletion checks |
+| Delayed GET rereads newer/unknown/denied device truth and blocks unsafe PUT | Pages test “a delayed initial GET reconciles…”; existing full browser unreadable reconciliation check |
+| Admitted stroke survives blocking ACK even when secondary write also fails | Pages test “an admitted stroke survives…”; red/green `47-fixes-s3-admitted-{red,green}.log`; full browser mid-stroke ACK cases |
+| Successful deletion fences idle/held ACK and admitted completion; other session retained | Pages test “deletion invalidates both idle and held-ACK…”; native generation tombstone and actual sidebar deletion browser check |
+
+Porting the admitted-stroke regression found a real active-controller omission:
+Retry loaded an older IDB row over a newer retained in-memory completion after
+both recovery writes failed. Load now causally reconciles retained working with
+the device row before reading compact/legacy recovery. The red lost the second
+stroke; the green retains it through repair, server sync, reload and Undo.
+
+The unmodified reviewer repro was rerun against the pinned original source before
+correction; all three defect assertions reproduced (`47-fixes-native-exact-repro.log`).
+Maintained native regressions now exercise the corrected application seams from
+the correction worktree. The original review files were not modified.
+
+| Final correction check | Completed result / cache-root evidence |
+|---|---|
+| Focused handwriting/active recovery/pages/store/routes/shared-writing/turn suites | **102 passed**, `47-fixes-focused-final.log`; obsolete-controller tests have been replaced by the mapped active coverage above |
+| Adjacent chat/practice/drill/session, dictation, SVG, Enter/Escape suites | **181 passed**, `47-fixes-adjacent-final.log` |
+| Native Pages/controller/session boundaries | Passed, `47-fixes-native-pages-final.log`; existing atomicity/history/deletion cases plus R1 cold/adopted assets, R2 thumbnail/navigation/all choices and R3 real lazy-hook cancellation before/after acceptance |
+| Inherited #46 native lifecycle | **13 cases passed**, `47-fixes-native-46-final.log` |
+| Full Chromium handwriting | Passed, `47-fixes-handwriting-final.log`, fixture `handwriting-browser-6BqrY4`; includes actual cold Pages thumbnail→switch, exact four choices, typed-intent reading positions and postcommit paint recovery |
+| Full Chromium mobile | Passed, `47-fixes-mobile-final.log`, fixture `mobile-input-browser-47-fixes-final`; includes S2 focused-chat/Pencil/live-scripted-speech Escape and all inherited input/Send/remount recovery assertions |
+| Typecheck / lint | Passed, `47-fixes-typecheck-final.log`, `47-fixes-lint-final.log` |
+| Production build | Passed, `47-fixes-build-final.log`, disposable `build-47-fixes`; 356 copied application files verified byte-identical to corrected source. Only the established fixture `turbopack.root` setting differs; four existing dynamic filesystem tracing warnings remain. |
+| Diff / original-review isolation | `git diff --check` passed. Read-only verification confirmed original `ticket-47` still clean at `56a26fc6ed81e19c87db21ceac51a6d168242666`. |
+
+All **283 focused/adjacent tests**, native runners, both full browser suites,
+typecheck, lint, build and diff checks completed before the correction commit.
+The full browsers ran sequentially after the production corrections settled;
+no required execution is pending. Reproduction commands are the earlier delivery
+commands, with `tests/handwriting-recovery.test.ts` retired, both adjacent/session
+groups combined, and mobile fixture `mobile-input-browser-47-fixes-final`.
+The dedicated S2 feedback loop uses `LH_NOTEBOOK_MENUS_ONLY=1` with the mobile
+runner; native R1–R3 cases are maintained in `scripts/check-handwriting-pages-device.mjs`.
+
+S2/S3/H1 and R1/R2/R3 are corrected in this implementation; **S1 remains explicitly
+deferred to #51**. Independent Standards/Spec rereview remains parent-owned and
+pending for the final pinned correction hash. These implementer checks do not
+grant overall #47 approval or physical #48 acceptance. No live provider/speech
+calls, public-preview changes, push, PR or issue closure occurred. The documented
+#45 broad-suite limitations remain unchanged; a whole-repository pass is not claimed.

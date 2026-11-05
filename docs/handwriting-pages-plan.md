@@ -34,6 +34,18 @@ latest owner amendments](handwriting-submission-plan.md), with no second schema.
   Page/session changes invalidate view callbacks, not frozen capture identity.
 - #47 working-page background sync Retry remains distinct from those controls.
 
+### Owner clarification after independent review — 2026-11-05
+
+Standards finding **S1 is deferred, not fixed, and does not block #47/#48**.
+The owner assigned new keyboard reachability/navigation, bindings and shortcuts
+to the app-wide overhaul in [#51](https://github.com/bearthababe/learnharness/issues/51),
+recorded on [#47](https://github.com/bearthababe/learnharness/issues/47#issuecomment-6657588270).
+No new binding, Tab cycle or menu-arrow navigation is authorized in this delivery.
+The existing one-Escape/topmost-surface dismissal contract remains in scope:
+Pages/options own dismissal independently of chat focus, preserve Pencil/typing
+behavior, and restore trigger focus. This clarification does not reopen the
+approved storage, activation, cancellation or #46 recovery contracts.
+
 ## 2. Settled behavior
 
 One Open flow for pending and sent source-backed snapshots finds the original

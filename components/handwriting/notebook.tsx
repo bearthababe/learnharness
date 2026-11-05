@@ -57,6 +57,20 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const [colour, setColour] = useState<Stroke["colour"]>(HANDWRITING_PEN_COLOURS[0]);
 	const [penScale, setPenScale] = useState<Stroke["penScale"]>(HANDWRITING_PEN_SCALES[1]), [eraserWidth, setEraserWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]), [highlighterWidth, setHighlighterWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]);
 	const [dimPaper, setDimPaper] = useState(true), [toolsOpen, setToolsOpen] = useState(false);
+	useEffect(() => {
+		if (hidden || (!pagesOpen && !optionsOpen && !toolsOpen)) return;
+		const dismiss = (event: KeyboardEvent) => {
+			// A native modal above the notebook owns its own Escape. Otherwise
+			// claim before focused chat fields and the window cancellation chain.
+			if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
+			event.preventDefault(); event.stopImmediatePropagation();
+			const trigger = pagesOpen ? "Pages" : "Notebook options";
+			setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false);
+			controlsRef.current?.querySelector<HTMLButtonElement>(`[aria-label="${trigger}"]`)?.focus();
+		};
+		document.addEventListener("keydown", dismiss, true);
+		return () => document.removeEventListener("keydown", dismiss, true);
+	}, [hidden, pagesOpen, optionsOpen, toolsOpen]);
 	const [paperSize, setPaperSize] = useState({ width: 1, height: 1 });
 	const viewRef = useRef({ expanded, paperSize }); viewRef.current = { expanded, paperSize };
 	const paperPositions = useRef<{ split: number; full?: number }>({ split: 0 }), restorePaperPosition = useRef<number | null>(null);
@@ -97,10 +111,10 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 					const area = areaRef.current;
 					paperPositions.current[viewRef.current.expanded ? "full" : "split"] = area ? area.scrollTop / Math.max(1, viewRef.current.paperSize.height) : 0;
 					positions.current.set(displayedPage.current, paperPositions.current);
-					paperPositions.current = state.notice === "Snapshot restored · Undo available" ? { split: 0, full: 0 } : positions.current.get(state.page.id) ?? { split: 0 };
+					paperPositions.current = state.readingPosition === "top" ? { split: 0, full: 0 } : positions.current.get(state.page.id) ?? { split: 0 };
 					displayedPage.current = state.page.id;
 					if (area) area.scrollTop = (paperPositions.current[viewRef.current.expanded ? "full" : "split"] ?? 0) * viewRef.current.paperSize.height;
-				} else if (state.notice === "Snapshot restored · Undo available" && areaRef.current) { areaRef.current.scrollTop = 0; paperPositions.current = { split: 0, full: 0 }; }
+				} else if (state.readingPosition === "top" && areaRef.current) { areaRef.current.scrollTop = 0; paperPositions.current = { split: 0, full: 0 }; }
 				const previousPainted = painted;
 				painted = state.working;
 				const { canUndo, canRedo } = replayHandwriting(state.working); setHistory({ canUndo, canRedo });
@@ -257,7 +271,6 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	return <div ref={slotRef} className="hw-notebookSlot" hidden={hidden} data-testid="notebook-slot" data-layout-revision="component-sized-card"
 		style={{ position: expanded ? "absolute" : "relative", inset: expanded ? 0 : undefined, flex: "1 1 0px", minWidth: 0, minHeight: 0, boxSizing: "border-box", padding: 16, overflow: "hidden" }}>
 		<aside ref={controlsRef} className="rounded-2xl border bg-card shadow-lg hw-notebook" aria-label="Handwriting notebook" data-testid="handwriting-notebook" data-ready={saved.ready} data-page-id={pageId} data-expanded={expanded}
-			onKeyDown={event => { if (event.key !== "Escape" || (!optionsOpen && !pagesOpen && !toolsOpen)) return; event.preventDefault(); event.stopPropagation(); const trigger = pagesOpen ? "Pages" : "Notebook options"; setOptionsOpen(false); setPagesOpen(false); setToolsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>(`[aria-label="${trigger}"]`)?.focus(); }}
 			style={{ position: "absolute", inset: 16, margin: 0, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 			<header className="hw-notebookHeader"><h2>Notebook</h2>
 				<Button variant="ghost" size="sm" className="hw-headerAction" disabled={!saved.ready || submission?.preparing} {...handlers("Attach snapshot", () => { void attachSnapshot(); })} data-testid="notebook-attach">Attach snapshot</Button>
@@ -267,15 +280,15 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" {...handlers("Chat", onClose)} data-testid="open-notebook-chat">Chat</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Notebook options" aria-expanded={optionsOpen} {...handlers("Notebook options", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
 			</header>
-			{optionsOpen && <div className="hw-toolsPanel" data-testid="notebook-options" onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); setOptionsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')?.focus(); } }}>
+			{optionsOpen && <div className="hw-toolsPanel" data-testid="notebook-options">
 				<Button variant="ghost" disabled={!saved.ready || submission?.preparing} {...handlers("Duplicate", () => { setOptionsOpen(false); void recovery.current?.duplicateWorking(); })}>Duplicate</Button><hr />
 				<Button variant="ghost" {...handlers("Tools and help", () => { setOptionsOpen(false); setToolsOpen(true); })} data-testid="notebook-tools-toggle">Tools and help</Button>
 			</div>}
-			{pagesOpen && <div className="hw-toolsPanel hw-pagesPanel" data-testid="notebook-pages" onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); setPagesOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Pages"]')?.focus(); } }}>
+			{pagesOpen && <div className="hw-toolsPanel hw-pagesPanel" data-testid="notebook-pages">
 				<div className="hw-toolsHeading"><h3>Pages</h3><Button variant="ghost" aria-label="Close pages" {...handlers("Close pages", () => { setPagesOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Pages"]')?.focus(); })}><XIcon /></Button></div>
 				{pages.map((page, index) => <PageRow key={page.id} page={page} index={index} pages={pages} current={pageId} revision={page.id === pageId ? recovery.current?.getSnapshot().working.head : undefined} model={recovery.current!} disabled={!saved.ready || !!submission?.preparing} choose={() => { void recovery.current?.switchPage(page.id).then(opened => { if (opened) { setPagesOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Pages"]')?.focus(); } }); }} />)}
 			</div>}
-			{toolsOpen && <div id="handwriting-tools" className="hw-toolsPanel" role="group" aria-label="Notebook tools" onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); setToolsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')?.focus(); } }}>
+			{toolsOpen && <div id="handwriting-tools" className="hw-toolsPanel" role="group" aria-label="Notebook tools">
 				<div className="hw-toolsHeading"><span>Notebook tools</span><Button variant="ghost" size="icon" aria-label="Close notebook tools" {...handlers("Close tools", () => { setToolsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')?.focus(); })}><XIcon /></Button></div>
 				<p>Write with Pencil; scroll the paper with a finger. Working, Undo and Redo save automatically. A new edit clears Redo. Clear can be undone.</p>
 				<button type="button" className="min-h-11 underline" {...handlers("Reload preview", () => location.reload())}>Reload preview</button>

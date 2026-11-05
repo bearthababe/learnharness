@@ -12,9 +12,10 @@ import type { PageActionResult } from "./pages-context";
 export function useHandwritingSession(chatId: string) {
 	const [open, setOpen] = useState(false), [mounted, setMounted] = useState(false), [expanded, setExpanded] = useState(false);
 	const ref = useRef<HandwritingHandle>(null);
+	const actionEpoch = useRef(0);
 	const controller = useRef<HandwritingPages | null>(null), waiters = useRef<((model: HandwritingPages | null) => void)[]>([]);
 	const register = useCallback((model: HandwritingPages) => { controller.current = model; for (const resolve of waiters.current.splice(0)) resolve(model); return () => { if (controller.current === model) controller.current = null; }; }, []);
-	useEffect(() => () => { for (const resolve of waiters.current.splice(0)) resolve(null); }, []);
+	useEffect(() => () => { actionEpoch.current++; for (const resolve of waiters.current.splice(0)) resolve(null); }, []);
 	useEffect(() => {
 		try { if (localStorage.getItem(handwritingVisibilityKey(chatId)) === "1") { setOpen(true); setMounted(true); } } catch { /* visibility is optional */ }
 	}, [chatId]);
@@ -42,9 +43,13 @@ export function useHandwritingSession(chatId: string) {
 		return { kind, notice: model.getSnapshot().notice };
 	}
 	const actions = {
-		async openSnapshot(writing: SnapshotWriting, duplicate = false): Promise<PageActionResult> { const model = await ensure(); return model ? result(model, await model.openSnapshot(writing, duplicate)) : { kind: "failed", notice: "Opening page…" }; },
+		async openSnapshot(writing: SnapshotWriting, duplicate = false): Promise<PageActionResult> {
+			const epoch = ++actionEpoch.current, model = await ensure();
+			if (epoch !== actionEpoch.current) return { kind: "cancelled", notice: null };
+			return model ? result(model, await model.openSnapshot(writing, duplicate)) : { kind: "failed", notice: "Opening page…" };
+		},
 		async choose(choice: OpenChoice): Promise<PageActionResult> { const model = controller.current; return model ? result(model, await model.choose(choice)) : { kind: "failed", notice: null }; },
-		cancel() { controller.current?.cancelDecision(); },
+		cancel() { actionEpoch.current++; controller.current?.cancelDecision(); },
 		async annotate(svg: string): Promise<PageActionResult> { const model = await ensure(); return model ? result(model, await model.importBackground(() => figureBackground(svg)) ? "opened" : "failed") : { kind: "failed", notice: "Opening page…" }; },
 	};
 	return { open, mounted, expanded, ref, show, register, actions, toggleExpanded: () => setExpanded(value => !value) };

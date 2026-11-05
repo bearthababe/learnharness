@@ -32,6 +32,24 @@ export async function checkHandwritingPages({ page, origin, draw, ready, dir }) 
 	assert.equal((await page.$$('[data-testid="notebook-pages"] [data-page-id]')).length, 2);
 	await page.click('[data-testid="notebook-pages"] [data-page-id="page_initial"]'); await ready();
 	assert.equal((await journal()).pageId, "page_initial");
+	// Simulate a second device: the copied page exists only on the server. Its
+	// mounted thumbnail must not poison the following actual navigation read.
+	await page.waitForFunction(async id => {
+		if (!(await fetch(`/api/chats/handwriting_pages/handwriting/pages/${id}`)).ok) return false;
+		const db = await new Promise(resolve => { const request = indexedDB.open("lh-handwriting-working", 1); request.onsuccess = () => resolve(request.result); });
+		const actions = await new Promise(resolve => { const request = db.transaction("pageActions").objectStore("pageActions").getAll(); request.onsuccess = () => resolve(request.result); }); db.close();
+		return !actions.some(action => action.chatId === "handwriting_pages" && action.pageId === id);
+	}, {}, copy.pageId);
+	await page.evaluate(async id => {
+		localStorage.removeItem(`lh:handwriting:pages:v1:handwriting_pages:${id}`);
+		const db = await new Promise(resolve => { const request = indexedDB.open("lh-handwriting-working", 1); request.onsuccess = () => resolve(request.result); });
+		await new Promise((resolve, reject) => { const tx = db.transaction("pages", "readwrite"); tx.objectStore("pages").delete(["handwriting_pages", id]); tx.oncomplete = resolve; tx.onabort = reject; }); db.close();
+	}, copy.pageId);
+	await page.reload({ waitUntil: "networkidle2" }); await ready(); await page.click('[aria-label="Pages"]');
+	await page.waitForSelector(`[data-testid="notebook-pages"] [data-page-id="${copy.pageId}"] img`);
+	await page.click(`[data-testid="notebook-pages"] [data-page-id="${copy.pageId}"]`);
+	await page.waitForFunction(id => document.querySelector('[data-testid="handwriting-notebook"]').dataset.pageId === id, {}, copy.pageId); await ready();
+	await page.click('[aria-label="Pages"]'); await page.click('[data-testid="notebook-pages"] [data-page-id="page_initial"]'); await ready();
 	assert.equal(await (await fetch(`${origin}/api/chats/handwriting_pages/writing/${a.id}/source`)).text(), snapshot);
 	assert.deepEqual((await (await fetch(`${origin}/api/chats/handwriting_pages/writing`)).json()).pending.map(w => w.id), [a.id]);
 	assert.ok(Object.keys((await journal()).events).length > Object.keys(original.events).length);

@@ -6,6 +6,8 @@ import { HandwritingPages } from "../components/handwriting/pages.ts";
 import type { PagesDevice, PageCommit, WorkingSnapshot } from "../components/handwriting/pages-device.ts";
 import { appendHandwriting, copyHandwriting, handwritingFingerprints, notebookSource, replayHandwriting, type HandwritingStroke } from "../src/core/handwriting.ts";
 import type { HandwritingPage } from "../src/core/handwriting-pages.ts";
+import { handwritingKey } from "../components/handwriting/device.ts";
+import { pageDeviceKey, pageRecoveryKey } from "../components/handwriting/pages-device.ts";
 const root = mkdtempSync(`${process.env.LH_HANDWRITING_TEST_ROOT ?? "/tmp/opencode"}/pages-controller-`);
 after(() => rmSync(root, { recursive: true, force: true }));
 const ink: HandwritingStroke = { tool: "pen", colour: "#171717", penScale: 1, width: 38, points: [{ x: 1, y: 2, pressure: .5 }] };
@@ -187,4 +189,115 @@ it("a local-only original keeps newer working and recreates its own identity bef
 	f.offline(false); await model.retry();
 	assert.deepEqual(f.store.readPage("test", id), local);
 	assert.equal(f.device.value.pages.length, 1); assert.equal(f.device.value.actions.length, 0); model.dispose();
+});
+
+it("activation intent resets Restore and copies even when a mirror error replaces the success notice; current working preserves position", async () => {
+	const f = fixture("activation-intent"), storage = f.deps.storage; let deny = false;
+	f.deps.storage = () => ({ ...storage(), setItem: (key, value) => { if (deny) throw Error("Quota"); storage().setItem(key, value); } });
+	f.store.save("test", f.source.journal); const model = new HandwritingPages("test", f.deps); await model.open(); model.draw(ink); await model.retry();
+	await model.openSnapshot({ id: "writing_snapshot" }); f.offline(); deny = true;
+	assert.equal(await model.choose("restore"), "opened"); assert.equal(model.getSnapshot().readingPosition, "top"); assert.match(model.getSnapshot().notice!, /Page saved on this device/);
+	assert.equal(await model.duplicateWorking(), true); assert.equal(model.getSnapshot().readingPosition, "top");
+	assert.equal(await model.switchPage("page_initial"), true); assert.equal(model.getSnapshot().readingPosition, "preserve");
+	model.undo(); assert.equal(model.getSnapshot().readingPosition, "preserve"); model.dispose();
+});
+
+it("an admitted stroke survives a blocking ACK and failed secondary recovery until repair, then reloads with Undo", async () => {
+	const f = fixture("admitted-repair"), fetch = f.deps.fetch, storage = f.deps.storage;
+	let release!: () => void, entered!: () => void, blocked!: () => void, first = true, failBackup = true;
+	const gate = new Promise<void>(resolve => { release = resolve; }), started = new Promise<void>(resolve => { entered = resolve; }), obstruction = new Promise<void>(resolve => { blocked = resolve; });
+	f.deps.fetch = async (url, init) => { const response = await fetch(url, init); if (init?.method === "PUT" && first) { first = false; entered(); await gate; } return response; };
+	f.deps.storage = () => ({ ...storage(), setItem: (key, value) => { if (failBackup && key === pageRecoveryKey("test", "page_initial")) throw Error("Quota"); storage().setItem(key, value); } });
+	const model = new HandwritingPages("test", f.deps); await model.open(); await model.retry(); model.draw(ink); await started;
+	const acknowledged = model.getSnapshot().working, complete = model.beginStroke(); assert.ok(complete);
+	model.subscribe(() => { if (!model.getSnapshot().ready) blocked(); });
+	f.local.set(handwritingKey("test"), '{"version":2,"operations":[]}'); release(); await obstruction;
+	const second = { ...ink, colour: "#dc2626" as const }; complete(second); complete(second);
+	assert.equal(model.beginStroke(), null); assert.deepEqual(replayHandwriting(model.getSnapshot().working).strokes, [ink, second]);
+	assert.match(model.getSnapshot().notice!, /Latest working could not be saved/);
+	f.local.set(handwritingKey("test"), JSON.stringify(acknowledged)); failBackup = false; await model.retry();
+	assert.equal(model.getSnapshot().ready, true); assert.deepEqual(replayHandwriting(model.getSnapshot().working).strokes, [ink, second]);
+	model.dispose(); const reopened = new HandwritingPages("test", f.deps); await reopened.open(); reopened.undo(); assert.deepEqual(replayHandwriting(reopened.getSnapshot().working).strokes, [ink]); reopened.dispose();
+});
+
+it("active page Redo, Clear and exhausted Undo persist across reopen; a new stroke abandons Redo", async () => {
+	const f = fixture("history-reopen"), first = new HandwritingPages("test", f.deps); await first.open();
+	first.draw(ink); first.clear(); first.undo(); first.undo(); await first.retry(); const emptyHead = first.getSnapshot().working.head;
+	first.undo(); assert.equal(first.getSnapshot().working.head, emptyHead); first.dispose();
+	const second = new HandwritingPages("test", f.deps); await second.open(); second.redo(); assert.deepEqual(replayHandwriting(second.getSnapshot().working).strokes, [ink]);
+	second.redo(); assert.deepEqual(replayHandwriting(second.getSnapshot().working).strokes, []); second.undo(); second.draw(ink);
+	const head = second.getSnapshot().working.head; second.redo(); assert.equal(second.getSnapshot().working.head, head);
+	await second.retry(); second.dispose(); const third = new HandwritingPages("test", f.deps); await third.open(); assert.deepEqual(replayHandwriting(third.getSnapshot().working).strokes, [ink, ink]); third.dispose();
+});
+
+it("held and lost working ACKs cannot erase a newer compact tail or a remounted controller's Undo", async () => {
+	const f = fixture("working-acks"), fetch = f.deps.fetch; let entered!: () => void, release!: () => void, requests = 0, loseAck = true;
+	const started = new Promise<void>(resolve => { entered = resolve; }), gate = new Promise<void>(resolve => { release = resolve; });
+	f.deps.fetch = async (url, init) => { const response = await fetch(url, init); if (init?.method === "PUT") { requests++; if (requests === 1) { entered(); await gate; } else if (loseAck) throw Error("Lost ACK after commit"); } return response; };
+	const first = new HandwritingPages("test", f.deps); await first.open(); await first.retry(); first.draw(ink); await started; first.clear();
+	const head = first.getSnapshot().working.head; release(); await first.retry();
+	assert.equal(JSON.parse(f.local.get(pageDeviceKey("test", "page_initial"))!).journal.head, head); assert.match(first.getSnapshot().notice!, /Saved on this device/); first.dispose();
+	loseAck = false; const second = new HandwritingPages("test", f.deps); await second.open(); assert.equal(second.getSnapshot().working.head, head); second.undo(); await second.retry(); assert.deepEqual(replayHandwriting(f.store.readPage("test", "page_initial")!.journal).strokes, [ink]); second.dispose();
+});
+
+it("immediate remount before a held save keeps completed Clear and its editable Undo", async () => {
+	const f = fixture("held-remount"), fetch = f.deps.fetch; let entered!: () => void, release!: () => void, held = true;
+	const started = new Promise<void>(resolve => { entered = resolve; }), gate = new Promise<void>(resolve => { release = resolve; });
+	f.deps.fetch = async (url, init) => { if (held && init?.method === "PUT") { held = false; entered(); await gate; } return fetch(url, init); };
+	const first = new HandwritingPages("test", f.deps); await first.open(); await first.retry(); first.draw(ink); await started; first.clear(); first.dispose();
+	const second = new HandwritingPages("test", f.deps); await second.open(); assert.equal(replayHandwriting(second.getSnapshot().working).strokes.length, 0); second.undo(); await second.retry();
+	const retained = f.local.get(pageDeviceKey("test", "page_initial")); release(); await new Promise(resolve => setImmediate(resolve));
+	assert.equal(f.local.get(pageDeviceKey("test", "page_initial")), retained); second.dispose();
+	const third = new HandwritingPages("test", f.deps); await third.open(); assert.deepEqual(replayHandwriting(third.getSnapshot().working).strokes, [ink]); third.undo(); assert.equal(replayHandwriting(third.getSnapshot().working).strokes.length, 0); third.dispose();
+});
+
+it("active recovery honestly distinguishes device-only, neither saved and server-only, then clears repaired errors", async () => {
+	const f = fixture("durability-notices"), storage = f.deps.storage; let denyWrites = false;
+	f.deps.storage = () => ({ ...storage(), setItem: (key, value) => { if (denyWrites) throw Error("Quota"); storage().setItem(key, value); } });
+	const model = new HandwritingPages("test", f.deps); await model.open(); f.offline(); model.draw(ink); await model.retry(); assert.equal(model.getSnapshot().notice, "Saved on this device; couldn’t save to LearnHarness");
+	denyWrites = true; f.device.fail = true; model.draw(ink); await model.retry(); assert.match(model.getSnapshot().notice!, /this device or to LearnHarness/);
+	f.offline(false); await model.retry(); assert.match(model.getSnapshot().notice!, /Saved to LearnHarness/);
+	denyWrites = false; f.device.fail = false; await model.retry(); assert.equal(model.getSnapshot().notice, null); model.dispose();
+});
+
+it("legacy recovery remains readable and retained; failed reads, corrupt/future records and divergence cannot autosave blank", async () => {
+	for (const fault of ["remote-read", "device-read", "corrupt", "future", "divergent", "generic-404"]) {
+		const f = fixture(`read-${fault}`), fetch = f.deps.fetch, storage = f.deps.storage;
+		const legacy = fault === "corrupt" ? "{broken" : fault === "future" ? '{"version":99}' : JSON.stringify(f.source.journal);
+		if (fault !== "remote-read") f.local.set(handwritingKey("test"), legacy);
+		if (fault === "divergent") f.store.save("test", appendHandwriting({ version: 1, operations: [] }, { id: "different", kind: "stroke", stroke: ink }));
+		let denied = fault === "device-read";
+		f.deps.storage = () => ({ ...storage(), getItem: key => { if (denied) throw Error("SecurityError"); return storage().getItem(key); } });
+		f.deps.fetch = async (url, init) => fault === "remote-read" ? Response.json({}, { status: 503 }) : fault === "generic-404" ? Response.json({ code: "not_found" }, { status: 404 }) : fetch(url, init);
+		const model = new HandwritingPages("test", f.deps); await model.open(); await model.retry();
+		const writes = f.writes.length; model.draw(ink); model.clear(); await model.retry();
+		assert.equal(model.getSnapshot().ready, false, fault); assert.equal(f.writes.length, writes); if (fault !== "remote-read") assert.equal(f.local.get(handwritingKey("test")), legacy);
+		if (fault === "device-read") { denied = false; await model.retry(); assert.equal(model.getSnapshot().ready, true); assert.deepEqual(replayHandwriting(model.getSnapshot().working).strokes, [ink]); }
+		model.dispose();
+	}
+});
+
+it("a delayed initial GET reconciles newly discovered legacy ink and blocks denied or unknown recovery until repair", async () => {
+	for (const fault of ["newer", "denied", "unknown"]) {
+		const f = fixture(`delayed-${fault}`), fetch = f.deps.fetch, storage = f.deps.storage; let deny = false, held = true, entered!: () => void, release!: () => void;
+		const gate = new Promise<void>(resolve => { release = resolve; }), started = new Promise<void>(resolve => { entered = resolve; });
+		f.deps.fetch = async (url, init) => { if (held && !init?.method && String(url).endsWith("/page_initial")) { held = false; entered(); await gate; } return fetch(url, init); };
+		f.deps.storage = () => ({ ...storage(), getItem: key => { if (deny) throw Error("SecurityError"); return storage().getItem(key); } });
+		const model = new HandwritingPages("test", f.deps), opening = model.open(); await started;
+		const text = fault === "unknown" ? '{"version":99}' : JSON.stringify(f.source.journal); f.local.set(handwritingKey("test"), text); deny = fault === "denied"; release(); await opening;
+		assert.equal(f.local.get(handwritingKey("test")), text);
+		if (fault !== "newer") { assert.equal(model.getSnapshot().ready, false); model.draw(ink); await model.retry(); assert.equal(f.writes.length, 0); }
+		deny = false; f.local.set(handwritingKey("test"), JSON.stringify(f.source.journal)); await model.retry(); assert.equal(model.getSnapshot().ready, true); assert.deepEqual(replayHandwriting(model.getSnapshot().working).strokes, [ink]); model.dispose();
+	}
+});
+
+it("deletion invalidates both idle and held-ACK page controllers and admitted completions without recreating recovery", async () => {
+	for (const hold of [false, true]) {
+		const f = fixture(`deleted-${hold}`), fetch = f.deps.fetch; let entered!: () => void, release!: () => void;
+		const started = new Promise<void>(resolve => { entered = resolve; }), gate = new Promise<void>(resolve => { release = resolve; });
+		f.deps.fetch = async (url, init) => { const response = await fetch(url, init); if (init?.method === "PUT" && hold) { entered(); await gate; } return response; };
+		const model = new HandwritingPages("test", f.deps); await model.open(); await model.retry(); model.draw(ink); if (hold) await started; else await model.retry();
+		const complete = model.beginStroke(); assert.ok(complete); model.sessionDeleted(); await f.device.deleteChat(); f.local.clear(); f.local.set("other-session", "untouched"); release(); complete(ink); model.draw(ink); await model.retry(); await new Promise(resolve => setImmediate(resolve));
+		assert.deepEqual([...f.local], [["other-session", "untouched"]]); assert.equal(f.device.value.pages.length, 0); model.dispose();
+	}
 });

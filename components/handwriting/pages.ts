@@ -8,7 +8,8 @@ type Dependencies = { device: PagesDevice; storage: () => StoragePort; fetch: ty
 export type SnapshotWriting = Pick<SharedWriting, "id"> & Partial<Pick<SharedWriting, "editableSource" | "notebook">>;
 export type OpenChoice = "current" | "restore" | "copy" | "cancel";
 export type PageDecision = { writing: SnapshotWriting; source: NotebookSource; target: HandwritingPage; expectedHead: string | null; external: boolean };
-export type PagesState = { working: HandwritingV2; page: HandwritingPage; pages: PageSummary[]; ready: boolean; notice: string | null; decision: PageDecision | null; busy: boolean };
+export type ReadingPosition = "preserve" | "top";
+export type PagesState = { working: HandwritingV2; page: HandwritingPage; pages: PageSummary[]; ready: boolean; notice: string | null; decision: PageDecision | null; busy: boolean; readingPosition: ReadingPosition };
 const blank = () => initialHandwritingPage({ version: 1, operations: [] });
 const deviceFailure = "Couldn’t save the current page on this device. It is still open. Retry before switching.";
 const loadFailure = "Couldn’t load this snapshot’s editable history. Your current page is unchanged.";
@@ -20,7 +21,7 @@ class CheckpointWriteError extends Error {}
 /** Local acceptance owns navigation/history. The server flight owns only sync:
  * it cannot select a page, rerun a decision or allocate another action identity. */
 export class HandwritingPages {
-	private state: PagesState = { working: blank().journal, page: blank(), pages: [], ready: false, notice: "Opening notebook…", decision: null, busy: false };
+	private state: PagesState = { working: blank().journal, page: blank(), pages: [], ready: false, notice: "Opening notebook…", decision: null, busy: false, readingPosition: "preserve" };
 	private pages = new Map<string, HandwritingPage>();
 	private summaries = new Map<string, PageSummary>();
 	private assets = new Map<string, BackgroundPixels>();
@@ -51,7 +52,7 @@ export class HandwritingPages {
 		this.pages.set(page.id, page); this.summaries.set(page.id, pageSummary(page));
 		for (const [id, asset] of Object.entries(page.journal.backgrounds)) this.assets.set(id, asset);
 	}
-	private activate(page: HandwritingPage, notice: string | null = null, preserveDecision = false) { this.remember(page); this.update({ page, working: page.journal, ready: !this.blocked.has(page.id), notice, decision: preserveDecision ? this.state.decision : null }); }
+	private activate(page: HandwritingPage, notice: string | null = null, preserveDecision = false, readingPosition: ReadingPosition = "preserve") { this.remember(page); this.update({ page, working: page.journal, ready: !this.blocked.has(page.id), notice, decision: preserveDecision ? this.state.decision : null, readingPosition }); }
 	private conflict(pageId: string) { this.blocked.add(pageId); this.update({ ready: this.state.page.id === pageId ? false : this.state.ready, notice: conflictNotice }); }
 	private reconcileDevice(page: HandwritingPage, authoritative = false): HandwritingPage {
 		let next = page;
@@ -101,7 +102,11 @@ export class HandwritingPages {
 			const session = await this.deps.device.open(this.chatId); this.generation = session.generation;
 			const saved = await this.localRead(); if (!this.alive()) return;
 			for (const action of saved.actions) this.actions.set(action.actionId, action);
-			for (const page of saved.pages) { const reconciled = this.reconcileDevice(page); this.remember(reconciled); this.localSaved.add(page.id); }
+			for (const page of saved.pages) {
+				const retained = this.pages.get(page.id), reconciled = this.reconcileDevice(retained ? reconcileHandwritingPage(retained, page) : page);
+				this.remember(reconciled);
+				if (handwritingPrefix(reconciled.journal, page.journal)) this.localSaved.add(page.id);
+			}
 			// Old keys are read even after migration, including corrupt/old-tab tails.
 			const initial = this.reconcileDevice(this.pages.get("page_initial") ?? blank());
 			if (initial.journal.head !== null || this.pages.has("page_initial")) this.remember(initial);
@@ -111,6 +116,12 @@ export class HandwritingPages {
 			if (this.blocked.has(selected)) { const remote = await this.getRemote(selected); if (remote) page = reconcileHandwritingPage(page, remote); }
 			page = this.reconcileDevice(page);
 			await this.deps.prepare(page); if (!this.alive()) return;
+			if (Object.keys(page.journal.backgrounds).length) {
+				const old = saved.pages.find(item => item.id === page!.id);
+				await this.deps.device.commit(this.chatId, this.generation!, { pages: [page], expected: { [page.id]: old ? { head: old.journal.head } : null }, valid: () => this.alive() });
+				if (!this.alive()) return;
+				this.localSaved.add(page.id);
+			}
 			this.blocked.delete(selected);
 			this.activate(page); // existing local acceptance is usable before network ACK
 			if (selected === "page_initial" && page.journal.head === null && !saved.pages.some(page => page.id === selected) && this.remote.get(selected) === null && initial.journal.head === null) this.pages.delete(selected);
@@ -147,7 +158,9 @@ export class HandwritingPages {
 		if (compact) page = page ? reconcileHandwritingPage(page, compact) : compact;
 		if (persisted) page = page ? reconcileHandwritingPage(page, persisted) : persisted;
 		if (page) page = this.reconcileDevice(page);
-		if (!this.remote.has(pageId) && !persisted) {
+		const knownRemote = this.remote.get(pageId);
+		if (knownRemote) page = page ? reconcileHandwritingPage(page, knownRemote) : knownRemote;
+		else if (!this.remote.has(pageId) && !persisted) {
 			const remote = await this.getRemote(pageId);
 			if (remote) page = page ? reconcileHandwritingPage(page, remote) : remote;
 		}
@@ -218,7 +231,7 @@ export class HandwritingPages {
 			if (action) this.actions.set(action.actionId, action);
 			let mirrored = true;
 			for (const page of pages) { this.remember(page); this.localSaved.add(page.id); mirrored = this.mirror(page) && mirrored; }
-			this.activate(target, mirrored ? action?.kind === "restore" ? "Snapshot restored · Undo available" : action?.kind === "duplicate" ? "Copy opened · not attached" : null : "Page saved on this device. Couldn’t finish opening it.");
+			this.activate(target, mirrored ? action?.kind === "restore" ? "Snapshot restored · Undo available" : action?.kind === "duplicate" ? "Copy opened · not attached" : null : "Page saved on this device. Couldn’t finish opening it.", false, action?.kind === "restore" || action?.kind === "duplicate" ? "top" : "preserve");
 			for (const page of pages) void this.sync(page.id);
 			return true;
 		} catch { if (this.alive()) this.update({ notice: deviceFailure }); return false; }
@@ -379,8 +392,21 @@ export class HandwritingPages {
 				try { if (this.reconcileDevice(current).journal.head !== current.journal.head) { this.conflict(pageId); return; } } catch { this.conflict(pageId); return; }
 				if (!handwritingPrefix(page.journal, remote.journal)) { this.conflict(pageId); return; }
 				const next = reconcileHandwritingPage(current, remote);
+				if (next.journal.head !== current.journal.head) {
+					if (this.strokes || this.state.busy) { this.conflict(pageId); return; }
+					this.update({ busy: true });
+					try {
+						await this.localFlight.catch(() => {});
+						const saved = await this.localRead(), old = saved.pages.find(item => item.id === pageId);
+						if (this.reconcileDevice(next).journal.head !== next.journal.head) throw new HandwritingConflict("Newer local working");
+						await this.deps.prepare(next);
+						await this.deps.device.commit(this.chatId, this.generation, { pages: [next], expected: { [pageId]: old ? { head: old.journal.head } : null }, valid: () => this.alive() });
+						if (!this.alive()) return;
+						this.remember(next); this.localSaved.add(pageId); this.mirror(next);
+						if (this.state.page.id === pageId) this.activate(next);
+					} finally { this.update({ busy: false }); }
+				}
 				this.remote.set(pageId, remote);
-				if (next.journal.head !== current.journal.head) { if (this.strokes || this.state.busy) { this.conflict(pageId); return; } this.remember(next); if (this.state.page.id === pageId) this.activate(next); this.mirror(next); }
 				for (const action of this.actions.values()) if (action.pageId === pageId && action.kind === "restore" && action.eventId && remote.journal.events[action.eventId]) { await this.deps.device.finishAction(this.chatId, this.generation, action.actionId); this.actions.delete(action.actionId); }
 			}
 			if (this.state.page.id === pageId && (!this.localSaved.has(pageId) || this.state.notice === syncFailure || this.state.notice === "Couldn’t save on this device; saving to LearnHarness…" || this.state.notice === "Saved to LearnHarness; device recovery is unavailable.")) this.update({ notice: this.localSaved.has(pageId) ? null : "Saved to LearnHarness; device recovery is unavailable." });
