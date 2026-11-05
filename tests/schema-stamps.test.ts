@@ -32,11 +32,11 @@ test.after(() => {
 
 // ── chats: lazy stamp at the write choke point ──────────────────────────────
 
-test("chats: createChat stamps version 1 on disk", () => {
+test("chats: createChat stamps version 2 on disk", () => {
 	const r = chatStore.createChat("stamp test");
-	assert.equal(r.version, 1, "the in-memory twin is stamped");
+	assert.equal(r.version, 2, "the in-memory twin is stamped");
 	const onDisk = JSON.parse(fs.readFileSync(path.join(TMP_DATA, "chats", `${r.id}.json`), "utf8"));
-	assert.equal(onDisk.version, 1, "the record carries the stamp");
+	assert.equal(onDisk.version, 2, "the record carries the stamp");
 });
 
 test("chats: an UNSTAMPED legacy record reads fine (absence = v1) and is stamped by its next write", () => {
@@ -51,7 +51,7 @@ test("chats: an UNSTAMPED legacy record reads fine (absence = v1) and is stamped
 	assert.ok(r, "unstamped record reads (lazy v1)");
 	chatStore.saveMessages(id, []);
 	const onDisk = JSON.parse(fs.readFileSync(path.join(TMP_DATA, "chats", `${id}.json`), "utf8"));
-	assert.equal(onDisk.version, 1, "the write choke point stamped it");
+	assert.equal(onDisk.version, 2, "the write choke point stamped it");
 });
 
 test("chats: a NEWER-stamped record is refused honestly (the downgrade scenario)", () => {
@@ -66,6 +66,17 @@ test("chats: a NEWER-stamped record is refused honestly (the downgrade scenario)
 	// and the refused record is NOT rewritten or downgraded by the visit:
 	const onDisk = JSON.parse(fs.readFileSync(path.join(TMP_DATA, "chats", `${id}.json`), "utf8"));
 	assert.equal(onDisk.version, 99, "the future record survives untouched");
+});
+
+test("chats: explicit v1 sessions without notebooks remain usable", () => {
+	const id = "chat_v1_notebook_compat";
+	const original = { id, version: 1, title: "v1", createdAt: "2026-01-01", updatedAt: "2026-01-01", messages: [], kind: "practice", practiceMode: "drill" };
+	fs.writeFileSync(path.join(TMP_DATA, "chats", `${id}.json`), JSON.stringify(original));
+	assert.deepEqual(chatStore.getChat(id), original);
+	chatStore.saveSettings(id, { thinkingLevel: "low" });
+	assert.equal(chatStore.getChat(id)?.version, 2);
+	assert.equal(chatStore.getChat(id)?.notebook, undefined);
+	assert.equal(chatStore.getChat(id)?.practiceMode, "drill");
 });
 
 // ── the graph family: the lazy format.json sidecar ──────────────────────────

@@ -65,6 +65,23 @@ const extended: EditorCase[] = [
 		id: "17-missing-history", title: "Do not invent absent historical source", initial: [line("L1", "p=")], notebookHistory: [velocity],
 		steps: [{ instruction: "Copy line five from the pressure entry in history onto a new last line.", expected: null, changed: [], action: "question" }],
 	},
+	{
+		id: "18-continuing-equality", title: "Continue an equality without removing earlier expressions", initial: [line("L1", String.raw`p = \frac{F}{A}`), line("L2", "F = p \\times A")],
+		steps: [
+			{ instruction: "On line one, set the equation equal to 600 over", expected: [line("L1", String.raw`p = \frac{F}{A} = \frac{600}{}`), line("L2", "F = p \\times A")], changed: ["L1"] },
+			{ instruction: "Set the denominator of that new fraction to 0.003.", expected: [line("L1", String.raw`p = \frac{F}{A} = \frac{600}{0.003}`), line("L2", "F = p \\times A")], changed: ["L1"] },
+			{ instruction: "So that... Set that equal to sick... 600 times three divided", expected: [line("L1", String.raw`p = \frac{F}{A} = \frac{600}{0.003} = 600 \times 3 \div`), line("L2", "F = p \\times A")], changed: ["L1"] },
+			{ instruction: "Replace that unfinished last expression with 200000.", expected: [line("L1", String.raw`p = \frac{F}{A} = \frac{600}{0.003} = 200000`), line("L2", "F = p \\times A")], changed: ["L1"] },
+		],
+	},
+	{
+		id: "19-current-line-follow-up", title: "Duplicate expressions do not erase the current line", initial: [line("L1", "2+2=5"), line("L2", String.raw`F = p \times A`)],
+		steps: [
+			{ instruction: "New line. F equals p times a equal 600 times 10", expected: [line("L1", "2+2=5"), line("L2", String.raw`F = p \times A`), line("L3", String.raw`F = p \times A = 600 \times 10`)], changed: ["L3"] },
+			{ instruction: "Remove the multiplication sign in p times a.", expected: [line("L1", "2+2=5"), line("L2", String.raw`F = p \times A`), line("L3", String.raw`F = p A = 600 \times 10`)], changed: ["L3"] },
+			{ instruction: "On line two, remove the multiplication sign in p times a.", expected: [line("L1", "2+2=5"), line("L2", "F = p A"), line("L3", String.raw`F = p A = 600 \times 10`)], changed: ["L2"] },
+		],
+	},
 ];
 
 // The 17 frozen turns stay unchanged. Expected source is never passed to the editor.

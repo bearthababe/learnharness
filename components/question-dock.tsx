@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+	import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
 import { CompactLearningInput } from "@/components/compact-learning-input";
 import { CornerDownLeftIcon } from "lucide-react";
-import { useEnterSubmits } from "@/components/enter-submits";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
 import {
@@ -14,8 +14,8 @@ import {
 	repairMathForDisplay,
 	normalizeQuizType,
 	CONFIDENCE_STOPS,
-	DEFAULT_CONFIDENCE_INDEX,
-	emptyDockSelection,
+	explanationHasContent,
+	type NotebookInputFields,
 	normalizeOptions,
 	resolveCorrect,
 	seededRandom,
@@ -39,6 +39,8 @@ import {
 	type Phase3,
 } from "@/src/core";
 import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-rail";
+import type { NotebookSession } from "./notebook-session";
+import { useNotebookQuestionDraft } from "./notebook-question-draft";
 
 /**
  * The question dock — a pending quiz/ask REPLACES the chat composer: the
@@ -61,6 +63,7 @@ import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-
  */
 
 export interface QuestionDockProps {
+	notebook?: NotebookSession;
 	dictation?: Dictation;
 	hasSharedWriting?: boolean;
 	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall";
@@ -76,7 +79,7 @@ export interface QuestionDockProps {
 	 */
 	reveal?: boolean;
 	onExpand: () => void;
-	onSubmit: (output: QuestionAnswerData) => void;
+	onSubmit: (output: QuestionAnswerData, toolCallId: string, fields?: Pick<NotebookInputFields, "submission">) => unknown;
 	/** Restore only this call's unconfirmed submission after recovery. */
 	initialDraft?: QuestionFormDraft;
 	onSaveDraft?: (draft: QuestionFormDraft) => void;
@@ -102,6 +105,7 @@ export interface QuestionDockProps {
 }
 
 export function QuestionDock({
+	notebook,
 	dictation,
 	hasSharedWriting = false,
 	toolName,
@@ -162,6 +166,8 @@ export function QuestionDock({
 			)}
 			<div className={expanded ? "dock-variant" : `${reveal ? "" : "lh-question-collapsed "}invisible h-0 overflow-hidden`}>
 				<QuestionDockForm
+					key={toolCallId}
+					notebook={notebook}
 					dictation={dictation}
 					hasSharedWriting={hasSharedWriting}
 					toolName={toolName}
@@ -261,6 +267,7 @@ export function QuestionDockBar({
 
 /** The expanded question: label, question, options, and the unified bottom row. */
 function QuestionDockForm({
+	notebook,
 	dictation,
 	hasSharedWriting = false,
 	toolName,
@@ -332,22 +339,29 @@ function QuestionDockForm({
 	// single-select displaces, multi-select coexists — picking the ask
 	// "Other…" row in a multi-select must never clear already-picked
 	// options, and picking an option must never clear a typed custom answer.
-	const [sel, setSel] = useState<DockSelection>(() => initialDraft?.selection ?? emptyDockSelection());
+	const owner = { kind: "question" as const, toolCallId, channel: qd.mode === "text" ? "text" as const : "thinking" as const };
+	const owned = useNotebookQuestionDraft(notebook, owner, initialDraft);
+	const { selection: sel, thinking, other, text, confidenceIndex: confIdx } = owned.form;
+	const setSel = (value: DockSelection | ((prior: DockSelection) => DockSelection)) => owned.change("selection", value);
+	const setThinking = (value: string) => owned.change("thinking", value);
+	const setOther = (value: string) => owned.change("other", value);
+	const setText = (value: string) => owned.change("text", value);
+	const setConfIdx = (value: number | ((prior: number) => number)) => owned.change("confidenceIndex", value);
 	// The learner's transfer channel — thinking, never "a note".
-	const [thinking, setThinking] = useState(initialDraft?.thinking ?? "");
-	const [other, setOther] = useState(initialDraft?.other ?? "");
-	const [text, setText] = useState(initialDraft?.text ?? "");
 	/* Refs MIRROR the two dictation-target fields ("nothing gets lost"
 	 * round, owner 2026-10-01): the run's flush lands via setState, which
 	 * a closure waiting through `await finishDictation()` cannot observe
 	 * in time — submit reads these, kept current at every write site. */
 	const thinkingTextRef = useRef(initialDraft?.thinking ?? "");
 	const answerTextRef = useRef(initialDraft?.text ?? "");
+	thinkingTextRef.current = thinking;
+	answerTextRef.current = text;
+	const sending = useRef(false);
+	const [submitError, setSubmitError] = useState<string | null>(null);
 	// Confidence (owner, 2026-10-01): an index into CONFIDENCE_STOPS,
 	// resting at 50 — a real coin flip by definition, untouched or
 	// deliberate (the same number, the same meaning). The dock unmounts
 	// between questions, so each question starts fresh at 50.
-	const [confIdx, setConfIdx] = useState<number>(initialDraft?.confidenceIndex ?? DEFAULT_CONFIDENCE_INDEX);
 	const selectMode: SelectMode = qd.mode === "multi-select" ? "multi-select" : "single-select";
 
 	// The PRIMARY dictation input (owner, STT round 1): while a question
@@ -382,25 +396,30 @@ function QuestionDockForm({
 
 	const canSubmit =
 		qd.mode === "text"
-			? text.trim().length > 0 || hasSharedWriting
+			? text.trim().length > 0 || explanationHasContent(owned.draft?.parts ?? []) || hasSharedWriting
 			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0;
 
 	const submit = () => {
-		if (!canSubmit || compactionRunning) return;
+		if (sending.current || compactionRunning || notebook?.getSnapshot().sendBlocked || (!canSubmit && !isDictationActive())) return;
+		sending.current = true;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): Enter may arrive while
 		 * a run is live with reasoning still in Deepgram's hands. Stop the
 		 * run, let the last finals land in the target field, and only then
 		 * build the answer — the spoken reasoning is never lost to a
 		 * forgotten stop. The field values below come from the REF mirrors
 		 * because the flush lands via setState after an await. */
-		if (!isDictationActive()) {
-			doSubmit();
-			return;
-		}
-		void finishDictation().then(doSubmit);
+		void (async () => {
+			try {
+				if (isDictationActive()) await finishDictation();
+				await doSubmit();
+			} catch (error) { setSubmitError(error instanceof Error ? error.message : "Answer could not be sent"); }
+			finally { sending.current = false; }
+		})();
 	};
-	const doSubmit = () => {
-		if (!canSubmit) return;
+	const doSubmit = async () => {
+		const { selection: sel, other, confidenceIndex: confIdx } = owned.current.current;
+		const hasWorking = explanationHasContent(notebook?.tutor.draft(owner)?.parts ?? []);
+		if (qd.mode === "text" ? !answerTextRef.current.trim() && !hasWorking && !hasSharedWriting : !(sel.dontKnow || (sel.otherSelected && other.trim()) || sel.selected.size)) return;
 		const req: AnswerRequest = {
 			dontKnow: sel.dontKnow,
 			values: [...sel.selected].map((i) => qd.options[i]!.value),
@@ -420,7 +439,11 @@ function QuestionDockForm({
 			text: answerTextRef.current,
 			confidenceIndex: confIdx,
 		});
-		onSubmit(buildAnswer(qd, req, toolName));
+		const answer = buildAnswer(qd, req, toolName);
+		const prepared = notebook?.getSnapshot().view?.contextId ? await notebook.tutor.prepareAnswer(owner, answer) : undefined;
+		try { await onSubmit(prepared?.answer ?? answer, toolCallId, prepared ? { submission: prepared.submission } : undefined); }
+		finally { if (prepared) await notebook!.tutor.reconcile(prepared.submission?.id); }
+		setSubmitError(null);
 	};
 
 	/* ENTER SUBMITS FROM ANYWHERE (owner round 6, 2026-10-05): the same
@@ -490,6 +513,7 @@ function QuestionDockForm({
 	useEffect(() => {
 		if (!active || rowCount === 0) return;
 		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.defaultPrevented || notebookOwnsKeyboard(e) || (notebook && !notebook.getSnapshot().view)) return;
 			const t = e.target as HTMLElement | null;
 			// A TYPING field is where keys mean text (owner round 4): the
 			// thinking/answer fields, search boxes, renames — never a range
@@ -570,7 +594,7 @@ function QuestionDockForm({
 	}, [kbdIdx]);
 
 	return (
-		<div ref={rootRef} data-testid="question-dock">
+		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-notebook-question={toolCallId} data-notebook-channel={owner.channel}>
 			{/* Question area — scrolls internally if very tall; the bottom row stays put.
 			    Capped by the measured column (--dock-max-h; the old fixed 55dvh cut
 			    long questions short — owner round, 2026-10-05). */}
@@ -841,6 +865,8 @@ function QuestionDockForm({
 				</div>
 			)}
 
+			{(submitError || owned.state.error) && <p role="alert" className="px-4 text-xs text-destructive">{submitError || owned.state.error}</p>}
+			{owned.state.saving && <p role="status" className="px-4 text-xs text-muted-foreground">Saving draft…</p>}
 			{/* The learner's half of the dock — a composer TWIN: a labeled, bordered
 			    field with Submit docked inside, exactly like the chat composer's
 			    send. Select modes get "Your thinking" (Enter makes a newline — it
@@ -932,8 +958,9 @@ function QuestionDockForm({
 						</span>
 						<Button
 							type="submit"
+							data-testid="question-send"
+							disabled={owned.blocked || (!canSubmit && !isDictationActive()) || compactionRunning}
 							aria-label="Submit answer"
-							disabled={!canSubmit || compactionRunning}
 							className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 						>
 							<span className="lh-wide-submit-label">Submit answer</span><CornerDownLeftIcon className="lh-phone-submit-icon" size={20} />

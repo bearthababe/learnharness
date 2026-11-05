@@ -3,7 +3,9 @@ import { SharedWritingImages, SharedWritingPanel, useSharedWriting } from "@/com
 import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
 import type { SharedWriting } from "@/src/core";
 
-import { createContext, Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { explanationHasContent, serializeLearnerExplanation, type LearnerExplanation as Explanation } from "@/src/core";
+import { LearnerExplanation } from "./learner-explanation";
 import { useChatSession } from "@/components/session";
 import { visibleQueuedSteers } from "@/components/session-core";
 import { SetupDialog } from "@/components/setup-dialog";
@@ -26,7 +28,18 @@ import { AnsweredCard } from "@/components/answered-card";
 import { artifactRenderers } from "@/components/artifacts";
 import { SubagentSteerCard } from "@/components/artifacts/steer-card";
 import { Composer } from "@/components/composer";
-import { useEnterSubmits } from "@/components/enter-submits";
+import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
+import { useNotebookSession } from "@/components/use-notebook-session";
+import { notebookActivityDrafts } from "@/components/notebook-activity-draft";
+import type { NotebookSession } from "@/components/notebook-session";
+import type { NotebookInputFields, TutorDraftOwner } from "@/src/core";
+import { NotebookPanel } from "@/components/notebook-panel";
+import { NotebookFrame, NotebookSplit, useNotebookLayout } from "@/components/notebook-layout";
+import { NotebookSavedDrafts } from "@/components/notebook-saved-drafts";
+import { useNotebookDestination } from "@/components/notebook-destination";
+import { notebookTutorInput } from "@/components/notebook-speech-input";
+import { NotebookSpeechDestination, NotebookSpeechRecovery } from "@/components/notebook-speech-status";
+import { useSessionInputViewport } from "@/components/session-input-viewport";
 import { blurAfterPointerClick } from "@/components/focus-hygiene";
 import { dockStateKey } from "@/components/dock-state-key";
 import { clearOpeningPrompt, readOpeningPromptEntry, stashOpeningPrompt, OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
@@ -52,7 +65,7 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -263,9 +276,17 @@ export function Chat({
 	const hasSharedWriting = sharedWriting.pending.length > 0;
 
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
+	const workspaceRef = useRef<HTMLDivElement | null>(null);
+	const workspaceId = useId();
+	const notebook = useNotebookSession(chatId);
+	const notebookVisible = notebook.view?.visible ?? false;
+	const notebookLayout = useNotebookLayout(notebookVisible);
+	const notebookSpeech = useSyncExternalStore(notebook.session.speech.subscribe, notebook.session.speech.getSnapshot, notebook.session.speech.getSnapshot);
+	const tutorDraftState = useSyncExternalStore(notebook.session.tutor.subscribe, notebook.session.tutor.getSnapshot, notebook.session.tutor.getSnapshot);
+	const ordinaryDraft = tutorDraftState.drafts.find((draft) => draft.owner.kind === "ordinary");
+	useSessionInputViewport(workspaceRef, notebookVisible);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
-	const mobileChatRef = useRef<HTMLDivElement | null>(null);
-	useMobileChatFocus(mobileChatRef, scrollContextRef);
+	useMobileChatFocus(workspaceRef, scrollContextRef, !notebookVisible);
 	const sourceTextParts = useMemo(() => firstSourceTextParts(messages), [messages]);
 
 	// The reattach settled terminal → the sync-and-continue seam (below).
@@ -416,14 +437,18 @@ export function Chat({
 			const p = pendingRef.current;
 			if (p) {
 				const question = (p.input as { question?: string } | null)?.question ?? "";
-				const reading = readingThinkingRef.current.trim() || undefined;
-				clearReadingThinking();
-				const answer = dismissedAnswer(toolQuestionKind(p.tool), question);
-				void dismissQuestion(
-					p.toolCallId,
-					reading ? { ...answer, readingThinking: reading } : answer,
-				);
-				if (busyRef.current) abortInFlightTurn();
+				void (async () => {
+					await finishDictation();
+					if (pendingRef.current?.toolCallId !== p.toolCallId) return;
+					const reading = readingThinkingRef.current.trim() || undefined;
+					const answer = { ...dismissedAnswer(toolQuestionKind(p.tool), question), ...(reading ? { readingThinking: reading } : {}) };
+					const prepared = notebook.session.getSnapshot().view?.contextId ? await notebook.session.tutor.prepareAnswer({ kind: "question", toolCallId: p.toolCallId, channel: "reading-thinking" }, answer) : undefined;
+					if (pendingRef.current?.toolCallId !== p.toolCallId) return;
+					const dismissed = dismissQuestion(p.toolCallId, prepared?.answer ?? answer, prepared ? { submission: prepared.submission } : undefined);
+					if (busyRef.current) abortInFlightTurn();
+					await dismissed;
+					if (prepared) await notebook.session.tutor.reconcile();
+				})().catch(() => {}); // shared notebook recovery retains the draft
 				return;
 			}
 			// The practice discard (owner, 2026-10-04): ask-style — the
@@ -436,7 +461,7 @@ export function Chat({
 				if (busyRef.current) abortInFlightTurn();
 			}
 		},
-		[abortInFlightTurn, dismissQuestion, dismissProblem],
+		[abortInFlightTurn, dismissQuestion, dismissProblem, notebook.session],
 	);
 	// Mount continuation: if the stored transcript ends with a fulfilled tool
 	// (a job result landed while no client was open), resume the lesson — the
@@ -464,6 +489,8 @@ export function Chat({
 	// replaces the composer. Computed from the NATIVE record (the fold is
 	// the gate the tools themselves read), not the projected view.
 	const activeProblem = activeProblemOf(nativeMessages);
+	const notebookActivity: TutorDraftOwner = pending ? { kind: "question", toolCallId: pending.toolCallId, channel: "thinking" } : activeProblem ? { kind: "practice", problemCallId: activeProblem.toolCallId } : { kind: "ordinary" };
+	const workingAttached = notebookActivityDrafts(tutorDraftState.drafts, notebookActivity).some(draft => draft.parts.some(part => part.kind === "working"));
 	const activeProblemRef = useRef(activeProblem);
 	activeProblemRef.current = activeProblem;
 
@@ -500,10 +527,10 @@ export function Chat({
 	// the dock stays mounted (the problem is still active until the agent
 	// concludes).
 	const submitThinking = useCallback(
-		(text: string) => {
+		(text: string, problemCallId: string, fields?: NotebookInputFields) => {
 			const problem = activeProblemRef.current;
-			if (!problem) return;
-			void send({ type: "thinking", problemCallId: problem.toolCallId, text, ...(hasSharedWriting ? { writingIds: sharedWriting.ids() } : {}) });
+			if (!problem || problem.toolCallId !== problemCallId) return Promise.resolve(false);
+			return send({ type: "thinking", problemCallId, text, explanation: fields?.explanation, submission: fields?.submission, ...(hasSharedWriting ? { writingIds: sharedWriting.ids() } : {}) });
 		},
 		[send, hasSharedWriting, sharedWriting],
 	);
@@ -538,10 +565,6 @@ export function Chat({
 		readingThinkingRef.current = v;
 		setReadingThinking(v);
 	}, []);
-	const clearReadingThinking = useCallback(() => {
-		readingThinkingRef.current = "";
-		setReadingThinking("");
-	}, []);
 	const pendingQuestionId = pending?.toolCallId ?? null;
 	useEffect(() => {
 		// Different calls never share a draft; a failed submission of THIS
@@ -565,7 +588,16 @@ export function Chat({
 	const applyText = useCallback((v: string) => {
 		textRef.current = v;
 		setText(v);
-	}, []);
+		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
+	}, [notebook.session]);
+	useLayoutEffect(() => {
+		if (!notebook.view?.contextId) return;
+		const part = ordinaryDraft?.parts.at(-1);
+		const value = part?.kind === "text" ? part.text : "";
+		textRef.current = value;
+		setText(value);
+	}, [ordinaryDraft, notebook.view?.contextId]);
+	const focusDictationDestination = useNotebookDestination(workspaceRef, notebook.session, notebookVisible);
 	// Saved slot completeness is live, but the session's selected route
 	// comes from its own ordinary model control, never today's Strong pin.
 	const { catalog, configured, zeroKeys } = useModelSetup(initialConfigured);
@@ -707,12 +739,13 @@ export function Chat({
 		// Ref-first (see textRef): the join is computed from the mirror so a
 		// send resuming after `await finish()` reads the dictated tail.
 		append: (t) => applyText(joinDictation(textRef.current, t)),
+		capture: notebook.session.speech,
 	});
+	const tutorDictation = dictation.active && notebookSpeech.destination === "notebook" ? undefined : dictation;
 	/* When a dictation run ends, the bare composer takes focus (owner
 	 * 2026-10-01) — the hands are already on the keyboard from the stop.
-	 * Falling edge of `active` only (idle→idle never focuses), and ONLY the
-	 * composer: with a question pending the Composer is unmounted, the ref
-	 * is null, and the thinking field is left alone by design. */
+	 * Falling edge of `active` only (idle→idle never focuses). Notebook's
+	 * destination adapter restores the applicable field, including reading. */
 	const dictationWasActiveRef = useRef(false);
 	const composerInputRef = useRef<HTMLTextAreaElement>(null);
 	useEffect(() => {
@@ -720,9 +753,9 @@ export function Chat({
 			dictationWasActiveRef.current = true;
 		} else if (dictationWasActiveRef.current) {
 			dictationWasActiveRef.current = false;
-			composerInputRef.current?.focus();
+			focusDictationDestination();
 		}
-	}, [dictation.active]);
+	}, [dictation.active, focusDictationDestination]);
 
 	// Jobs never gate the composer (contracts.ts "THE ASYNC PROTOCOL" §4): job
 	// tools resolve with an ack mid-turn, so the learner can interject while
@@ -750,7 +783,7 @@ export function Chat({
 	const retryable = (status === "ready" || status === "error") && !busy && !compacting && endsInFailedTurn(nativeMessages);
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
 	const canSend =
-		(text.trim().length > 0 || dictation.active || hasSharedWriting) && !pending && !activeProblem && !compacting && !(hasSharedWriting && busy);
+		(text.trim().length > 0 || (ordinaryDraft && explanationHasContent(ordinaryDraft.parts)) || dictation.active || hasSharedWriting) && !notebook.sendBlocked && !pending && !activeProblem && !compacting && !(hasSharedWriting && busy);
 
 	/* THE PRACTICE PAUSE (owner round 16): between problems — practice
 	 * kind, nothing active, nothing in flight, and at least one problem
@@ -1198,8 +1231,9 @@ export function Chat({
 		void syncFromServer();
 	});
 
+	const finishingSend = useRef(false);
 	const onSend = () => {
-		if (pending || compacting) return;
+		if (finishingSend.current || pending || compacting || !notebook.view || notebook.session.getSnapshot().sendBlocked) return;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): a learner who keeps
 		 * talking right through Enter must not lose the tail — stop the run,
 		 * let the last finals land in the composer, then send the REF value
@@ -1208,7 +1242,8 @@ export function Chat({
 			doSteerOrSend();
 			return;
 		}
-		void dictation.finish().then(doSteerOrSend);
+		finishingSend.current = true;
+		void dictation.finish().then(doSteerOrSend).catch(() => {}).finally(() => { finishingSend.current = false; });
 	};
 	const doSend = () => {
 		if (busy || pending || compacting) return;
@@ -1241,7 +1276,18 @@ export function Chat({
 	 * time the send's POST resolved, so the steer lands. Idle takes the
 	 * plain send; a raced settle 409s and falls back to exactly that. */
 	const doSteerOrSend = () => {
-		if (pending || compacting) return;
+		if (pending || compacting || notebook.session.getSnapshot().sendBlocked) return;
+		if (hasSharedWriting && busy) return;
+		if (notebook.session.getSnapshot().view?.contextId && (!hasSharedWriting || explanationHasContent(notebook.session.tutor.draft({ kind: "ordinary" })?.parts ?? []))) {
+			if (zeroKeys) { setSetupOpen(true); return; }
+			if (selectedModelUnavailable(catalog, selectedModel)) { openModelPicker(); return; }
+			const writingIds = hasSharedWriting ? sharedWriting.ids() : undefined;
+			return notebook.session.tutor.prepareSubmission({ kind: "ordinary" }).then(async (input) => {
+				// Explicit Send is the only authority; switching and autosaves never enter here.
+				try { if (busy) await steer(input.text, input); else await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission, writingIds }); }
+				finally { await notebook.session.tutor.reconcile(input.submission.id); }
+			}).catch(() => {});
+		}
 		if (hasSharedWriting) { if (!busy) doSend(); return; }
 		const t = textRef.current.trim();
 		if (!t) return;
@@ -1277,8 +1323,9 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div ref={mobileChatRef} className="flex h-dvh overflow-hidden">
-			<div className="flex min-w-0 flex-1 flex-col">
+		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" className="session-workspace flex h-dvh overflow-hidden">
+			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
+			<div className="session-tutor" inert={notebookLayout.expanded}>
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its
 				    bottom outline (border-b border-border) matches the one that
@@ -1356,6 +1403,7 @@ export function Chat({
 					{/* The plan chip (owner, plan-placement round): session-level
 					    structure beside the phase chip — access to the full-DAG popup
 					    at every width; the marginalia is the wide-screen glance view. */}
+					<NotebookSpeechDestination session={notebook.session} />
 					{planTree && (
 						<Hint label="Open the full plan" side="bottom">
 <button
@@ -1396,9 +1444,10 @@ export function Chat({
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
 					)}
 				</TopBar>
+				{!notebookVisible && notebook.error && <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>}
 
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
-				<div ref={sessionFindScopeRef} className="relative flex min-h-0 flex-1">
+				<div ref={sessionFindScopeRef} data-input-owner="tutor" className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
 					<ConversationContent className="min-h-full gap-0 p-0">
@@ -1428,12 +1477,13 @@ export function Chat({
 								// assistant group — is gone). Never a user bubble: the wake is
 								// scaffolding; the model-facing instruction lives in the adapter.
 								<PhaseDivider key={m.id || `m-${mi}`} phase="plan" />
-							) : m.role === "user" && m.parts.length > 0 && m.parts.every((p) => p.type.startsWith("data-")) ? (
+							) : m.role === "user" && m.parts.length > 0 && m.parts.every((p) => p.type.startsWith("data-") && p.type !== "data-learner-explanation") ? (
 								// Marker cards (custom messages, 2026-10-04): user-side
 								// scaffolding — the graph-context pick, the practice
 								// thinking trace — render as cards in the transcript
 								// column directly, NO chat bubble (the subagent-steer
-								// precedent). The user branch below renders text only;
+								// precedent). Learner explanations belong to the You row
+								// below even though their structured part is data-only;
 								// without this hoist a data-only message read as an
 								// EMPTY bubble (owner report, 2026-10-04).
 								<Fragment key={m.id || `m-${mi}`}>
@@ -1520,7 +1570,9 @@ export function Chat({
 												    rail as the thinking rows — one quote geometry. */}
 												<div className="font-medium uppercase tracking-wide text-muted-foreground">You</div>
 												<div className="lh-prose whitespace-pre-wrap text-foreground">
-													{m.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n")}
+													{m.parts.some((part) => part.type === "data-learner-explanation")
+														? m.parts.filter((part) => part.type === "data-learner-explanation").map((part, index) => <LearnerExplanation key={index} parts={part.data as Explanation} />)
+														: m.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n")}
 												</div>
 												{m.parts.filter((p) => p.type === "data-shared-writing").map((p, i) => <SharedWritingImages key={i} chatId={chatId} writing={p.data as SharedWriting[]} />)}
 											</div>
@@ -1681,6 +1733,8 @@ export function Chat({
 						    the overlay — the flow-space replacement for the old
 						    sticky dock. Zero only pre-measurement (the first layout
 						    effect reports before paint). */}
+						<NotebookSavedDrafts session={notebook.session} questionId={pending?.toolCallId} problemId={activeProblem?.toolCallId} messages={nativeMessages} />
+						<NotebookSpeechRecovery session={notebook.session} />
 						<div aria-hidden data-testid="dock-spacer" style={{ height: dockReserve }} />
 				</ConversationContent>
 				{/* The dock: an overlay sibling of the scroller (the
@@ -1690,6 +1744,7 @@ export function Chat({
 				    height morph (typing, a question growing the band, the
 				    fold) and NEVER overlaps the composer. */}
 				<DockOverlay
+					notebook={notebook.session}
 					sharedWritingSlot={<SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} />}
 					hasSharedWriting={hasSharedWriting}
 					pending={pending}
@@ -1709,11 +1764,25 @@ export function Chat({
 					turns={turns}
 					contextTokens={contextTokens}
 					pricing={pricing}
+					notebookToggle={<span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
+						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
+						className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+						onClick={() => {
+							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
+							if (notebookVisible && workspaceRef.current) {
+								void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
+							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
+						}}><NotebookPenIcon className="size-4" /></button>
+						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="text-muted-foreground"><PaperclipIcon className="size-3" aria-hidden="true" /></span>}
+					</span>}
 					onReserve={setDockReserve}
 					dictationSlot={<DictationBar dictation={dictation} />}
-					dictation={dictation}
+					dictation={tutorDictation}
 					dictationCancel={dictation.cancel}
-					queuedSteers={visibleQueuedSteers(steerQueue, nativeMessages)}
+					queuedSteers={visibleQueuedSteers([
+						...steerQueue,
+						...(notebook.view?.submissions ?? []).filter((receipt) => receipt.status === "pending" && !steerQueue.some((entry) => entry.id === receipt.submission.id)).map((receipt) => ({ id: receipt.submission.id, text: serializeLearnerExplanation(receipt.explanation) })),
+					], nativeMessages)}
 					setupCta={
 						zeroKeys ? (
 							<ZeroKeysPill onOpen={() => setSetupOpen(true)} />
@@ -1733,8 +1802,12 @@ export function Chat({
 						)
 					}
 					composer={
+						<div>
+						{tutorDraftState.error && <p role="alert" className="px-3 text-xs text-destructive">Unsent draft: {tutorDraftState.error}</p>}
+						{tutorDraftState.saving && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
+						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}
 						<Composer
-							dictation={dictation}
+							dictation={tutorDictation}
 							// Stop aborts ANY in-flight turn (stream-reattach wave): the
 							// square renders while a reattached/wake turn runs too — the
 							// abort channel kills it server-side; stop() alone would
@@ -1754,9 +1827,11 @@ export function Chat({
 							onNext={sendNext}
 							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : undefined}
 						/>
+						</div>
 					}
-					onSubmitAnswer={(output) => {
-						if (!pending) return;
+					onSubmitAnswer={async (output, toolCallId, fields) => {
+						const pending = pendingRef.current;
+						if (!pending || pending.toolCallId !== toolCallId) return false;
 						// THE ANSWER IS THE QUESTION CALL'S TOOL RESULT (fork 1, owner
 						// 2026-09-26): one input event, one turn — the hook appends
 						// the optimistic graded result (the AnsweredCard shows at
@@ -1769,7 +1844,7 @@ export function Chat({
 						const reading = readingThinkingRef.current.trim() || undefined;
 						// The pending-id effect clears this only when the question
 						// actually leaves. An offline preflight keeps the draft visible.
-						submitAnswer(pending.tool, pending.toolCallId, reading ? { ...output, readingThinking: reading } : output, hasSharedWriting && !output.dismissed ? sharedWriting.ids() : undefined);
+						await submitAnswer(pending.tool, toolCallId, reading && !fields?.submission ? { ...output, readingThinking: reading } : output, { ...fields, writingIds: hasSharedWriting && !output.dismissed ? sharedWriting.ids() : undefined });
 					}}
 				/>
 				</Conversation>
@@ -1791,6 +1866,22 @@ export function Chat({
 				{planOpen && <PlanPopup messages={messages} onClose={() => setPlanOpen(false)} />}
 				<AbortTurnDialog mode={abortAsk} onClose={() => setAbortAsk(null)} onConfirm={confirmAbort} busy={busy} />
 				</div>
+				</div>
+				{notebookLayout.mounted && <>
+					<NotebookSplit hidden={!notebookVisible} />
+					<NotebookFrame hidden={!notebookVisible} expanded={notebookLayout.expanded}
+						onExpand={() => { void notebook.session.speech.choose({ kind: "notebook" }).then(notebookLayout.expand).catch(() => {}); }}
+						onBack={notebookLayout.back}
+						onClose={() => {
+							if (!workspaceRef.current) return;
+							void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).then(() => {
+								requestAnimationFrame(focusDictationDestination);
+							}).catch(() => {});
+						}}>
+						{controls => <NotebookPanel session={notebook.session} dictation={dictation} viewControls={controls} workspaceId={workspaceId}
+							activity={notebookActivity} />}
+					</NotebookFrame>
+				</>}
 			</div>
 		</div>
 		</JobsContext.Provider>
@@ -1924,6 +2015,8 @@ export function shouldStampGeometryMute(nextH: number, prevH: number, pending: b
 }
 
 function DockOverlay({
+	notebook,
+	notebookToggle,
 	sharedWritingSlot,
 	hasSharedWriting,
 	pending,
@@ -1952,6 +2045,8 @@ function DockOverlay({
 	setupCta,
 	queuedSteers,
 }: {
+	notebook: NotebookSession;
+	notebookToggle: React.ReactNode;
 	sharedWritingSlot?: React.ReactNode;
 	hasSharedWriting?: boolean;
 	pending: ReturnType<typeof findPendingToolCall>;
@@ -1965,7 +2060,7 @@ function DockOverlay({
 	 *  question (the composer is replaced); null in teaching sessions. */
 	practice: { toolCallId: string; input: unknown } | null;
 	/** (commit, text) — the practice dock's two submit lanes. */
-	onSubmitThinking: (text: string) => void;
+	onSubmitThinking: (text: string, problemCallId: string, fields?: NotebookInputFields) => Promise<boolean>;
 	/** Teach-phase pending question: arrives collapsed behind the reveal button (W5). */
 	requiresReveal: boolean;
 	/** The reading-thinking draft (owner 2026-10-03) — owned by ChatView so
@@ -1979,7 +2074,7 @@ function DockOverlay({
 	contextTokens: number | null;
 	pricing?: SessionPricing;
 	composer: React.ReactNode;
-	onSubmitAnswer: (output: QuestionAnswerData) => void;
+	onSubmitAnswer: React.ComponentProps<typeof QuestionDock>["onSubmit"];
 	/** The model control's pass-through (the stats bar hosts it). */
 	chatId: string;
 	onModelChange: (model: string | undefined) => void;
@@ -2235,6 +2330,7 @@ function DockOverlay({
 	useEffect(() => {
 		if (!pending || expanded) return;
 		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.defaultPrevented || notebookOwnsKeyboard(e)) return;
 			if (e.key !== "Enter" || e.altKey) return;
 			if (e.shiftKey && !e.metaKey && !e.ctrlKey) return;
 			const t = e.target as HTMLElement | null;
@@ -2249,7 +2345,7 @@ function DockOverlay({
 			e.preventDefault();
 			void finishDictation().then(() => {
 				expandAndRevealRef.current();
-			});
+			}).catch(() => {});
 		};
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
@@ -2259,6 +2355,7 @@ function DockOverlay({
 		const el = scrollRef.current;
 		if (!el) return;
 		const onScroll = () => {
+			if (el.closest('[data-input-focused="tutor"]')) return;
 			if (!pendingRef.current) return;
 			// Resize mute (owner, resize round): a geometry change re-clamps
 			// scrollTop and the browser emits the clamp as a scroll event —
@@ -2355,7 +2452,10 @@ function DockOverlay({
 			<div ref={blockRef} className="relative bg-background pb-5">
 				<div className={DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
-					<div ref={bodyRef}>
+					{!notebook.getSnapshot().view && <div data-tutor-draft-loading="" role={notebook.getSnapshot().error ? "alert" : "status"} className="px-3 py-2 text-xs text-muted-foreground">
+						{notebook.getSnapshot().error ? <>Saved drafts could not load. <button type="button" className="min-h-11 underline" onClick={() => { void notebook.refresh(); }}>Retry</button></> : "Loading saved drafts…"}
+					</div>}
+					<div ref={bodyRef} data-tutor-draft-inputs="" inert={!notebook.getSnapshot().view}>
 					{setupCta}
 					{sharedWritingSlot}
 					{/* The queued-steer indicator (owner spec 2026-10-03): quiet
@@ -2369,6 +2469,9 @@ function DockOverlay({
 					    (the dock reclaims then). Rides the check answer on submit. */}
 					{pending && requiresReveal && (
 						<ReadingThinkingField
+							key={pending.toolCallId}
+							notebook={notebook}
+							toolCallId={pending.toolCallId}
 							dictation={dictation}
 							value={readingThinking}
 							onChange={onReadingThinking}
@@ -2378,7 +2481,7 @@ function DockOverlay({
 									? () => {
 											void finishDictation().then(() => {
 												expandAndRevealRef.current();
-											});
+											}).catch(() => {});
 										}
 									: undefined
 							}
@@ -2395,6 +2498,7 @@ function DockOverlay({
 						>
 							{pending ? (
 								<QuestionDock
+									notebook={notebook}
 									dictation={dictation}
 									hasSharedWriting={hasSharedWriting}
 									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall"}
@@ -2419,6 +2523,7 @@ function DockOverlay({
 								/>
 							) : practice ? (
 								<PracticeDock
+									notebook={notebook}
 									dictation={dictation}
 									hasSharedWriting={hasSharedWriting}
 									problemCallId={practice.toolCallId}
@@ -2443,10 +2548,11 @@ function DockOverlay({
 					    flush to the screen bottom — static height, outside the
 					    morphing shell so it never joins a height animation. */}
 					<StatsBar
+						leadingSlot={notebookToggle}
 						turns={turns}
 						contextTokens={contextTokens}
 						pricing={pricing}
-						dictationSlot={dictationSlot}
+						dictationSlot={notebook.getSnapshot().view ? dictationSlot : undefined}
 						compactInput
 						phonePlan={plan ? <button type="button" className="lh-phone-plan" onClick={onOpenPlan}>Plan</button> : undefined}
 						chatId={chatId}

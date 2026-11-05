@@ -27,6 +27,9 @@
 
 import { ChatInputError, dismissAppends, emit } from "../core";
 import type { ChatStore } from "../core/ports.ts";
+import { commitNotebookInput, notebookSubmissionAccepted } from "./notebook-submissions.ts";
+import { NotebookDraftConflict } from "../core/notebook-drafts.ts";
+import { parseDismissInput } from "../core/input-events.ts";
 
 /** The parked dismissal body — exactly the parsed input the dismiss route
  *  accepted ({type:"dismiss", toolCallId, answer} or
@@ -70,11 +73,14 @@ export function applyParkedDismissal(chatStore: ChatStore, chatId: string): void
 	const record = chatStore.getChat(chatId);
 	if (!record) return;
 	try {
-		const appends = dismissAppends(record, input as Parameters<typeof dismissAppends>[1]);
-		chatStore.saveMessages(chatId, [...record.messages, ...appends]);
+		const parsed = parseDismissInput(input);
+		if (parsed.type === "dismiss" && parsed.submission && notebookSubmissionAccepted(record, parsed)) return;
+		const appends = dismissAppends(record, parsed);
+		if (parsed.type === "dismiss" && parsed.submission) commitNotebookInput(chatStore, chatId, parsed, appends);
+		else chatStore.saveMessages(chatId, [...record.messages, ...appends]);
 		emit("record-changed", { chatId });
 	} catch (err) {
-		if (err instanceof ChatInputError) return; // never materialized — drop
+		if (err instanceof ChatInputError || err instanceof NotebookDraftConflict) return; // original draft remains available
 		throw err;
 	}
 }

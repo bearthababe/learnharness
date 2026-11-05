@@ -39,7 +39,15 @@ import { isTypingSurface } from "@/src/core";
 
 /** Overlay roots whose buttons keep native Enter (hand-rolled menus mark
  *  themselves data-lh-menu; Radix poppers/dialogs carry their own attrs). */
-const OVERLAY_ROOTS = '[data-lh-menu], [data-radix-popper-content-wrapper], [role="menu"], [role="dialog"]';
+const OVERLAY_ROOTS = '[data-lh-menu], [data-radix-popper-content-wrapper], [role="menu"], [role="dialog"], [data-input-owner="notebook"]';
+
+/** Notebook is a separate keyboard destination, including page/chrome Enter. */
+export function notebookOwnsKeyboard(event: KeyboardEvent): boolean {
+	const target = event.target as HTMLElement | null;
+	const owner = target?.closest?.("[data-input-owner]")?.getAttribute("data-input-owner");
+	if (owner) return owner === "notebook";
+	return !!document.querySelector('[data-session-destination="notebook"]');
+}
 
 /** Pure decision, exported for pins: does a focused BUTTON keep native
  *  Enter (true) or does Enter belong to submit (false)? */
@@ -64,6 +72,7 @@ export function useEnterSubmits(submit: () => void): void {
 	submitRef.current = submit;
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
+			if (e.defaultPrevented || notebookOwnsKeyboard(e)) return;
 			if (e.key !== "Enter") return;
 			if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
 			if (isTypingSurface(e)) return;

@@ -7,6 +7,8 @@ import { compactionInFlight, getChat, isTurnRunning, readSettingsRecord, turnFai
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+	// Retain the installed Notebook preview's stable root identity.
+	if (process.env.LH_NOTEBOOK_PREVIEW === "1") return {};
 	const { id } = await params;
 	return {
 		manifest: `/chat/${encodeURIComponent(id)}/manifest.webmanifest`,

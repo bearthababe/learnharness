@@ -16,6 +16,25 @@ A separate conversation exercising retrieval and application through varied prob
 **Problem**:
 An exercise the learner works on within practice or a drill, with discussion and assistance as needed. Its conclusion records the outcome of that attempt.
 
+**Notebook**:
+The learner's continuing mathematical working within a teaching or practice session, distinct from the Tutor conversation. It can span multiple questions and topics; snapshots of its working can be shared with the Tutor.
+
+**Notebook line**:
+A whole row of the learner's mathematical working, addressed by its displayed line number.
+
+**Numbered expression**:
+An individually addressable part of a Notebook line, separated from its neighbors by outer-level relation signs such as =, ≈, ≠, <, >, ≤ or ≥. Expressions are numbered from left to right starting at 1 on each line, including the leftmost expression; fractions, grouped expressions and sums remain together.
+_Avoid_: Term, equation when referring to an expression's number.
+
+**Expression number**:
+An expression's current left-to-right position within its line. Numbers update after insertion or removal rather than remaining attached to earlier expressions.
+
+**Selected expression**:
+The expression the learner has explicitly chosen as the referent for instructions such as “copy this” or “substitute this”.
+
+**Relation chain**:
+A sequence of expressions connected by relation signs. An equality chain is a relation chain whose connecting signs are all equals signs.
+
 **Proposition**:
 A statement represented in the knowledge graph as subject knowledge. Its presence does not establish that the learner understands it or that the statement is correct.
 

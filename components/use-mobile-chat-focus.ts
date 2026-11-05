@@ -6,10 +6,10 @@ import { PHONE_MEDIA } from "@/components/use-phone-viewport";
 
 /** Focus-scoped counterpart of the accepted notebook preview lock. Native
  * history/textarea scrolling stays enabled; edge gestures cannot move the page. */
-export function useMobileChatFocus(rootRef: RefObject<HTMLDivElement | null>, history: RefObject<StickToBottomContext | null>) {
+export function useMobileChatFocus(rootRef: RefObject<HTMLDivElement | null>, history: RefObject<StickToBottomContext | null>, enabled = true) {
 	useEffect(() => {
 		const root = rootRef.current;
-		if (!root) return;
+		if (!root || !enabled) return;
 		const mobile = matchMedia("(pointer: coarse) and (max-width: 979px)");
 		const phone = matchMedia(PHONE_MEDIA);
 		let unlock: (() => void) | undefined;
@@ -93,5 +93,5 @@ export function useMobileChatFocus(rootRef: RefObject<HTMLDivElement | null>, hi
 			document.removeEventListener("touchstart", start);
 			document.removeEventListener("touchmove", move);
 		};
-	}, [rootRef, history]);
+	}, [rootRef, history, enabled]);
 }

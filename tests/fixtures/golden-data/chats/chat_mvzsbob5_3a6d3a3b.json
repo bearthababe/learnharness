@@ -1,0 +1,646 @@
+{
+	"id": "chat_mvzsbob5_3a6d3a3b",
+	"title": "Notebook compatibility capture",
+	"createdAt": "2026-11-02T21:42:32.657Z",
+	"updatedAt": "2026-11-02T21:42:32.699Z",
+	"messages": [
+		{
+			"id": "775fe0bc-48ec-495f-b956-00f08ccf964b",
+			"role": "user",
+			"content": "Pressure is force per area.\n\nNotebook-assisted working\nThis working was edited with assistance; it is not by itself evidence of independent reasoning.\n1. p=\n\nNotebook-assisted working\nThis working was edited with assistance; it is not by itself evidence of independent reasoning.\n1. p=F/A\n\nI compare the area while holding force constant.",
+			"explanation": [
+				{
+					"id": "f823a734-5569-47ab-94e9-78339ed17372",
+					"kind": "text",
+					"text": "Pressure is force per area."
+				},
+				{
+					"id": "005b0490-7083-4400-98f2-ad840126f30f",
+					"kind": "working",
+					"snapshotId": "005b0490-7083-4400-98f2-ad840126f30f",
+					"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+					"revision": 1,
+					"lines": [
+						{
+							"id": "L1",
+							"latex": "p="
+						}
+					]
+				},
+				{
+					"id": "3ec10e81-3392-44e9-8204-d7fffed5cdd2",
+					"kind": "text",
+					"text": ""
+				},
+				{
+					"id": "77564415-1a17-43e6-8663-0f311c543e67",
+					"kind": "working",
+					"snapshotId": "77564415-1a17-43e6-8663-0f311c543e67",
+					"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+					"revision": 2,
+					"lines": [
+						{
+							"id": "L1",
+							"latex": "p=F/A"
+						}
+					]
+				},
+				{
+					"id": "82d04c38-51fe-4cd7-899b-4cb05794ef65",
+					"kind": "text",
+					"text": "I compare the area while holding force constant."
+				}
+			],
+			"timestamp": 1793655752693
+		},
+		{
+			"role": "assistant",
+			"content": [
+				{
+					"type": "text",
+					"text": "Explain how doubling area affects pressure."
+				}
+			],
+			"api": "faux:1793655752688:j36jiz2tubm",
+			"provider": "faux",
+			"model": "faux-1",
+			"usage": {
+				"input": 10625,
+				"output": 11,
+				"cacheRead": 0,
+				"cacheWrite": 0,
+				"totalTokens": 10636,
+				"cost": {
+					"input": 0,
+					"output": 0,
+					"cacheRead": 0,
+					"cacheWrite": 0,
+					"total": 0
+				}
+			},
+			"stopReason": "stop",
+			"timestamp": 1793655752698,
+			"durationMs": 1,
+			"thinkingLevel": "off",
+			"id": "msg_mvzsbocb_e6577712"
+		}
+	],
+	"version": 2,
+	"settings": {
+		"model": {
+			"provider": "openrouter",
+			"id": "z-ai/glm-5.3-flash"
+		}
+	},
+	"notebook": {
+		"revision": 24,
+		"visible": true,
+		"current": {
+			"id": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+			"revision": 2,
+			"state": {
+				"lines": [
+					{
+						"id": "L1",
+						"latex": "p=F/A"
+					}
+				],
+				"undo": [
+					[],
+					[
+						{
+							"id": "L1",
+							"latex": "p="
+						}
+					]
+				]
+			},
+			"exchanges": [
+				{
+					"instruction": "Write p=",
+					"selection": null,
+					"cursorLineId": null,
+					"response": {
+						"action": "edit",
+						"operations": [
+							{
+								"op": "insert",
+								"after": null,
+								"id": "L1",
+								"latex": "p="
+							}
+						]
+					},
+					"notebookAfter": [
+						{
+							"id": "L1",
+							"latex": "p="
+						}
+					]
+				},
+				{
+					"instruction": "Complete the formula with F/A",
+					"selection": null,
+					"cursorLineId": null,
+					"response": {
+						"action": "edit",
+						"operations": [
+							{
+								"op": "replace",
+								"id": "L1",
+								"latex": "p=F/A"
+							}
+						]
+					},
+					"notebookAfter": [
+						{
+							"id": "L1",
+							"latex": "p=F/A"
+						}
+					]
+				}
+			]
+		},
+		"notebookDraft": {
+			"id": "1e807b3d-d4ca-4cf0-97b9-c6a15b6f6c85",
+			"revision": 5,
+			"text": "Next unsent instruction."
+		},
+		"nextSequence": 3,
+		"operations": [
+			{
+				"id": "e3639a0d-5712-4107-b390-110db696036f",
+				"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+				"sequence": 1,
+				"kind": "edit",
+				"acceptedAt": "2026-11-02T21:42:32.670Z",
+				"status": "applied",
+				"instruction": "Write p=",
+				"baseRevision": 0,
+				"execution": {
+					"id": "48f0f8f4-c207-40c9-a0f6-7fda5c0dfea6",
+					"model": "faux:editor",
+					"attempts": [
+						{
+							"id": "48f0f8f4-c207-40c9-a0f6-7fda5c0dfea6:0",
+							"model": "faux:editor",
+							"returnedModel": {
+								"provider": "faux",
+								"id": "faux-1"
+							},
+							"at": "2026-11-02T21:42:32.674Z",
+							"elapsedMs": 1,
+							"usage": {
+								"inputTokens": 742,
+								"outputTokens": 21,
+								"cacheReadTokens": 0,
+								"cacheWriteTokens": 0
+							},
+							"raw": "{\"action\":\"edit\",\"operations\":[{\"op\":\"insert\",\"after\":null,\"id\":\"L1\",\"latex\":\"p=\"}]}"
+						}
+					],
+					"input": {
+						"state": {
+							"lines": [],
+							"undo": []
+						},
+						"instruction": "Write p=",
+						"history": [],
+						"notebookHistory": []
+					}
+				},
+				"result": {
+					"state": {
+						"lines": [
+							{
+								"id": "L1",
+								"latex": "p="
+							}
+						],
+						"undo": [
+							[]
+						]
+					},
+					"response": {
+						"action": "edit",
+						"operations": [
+							{
+								"op": "insert",
+								"after": null,
+								"id": "L1",
+								"latex": "p="
+							}
+						]
+					},
+					"exchanges": [
+						{
+							"instruction": "Write p=",
+							"selection": null,
+							"cursorLineId": null,
+							"response": {
+								"action": "edit",
+								"operations": [
+									{
+										"op": "insert",
+										"after": null,
+										"id": "L1",
+										"latex": "p="
+									}
+								]
+							},
+							"notebookAfter": [
+								{
+									"id": "L1",
+									"latex": "p="
+								}
+							]
+						}
+					]
+				},
+				"appliedRevision": 1,
+				"completedWorking": {
+					"revision": 1,
+					"lines": [
+						{
+							"id": "L1",
+							"latex": "p="
+						}
+					]
+				}
+			},
+			{
+				"id": "8bd9c79d-c553-4392-9bc8-d9092c7b4556",
+				"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+				"sequence": 2,
+				"kind": "edit",
+				"acceptedAt": "2026-11-02T21:42:32.681Z",
+				"status": "applied",
+				"instruction": "Complete the formula with F/A",
+				"baseRevision": 1,
+				"execution": {
+					"id": "afe69a05-a598-4a8c-96c4-f9de5a16c60e",
+					"model": "faux:editor",
+					"attempts": [
+						{
+							"id": "afe69a05-a598-4a8c-96c4-f9de5a16c60e:0",
+							"model": "faux:editor",
+							"returnedModel": {
+								"provider": "faux",
+								"id": "faux-1"
+							},
+							"at": "2026-11-02T21:42:32.682Z",
+							"elapsedMs": 0,
+							"usage": {
+								"inputTokens": 803,
+								"outputTokens": 19,
+								"cacheReadTokens": 0,
+								"cacheWriteTokens": 0
+							},
+							"raw": "{\"action\":\"edit\",\"operations\":[{\"op\":\"replace\",\"id\":\"L1\",\"latex\":\"p=F/A\"}]}"
+						}
+					],
+					"input": {
+						"state": {
+							"lines": [
+								{
+									"id": "L1",
+									"latex": "p="
+								}
+							],
+							"undo": [
+								[]
+							]
+						},
+						"instruction": "Complete the formula with F/A",
+						"history": [
+							{
+								"instruction": "Write p=",
+								"selection": null,
+								"cursorLineId": null,
+								"response": {
+									"action": "edit",
+									"operations": [
+										{
+											"op": "insert",
+											"after": null,
+											"id": "L1",
+											"latex": "p="
+										}
+									]
+								},
+								"notebookAfter": [
+									{
+										"id": "L1",
+										"latex": "p="
+									}
+								]
+							}
+						],
+						"notebookHistory": []
+					}
+				},
+				"result": {
+					"state": {
+						"lines": [
+							{
+								"id": "L1",
+								"latex": "p=F/A"
+							}
+						],
+						"undo": [
+							[],
+							[
+								{
+									"id": "L1",
+									"latex": "p="
+								}
+							]
+						]
+					},
+					"response": {
+						"action": "edit",
+						"operations": [
+							{
+								"op": "replace",
+								"id": "L1",
+								"latex": "p=F/A"
+							}
+						]
+					},
+					"exchanges": [
+						{
+							"instruction": "Write p=",
+							"selection": null,
+							"cursorLineId": null,
+							"response": {
+								"action": "edit",
+								"operations": [
+									{
+										"op": "insert",
+										"after": null,
+										"id": "L1",
+										"latex": "p="
+									}
+								]
+							},
+							"notebookAfter": [
+								{
+									"id": "L1",
+									"latex": "p="
+								}
+							]
+						},
+						{
+							"instruction": "Complete the formula with F/A",
+							"selection": null,
+							"cursorLineId": null,
+							"response": {
+								"action": "edit",
+								"operations": [
+									{
+										"op": "replace",
+										"id": "L1",
+										"latex": "p=F/A"
+									}
+								]
+							},
+							"notebookAfter": [
+								{
+									"id": "L1",
+									"latex": "p=F/A"
+								}
+							]
+						}
+					]
+				},
+				"appliedRevision": 2,
+				"completedWorking": {
+					"revision": 2,
+					"lines": [
+						{
+							"id": "L1",
+							"latex": "p=F/A"
+						}
+					]
+				}
+			}
+		],
+		"tutorDrafts": [
+			{
+				"id": "e0bab2e8-2d74-40de-835c-6af345a9b5cc",
+				"owner": {
+					"kind": "ordinary"
+				},
+				"revision": 3,
+				"parts": [
+					{
+						"id": "b7fe99f2-07ae-4c67-a256-124c59a6fa50",
+						"kind": "text",
+						"text": "Unsent next thought."
+					},
+					{
+						"id": "9986d62e-56bd-4dc0-aae1-fc10c3c74722",
+						"kind": "working",
+						"snapshotId": "9986d62e-56bd-4dc0-aae1-fc10c3c74722",
+						"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+						"revision": 2,
+						"lines": [
+							{
+								"id": "L1",
+								"latex": "p=F/A"
+							}
+						]
+					},
+					{
+						"id": "4a46bbb4-77c8-49e9-8795-60b014515054",
+						"kind": "text",
+						"text": "Saved spoken continuation."
+					}
+				]
+			}
+		],
+		"snapshots": [
+			{
+				"id": "005b0490-7083-4400-98f2-ad840126f30f",
+				"owner": {
+					"kind": "ordinary"
+				},
+				"draftId": "4e6c0903-0a38-4b6d-a406-656a488d158b",
+				"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+				"throughOperationId": "e3639a0d-5712-4107-b390-110db696036f",
+				"status": "resolved",
+				"revision": 1,
+				"lines": [
+					{
+						"id": "L1",
+						"latex": "p="
+					}
+				]
+			},
+			{
+				"id": "77564415-1a17-43e6-8663-0f311c543e67",
+				"owner": {
+					"kind": "ordinary"
+				},
+				"draftId": "4e6c0903-0a38-4b6d-a406-656a488d158b",
+				"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+				"throughOperationId": "8bd9c79d-c553-4392-9bc8-d9092c7b4556",
+				"status": "resolved",
+				"revision": 2,
+				"lines": [
+					{
+						"id": "L1",
+						"latex": "p=F/A"
+					}
+				]
+			},
+			{
+				"id": "9986d62e-56bd-4dc0-aae1-fc10c3c74722",
+				"owner": {
+					"kind": "ordinary"
+				},
+				"draftId": "e0bab2e8-2d74-40de-835c-6af345a9b5cc",
+				"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+				"throughOperationId": "8bd9c79d-c553-4392-9bc8-d9092c7b4556",
+				"status": "resolved",
+				"revision": 2,
+				"lines": [
+					{
+						"id": "L1",
+						"latex": "p=F/A"
+					}
+				]
+			}
+		],
+		"submissions": [
+			{
+				"submission": {
+					"draftId": "4e6c0903-0a38-4b6d-a406-656a488d158b",
+					"draftRevision": 4,
+					"owner": {
+						"kind": "ordinary"
+					},
+					"id": "775fe0bc-48ec-495f-b956-00f08ccf964b"
+				},
+				"explanation": [
+					{
+						"id": "f823a734-5569-47ab-94e9-78339ed17372",
+						"kind": "text",
+						"text": "Pressure is force per area."
+					},
+					{
+						"id": "005b0490-7083-4400-98f2-ad840126f30f",
+						"kind": "working",
+						"snapshotId": "005b0490-7083-4400-98f2-ad840126f30f",
+						"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+						"revision": 1,
+						"lines": [
+							{
+								"id": "L1",
+								"latex": "p="
+							}
+						]
+					},
+					{
+						"id": "3ec10e81-3392-44e9-8204-d7fffed5cdd2",
+						"kind": "text",
+						"text": ""
+					},
+					{
+						"id": "77564415-1a17-43e6-8663-0f311c543e67",
+						"kind": "working",
+						"snapshotId": "77564415-1a17-43e6-8663-0f311c543e67",
+						"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+						"revision": 2,
+						"lines": [
+							{
+								"id": "L1",
+								"latex": "p=F/A"
+							}
+						]
+					},
+					{
+						"id": "82d04c38-51fe-4cd7-899b-4cb05794ef65",
+						"kind": "text",
+						"text": "I compare the area while holding force constant."
+					}
+				],
+				"message": {
+					"id": "775fe0bc-48ec-495f-b956-00f08ccf964b",
+					"role": "user",
+					"content": "Pressure is force per area.\n\nNotebook-assisted working\nThis working was edited with assistance; it is not by itself evidence of independent reasoning.\n1. p=\n\nNotebook-assisted working\nThis working was edited with assistance; it is not by itself evidence of independent reasoning.\n1. p=F/A\n\nI compare the area while holding force constant.",
+					"explanation": [
+						{
+							"id": "f823a734-5569-47ab-94e9-78339ed17372",
+							"kind": "text",
+							"text": "Pressure is force per area."
+						},
+						{
+							"id": "005b0490-7083-4400-98f2-ad840126f30f",
+							"kind": "working",
+							"snapshotId": "005b0490-7083-4400-98f2-ad840126f30f",
+							"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+							"revision": 1,
+							"lines": [
+								{
+									"id": "L1",
+									"latex": "p="
+								}
+							]
+						},
+						{
+							"id": "3ec10e81-3392-44e9-8204-d7fffed5cdd2",
+							"kind": "text",
+							"text": ""
+						},
+						{
+							"id": "77564415-1a17-43e6-8663-0f311c543e67",
+							"kind": "working",
+							"snapshotId": "77564415-1a17-43e6-8663-0f311c543e67",
+							"contextId": "6f2f6d4e-5502-422b-bcd1-286dc3f82d2b",
+							"revision": 2,
+							"lines": [
+								{
+									"id": "L1",
+									"latex": "p=F/A"
+								}
+							]
+						},
+						{
+							"id": "82d04c38-51fe-4cd7-899b-4cb05794ef65",
+							"kind": "text",
+							"text": "I compare the area while holding force constant."
+						}
+					],
+					"timestamp": 1793655752693
+				},
+				"status": "delivered"
+			}
+		],
+		"speechRuns": [
+			{
+				"id": "6f54f7e6-5444-4190-8f2d-c0992b54a06a",
+				"revision": 3,
+				"status": "revealed",
+				"incomplete": false,
+				"fragments": [
+					{
+						"id": "continuation:0",
+						"start": 0,
+						"end": 0.9,
+						"text": "Saved spoken continuation.",
+						"target": {
+							"kind": "tutor",
+							"owner": {
+								"kind": "ordinary"
+							},
+							"draftId": "e0bab2e8-2d74-40de-835c-6af345a9b5cc",
+							"partId": "4a46bbb4-77c8-49e9-8795-60b014515054"
+						}
+					}
+				],
+				"unplaced": []
+			}
+		]
+	}
+}

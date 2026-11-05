@@ -1,5 +1,5 @@
-/** Read-only browser regression against a running app and an existing session.
- * LH_SMOKE_CHAT_ID=<id-with-scrollable-history> node scripts/smoke-mobile-layout.mjs
+/** Browser layout regression against the disposable session from --all.
+ * Drafts and recording recovery persist only in that fixture.
  * Optional: LH_SMOKE_URL, CHROMIUM_PATH. No tutor turns or uploads are submitted.
  */
 import assert from "node:assert/strict";
@@ -8,6 +8,7 @@ import puppeteer from "puppeteer-core";
 const chatId = process.env.LH_SMOKE_CHAT_ID;
 assert.ok(chatId && /^[A-Za-z0-9_-]+$/.test(chatId), "Set LH_SMOKE_CHAT_ID to an existing teaching session.");
 const origin = process.env.LH_SMOKE_URL ?? "http://127.0.0.1:3000";
+assert.ok(process.env.LH_SMOKE_NOTEBOOK_FIXTURE === "1" && chatId === "mobile_panels" && new URL(origin).hostname === "127.0.0.1" && !["3000", "3001", "3002"].includes(new URL(origin).port), "Run through smoke-mobile-inputs.mjs --all with its disposable fixture.");
 const browser = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", headless: true, args: ["--no-sandbox", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
 const failures = [];
 const check = (condition, message) => {
@@ -16,6 +17,7 @@ const check = (condition, message) => {
 };
 try {
 	const page = await browser.newPage();
+	page.setDefaultNavigationTimeout(120_000);
 	const errors = [];
 	page.on("pageerror", error => errors.push(error.message));
 	await page.setViewport({ width: 375, height: 667, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -41,7 +43,7 @@ try {
 				if (typeof value !== "string") { window.__lhSmokeAudioFrames = (window.__lhSmokeAudioFrames ?? 0) + 1; return; }
 				if (JSON.parse(value).type !== "CloseStream") return;
 				queueMicrotask(() => {
-					this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "Results", is_final: true, channel: { alternatives: [{ transcript: "Mobile dictation check" }] } }) }));
+					this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "Results", is_final: true, speech_final: true, start: 0, duration: .001, channel: { alternatives: [{ transcript: "Mobile dictation check", words: [{ word: "Mobile dictation check", start: 0, end: .001 }] }] } }) }));
 					this.close();
 				});
 			}

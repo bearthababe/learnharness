@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRightIcon, CornerDownLeftIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
-import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+import { finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+import { explanationHasContent, type NotebookInputFields } from "@/src/core";
+import type { NotebookSession } from "./notebook-session";
+import { useNotebookActivityDraft } from "./notebook-activity-draft";
 import { CompactLearningInput } from "@/components/compact-learning-input";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { cn } from "@/lib/utils";
@@ -41,7 +44,8 @@ export interface PracticeDockProps {
 	expanded: boolean;
 	onExpand: () => void;
 	/** text — POST {type:"thinking"} (one lane; the register is read from the text). */
-	onSubmit: (text: string) => void;
+	onSubmit: (text: string, problemCallId: string, fields?: NotebookInputFields) => void | Promise<boolean>;
+	notebook?: NotebookSession;
 	/** Escape in the thinking field stops dictation (threaded from the page). */
 	onEscape?: () => void;
 	/** Compaction is running for this chat (owner round 14): the thinking
@@ -51,32 +55,57 @@ export interface PracticeDockProps {
 	compactionRunning?: boolean;
 }
 
-export function PracticeDock({ dictation, problemCallId, input, expanded, onExpand, onSubmit, onEscape, compactionRunning = false, hasSharedWriting = false }: PracticeDockProps) {
+export function PracticeDock({ dictation, problemCallId, input, expanded, onExpand, onSubmit, onEscape, notebook, compactionRunning = false, hasSharedWriting = false }: PracticeDockProps) {
+	const owner = { kind: "practice" as const, problemCallId };
+	const owned = useNotebookActivityDraft(notebook, owner);
 	const [thinking, setThinking] = useState("");
 	// Ref MIRRORS the field ("nothing gets lost", the question-dock
 	// discipline): a submit resuming after `await finishDictation()` reads
 	// the tail, never a stale closure.
 	const thinkingRef = useRef("");
+	const sending = useRef(false);
+	const activated = useRef<string | null>(null);
+	useEffect(() => {
+		if (!owned.enabled || activated.current === problemCallId) return;
+		activated.current = problemCallId;
+		if (!owned.draft && thinkingRef.current) notebook!.tutor.updateText({ kind: "practice", problemCallId }, thinkingRef.current);
+	}, [notebook, problemCallId, owned.enabled, owned.draft]);
+	const update = (text: string) => {
+		thinkingRef.current = text; setThinking(text);
+		if (owned.enabled) notebook!.tutor.updateText(owner, text);
+	};
 
 	useDictationTarget(
 		useCallback(
 			(t: string) => {
-				const v = joinDictation(thinkingRef.current, t);
-				thinkingRef.current = v;
-				setThinking(v);
+				const part = notebook?.tutor.draft({ kind: "practice", problemCallId })?.parts.at(-1);
+				update(joinDictation(part?.kind === "text" ? part.text : thinkingRef.current, t));
 			},
-			[],
+			[notebook, problemCallId, owned.enabled],
 		),
 		true,
 	);
 
-	const submit = () => {
-		if (compactionRunning) return;
-		const text = thinkingRef.current.trim();
-		if (text.length === 0 && !hasSharedWriting) return;
-		thinkingRef.current = "";
-		setThinking("");
-		onSubmit(text);
+	const submit = async () => {
+		if (compactionRunning || sending.current || notebook?.getSnapshot().sendBlocked) return;
+		sending.current = true;
+		// Capture this problem and adapter before finalization can change activity.
+		try {
+			await finishDictation();
+			if (notebook?.getSnapshot().view?.contextId && (!hasSharedWriting || explanationHasContent(notebook.tutor.draft(owner)?.parts ?? []))) {
+				const prepared = await notebook!.tutor.prepareSubmission(owner);
+				try { await onSubmit(prepared.text, problemCallId, prepared); }
+				finally { await notebook!.tutor.reconcile(prepared.submission.id); }
+			} else {
+				// An owned draft was already checked above. Image-only submission
+				// must not revive the legacy field after that draft was consumed.
+				const text = notebook?.getSnapshot().view?.contextId ? "" : thinkingRef.current.trim();
+				if (!text && !hasSharedWriting) return;
+				const accepted = await onSubmit(text, problemCallId);
+				if (accepted !== false && thinkingRef.current.trim() === text) update("");
+			}
+		} catch { /* The shared draft model exposes recoverable save failures. */ }
+		finally { sending.current = false; }
 	};
 
 	/* ENTER SUBMITS FROM ANYWHERE (owner round 6, 2026-10-05): dictation
@@ -86,11 +115,12 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 	useEnterSubmits(submit);
 
 	return (
-		<div data-testid="practice-dock" data-problem={problemCallId}>
+		<div data-testid="practice-dock" data-input-owner="tutor" data-problem={problemCallId} data-tutor-owner={JSON.stringify(owner)}>
 			{!expanded ? (
 			<button
 				type="button"
 				data-testid="practice-dock-bar"
+				data-input-owner="tutor" data-problem={problemCallId}
 				onClick={onExpand}
 				className="flex w-full cursor-pointer items-center gap-2 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:text-foreground"
 			>
@@ -118,10 +148,9 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 				</div>
 				<CompactLearningInput dictation={dictation}><textarea
 					aria-label="Your thinking"
-					value={thinking}
+					value={owned.enabled ? owned.text : thinking}
 					onChange={(e) => {
-						thinkingRef.current = e.target.value;
-						setThinking(e.target.value);
+						update(e.target.value);
 					}}
 					onKeyDown={(e) => {
 						// Esc ends dictation — stopPropagation claims it (the
@@ -157,7 +186,7 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 						type="button"
 						data-testid="practice-send"
 						aria-label="Submit thinking"
-						disabled={(thinking.trim().length === 0 && !hasSharedWriting) || compactionRunning}
+						disabled={owned.blocked || (!(owned.enabled ? explanationHasContent(owned.draft?.parts ?? []) : thinking.trim().length > 0) && !isDictationActive() && !hasSharedWriting) || compactionRunning}
 						onClick={() => submit()}
 						className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 					>
