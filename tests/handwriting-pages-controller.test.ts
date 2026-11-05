@@ -22,6 +22,7 @@ class MemoryDevice implements PagesDevice {
 		for (const page of input.pages) { value.pages = value.pages.filter(p => p.id !== page.id); value.pages.push(structuredClone(page)); }
 		if (input.activePageId) value.session.activePageId = input.activePageId;
 		if (input.action) { value.actions = value.actions.filter(a => a.actionId !== input.action!.actionId); value.actions.push(structuredClone(input.action)); }
+		if (input.retireAction) value.actions = value.actions.filter(a => a.actionId !== input.retireAction);
 		this.value = value;
 	}
 	async finishAction(_chat: string, _generation: number, id: string) { this.value.actions = this.value.actions.filter(a => a.actionId !== id); }

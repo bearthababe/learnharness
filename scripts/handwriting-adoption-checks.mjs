@@ -2,31 +2,30 @@ import assert from "node:assert/strict";
 
 /** Native abort/repair at the controller boundary, using the server's causal policy. */
 export async function checkHandwritingAdoption(page) {
-	for (const mode of ["put", "creation", "cold", "existing"]) {
+	// Creation uses the actual server validator in check-handwriting-creation-device.mjs.
+	for (const mode of ["put", "cold", "existing"]) {
 		const result = await page.evaluate(async mode => {
-			const { IndexedPagesDevice, HandwritingPages, initialHandwritingPage, appendHandwriting, importHandwritingBackground, reconcileHandwritingPage, copyHandwriting, notebookSource } = window;
+			const { IndexedPagesDevice, HandwritingPages, initialHandwritingPage, appendHandwriting, importHandwritingBackground, reconcileHandwritingPage, copyHandwriting } = window;
 			const chat = `adoption-abort-repair-${mode}`, device = new IndexedPagesDevice();
 			const ink = { tool: "pen", colour: "#171717", penScale: 1, width: 38, points: [{ x: 10, y: 20, pressure: .5 }] };
 			const canvas = document.createElement("canvas"); canvas.width = 1400; canvas.height = 1800; canvas.getContext("2d").fillRect(0, 0, 1400, 1800);
 			const pixels = { mediaType: "image/png", width: 1400, height: 1800, data: canvas.toDataURL("image/png").split(",")[1] };
 			let base = initialHandwritingPage(appendHandwriting({ version: 1, operations: [] }, { id: "base", kind: "stroke", stroke: ink }));
-			if (mode === "creation" || mode === "existing") { const id = `page_${crypto.randomUUID()}`; base = { ...base, id, createdAt: "2026-01-01T00:00:00.000Z", journal: copyHandwriting(base.journal, id) }; }
+			if (mode === "existing") { const id = `page_${crypto.randomUUID()}`; base = { ...base, id, createdAt: "2026-01-01T00:00:00.000Z", journal: copyHandwriting(base.journal, id) }; }
 			let remote = { ...base, journal: await importHandwritingBackground(appendHandwriting(base.journal, { id: "clear", kind: "clear" }), pixels, "incoming") };
 			const session = await device.open(chat); if (mode === "put" || mode === "existing") await device.commit(chat, session.generation, { pages: [base], expected: { [base.id]: null }, activePageId: base.id });
-			let abort = true, aborts = 0, conflicts = 0, offlineRead = false, created = mode !== "creation";
+			let abort = true, aborts = 0, conflicts = 0, offlineRead = false;
 			const put = IDBObjectStore.prototype.put;
 			IDBObjectStore.prototype.put = function(...args) { const result = put.apply(this, args); if (abort && this.name === "pages" && args[0]?.chatId === chat && args[0]?.page?.journal?.head === "incoming") { aborts++; this.transaction.abort(); } return result; };
 			const deps = { device, storage: () => localStorage, prepare: async () => {}, flatten: async () => { throw Error("unexpected"); }, fetch: async (url, init) => {
-				if (String(url).endsWith("/source")) return Response.json(notebookSource(base.journal));
-				if (init?.method === "POST") { created = true; return Response.json({ page: remote, existing: true }); }
+				if (init?.method === "POST") throw Error("Creation must use the actual-server regression");
 				if (init?.method === "PUT") { const submitted = JSON.parse(init.body); if (submitted.id !== base.id) return Response.json(submitted); try { remote = reconcileHandwritingPage(remote, submitted); return Response.json(remote); } catch { conflicts++; return Response.json({ code: "conflict" }, { status: 409 }); } }
 				if (offlineRead) throw Error("Incoming state must be retained without another GET");
-				if (!created) return String(url).endsWith("/pages") ? Response.json({ pages: [] }) : Response.json({ code: "page_not_found" }, { status: 404 });
 				return String(url).endsWith("/pages") ? Response.json({ pages: [{ id: remote.id, origin: remote.origin, createdAt: remote.createdAt }] }) : Response.json(remote);
 			} };
 			const model = new HandwritingPages(chat, deps);
 			try {
-				await model.open(); if (mode === "creation") await model.openSnapshot({ id: "writing_snapshot" }); await model.retry();
+				await model.open(); await model.retry();
 				const blocked = !model.getSnapshot().ready, complete = model.beginStroke(); complete?.(ink);
 				const headAfterRefusal = model.getSnapshot().working.head, durableAfterAbort = (await device.read(chat, 0)).pages.find(page => page.id === base.id)?.journal.head ?? null;
 				offlineRead = true; abort = false; await model.retry();

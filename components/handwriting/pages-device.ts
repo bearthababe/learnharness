@@ -8,7 +8,7 @@ export type WorkingSession = z.infer<typeof sessionSchema>;
 const actionSchema = z.object({ version: z.literal(1), chatId: z.string(), actionId: z.string(), kind: z.enum(["duplicate", "restore", "recover", "external"]), pageId: notebookPageIdSchema, writingId: z.string().optional(), expectedHead: z.string().nullable().optional(), eventId: z.string().optional(), seedHead: z.string().nullable(), seedFingerprint: z.string().regex(/^[0-9a-f]{64}$/), state: z.enum(["local-committed", "syncing", "failed"]) }).strict();
 export type PageAction = z.infer<typeof actionSchema>;
 export type WorkingSnapshot = { session: WorkingSession; pages: HandwritingPage[]; actions: PageAction[] };
-export type PageCommit = { pages: HandwritingPage[]; expected: Record<string, { head: string | null } | null>; activePageId?: string; expectedActivePageId?: string; action?: PageAction; adoptMetadata?: string[]; valid?: () => boolean };
+export type PageCommit = { pages: HandwritingPage[]; expected: Record<string, { head: string | null } | null>; activePageId?: string; expectedActivePageId?: string; action?: PageAction; retireAction?: string; adoptMetadata?: string[]; valid?: () => boolean };
 export interface PagesDevice {
 	open(chatId: string): Promise<WorkingSession>;
 	read(chatId: string, generation: number): Promise<WorkingSnapshot>;
@@ -88,6 +88,10 @@ export class IndexedPagesDevice implements PagesDevice {
 			const session = await this.guard(tx, chatId, generation);
 			if (input.valid && !input.valid()) throw new Error("Page action was cancelled");
 			if (input.expectedActivePageId !== undefined && session.activePageId !== input.expectedActivePageId) throw new PageDeviceConflict("Active page changed");
+			if (input.retireAction) {
+				const old = await request(tx.objectStore("pageActions").get([chatId, input.retireAction]));
+				if (old !== undefined && !pages.some(page => page.id === actionSchema.parse(old).pageId)) throw new Error("Wrong retiring action");
+			}
 			for (const page of pages) {
 				const row = await request(tx.objectStore("pages").get([chatId, page.id])), expected = input.expected[page.id];
 				if (expected === undefined) throw new Error("Missing page precondition");
@@ -106,6 +110,9 @@ export class IndexedPagesDevice implements PagesDevice {
 			}
 			if (input.valid && !input.valid()) throw new Error("Page action was cancelled");
 			for (const page of pages) tx.objectStore("pages").put({ chatId, pageId: page.id, page: compactPage(page) });
+			// The original wrapper remains the frozen creation seed until both
+			// metadata adoption and action retirement commit, or both roll back.
+			if (input.retireAction) tx.objectStore("pageActions").delete([chatId, input.retireAction]);
 			if (input.action) {
 				const store = tx.objectStore("pageActions"), old = await request(store.get([chatId, input.action.actionId]));
 				if (input.valid && !input.valid()) throw new Error("Page action was cancelled");

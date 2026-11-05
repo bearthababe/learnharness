@@ -179,6 +179,14 @@ mirror compact storage, activate and unlock; mirror/render failures report hones
 device-saved status. Background sync retries the same immutable operation/seed.
 Never mint another copy or Restore on retry. No per-switch network ACK gate.
 
+R5 lifecycle clarification: the frozen creation seed includes its original
+descriptive metadata and identity, not only its graph closure. If a compatible
+existing original changes that metadata, adopt it and retire the accepted
+creation action in one native transaction. Abort retains both the original
+wrapper and outstanding action for identical retries; committed adoption leaves
+no stale creation to regenerate. Queued tails then save with reconciled metadata.
+This uses the existing persisted page/action schemas and server validation.
+
 Sync failure: **Saved on this device; couldn’t save to LearnHarness**, with Retry;
 automatic 5-second/online/focus/visible retry remains. Local divergence retains
 both versions and blocks unsafe edits. Reload uses committed pointer/history,

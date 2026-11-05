@@ -27,7 +27,7 @@ export class HandwritingPages {
 	private summaries = new Map<string, PageSummary>();
 	private assets = new Map<string, BackgroundPixels>();
 	private remote = new Map<string, HandwritingPage | null>();
-	private incoming = new Map<string, { page: HandwritingPage; metadata: boolean }>();
+	private incoming = new Map<string, { page: HandwritingPage; metadata: boolean; creationId?: string }>();
 	private actions = new Map<string, PageAction>();
 	private listeners = new Set<() => void>();
 	private generation: number | null = null;
@@ -329,6 +329,8 @@ export class HandwritingPages {
 		finally { this.update({ busy: false }); }
 	}
 	private creation(page: HandwritingPage, action: PageAction): { page: HandwritingPage; creation: PageCreation } {
+		// The page wrapper is part of the frozen seed: server metadata adoption
+		// must retire this action in the same transaction before replacing it.
 		const from = action.kind === "recover" && !action.writingId ? { kind: "working" as const, pageId: page.id } : page.origin.kind === "duplicate" ? page.origin.from : { kind: "snapshot" as const, writingId: action.writingId! };
 		return { page: { ...page, journal: handwritingAtHead(page.journal, action.seedHead) }, creation: { id: action.actionId, kind: action.kind as PageCreation["kind"], seedFingerprint: action.seedFingerprint, from } };
 	}
@@ -352,8 +354,9 @@ export class HandwritingPages {
 			let next = reconcile(current, incoming.page);
 			if (old) next = incoming.metadata ? adoptHandwritingPageMetadata(old, next) : reconcileHandwritingPage(next, old);
 			await this.deps.prepare(next);
-			await this.deps.device.commit(this.chatId, this.generation, { pages: [next], expected: { [pageId]: old ? { head: old.journal.head } : null }, ...(incoming.metadata ? { adoptMetadata: [pageId] } : {}), valid: () => this.alive() });
+			await this.deps.device.commit(this.chatId, this.generation, { pages: [next], expected: { [pageId]: old ? { head: old.journal.head } : null }, ...(incoming.metadata ? { adoptMetadata: [pageId] } : {}), retireAction: incoming.creationId, valid: () => this.alive() });
 			if (!this.alive()) return false;
+			if (incoming.creationId) this.actions.delete(incoming.creationId);
 			this.remember(next); this.localSaved.add(pageId); this.blocked.delete(pageId);
 			this.mirror(next, incoming.metadata);
 			this.remote.set(pageId, incoming.page); this.incoming.delete(pageId);
@@ -397,11 +400,11 @@ export class HandwritingPages {
 				if (!handwritingPrefix(result.journal, page.journal) && !handwritingPrefix(page.journal, result.journal)) { this.conflict(pageId); return; }
 				const reconciled = adoptHandwritingPageMetadata(page, result);
 				if (canonicalHandwriting(pageSummary(page)) !== canonicalHandwriting(pageSummary(result)) || reconciled.journal.head !== page.journal.head) {
-					this.incoming.set(pageId, { page: result, metadata: true });
+					this.incoming.set(pageId, { page: result, metadata: true, creationId: creation.actionId });
 					if (!await this.adoptIncoming(pageId)) return;
 				}
 				this.remote.set(pageId, result);
-				await this.deps.device.finishAction(this.chatId, this.generation, creation.actionId); this.actions.delete(creation.actionId);
+				if (this.actions.has(creation.actionId)) { await this.deps.device.finishAction(this.chatId, this.generation, creation.actionId); this.actions.delete(creation.actionId); }
 			}
 			while (this.alive() && !this.blocked.has(pageId)) {
 				page = this.pages.get(pageId)!; const acknowledged = this.remote.get(pageId);

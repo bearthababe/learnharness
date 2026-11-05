@@ -877,3 +877,78 @@ This last receipt entry is documentation-only. The handoff supplies its exact
 final clean hash after fresh ancestry and pinned-worktree isolation checks.
 Parent-owned independent rereview must assess N1/R4 at that hash; no overall #47
 approval is claimed. S1 remains deferred to #51 and physical #48 remains open.
+
+### #47 R5 frozen creation lifecycle correction — 2026-11-05
+
+Continued in `ticket-47-menu-fix` / `implement/handwriting-47-menu-fix` from clean
+`fa8c2aa25bc2cf17844e841127e3835b359ae901`, after both independent reviewers
+finished. Parent reports **Standards PASS**: N1/S2 fixed, S3/H1 closed, S1 still
+owner-deferred to #51. `47-adoption-review-spec.md` closes **R1/R2/R3/R4** and
+reports **R5 P2**: metadata adoption followed by failed/outstanding creation
+retirement could regenerate an invalid recovery seed, leaving its queued tail
+unsynced. Earlier owner approvals, review files and verification history remain
+intact. Evidence filenames below are relative to `/home/bjorn/.cache/opencode/issue4/`.
+
+The unmodified actual-server/native reproduction passed its bug assertions before
+changes (`47-r5-exact-repro.log`). Maintained regression red
+`47-r5-native-red.log` likewise recorded a valid recovered-origin POST returning
+200 followed by working-origin retries returning 400, an outstanding action after
+remount and an unsynced tail. This reaches the real `handwritingPagesResponse`,
+`sharedWritingSourceResponse`, shared-writing/filesystem stores, native IDB and
+WebCrypto; it does not stub creation acceptance.
+
+**Correction:** the original page wrapper remains part of the frozen seed while
+its creation action exists. Compatible server metadata adoption and retirement of
+that accepted creation now share one native transaction. A page-write or action-
+deletion abort rolls back both; the original metadata/identity and seed closure
+remain available for exactly the same request after remount. Only transaction
+completion updates controller metadata and removes the in-memory action. Queued
+tails then use ordinary PUT with reconciled metadata. When metadata adoption is
+unnecessary, a failed ordinary retirement leaves the unchanged wrapper available
+for the same idempotent POST retry. No server-validation relaxation or 400-as-
+acceptance path was introduced.
+
+The internal `PageCommit.retireAction` transaction argument uses the existing
+pageActions store. Persisted page/action schemas and IDB version remain unchanged;
+there is no new persisted seed shape. The promoted plan clarifies the existing
+immutable-seed/safe-retirement invariant. No UI or keyboard behavior changes.
+
+`scripts/check-handwriting-creation-device.mjs` maintains **13 real-handler/native
+lifecycle cases**: concurrent source recovery with adoption abort, retirement
+abort or lost response; absent-original recovery, working copy, snapshot copy,
+external original and local-only recovery with retirement abort/lost response.
+Every case forces multiple actual POSTs across a remount and compares the full
+parsed request against the original (including origin, createdAt, page identity,
+creation ID/from, frozen graph closure and assets), not merely the head or kind.
+Assertions verify retirement, unchanged immutable snapshot source, one noninitial
+page, zero tutor messages, successful subsequent tail PUT and exact reload.
+Reconciled working accumulates a queued tail while creation is pending; concurrent
+metadata adoption remains guarded. Known incoming state repairs with GET disabled.
+
+The permissive creation POST branch in `handwriting-adoption-checks.mjs` is removed
+and its coverage replaced by this actual-server runner. PUT/cold/known-GET/admitted-
+stroke boundaries remain in the existing native Pages runner. A separate external
+`47-r5-creation-feedback.mjs` changes only the independent reproduction's expected
+success assertions, preserving its original artifact. Its final result has zero
+remaining actions, no 400s, null notice, and identical local/server/reloaded tail.
+
+| Final check after production changes settled | Completed evidence |
+|---|---|
+| Affected Pages/controller/route/store, handwriting/history and shared-writing suites | **39 passed**, `47-r5-focused-final.log` |
+| Actual-handler/native creation lifecycle | **13 cases passed**, `47-r5-creation-final.log` |
+| Existing native Pages/R1–R4 boundaries | Passed, `47-r5-pages-native-final.log`; genuine cold reads/assets, cancellation, atomicity, recovery and admitted-stroke preservation retained |
+| Independent exact scenario with success assertions | Passed, `47-r5-feedback-final.log` |
+| Full handwriting Chromium suite | Passed, `47-r5-handwriting-final.log`, fixture `handwriting-browser-chZGS3`; real Pages/Open/Restore/Duplicate/import, immutable Attach, recovery and postcommit retry |
+| Typecheck / lint | Passed, `47-r5-typecheck-final.log`, `47-r5-lint-final.log` |
+| Production build | Passed, `47-r5-build-final.log`, fixture `build-47-r5`; 357 application files verified byte-identical, established fixture `turbopack.root` variation only; four existing filesystem tracing warnings |
+| Diff and original-tree isolation | `git diff --check` passed; `ticket-47` remains clean at `56a26fc6ed81e19c87db21ceac51a6d168242666`, `ticket-47-fixes` clean at `eeef5d3c6db9daa8789f7266a6a3302626ea6f9c` |
+
+New reproduction command:
+`NODE_ENV=test node --import tsx scripts/check-handwriting-creation-device.mjs`.
+Existing native/full-handwriting commands remain as recorded above. All checks
+have completed. Unrelated keyboard/mobile/transfer and whole-repository suites
+were not rerun for this persistence-only delta; their earlier approvals/evidence
+remain recorded. No live provider/speech calls, public-preview changes, push,
+PR or issue closure occurred. R5 is an implemented correction awaiting parent-owned
+independent review at the final clean hash; overall #47 and physical #48 acceptance
+are not claimed.
