@@ -149,6 +149,7 @@ const server = processes.spawn(process.execPath, [path.join(dir, "node_modules/n
 let log = "";
 let serverError;
 server.once("error", error => { serverError = error; });
+server.once("exit", (code, signal) => console.log(`Disposable mobile server exited: code=${code}, signal=${signal}`));
 captureOutput(server, path.join(dir, "server.log"), false);
 server.stdout.on("data", data => { log += data; });
 server.stderr.on("data", data => { log += data; });
@@ -173,6 +174,7 @@ try {
 	const page = await browser.newPage();
 	const errors = [];
 	page.on("pageerror", error => errors.push(error.message));
+	page.on("requestfailed", request => console.log(`Browser request failed: ${request.method()} ${new URL(request.url()).pathname}: ${request.failure()?.errorText}`));
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	await page.setRequestInterception(true);
 	let missingSpeechKey = false;

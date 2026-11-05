@@ -1434,3 +1434,45 @@ from it. Automated, independent-review and HTTPS evidence remain recorded above.
 The bounded delivery tickets #46, #47 and #48 are accepted for closure. Broader
 #4/#44 and the owner-deferred keyboard overhaul #51 remain separate. The accepted
 slot-2 preview and saved review data are retained.
+
+## Main integration with v0.5.0 — 2026-11-05
+
+Combined branch `integrate/main-ipad` starts at
+`e3437fb3b42ca3428852b75dea11eef2004fb2db`, merges the accepted handwriting tip
+`58280c99c00cfa3b8f025e3abe1c31a036adb2b2` in
+`de977b5eeda1355630cf94d80ac83a7dfb1f1f9a`, then the final mobile product commit
+`887496b48ff3893085bce471863eea9e6f428906` in
+`acf32a285bf8c4007b5b648664b9724b4487fa65`.
+
+Conflict resolutions preserve both Notebook submission fields and reviewed
+handwriting snapshots. Recovery identity is captured before speech finalization;
+the upstream `SessionModel.send` question key remains argument three and the
+handwriting outcome callback is argument four. The real-handler combined retry
+regression first reproduced a changed image payload returning 200 instead of
+422 (`combined-receipt-red.log`); handwriting receipt validation now precedes
+the equation receipt early return (`combined-receipt-green.log`). Independent
+layout wrappers expose both named containers. The handwriting browser fixture
+copies current source, lockfile and installed dependencies and verifies its
+source fingerprint before substituting isolated routes.
+
+Evidence below is rooted at
+`/home/bjorn/.cache/opencode/issue4/main-verification/`. This section is the
+authoritative combined-source verification record. Earlier physical owner
+acceptance above belongs to its recorded deployment; these combined checks use
+scripted providers/speech and Chromium emulation, not new physical acceptance.
+
+| Check | Combined result / evidence |
+| --- | --- |
+| Typecheck | Passed, `typecheck-final.log` |
+| Lint | Passed, `lint-final.log`; one existing `<head>` warning in `tests/source-name-ui.test.tsx:26` |
+| Production build and provider-runtime smoke | Passed, `build-final.log`, `provider-runtime.log`; isolated build data/auth |
+| Whole nonlive unit suite | First run: 3,816 passed, four skipped, four child-process timeouts in `custom-provider-restart.test.ts`; `unit-combined.log`. Full bounded-concurrency rerun pending in `unit-bounded.log`. |
+| Native Pages/adoption, precommit/capture, atomic creation retirement | Passed sequentially, `native-pages-clean.log`, `native-precommit-clean.log`, `native-creation-clean.log` |
+| Fresh aggregate mobile | First run failed at Settings recovery with Settings/Notebook fetch failures: `mobile-input-browser-eA6VtP/result.json`; source clean `acf32a2`, SHA-256 `ed5245b006a4f6755a8303ed3eefc2d1b5bf34751a2515320a49d442d0e46c06`. Fresh diagnostic aggregate pending. |
+| Full handwriting browser | Pending, `handwriting-combined.log` |
+
+The earlier duplicate/interrupted unit/mobile runs and shared `native-*.log`
+files are not completion evidence. The clean native sequence replaces those
+ambiguous logs. Final delivery remains pending the full unit/browser outcomes
+and the peer's supplemental harness/docs commit. Parent owns the single
+combined PR, remote merge and local main update.
