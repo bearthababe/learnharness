@@ -1111,3 +1111,208 @@ checkpoints superseded by this final completion entry. **#48 is ready.** S1
 keyboard reachability remains explicitly owner-deferred to #51, not fixed and
 not blocking. Physical iPad acceptance remains open; automated evidence above
 does not replace owner device acceptance.
+
+### #48 composition and handoff preflight — 2026-11-05
+
+Integration tested at `10ec0d0c999c6d88615f771e2271eb0fc24c32c9`; reviewed production
+source remains `86dff1dd55d757fe34b334d0e8c45e36753a8ce7`. The complete tracked-tree
+comparison differs only in this receipt. Independent Standards/Spec approvals
+above apply without a merge-specific production delta; S1 remains deferred to
+[#51](https://github.com/bearthababe/learnharness/issues/51).
+
+All filenames in this section are under `/home/bjorn/.cache/opencode/issue4/`.
+Machine preflight: `48-preflight.json`, produced by `48-preflight.py`. It verifies
+all **357 application files** against retained production `build-47-r5`, build ID
+`FK05t14TT6OZj5Z_ygK_h`. The only configuration variation is the documented
+disposable `turbopack.root: "/"`; the build has no `.env*`. No rebuild or blanket
+suite rerun is needed. Earlier completed logs are fingerprinted in that record.
+
+#### Composition acceptance matrix
+
+| #48 acceptance | Automated evidence / boundary |
+|---|---|
+| Writing + speech → Attach → review → explicit Send, ordinary/teaching/practice/drill | Focused #48 composition runner adds actual canvas capture and Attach-finalized speech to each ordinary adapter, including reload before explicit submission. Final result recorded below. |
+| Choice eligibility and tutor access | #48 includes image+speech with an empty choice still ineligible, then explicit selection. Actual handler/store persists intended reasoning, image reference and receipt; scripted provider only. Real tutor understanding is an owner gate. Earlier adapter coverage: `47-fixes-mobile-final.log`. |
+| Actual tutor read-tool byte access | `47-r5-focused-final.log` includes the passed real `read` tool image-bytes test and question/practice model/transcript projections. This proves intended bytes are available through the actual tool seam, not that a live tutor understood them. |
+| Pending/sent Open, exact four choices, undoable Restore, Redo, Duplicate and independent stages | `47-r5-handwriting-final.log` / `scripts/handwriting-pages-checks.mjs`: actual pending/sent controls, four-choice order/neutral focus, Restore/reload/Undo/Redo, exact snapshot versus working copies, independent pending heads and same-page replacement. Native graph/adoption/creation cases: `47-r5-pages-native-final.log`, `47-r5-creation-final.log`. |
+| Figure import → unfinished leave/reload → continued editing → Attach/Send; immutable older submission | Focused #48 composition runner connects the previously tested import and Send paths and exercises sent Open/save-switch, return to set-aside working, and revised submission. Existing geometry, empty-only admission, independent eraser and background fidelity: `47-r5-handwriting-final.log`. |
+| Empty/older sessions, repeated reopen and session separation | #48 includes empty other-session navigation during unfinished annotation. Final handwriting suite covers V1 recovery, repeated reopen and actual session isolation/deletion; native Pages runner covers missing/local-only/cold originals and retained corrupt/future data. |
+| Save/upload/submission failure and retry composition | `47-fixes-mobile-final.log`: exact saved capture recovery through Attach/reopen/online without Send, newer draft preservation, definite rejection→edit/replace/reload/Submit, both uncertain-A/replacement-B orderings, exact ordinary Send recovery and speech/acceptance races. `47-fixes-native-46-final.log`: 13 precommit/remount ownership cases. Final #47 native and handwriting logs add page commitment/adoption/creation failures and postcommit rendering recovery. |
+| Mobile layout, focus, keyboard and gestures | Existing scripted full handwriting/mobile suites plus `47-menu-menus-final.log` cover phone focus containment, paper/history scrolling, Expand/Back, Pencil-emulated activation and topmost Escape. Physical palm contact, Pencil feel, orientation, software keyboard and iOS pinch/scroll behavior remain owner gates; S1 reachability is explicitly deferred. |
+| HTTPS normal launch, Home Screen identity/assets and Reload | Staged integrated production is checked against the retained #45 HTTPS launch identity, with actual Reload on the isolated local production copy. Final endpoint/handoff result recorded below. Physical Home Screen install/launch remains distinct. |
+| Regression/type/lint/build and review | Completed exact-delta `47-r5-{focused-final,creation-final,pages-native-final,handwriting-final,typecheck-final,lint-final,build-final}.log`; prior broader affected suites and independent final reports above. No app-code change in #48. Existing #45 whole-suite limitations are not claimed fixed. |
+| Actual learning verdict and broader scope | Pending owner trial; neither #4, #44 nor physical #48 is closed by automation. |
+
+#### Slot-2 readiness and concrete configuration blocker
+
+Owner approval to replace #45 at the same `:8445` remains valid. Preflight verified
+slot 2 PID3484369 at `/home/bjorn/.cache/opencode/issue45/review-build-329677b`,
+with existing `review-data` and `review-isolated-auth.json` paths. Slot 1 PID4152830
+and slot 3 PID4154558 are unrelated. All existing Tailscale mappings, including
+443/8443/8444/8445/8446/8447, remain tailnet-only and unchanged.
+
+The review data has a byte-verified reversible backup at
+`48-review-data-before-handoff`; file hashes are in `48-preflight.json`. Original
+#45 build/data and lesson-navigation restoration instructions at
+`/tmp/opencode/issue45-preview-slot.md` are retained. Local production readiness
+uses **only a separate copy** `48-production-readonly-data`, with empty isolated
+`48-production-readonly-auth/auth.json`, and port 3130.
+
+**Handoff blocker requiring parent/owner decision:** main settings at
+`/home/bjorn/repo/teach/learnharness/data/settings.json` select ChatGPT subscription
+models (`gpt-6.1-sol` strong; `gpt-6-luna` cheap/vision). Slot 2 has no auth JSON or
+settings file; its subscription store has no registrations. Read-only projection
+of `/home/bjorn/repo/teach/learnharness/chatgpt-credentials.json` found one saved
+registration but **no active registration**. No credential content is recorded.
+The separate native app store
+`/home/bjorn/.config/LearnHarness/chatgpt-credentials.json` does have an active
+refreshable registration, with no explicit `allowBackgroundUse` field. This is
+not the isolated review owner and was inspected only as booleans/counts; its
+credentials and consent were not copied or changed.
+
+`src/server/web-subscriptions.ts:100` derives the writable subscription-owner
+directory from `dirname(LH_AUTH_FILE)`; `electron/chatgpt.cjs` owns token refresh
+and credential writes there. Pointing this preview at the main auth directory
+would share a writable owner with other services. Copying refreshable credentials
+would create competing owners. Neither is authorized. Copying only ordinary API
+keys would not configure the selected ChatGPT tutor. Parent must resolve isolated
+owner sign-in or an explicitly coordinated credential-owner handoff, including
+background-role consent, before this can be described as live-trial-ready.
+
+No main credentials/settings were changed, copied, refreshed, revoked or tested
+with inference. No live tutor/speech/extraction call was initiated. The #48 scripted
+fixture has empty isolated auth, fake speech and faux tutor; its server fetch guard
+(`48-no-external.cjs`) refuses non-loopback destinations, and browser interception
+blocks external requests. Readiness browsing allows only same-origin GET/HEAD and
+blocks speech/extraction paths and all non-read requests. The public slot has not
+been replaced while this decision is unresolved.
+
+#### Completed production/identity readiness
+
+`48-production-readiness.json` and `48-production-browser-c.log` pass:
+
+- The retained #47 production build served all three intended review sessions
+  from a copied data directory on strict `127.0.0.1:3130`. Actual **Pages** controls
+  established integrated app identity. The real **Notebook options → Tools and
+  help → Reload preview** action retained exact saved ink pixels.
+- Existing HTTPS `:8445` teaching/practice/drill pages returned 200. Each page's
+  manifest, stable session `id`, `start_url`, session-limited `scope`, standalone
+  display, Apple metadata and touch icon match staged production exactly. Icon
+  SHA-256 is recorded in machine evidence. This is **readiness comparison**, not
+  a claim the integrated build has replaced #45 on HTTPS.
+- Browser runtime errors: zero. The interceptor actually blocked automatic
+  `/api/stt/token` GETs and the local copy's attempted working PUTs. The resulting
+  local save-warning is expected under this read-only check, not a persistence
+  failure claim. No public learning-data mutation or inference was allowed.
+- Local readiness task `sh_1ac0f5bab001URHztofP6Au8Oq` used PID19447; after completed
+  checks its exact cwd/data/auth identity was reverified, then only that PID was
+  stopped. Build, copied data and rollback data remain available. No public slot
+  was stopped or remapped.
+
+Retained harness diagnostics: `48-production-browser{,-b,-diagnostic}.log` and
+`48-reload-diagnostic.png`. The locator-based Reload attempt delivered **zero
+click events**. A direct selector pointer click on the same visible button
+performed Reload and passed all assertions. The initial composition harness
+also waited for network idleness despite persistent event streams; its successor
+uses document-load and explicit hydrated/visible UI readiness. No production
+change or weakened behavioral assertion was used for these harness corrections.
+`48-composition-{a,b,c}.log` retain those initial runs: the first timed out at
+network-idle, the second clicked reveal before hydrated readiness, and the third
+assumed question reveal itself persisted across reload. The durable answer/image
+assertions had passed; the final harness uses the existing reveal control again
+after reload and requires the same restored answer before explicit submission.
+
+#### Remaining handoff and owner acceptance
+
+1. Parent/owner resolves isolated subscription sign-in/ownership and explicit
+   background-role consent. Preserve the selected model/thinking settings and
+   authorized dictation key in the isolated configuration; do not silently
+   substitute another provider. No agent inference test is authorized.
+2. Recheck all listeners/cwd/env paths and mappings; refresh the data backup if
+   the owner has written more working. Replace only verified #45 slot2 with the
+   retained reviewed build using the supported background lifecycle and strict
+   `127.0.0.1:3001`, existing review data, and resolved isolated auth owner.
+3. Verify **actual integrated HTTPS** app identity, manifests/icon and Reload
+   with non-read/live paths blocked, then record deployment task/PID/log/data/
+   build/source and update the ledger/handoff record. Intended URL remains
+   `https://thinkpad.tailfd9bf6.ts.net:8445/chat/handwriting_review_teach`.
+4. Owner installs/opens via **Safari → Share → Add to Home Screen → Open as Web
+   App → Add**, if needed; existing installed identity is retained. Review on the
+   physical iPad Air/Pencil 2: ordinary/teaching/practice/drill speech+writing,
+   Attach/review/explicit Send; sent Open/set-aside/reload/revise; Restore Undo/
+   Redo and independent stages; figure annotation/reload/submit; palm/tools,
+   portrait/landscape layout, Expand/Back, keyboard/dictation Stop/review, scrolling
+   and pinch zoom. Record actual tutor understanding and learning verdict.
+
+Do not mark physical #48 or broader #4/#44 complete from these automated results.
+
+#### Completed #48 adapter composition
+
+All five real input paths passed with scripted tutor/speech:
+
+| Path | Completed case evidence |
+|---|---|
+| Ordinary conversation / teaching free-text question | `48-composition-d.log` |
+| Practice | `48-composition-e.log` |
+| Drill / teaching choice question | `48-composition-f.log` |
+
+Each case draws an actual pen stroke, finalizes scripted speech through **Attach**,
+checks visible image review and durable finalized explanation after reload, and
+asserts **zero tutor POSTs before explicit Send** and exactly one on Send. The
+real handler/store records the intended image plus explanation and submission
+receipt, retires pending state, and preserves the frozen source. The choice case
+also refuses a new answer until a choice is selected despite image+speech.
+`48-composition-completed-adapters.json` additionally verifies every retained
+canonical input and immutable PNG/source against its bundle SHA-256 manifest.
+
+Successful cases were retained rather than rerun after later harness failures.
+The `d` run's next case typed before draft initialization; `e` completed practice
+then timed out on network-idle for drill; `f` completed drill/choice and reached
+figure/session reopening, where the harness clicked Write after automatic notebook
+restoration had already hidden it. The corrected helper waits for the existing
+visibility-restoration contract and uses actual notebook readiness before editing.
+These are retained test-harness diagnostics, not reported production defects.
+
+`48-fixture-equivalence.json` verifies all 357 application files in the composition
+fixtures: the sole application substitution is the explicit **faux provider route**
+from the established mobile runner; the real chat handler, stores, adapters and
+notebook remain exact reviewed production. The extra native-adapter fixture and
+environment-only Turbopack root are recorded. No live credentials or `.env` files
+are present. Runner source: `48-{generate-runner,composition-runner,composition-body}.mjs`.
+
+#### Completed figure composition and software-check disposition
+
+**Software composition checks are complete.** Machine summary:
+`48-composition-results.json`, combining the five adapter cases above with
+`48-composition-h.log` and the successful `48-figure-continuation.log` /
+`48-figure-continuation.mjs`. The actual fixture is
+`mobile-input-browser-48-composition-h`, with the same byte-verified production
+modules and scripted provider boundary.
+
+The real figure flow imported a tutor SVG, drew actual ink, left for an empty
+other session, reopened/reloaded, verified the same head and original figure,
+continued ink, then attached and explicitly submitted. The first frozen source
+contains an independent background and **two actual stroke events**. Further
+working and an independent copy were then created through the ordinary UI.
+The completed continuation uses that retained native-IDB/server fixture: sent
+snapshot Open shows all four exact choices; Open current selects the original
+working; reload and Pages restore the exact set-aside copy head; a later Attach/
+Send submits the revised original page. Both canonical submissions, both immutable
+PNG/source manifest hashes, and the unchanged original SVG are verified.
+
+The initial figure runs `g`/`h` timed out entering the sent image menu. A narrow
+read-only actual-pointer check (`48-menu-isolation.{mjs,json,log}`) successfully
+opened it and recorded the button as the actual click target. The continuation
+waits for the actual image to decode and verifies hit geometry before clicking;
+the full remaining flow passed with zero runtime errors. The earlier missed
+activation's exact cause is not established; no production defect or fix is
+claimed. Original failures/screenshots remain retained.
+
+The final isolated fixture server was task `sh_1ac2980250017p3ynYiiRxvKOt`,
+PID38680, strict localhost3129. Its exact cwd/data/auth identity was verified and
+only that process stopped after the checks; final check task
+`sh_1ac2b849b001jIRPu0jxZ3kxf0` completed successfully. No required test remains
+running. Application source is unchanged, no live calls were made, and no issue
+was closed or branch pushed. **Public deployment/live configuration remains
+blocked on the parent/owner decision above; physical iPad acceptance remains
+pending.** The retained #45 HTTPS launch is not advertised as the new integration.
