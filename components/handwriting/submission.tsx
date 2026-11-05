@@ -38,7 +38,9 @@ export function useHandwritingSubmission(chatId: string, review: () => Promise<A
 		const check = () => { if (!document.hidden && model.attempt && !model.busy) void model.check(); };
 		const timer = window.setInterval(check, 5000);
 		window.addEventListener("online", check); window.addEventListener("focus", check); document.addEventListener("visibilitychange", check);
-		return () => { mounted = false; model.dispose(); attachment.dispose(); clearInterval(timer); window.removeEventListener("online", check); window.removeEventListener("focus", check); document.removeEventListener("visibilitychange", check); window.removeEventListener(HANDWRITING_DELETED_EVENT, deleted); };
+		const recoverUploads = () => { void attachment.recover(); };
+		window.addEventListener("online", recoverUploads);
+		return () => { mounted = false; model.dispose(); attachment.dispose(); clearInterval(timer); window.removeEventListener("online", check); window.removeEventListener("online", recoverUploads); window.removeEventListener("focus", check); document.removeEventListener("visibilitychange", check); window.removeEventListener(HANDWRITING_DELETED_EVENT, deleted); };
 	}, [chatId]);
 	const actions = useMemo(() => ({
 		attachment() { return attachmentRef.current; },
@@ -53,6 +55,10 @@ export function useHandwritingSubmission(chatId: string, review: () => Promise<A
 		release() { preparingRef.current = false; setPreparing(false); },
 		blocked() { return preparingRef.current || !!modelRef.current?.busy; },
 		hasAttempt() { return !!modelRef.current?.attempt; },
+		recoveryAction() {
+			const send = callbacks.current.send;
+			return modelRef.current?.recoveryAction((value, outcome) => send(value, undefined, outcome));
+		},
 		retainSpeech(targetKey: string, name: "text" | "thinking" | "readingThinking") {
 			const field = fields.current.get(targetKey), model = modelRef.current;
 			if (!field || !model) return;
@@ -102,7 +108,7 @@ export function useHandwritingEditor(targetKey: string, read: () => EditorSnapsh
 export function HandwritingDeliveryNotice({ bridge, activeTarget }: { bridge: Bridge; activeTarget?: string }) {
 	const model = bridge.model, attempt = model?.attempt;
 	return <div className="text-xs" data-testid="handwriting-delivery">
-		{bridge.attachment()?.noticeEntries().map(({ pageId, text, retry, refresh }) => <p role="status" key={pageId}>{text}{retry && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.attachment()?.retry(pageId)}>Retry</button>}{refresh && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.refreshReview().catch(() => {})}>Refresh review</button>}</p>)}
+		{bridge.attachment()?.noticeEntries().map(({ pageId, text, refresh }) => <p role="status" key={pageId}>{text}{refresh && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.refreshReview().catch(() => {})}>Refresh review</button>}</p>)}
 		{model?.notice && <p role="status">{model.notice}</p>}
 		{attempt && <div data-testid="handwriting-attempt-review"><p>Original answer · delivery unconfirmed</p><pre className="max-h-48 overflow-auto whitespace-pre-wrap">{JSON.stringify(attempt.input, null, 2)}</pre><SharedWritingImages chatId={attempt.chatId} writing={attempt.imageVersions.map(image => ({ id: image.writingId }))} /><p>Later edits are not part of this answer.</p></div>}
 		{model?.savedDrafts().filter(draft => draft.targetKey !== activeTarget && !bridge.field(draft.targetKey)).map(draft => <div key={draft.draftId}><p>This draft belongs to an earlier question.</p><pre className="max-h-48 overflow-auto whitespace-pre-wrap">{JSON.stringify(draft.editor, null, 2)}</pre></div>)}

@@ -39,11 +39,12 @@ export class HandwritingAttachment {
 	constructor(private chatId: string, private deps: Dependencies) {}
 	notice(pageId: string) {
 		const notice = this.notices.get(pageId); if (!notice) return;
-		return { ...notice, text: noticeText[notice.kind] + (notice.limit ? ` ${new CaptureSizeError(notice.limit).message}` : ""), retry: this.captures.has(pageId) && !this.flights.has(pageId), refresh: notice.kind === "refresh_failed" || notice.kind === "review_unavailable" };
+		return { ...notice, text: noticeText[notice.kind] + (notice.limit ? ` ${new CaptureSizeError(notice.limit).message}` : ""), refresh: notice.kind === "refresh_failed" || notice.kind === "review_unavailable" };
 	}
 	noticeEntries() { return [...this.notices.keys()].map(pageId => ({ pageId, ...this.notice(pageId)! })); }
 	report(pageId: string, kind: NoticeKind) { this.update(pageId, kind); }
 	busy(pageId: string) { return this.flights.has(pageId); }
+	hasCapture(pageId: string) { return this.captures.has(pageId); }
 	private update(pageId: string, kind: NoticeKind, limit?: SizeLimit) { this.notices.set(pageId, { kind, limit }); if (!this.disposed) this.deps.changed(); }
 	async open() {
 		try {
@@ -56,11 +57,17 @@ export class HandwritingAttachment {
 				if (capture.state !== "conflicted") this.captures.set(capture.pageId, capture);
 				this.update(capture.pageId, capture.state === "conflicted" ? "conflicted" : "failed");
 			}
-		} catch { this.generation = null; this.update("page_initial", "recovery_unavailable"); }
+		} catch { this.generation = null; this.update("page_initial", "recovery_unavailable"); return; }
+		await this.recover();
+	}
+	async recover() {
+		if (this.deleted || this.disposed || this.generation === null) return;
+		await Promise.all([...this.captures.keys()].map(pageId => this.retry(pageId)));
 	}
 	async attach(preparation: AttachPreparation) {
 		const pageId = preparation.pageId;
-		if (this.deleted || this.disposed || this.flights.has(pageId) || this.captures.has(pageId)) return;
+		if (this.deleted || this.disposed || this.flights.has(pageId)) return;
+		if (this.captures.has(pageId)) { await this.retry(pageId); return; }
 		this.flights.add(pageId); this.update(pageId, "preparing");
 		try {
 			if (this.generation === null) throw new Error("Device unavailable");
@@ -89,10 +96,11 @@ export class HandwritingAttachment {
 		} finally { this.flights.delete(pageId); if (!this.disposed) this.deps.changed(); }
 	}
 	async retry(pageId: string) {
-		if (this.deleted || this.flights.has(pageId)) return;
-		if (this.generation === null) await this.open();
+		if (this.deleted || this.disposed || this.flights.has(pageId)) return;
 		const capture = this.captures.get(pageId);
 		if (!capture || this.generation === null) return;
+		const limit = new TextEncoder().encode(capture.sourceJson).length > LIMIT ? "source" : (capture.png?.size ?? 0) > LIMIT ? "image" : undefined;
+		if (limit) { this.update(pageId, "failed", limit); return; }
 		this.flights.add(pageId);
 		try { await this.deps.device.saveCapture(this.chatId, this.generation, capture, this.drafts.get(pageId)); await this.transfer(capture); }
 		catch { this.update(pageId, "local_failed"); }
@@ -140,6 +148,7 @@ export class HandwritingAttachment {
 			try {
 				const review = await this.deps.refresh(), head = review.pageAttachments[capture.pageId];
 				this.update(capture.pageId, head?.writingId !== capture.writingId ? "superseded" : review.pending.some(item => item.id === capture.writingId) ? capture.expectedPageRevision > 0 ? "updated" : "attached" : "sent");
+				if (!this.disposed) this.deps.reveal();
 			} catch { this.update(capture.pageId, "refresh_failed"); }
 		} catch (error) {
 			capture = { ...capture, state: "failed", error: error instanceof Error ? error.message : "Upload failed" };

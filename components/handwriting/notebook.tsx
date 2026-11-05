@@ -123,6 +123,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		const field = transfer.activeField(), pageId = normalizeHandwriting(working.getSnapshot().working).pageId, validSpeech = dictationCheckpoint();
 		const valid = () => recovery.current === working && normalizeHandwriting(working.getSnapshot().working).pageId === pageId && transfer.activeField() === field && !!field && validSpeech();
 		try {
+			if (uploader.hasCapture(pageId)) { await uploader.retry(pageId); return; }
 			const observed = await callbacks.current.review();
 			if (!valid()) return;
 			await uploader.attach({ pageId, head: observed.pageAttachments[pageId], valid, finish: async () => {
@@ -260,7 +261,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				</div>
 			</div><HandwritingToolbar tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} clear={clear} togglePaper={() => setDimPaper(v => !v)} /></div></div>
 			{saved.notice && <div className="hw-notice" role="status">{saved.notice}{saved.notice !== "Opening notebook…" && <button type="button" className="min-h-11 px-3 underline" {...handlers("Retry", () => { void recovery.current?.retry(); })}>Retry</button>}</div>}
-			{attachmentNotice && <div className="hw-notice" role="status">{attachmentNotice.text}{attachmentNotice.retry && <button type="button" className="min-h-11 px-3 underline" {...handlers("Retry snapshot", () => { const pageId = normalizeHandwriting(recovery.current!.getSnapshot().working).pageId; void submission?.attachment()?.retry(pageId); })}>Retry</button>}{attachmentNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
+			{attachmentNotice && <div className="hw-notice" role="status">{attachmentNotice.text}{attachmentNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
 		</aside>
 	</div>;
 }

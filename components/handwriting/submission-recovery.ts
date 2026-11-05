@@ -70,6 +70,26 @@ export class HandwritingSubmission {
 		this.queueDraft(draft); this.update();
 	}
 	async flush() { await this.writes; }
+	/** Bind the explicit action before speech/preparation can yield. Background
+	 * acceptance may retire this identity, but cannot turn its replay into a
+	 * new submission of whatever the editor contains when preparation ends. */
+	recoveryAction(send: ImageSend): (() => Promise<boolean>) | undefined {
+		const submissionId = this.attempt?.submissionId;
+		if (!submissionId) return;
+		return async () => {
+			if (this.deleted || this.disposed || this.busy) return false;
+			if (this.attempt?.submissionId !== submissionId) return true;
+			this.busy = true; this.update();
+			try {
+				await this.check();
+				if (this.attempt?.submissionId !== submissionId) return true;
+				if (!this.canRetry) return false;
+				await this.dispatch(send, false);
+				return true;
+			} catch { this.update("Couldn’t confirm delivery. Your saved answer is kept on this device."); return false; }
+			finally { this.busy = false; this.update(); }
+		};
+	}
 	async submit(input: ChatInput, images: SharedWriting[], draft: DurableDraft, send: ImageSend): Promise<boolean> {
 		if (this.busy || this.deleted) return false;
 		this.busy = true; this.update();

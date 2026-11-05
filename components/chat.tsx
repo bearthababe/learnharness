@@ -1208,20 +1208,21 @@ export function Chat({
 
 	const onSend = () => {
 		if (pending || compacting || handwritingSubmission.blocked()) return;
-		const reviewed = handwritingSubmission.reviewed();
+		const reviewed = handwritingSubmission.reviewed(), recovery = handwritingSubmission.recoveryAction();
 		const field = handwritingSubmission.activeField(), validSpeech = dictationCheckpoint();
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): a learner who keeps
 		 * talking right through Enter must not lose the tail — stop the run,
 		 * let the last finals land in the composer, then send the REF value
 		 * (the flush lands via setState, invisible to this closure). */
 		if (!dictation.active) {
-			doSteerOrSend(reviewed);
+			doSteerOrSend(reviewed, recovery);
 			return;
 		}
-		void dictation.finish().then(() => { if (validSpeech() && handwritingSubmission.activeField() === field) doSteerOrSend(reviewed); });
+		void dictation.finish().then(() => { if (validSpeech() && handwritingSubmission.activeField() === field) doSteerOrSend(reviewed, recovery); });
 	};
-	const doSend = (reviewed = handwritingSubmission.reviewed()) => {
+	const doSend = (reviewed = handwritingSubmission.reviewed(), recovery = handwritingSubmission.recoveryAction()) => {
 		if (busy || pending || compacting || handwritingSubmission.blocked()) return;
+		if (recovery) { void recovery(); return; }
 		const t = textRef.current.trim();
 		if (!t && !reviewed.length && !handwritingSubmission.hasAttempt()) return;
 		if (zeroKeys) {
@@ -1255,9 +1256,9 @@ export function Chat({
 	 * own stream AND foreign/wake turns — both have a live agent by the
 	 * time the send's POST resolved, so the steer lands. Idle takes the
 	 * plain send; a raced settle 409s and falls back to exactly that. */
-	const doSteerOrSend = (reviewed = handwritingSubmission.reviewed()) => {
+	const doSteerOrSend = (reviewed = handwritingSubmission.reviewed(), recovery = handwritingSubmission.recoveryAction()) => {
 		if (pending || compacting || handwritingSubmission.blocked()) return;
-		if (reviewed.length || handwritingSubmission.hasAttempt()) { if (!busy) doSend(reviewed); return; }
+		if (recovery || reviewed.length || handwritingSubmission.hasAttempt()) { if (!busy) doSend(reviewed, recovery); return; }
 		const t = textRef.current.trim();
 		if (!t) return;
 		if (busy) {
@@ -1265,7 +1266,7 @@ export function Chat({
 			void steer(t);
 			return;
 		}
-		doSend(reviewed);
+		doSend(reviewed, recovery);
 	};
 	useHandwritingEditor("composer", () => ({ text: textRef.current }), draft => applyText(draft.text ?? ""), !pending && !activeProblemRef.current, handwritingSubmission);
 

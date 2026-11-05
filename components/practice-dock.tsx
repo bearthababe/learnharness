@@ -78,11 +78,12 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 
 	const submit = async () => {
 		if (compactionRunning || submitting.current || transfer?.blocked()) return;
-		const reviewed = transfer?.reviewed(), valid = dictationCheckpoint(), target = problemCallId;
+		const reviewed = transfer?.reviewed(), recovery = transfer?.recoveryAction(), valid = dictationCheckpoint(), target = problemCallId;
 		submitting.current = true;
 		try {
 			await finishDictation();
 			if (!alive.current || current.current.problemCallId !== target || current.current.compactionRunning || !valid() || transfer?.blocked()) return;
+			if (recovery) { await recovery(); return; }
 			const text = thinkingRef.current.trim();
 			if (!text && !(reviewed?.length ?? current.current.hasSharedWriting)) return;
 			if (!reviewed?.length && !transfer?.hasAttempt()) { thinkingRef.current = ""; setThinking(""); }
@@ -176,7 +177,7 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 						type="button"
 						data-testid="practice-send"
 						aria-label="Submit thinking"
-						disabled={(thinking.trim().length === 0 && !hasSharedWriting) || compactionRunning}
+						disabled={(thinking.trim().length === 0 && !hasSharedWriting && !transfer?.hasAttempt()) || compactionRunning}
 						onClick={() => submit()}
 						className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 					>

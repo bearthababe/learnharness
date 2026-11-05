@@ -147,9 +147,38 @@ also recorded in [the approved plan](handwriting-submission-plan.md).
 | Spec P1: late speech retargeted before Attach's post-finish guard | Speech finalization pins the actual receiver before requesting finals. A replaced/unmounted field retains late finals in its original target-bound durable draft; stale Attach aborts. The regression uses actual speech hooks and the browser test replaces the question through the real canonical parallel-question path. |
 | Spec P2: another input consumes image/resolves target, leaving uncertainty stuck | Pure canonical-obsolescence evidence handles image consumption and resolved question/problem targets, after exact receipt matching. Missing pending data, missing targets and failed reads alone remain insufficient. Newer drafts stay intact. |
 | Spec P2: original images represented only by IDs | Normal unconfirmed-answer review reuses actual immutable image thumbnails and the existing viewer, independently of current pending B. Browser assertions cover retained A while canonical reads fail and B is pending. |
-| Standards S1: manual recovery controls unreachable under the Tab trap | Submission Check/Retry/disclosures removed per owner approval. App-controlled Tab + ordinary Enter/Send now reconcile/retry the original payload and retain newer edits. **Remaining clarification:** existing upload Retry/Refresh and image-thumbnail viewer entry still have no approved keyboard-only entry route; parent guidance requested, no shortcut or Tab contract invented. |
+| Standards S1: manual recovery controls unreachable under the Tab trap | Submission Check/Retry/disclosures removed per owner approval. App-controlled Tab + ordinary Enter/Send now reconcile/retry the original payload and retain newer edits. Residual upload/image-entry reachability is documented below for parent/reviewer scope assessment; no keyboard design change is authorized. |
 | Standards H1: English notice substrings determine controls | Typed attachment notice kinds expose explicit retry/refresh capabilities; one mapping owns wording. Source/image size errors and changed-review failures use typed errors, not English matching. |
 | Standards H2: duplicated full-page PNG validation | One browser-safe core byte predicate is used by import and multipart upload; canonical base64, hash, transport limits and error responses stay at their boundaries. |
+
+Historical residual keyboard evidence at correction commit `17c70d9` (source
+reachability, not a claim of a new keyboard-browser reproduction; subsequently
+resolved/scoped by the approval and independent findings below):
+
+- **Upload Retry:** `components/handwriting/submission.tsx:105` and
+  `components/handwriting/notebook.tsx:263`. Reachable scenario: Attach persists
+  its immutable capture, upload fails, and the user reloads with the notebook
+  closed. The restored capture displays Retry; normal Send does not publish
+  that failed capture. `attachment.ts:48–58` restores without uploading, and
+  `:61–63` prevents a replacement Attach while the saved capture exists. These
+  upload controls were introduced by #46 relative to baseline `8148bb9`.
+- **Refresh review:** the same two locations display this action after an
+  acknowledged upload whose pending-review read fails (`attachment.ts:140–143`),
+  or a failed pre-Attach review (`notebook.tsx:138`). Automatic writing refreshes
+  already exist on focus, visibility and server events
+  (`components/shared-writing.tsx:34–46`), so lack of direct button access does
+  not establish a permanent recovery dead end for this action.
+- **Original image enlargement:** `submission.tsx:107` reuses
+  `components/shared-writing.tsx:50–58`, whose thumbnail's entry is `onClick` at
+  line 53. Scenario: A is uncertain, revised B is pending, canonical reads fail,
+  and the user wants to enlarge A. A's thumbnail is visible independently of B;
+  entering the viewer still needs a pointer. This click-only viewer entry
+  already existed in baseline `8148bb9`; original-attempt placement is new.
+- **Common reachability mechanism:** `components/keyboard-shortcuts.tsx:66–76`
+  suppresses native Tab. `components/chat.tsx:703–710` cycles only textareas;
+  `src/core/keyboard.ts:22–39,57–88` has no upload-retry/review/image-entry action.
+  Parent requested independent assessment of changed-scope versus inherited
+  behavior before any owner question. Normal-Send recovery remains approved.
 
 Red/green evidence: `46-review-fixes-red.log` reproduces speech retargeting,
 normal-Send retry rejection and missing canonical-obsolescence handling;
@@ -159,7 +188,7 @@ retains newer edits. Browser corrections use actual target replacement and the
 app keyboard path, native IndexedDB, actual HTTP/store handlers, scripted speech
 and deterministic providers.
 
-Correction verification:
+Verification of first correction `17c70d9` (predates the final delta below):
 
 | Check | Result / cache-root evidence |
 |---|---|
@@ -168,7 +197,71 @@ Correction verification:
 | Disposable production build | Passed; `46-review-build-final.log`. Existing dynamic tracing warnings; environment-only `turbopack.root` in the disposable copy. |
 | First correction mobile browser run | Passed; `46-review-browser-mobile-1.log` |
 | Final mobile browser rerun | **Passed**, `46-review-browser-mobile-3.log`, including original A review/viewer while B is pending and canonical reads fail. Previous run timed out before transfer scenarios: 30-second ready wait versus 31-second cold compilation; retained in `46-review-browser-mobile-final.log`, `mobile-input-browser-46-review2/server.log`. |
-| Final handwriting browser run | First nine scenarios passed; exported-background assertion failed because captured source contains two **pen** strokes, not pen then eraser. Offscreen background pixel is correct. Five targeted tool-activation runs passed (`46-eraser-click-diagnostic.log`). Test now waits for Eraser's selected state before the next stroke; full rerun in progress. Original evidence: `46-review-browser-handwriting-final.log`, `handwriting-browser-VcaswB/`. |
+| Handwriting browser diagnostics | Initial run failed after nine scenarios: captured source contained two pen strokes, with a correct offscreen background. Adding selected-tool assertion exposed an unactivated Eraser click (`46-review-browser-handwriting-2.log`). Pointer tracing caught a nominal drawing gesture landing on Page options during layout movement (`46-eraser-event-diagnostic.log`); a subsequent run failed in sidebar traversal after viewport change (`46-review-browser-handwriting-3.log`). Smoke-test locators now wait for stable canvas/button geometry and enabled controls at these boundaries, and source assertions require actual pen + eraser strokes. Original failed artifacts are retained. |
+
+### Final correction delta after independent re-review of `17c70d9`
+
+Read full parent-owned `46-rereview-standards.md`, `46-rereview-spec.md` and
+`46-rereview-boundaries.log` under the cache root. Independent Spec review closed
+the original three findings, but reproduced the two caller defects below.
+Standards closed H1/H2 and submission recovery's S1 portion, while identifying
+failed capture-upload Retry as the remaining changed-scope S1 blocker. Refresh
+already has ordinary/automatic paths; shared viewer keyboard entry predates
+baseline and is not a blocker for this correction.
+
+**Additional owner approval, 2026-11-05, relayed by parent:** retry recoverable
+failed Attach uploads automatically on session reopen/network reconnection;
+ordinary Attach immediately retries the saved snapshot. Preserve exact original
+identity, PNG/source and expected page revision, plus newer working/drafts. Show
+the recovered snapshot for review, never automatically Send. No separate upload
+Retry action, new keyboard binding, Tab change or menu. Preserve nonretryable
+size/conflict/corruption safeguards and one in-flight transfer per page. The
+approved plan records this amendment without changing its original approval hash.
+
+| Re-review finding | Final implementation / regression |
+|---|---|
+| S1 remaining: failed capture needs inaccessible upload Retry | Session reopen and online events recover saved captures; ordinary Attach routes to their exact transfer before preparing new working. Separate upload Retry buttons removed. Controller coverage checks coalesced concurrent triggers, original identity/bytes/source, newer drafts, and refusal to upload oversized/conflicted/corrupt records. Real-browser coverage exercises Attach, reopen and online with native IDB and actual HTTP/store adapters, checks PNG SHA-256/source/identity and newer working, and proves zero tutor POSTs. |
+| R1 P1: automatic acceptance during speech finalization makes Send fall through to fresh text | Capture an identity-bound recovery action before the first await in composer, question and practice callers. The action terminates if that original identity has retired; it cannot create a new input. The regression executes Chat's exact source-extracted Send closures with the actual controller and accepts A during finalization, then asserts no POST and preserved newer text. Browser regression drives the same speech/acceptance race. |
+| R2 P2: empty newer choice selection disables valid original replay | Existing attempt permits ordinary button/keyboard recovery; the captured recovery action runs before new-answer validation. Empty NEW choices remain invalid. Actual QuestionDock rendering checks both gates; browser Enter replay checks exact original input and preservation of newer empty selections in native IDB. |
+
+Red evidence: `46-attach-auto-red.log` (old reopen behavior) and
+`46-rereview-fixes-red.log` (unexpected newer-text POST and disabled ordinary
+choice Submit). Green: `46-rereview-fixes-green.log` and final focused suite.
+Production changes after `17c70d9` require parent incremental re-review; this
+receipt does not grant independent approval.
+
+| Final-code check | Result / cache-root evidence |
+|---|---|
+| Focused suites | **186 passed, 0 failed**, `46-final-correction-focused.log` |
+| Typecheck and lint | Passed, `46-final-correction-typecheck.log`, `46-final-correction-lint.log` |
+| Mobile browser | **Passed**, `46-final-correction-browser-mobile-3.log`; disposable app `mobile-input-browser-46-final6`. Includes all three upload-recovery triggers, original-image review, actual Send/speech/background-acceptance race, ordinary Tab/Enter choice recovery with empty newer selections, target-bound speech and native IDB fault boundaries. |
+| Handwriting browser | **Passed**, `46-final-correction-browser-handwriting-2.log`; disposable app `handwriting-browser-Avtd5C`. All drawing/recovery/deletion/export scenarios completed; background export asserts actual pen + eraser source events as well as pixels. |
+| Production build | **Passed**, `46-final-correction-build.log`; disposable `build-46-final-correction`, existing dependency symlink and environment-only `turbopack.root`. Four existing dynamic filesystem tracing warnings. |
+
+Retained final-pass diagnostics: `46-final-correction-browser-mobile.log` and
+`46-final-correction-browser-mobile-2.log`; the helper now awaits actual pending
+image review and settled uncertainty rather than merely the upload response or
+early attempt markup. Recording uses the visible Send button; keyboard choice
+recovery enters rows through the app's Tab path before Enter. Narrow source-
+extracted browser scenarios and logs are `46-send-boundary-browser-focused.log`
+and `46-send-boundary-browser-focused-2.log`. These expose invalid harness
+activation/precondition assumptions; final full-suite assertions remain intact.
+
+`46-final-correction-browser-handwriting.log` caught a false-positive export
+precondition: scrolling the full canvas for hover left test coordinates outside
+visible paper and produced no strokes. The test now waits on the visible paper
+viewport, draws clear of overlays, and requires both real stroke types.
+`46-background-export-focused.log` passes the isolated exact export scenario;
+the final full handwriting run also passes it.
+
+All required automated checks have completed. No detached required check is
+running. Final production changes after `17c70d9` are upload recovery routing and
+the identity-bound Send/Submit caller/controller fixes; other final changes are
+regressions, browser synchronization and this approval/evidence record. The
+committed integration tip `12f444a` is already an ancestor; merging it reports
+already up to date. Parent-owned uncommitted integration diagnostics were not
+edited. No live provider/speech calls, public-preview changes, pushes or issue
+closure were performed.
 
 One focused run hit filesystem quota (`EDQUOT`) in
 old `/tmp/opencode` fixtures (`46-review-focused-edquot.log`); the handwriting
