@@ -862,3 +862,18 @@ and native commands are unchanged. No live provider/speech calls, public-preview
 changes, push, PR or issue closure occurred. N1/R4 are implemented corrections,
 not independent approval: parent-owned Standards/Spec rereview must pin the final
 clean commit. Physical #48 acceptance remains pending.
+
+#### N1/R4 committed integration handoff
+
+Implementation, owner amendment, regressions and completed evidence were committed
+as `c84d71a708c6c160aee38323b8c635646ce0be60`. Then
+`git merge --no-edit integration/handwriting-45` reported **Already up to date**:
+the latest committed integration tip remains
+`674e3da638d87e4d6405fa34db785568fca70a1f`, already inherited with both earlier
+receipt histories. Integration ancestry, `git diff --check` and empty
+`git status --porcelain=v1 --untracked-files=all` passed after the commit.
+
+This last receipt entry is documentation-only. The handoff supplies its exact
+final clean hash after fresh ancestry and pinned-worktree isolation checks.
+Parent-owned independent rereview must assess N1/R4 at that hash; no overall #47
+approval is claimed. S1 remains deferred to #51 and physical #48 remains open.
