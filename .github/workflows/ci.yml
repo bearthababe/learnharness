@@ -36,8 +36,6 @@ jobs:
     name: Mobile browser regressions (Linux)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    env:
-      LH_MOBILE_TEST_DIR: ${{ runner.temp }}/mobile-browser-artifacts
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -70,6 +68,8 @@ jobs:
           node --check scripts/smoke-mobile-layout.mjs
           node --check scripts/sidebar-swipe-checks.mjs
       - run: npm run test:mobile
+        env:
+          LH_MOBILE_TEST_DIR: ${{ runner.temp }}/mobile-browser-artifacts
       - name: Retain browser run result
         if: always()
         uses: actions/upload-artifact@v7
