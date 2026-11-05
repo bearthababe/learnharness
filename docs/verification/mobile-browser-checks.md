@@ -1,5 +1,10 @@
 # Mobile browser checks
 
+`main` is the integration baseline. Start new task branches from freshly fetched
+`origin/main`; PR #55 integrated the accepted mobile/Notebook foundation there.
+References to `integration/focused-drills` in older receipts describe historical
+delivery checkpoints, not a branch to use as main.
+
 Use the aggregate command at UI integration checkpoints and after editing the
 browser harness. From a checkout with `npm ci` completed and Chrome/Chromium installed:
 

@@ -29,6 +29,9 @@ await reportBrowserEvent({ type: "fixture", directory: dir, sha256: await source
 await mkdir(path.join(dir, "data/chats"), { recursive: true });
 await writeFile(path.join(dir, "auth.json"), "{}\n", { mode: 0o600 });
 const now = new Date().toISOString();
+await mkdir(path.join(dir, "data/graph"), { recursive: true });
+await writeFile(path.join(dir, "data/graph/nodes.jsonl"), ["pressure", "force", "area"].map(id => JSON.stringify({ id, name: id, statement: `Disposable ${id} graph node.`, aliases: [], createdAt: now, provenance: [] })).join("\n") + "\n");
+await writeFile(path.join(dir, "data/graph/positions.json"), JSON.stringify({ positions: { pressure: { x: 0, y: 0 }, force: { x: 150, y: 120 }, area: { x: -150, y: 120 } } }));
 const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
 const assistant = (content, id = "assistant") => ({ role: "assistant", content, id, api: "openai-completions", provider: "openrouter", model: "z-ai/glm-5.3-flash", usage, stopReason: "stop", timestamp: Date.now() });
 const conversation = { id: "mobile_conversation", title: "Mobile browser conversation", createdAt: now, updatedAt: now, messages: [assistant([{ type: "text", text: "Explain how pressure changes with area." }])] };
