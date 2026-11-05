@@ -1367,7 +1367,8 @@ export function Chat({
 		    the transcript reserves its height. */}
 		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" className={`session-workspace flex h-dvh overflow-hidden ${handwriting.open ? "hw-workspace" : ""}`}>
 		<div className={handwriting.open ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
-			<div inert={handwriting.open && handwriting.expanded} className={`session-panes ${handwriting.open ? "hw-chat hw-mobileHidden" : ""}`} data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
+			<div inert={handwriting.open && handwriting.expanded} className={handwriting.open ? "hw-chat hw-mobileHidden flex min-h-0 min-w-0 flex-1 flex-col" : "contents"}>
+			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
 			<div className="session-tutor" inert={notebookLayout.expanded}>
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its
@@ -1941,6 +1942,7 @@ export function Chat({
 							activity={notebookActivity} />}
 					</NotebookFrame>
 				</>}
+			</div>
 			</div>
 			{handwriting.mounted && <HandwritingSplit hidden={!handwriting.open} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
 			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}

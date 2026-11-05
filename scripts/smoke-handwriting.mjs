@@ -1,17 +1,20 @@
 /** Real drawing controls and request/reopen boundaries; disposable data only.
  * Chromium pen/touch emulation is not physical iPad acceptance. */
 import assert from "node:assert/strict";
-import { cp, mkdir, mkdtemp, readFile, symlink, writeFile, appendFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, realpath, writeFile, appendFile } from "node:fs/promises";
+import { constants } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
 import { checkHandwritingPages, checkHandwritingImports } from "./handwriting-pages-checks.mjs";
+import { sourceEntries, sourceFingerprint } from "./mobile-browser-result.mjs";
 
 const root = process.cwd(), dir = await mkdtemp(path.join(process.env.LH_HANDWRITING_TEST_ROOT ?? "/tmp/opencode", "handwriting-browser-"));
-for (const name of ["app", "components", "src", "lib", "public", "electron", "config.ts", "package.json", "tsconfig.json", "postcss.config.mjs", "next.config.ts"]) await cp(path.join(root, name), path.join(dir, name), { recursive: true });
-await symlink(path.join(root, "node_modules"), path.join(dir, "node_modules"));
-const config = path.join(dir, "next.config.ts");
-await writeFile(config, (await readFile(config, "utf8")).replace("const nextConfig: NextConfig = {", 'const nextConfig: NextConfig = { turbopack: { root: "/" },'));
+const fingerprint = await sourceFingerprint(root);
+for (const name of sourceEntries) await cp(path.join(root, name), path.join(dir, name), { recursive: true });
+assert.equal(await sourceFingerprint(dir), fingerprint, "Handwriting fixture uses the complete current application and lockfile");
+console.log(`Handwriting source SHA-256: ${fingerprint}`);
+await cp(await realpath(path.join(root, "node_modules")), path.join(dir, "node_modules"), { recursive: true, mode: constants.COPYFILE_FICLONE, verbatimSymlinks: true });
 await mkdir(path.join(dir, "data/chats"), { recursive: true });
 const now = new Date().toISOString();
 const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };

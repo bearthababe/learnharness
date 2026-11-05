@@ -1,6 +1,7 @@
 /* Accepted c663dcecd22a card/split and corner arc, scoped to the handwriting
  * extension. Imported once by globals.css; session logic owns no stylesheet. */
 .hw-workspace { container: handwriting-workspace / inline-size; }
+.session-workspace.hw-workspace { container-name: equation-notebook handwriting-workspace; }
 .hw-splitLayout { display: contents; }
 .hw-splitDivider { display: none; }
 .hw-splitDivider[hidden] { display: none !important; }
