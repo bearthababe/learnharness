@@ -488,3 +488,31 @@ All required checks completed before delivery. Parent's uncommitted review-statu
 notes were not edited. **Independent incremental re-review of this changed delta
 and its final hash remains parent-owned and pending.** No live calls, public-preview
 changes, pushes or issue closure occurred; physical acceptance remains separate.
+
+### #46 integration completed; #47 ready — 2026-11-05
+
+Reviewed source `ea74759e2ca2a681e6069ce8ba2b399533d5b827` is integrated by
+normal merge commit `8b0000a88007fb90a7a312617da5827d01ee9972`. Its first parent
+is the approval receipt `cd4ac3dc05793c5d5a8e14427ddaa04dc5cc002e`; its second
+parent is the exact independently approved source above. Both worktrees were
+clean at their pinned tips before the merge.
+
+The sole conflict was adjacent receipt additions. Resolution preserved the
+complete source implementation evidence and the parent's diagnostic/approval
+history, including the parent's updated status sentence. Exact combined-content
+verification passed; the merge differs from the reviewed source only in this
+receipt. Both independent final review gates remain **PASS** for `ea74759`.
+
+Post-merge verification at `8b0000a`:
+
+- `~/.local/bin/agent-integration-check integration/handwriting-45 ea74759e2ca2a681e6069ce8ba2b399533d5b827`
+  passed, reporting the merge tip and reviewed source as integrated.
+- `git merge-base --is-ancestor cd4ac3dc05793c5d5a8e14427ddaa04dc5cc002e HEAD`
+  passed; both merge parents and their ordering were verified.
+- `git diff --check` passed; the integration worktree was clean.
+
+This completion entry is a separate documentation commit after the merge; its
+commit is the final receipt tip, not the merge commit. The historical pending
+integration/re-review statements above describe their earlier checkpoints and
+are superseded by this completion. **#47 is ready for its owner-approved
+implementation.** Physical iPad acceptance remains open as recorded above.
