@@ -231,6 +231,20 @@ body {
 		width: 100%;
 		padding: var(--lh-safe-top) env(safe-area-inset-right, 0px) var(--lh-safe-bottom) env(safe-area-inset-left, 0px);
 	}
+	.lh-app-shell[data-sessions-swipe] .lh-sessions-panel {
+		width: 100%;
+		padding: var(--lh-safe-top) env(safe-area-inset-right, 0px) var(--lh-safe-bottom) env(safe-area-inset-left, 0px);
+		transform: translateX(calc(-100% + var(--lh-sessions-swipe-distance, 0px)));
+		pointer-events: none;
+	}
+	.lh-app-shell[data-sessions-swipe="settling"] .lh-sessions-panel {
+		transition: transform 200ms ease !important;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.lh-app-shell[data-sessions-swipe="settling"] .lh-sessions-panel {
+			transition: none !important;
+		}
+	}
 	.lh-sessions-content {
 		width: 100%;
 		border-right: 0;

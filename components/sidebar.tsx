@@ -24,6 +24,7 @@ import type { ChatListItem } from "@/src/core";
 import { kbdEventForAction } from "@/src/core";
 import { notifySettingsSaved } from "@/components/settings-signal";
 import { usePhoneViewport } from "@/components/use-phone-viewport";
+import { bindSidebarSwipe } from "@/components/sidebar-swipe";
 
 /**
  * Desktop navigation sits inline and retains its open preference. On phones
@@ -435,6 +436,9 @@ function SessionsSidebar() {
 	}, []);
 	const pathname = usePathname();
 	const router = useRouter();
+	useEffect(() => {
+		if (phone && sidebarRef.current) return bindSidebarSwipe(sidebarRef.current, toggle);
+	}, [phone, pathname, toggle]);
 	const { open: openSettings } = useSettingsDialog();
 
 	/* New session (owner, 2026-09-13): NO POST — the button opens the

@@ -102,15 +102,15 @@ recording now persists recovery state. An initial cold-navigation timeout was
 resolved with the existing fixture warmed and a bounded navigation timeout.
 No additional live calls were made; the accepted six-call budget remains exhausted.
 
-**Landed:** `integration/focused-drills` fast-forwarded to `3f241c3`. Main's current
+**Historical local landing:** `integration/focused-drills` fast-forwarded to `3f241c3`. That checkout's
 nine modified tracked files and 284 untracked files were preserved as local work;
 this includes two new files and research/evidence edits added concurrently after
 the first backup. Four overlaps match the verified overlay byte-for-byte; the other
 289 local files match the immediate pre-landing snapshot. Original and pre-landing
 archives/patches remain in the preservation directory, with the four-file backup
 stash `466f5e5e5e2b253cf02b1fccae2fe10e07c0483f`. Receipt: `landing.json` there.
-Main typecheck passes; its dev server additionally regenerated `next-env.d.ts` as
-an uncommitted generated-file change. Main's existing slot-3 HTTPS endpoint serves
+That checkout's typecheck passed; its dev server additionally regenerated `next-env.d.ts` as
+an uncommitted generated-file change. Its then-existing slot-3 HTTPS endpoint served
 the integrated Notebook (read-only `main-serving.json` check).
 
 **Deployed:** existing slot1/Home Screen URL

@@ -4,6 +4,7 @@
  */
 import assert from "node:assert/strict";
 import puppeteer from "puppeteer-core";
+import { checkSidebarSwipes } from "./sidebar-swipe-checks.mjs";
 
 const chatId = process.env.LH_SMOKE_CHAT_ID;
 assert.ok(chatId && /^[A-Za-z0-9_-]+$/.test(chatId), "Set LH_SMOKE_CHAT_ID to an existing teaching session.");
@@ -67,6 +68,7 @@ try {
 		check(controls.length >= 2 && controls.every(r => r.x >= 0 && r.right <= width && r.y >= 0 && r.bottom <= 667 && r.width >= 44 && r.height >= 44 && r.reachable), `Home toolbar controls fit and receive taps at ${width}px`);
 	}
 	await page.setViewport({ width: 375, height: 667, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+	await checkSidebarSwipes(page, check, origin, chatId);
 	await page.click('.lh-home-navigation button[aria-label="Open sidebar"]');
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
 	await page.click('button[aria-label="Close sidebar"]');

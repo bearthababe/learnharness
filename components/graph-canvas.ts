@@ -55,6 +55,7 @@ import { select } from "d3-selection";
 import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
 import type { Simulation, SimulationLinkDatum } from "d3-force";
 import { clusterHue, type Pt } from "./cluster-geometry.ts";
+import { sidebarSwipePointer } from "./sidebar-swipe.ts";
 import {
 	CHARGE_STRENGTH,
 	CLUSTER_PULL_STRENGTH,
@@ -928,6 +929,7 @@ export class GraphCanvasRenderer {
 	};
 
 	private onPointerMove = (e: PointerEvent) => {
+		if ((e.pointerType === "touch" && !e.isPrimary) || sidebarSwipePointer(e)) return;
 		const pos = this.eventPos(e);
 		if (this.dragId) {
 			const n = this.simById.get(this.dragId);
@@ -957,6 +959,11 @@ export class GraphCanvasRenderer {
 	};
 
 	private onPointerDown = (e: PointerEvent) => {
+		if (e.pointerType === "touch" && !e.isPrimary) return;
+		if (sidebarSwipePointer(e)) {
+			this.downPos = this.eventPos(e);
+			return;
+		}
 		// Primary button only (owner, polish round): a right-press must not
 		// pin the node — right-click belongs to the context menu alone, and
 		// the right-pointerup must never read as a click (the detail card
@@ -992,6 +999,11 @@ export class GraphCanvasRenderer {
 	};
 
 	private onPointerUp = (e: PointerEvent) => {
+		if (e.pointerType === "touch" && !e.isPrimary) return;
+		if (sidebarSwipePointer(e) === "consumed") {
+			this.downPos = null;
+			return;
+		}
 		if (e.button !== 0) return; // right-click is context-menu territory
 		// Node press ending: click (no slop) → select; drag → release-and-relax.
 		if (this.dragId) {

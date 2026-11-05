@@ -1,6 +1,7 @@
 # Focused drills — implementation delivery
 
-Implemented on `integration/focused-drills`, based on `b577ec5`.
+Originally implemented on the historical `integration/focused-drills` branch,
+based on `b577ec5`. Current development starts from freshly fetched `origin/main`.
 Application changes through `37fcbbc` implement the approved initial plan and
 the owner's subsequent instruction-size accounting fix.
 

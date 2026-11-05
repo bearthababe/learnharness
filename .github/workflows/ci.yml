@@ -68,6 +68,7 @@ jobs:
           node --check scripts/smoke-mobile-inputs.mjs
           node --check scripts/smoke-question-reveal.mjs
           node --check scripts/smoke-mobile-layout.mjs
+          node --check scripts/sidebar-swipe-checks.mjs
       - run: npm run test:mobile
       - name: Retain browser run result
         if: always()
