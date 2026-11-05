@@ -77,7 +77,8 @@ try {
 		check(await page.$eval('button[aria-label="Graph display settings"]', e => e.getAttribute("aria-expanded") === "true"), "Graph settings opens from the mobile action row");
 		await page.click('button[aria-label="Graph display settings"]');
 	}
-	const [chooser] = await Promise.all([page.waitForFileChooser(), page.click('[data-testid="import-notes"]')]);
+	await page.click('[data-testid="import-notes"]');
+	const [chooser] = await Promise.all([page.waitForFileChooser(), page.locator('[role="menuitem"]').filter(button => button.textContent === "Files").click()]);
 	await chooser.cancel();
 	check(true, "Import notes opens the native file chooser (cancelled without an upload)");
 	await page.goto(`${origin}/chat/${chatId}`, { waitUntil: "networkidle2" });

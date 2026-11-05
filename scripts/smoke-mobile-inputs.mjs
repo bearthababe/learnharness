@@ -1340,9 +1340,9 @@ try {
 	assert.ok(selectionRecord.writingSubmission && selectionRecord.sharedWriting.length === 1);
 	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-attempt-review"]'));
 	await page.goto(`${origin}/chat/mobile_other_answer`, { waitUntil: "networkidle2" });
-	await page.waitForSelector('[data-testid="other-option"] input');
+	await page.waitForSelector('[data-testid="other-option"] [data-file-path-input]');
 	await page.locator('[role="checkbox"]').filter(button => button.textContent.includes("Start with force")).click();
-	await fill('[data-testid="other-option"] input', "Compare both areas.");
+	await fill('[data-testid="other-option"] [data-file-path-input]', "Compare both areas.");
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "My custom reasoning.");
 	await upload("mobile_other_answer"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="question-dock"] button[type="submit"]');

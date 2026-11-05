@@ -28,7 +28,7 @@ export function useMobileChatFocus(rootRef: RefObject<HTMLDivElement | null>, hi
 		};
 		const update = () => {
 			const focused = document.activeElement;
-			const shouldLock = mobile.matches && focused instanceof HTMLTextAreaElement && root.contains(focused);
+			const shouldLock = mobile.matches && focused instanceof HTMLElement && focused.matches('textarea,[data-file-path-input]') && root.contains(focused);
 			if (shouldLock && !unlock) {
 				const x = scrollX, y = scrollY;
 				const rect = root.getBoundingClientRect();
@@ -63,7 +63,7 @@ export function useMobileChatFocus(rootRef: RefObject<HTMLDivElement | null>, hi
 			const dy = point.clientY - touch.y, dx = point.clientX - touch.x;
 			touch = { x: point.clientX, y: point.clientY };
 			const target = event.target instanceof Element ? event.target : null;
-			const textarea = target?.closest("textarea");
+			const textarea = target?.closest("textarea,[data-file-path-input]");
 			const scroll = history.current?.scrollRef.current;
 			const allowed = textarea && root.contains(textarea) ? textarea : scroll?.contains(target) ? scroll : null;
 			if (!allowed || (Math.abs(dy) >= Math.abs(dx) && (
