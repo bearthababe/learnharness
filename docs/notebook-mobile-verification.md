@@ -4,12 +4,15 @@ Authoritative combined verification record for #28/#18. Review baseline:
 `d161c0d707e605e2a6ea5761b4f40bbd78dc0c58`. Notebook checkpoint: `2d43b41`.
 
 **Terra/Sol reasoning controls and numbered, selectable expressions verified and deployed.**
-Source `73878eb`, production build `_Hk4ZaeJveuA2XxOX61c3`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
+Application source `ad3cac9`, production build `nFQu1OeJMoR3j8LvYFnsp`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
 The current fork's native Electron app remains open; use **Reload preview** to
-load the update. **Owner phone and real-learning acceptance completed 2026-11-05**;
-final reviewed integration is in progress.
+load the update. **Owner acceptance, reviewed main integration and #28/#18 closure
+completed 2026-11-05.** See the final combined integration receipt below.
 
-Current tracker receipt: [#28 expression/picker deployment](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6657245951),
+Current closure receipts: [#28](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6659062320)
+and [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6659062253).
+
+Earlier tracker receipt: [#28 expression/picker deployment](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6657245951),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6657248245).
 
 Earlier tracker receipt: [#28 current-line/Close](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6652921783),
@@ -49,6 +52,90 @@ expression/model/UI/golden checks passed (`check-28-review-grouping-red.log`,
 
 The owner approved staging the combined merge separately, preserving/backing up the
 main checkout's local work and restoring it as uncommitted changes after integration.
+
+### Final combined integration — 2026-11-05
+
+Combined merge `270bc35` joins reviewed Notebook `030bfc3` with the main app's
+`36550e7` mobile baseline. Shared-menu resolution retains main's existing viewport
+implementation; the browser runner retains main's process cleanup and all mobile
+suites plus Notebook editing/layout checks.
+
+The combined tree passed **2,717/2,717 deterministic tests**, typecheck, lint,
+production build, packaged-server and Electron smoke checks. Browser integration
+exposed one actionable-error regression: recording recovery replaced a missing
+Deepgram key's Settings action with a generic interruption error. The owner approved
+preserving the original error while retaining recovery. Correction `6b8f597` has a
+mounted red→green regression and a passing browser reproduction. Both review axes
+confirmed zero unresolved findings after that correction. Browser waits also now
+distinguish fresh sockets from a deliberately reopened cancelled fake socket, and
+wait for durable Send rather than optimistic rendering.
+
+Further combined checks reproduced an initial-draft hydration race. The owner chose
+to wait for saved drafts before editing: `ad3cac9` gates Tutor inputs and submission
+until loading completes, displays loading/Retry, restores ordinary text before
+paint, and gates global question keyboard actions and recording. Five mounted
+activity tests hold the initial response before exercising Send; a keyboard test
+verifies blocked selection/submission before loading and normal behavior afterward.
+A browser check deliberately delays loading, fails it, retries, and confirms restored
+text is present before editing becomes available. All targeted regressions pass.
+The owner also approved single-line ellipsis for the narrow-phone Tutor model label
+to stabilize its menu anchor with the added Notebook control; full picker names
+remain available. Both reviewers cleared the completed corrections.
+
+Main's existing local work is backed up in
+`/home/bjorn/.cache/opencode/notebook-main-preservation-20261105/` (original manifest,
+tracked patch and archive: nine modified tracked files, 282 untracked files).
+An isolated overlay reconciles the glossary, page metadata and chat wrappers while
+retaining the opt-in handwriting prototype. Overlay typecheck/lint and browser
+layout checks at 390/820/1440px, including tablet/desktop expand and return, passed.
+Unrelated local work remains uncommitted; concurrent updates to the mobile evidence
+document are retained in place.
+
+Final corrected source `ad3cac9` passes **2,719/2,719 deterministic tests** (500
+suites, zero failures/skips), lint, production build, payload/Electron smoke, and
+preserved-local-work overlay typecheck. Build identity: `nFQu1OeJMoR3j8LvYFnsp`.
+All constituent browser suites passed: main mobile input/panel/gesture checks plus
+Notebook editing and layout in `browser.log`; downstream reveal and mobile layout
+in `reveal.log` and `layout-final.log`. The downstream scripts were adapted to
+explicitly scoped disposable Notebook writes and timestamped speech, because real
+recording now persists recovery state. An initial cold-navigation timeout was
+resolved with the existing fixture warmed and a bounded navigation timeout.
+No additional live calls were made; the accepted six-call budget remains exhausted.
+
+**Landed:** `integration/focused-drills` fast-forwarded to `3f241c3`. Main's current
+nine modified tracked files and 284 untracked files were preserved as local work;
+this includes two new files and research/evidence edits added concurrently after
+the first backup. Four overlaps match the verified overlay byte-for-byte; the other
+289 local files match the immediate pre-landing snapshot. Original and pre-landing
+archives/patches remain in the preservation directory, with the four-file backup
+stash `466f5e5e5e2b253cf02b1fccae2fe10e07c0483f`. Receipt: `landing.json` there.
+Main typecheck passes; its dev server additionally regenerated `next-env.d.ts` as
+an uncommitted generated-file change. Main's existing slot-3 HTTPS endpoint serves
+the integrated Notebook (read-only `main-serving.json` check).
+
+**Deployed:** existing slot1/Home Screen URL
+`https://thinkpad.tailfd9bf6.ts.net:8444/`, application source `ad3cac9`, build
+`nFQu1OeJMoR3j8LvYFnsp`, standalone
+`/home/bjorn/.cache/opencode/notebook-final-build-ad3cac9`, observed PID4152830.
+Local and actual HTTPS build identity, Reload, model choice/draft recovery,
+manifest/icon responses, expression controls and keyboard/gesture layout checks
+pass with zero owner writes (`production-preview.json`). Settings, API-key and
+ChatGPT credential fingerprints are unchanged. Other preview ownership and
+tailnet mappings are retained.
+
+**Closed:** [#28 receipt](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6659062320)
+and [#18 receipt](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6659062253).
+Prompt tuning remains the separately deferred [#52](https://github.com/bearthababe/learnharness/issues/52).
+
+Evidence logs under `/tmp/opencode/notebook-integration/`:
+`check-28-merge-all-tests.log`, `check-28-key-recovery-{red,green}.log`,
+`check-28-key-browser-green.log`, `check-28-final-{build,lint,payload,electron}.log`,
+`check-28-overlay-{types,lint}.log`, and `check-28-overlay-hit.log`.
+Loading evidence: `check-28-draft-loading-{red,green,browser}.log` and
+`check-28-loading-keys-{red,focused}.log`. Final combined logs are in
+`/home/bjorn/.cache/opencode/notebook-final-logs/`; an intermediate build/test run
+produced truncated `/tmp` logs and was not counted as a pass. Old owned build caches
+were archived to disk before the successful rerun with disk-backed logs.
 
 Owner approved the complete implementation and deployment plan: separate Model
 and Reasoning under ⋯ → Model; Terra/medium default for new and existing sessions;
