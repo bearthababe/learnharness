@@ -1417,3 +1417,20 @@ is retained; if installation is needed use **Safari → Share → Add to Home Sc
 → Open as Web App → Add**. Reload retains saved working. #4/#44/#48 remain open;
 S1 keyboard reachability remains owner-deferred to #51. No push or live inference
 acceptance is claimed.
+
+### Owner acceptance of the integrated delivery
+
+After receiving the deployed integrated review link and host-laptop sign-in
+instructions, the owner stated: **“It's all fine. I approve of this.”**
+This records the owner's acceptance of the delivered #46/#47/#48 integration and
+supersedes the pending owner-verdict status above. The delivered application is
+the independently approved `86dff1dd55d757fe34b334d0e8c45e36753a8ce7`, build
+`FK05t14TT6OZj5Z_ygK_h`, with deployment receipt
+`aee00825cdf622925a87702bd5a5fc7775490960`.
+
+The owner's statement is the acceptance evidence; no additional per-step device
+observations, completed sign-in, or agent-run live tutor/speech checks are inferred
+from it. Automated, independent-review and HTTPS evidence remain recorded above.
+The bounded delivery tickets #46, #47 and #48 are accepted for closure. Broader
+#4/#44 and the owner-deferred keyboard overhaul #51 remain separate. The accepted
+slot-2 preview and saved review data are retained.
