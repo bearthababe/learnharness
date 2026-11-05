@@ -4,12 +4,15 @@ Authoritative combined verification record for #28/#18. Review baseline:
 `d161c0d707e605e2a6ea5761b4f40bbd78dc0c58`. Notebook checkpoint: `2d43b41`.
 
 **Terra/Sol reasoning controls and numbered, selectable expressions verified and deployed.**
-Source `73878eb`, production build `_Hk4ZaeJveuA2XxOX61c3`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
+Application source `ad3cac9`, production build `nFQu1OeJMoR3j8LvYFnsp`, at **https://thinkpad.tailfd9bf6.ts.net:8444/**.
 The current fork's native Electron app remains open; use **Reload preview** to
 load the update. **Owner acceptance, reviewed main integration and #28/#18 closure
 completed 2026-11-05.** See the final combined integration receipt below.
 
-Current tracker receipt: [#28 expression/picker deployment](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6657245951),
+Current closure receipts: [#28](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6659062320)
+and [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6659062253).
+
+Earlier tracker receipt: [#28 expression/picker deployment](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6657245951),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6657248245).
 
 Earlier tracker receipt: [#28 current-line/Close](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6652921783),
