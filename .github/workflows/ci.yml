@@ -63,11 +63,20 @@ jobs:
       - name: Check browser harness syntax
         run: |
           node --check scripts/mobile-browser-runner.mjs
+          node --check scripts/mobile-browser-result.mjs
           node --check scripts/run-mobile-checks.mjs
           node --check scripts/smoke-mobile-inputs.mjs
           node --check scripts/smoke-question-reveal.mjs
           node --check scripts/smoke-mobile-layout.mjs
       - run: npm run test:mobile
+      - name: Retain browser run result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-browser-result-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/mobile-browser-artifacts/**/result.json
+          if-no-files-found: warn
+          retention-days: 7
       - name: Retain browser failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v7

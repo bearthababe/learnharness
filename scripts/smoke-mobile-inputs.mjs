@@ -2,13 +2,14 @@
  * Run: node scripts/smoke-mobile-inputs.mjs (no learner data or preview slots used).
  */
 import assert from "node:assert/strict";
-import { cp, mkdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, realpath, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import puppeteer, { PUPPETEER_REVISIONS } from "puppeteer-core";
 import { createRunDirectory, processScope, captureOutput, completed } from "./mobile-browser-runner.mjs";
+import { sourceEntries, sourceFingerprint, reportBrowserEvent } from "./mobile-browser-result.mjs";
 import { verifyNotebookMobile } from "./smoke-notebook-mobile.mjs";
 import { verifyNotebookLayout } from "./smoke-notebook-layout.mjs";
 
@@ -17,9 +18,11 @@ const dir = await createRunDirectory();
 console.log(`Disposable browser app: ${dir}`);
 const executablePath = process.env.CHROMIUM_PATH ?? "/usr/bin/chromium";
 console.log(`Browser: ${executablePath}\n${execFileSync(executablePath, ["--version"], { encoding: "utf8" }).trim()}\nPuppeteer-supported Chrome: ${PUPPETEER_REVISIONS.chrome}`);
-for (const name of ["app", "components", "src", "lib", "public", "electron", "scripts", "config.ts", "package.json", "package-lock.json", "tsconfig.json", "postcss.config.mjs", "next.config.ts", "node_modules"]) {
-	await cp(path.join(root, name), path.join(dir, name), { recursive: true, mode: constants.COPYFILE_FICLONE, verbatimSymlinks: true });
+for (const name of [...sourceEntries, "node_modules"]) {
+	const source = name === "node_modules" ? await realpath(path.join(root, name)) : path.join(root, name);
+	await cp(source, path.join(dir, name), { recursive: true, mode: constants.COPYFILE_FICLONE, verbatimSymlinks: true });
 }
+await reportBrowserEvent({ type: "fixture", directory: dir, sha256: await sourceFingerprint(dir) });
 await mkdir(path.join(dir, "data/chats"), { recursive: true });
 await writeFile(path.join(dir, "auth.json"), "{}\n", { mode: 0o600 });
 const now = new Date().toISOString();
@@ -149,6 +152,7 @@ try {
 		await verifyNotebookMobile(browser, origin);
 		await verifyNotebookLayout(browser, origin, dir);
 	} else {
+	await reportBrowserEvent({ type: "start", suite: "inputs-notebook" });
 	const page = await browser.newPage();
 	const errors = [];
 	page.on("pageerror", error => errors.push(error.message));
@@ -1404,14 +1408,17 @@ try {
 	await verifyNotebookLayout(browser, origin, dir);
 	await browser.close();
 	browser = undefined;
+	await reportBrowserEvent({ type: "pass", suite: "inputs-notebook" });
 	if (process.argv.includes("--all")) {
-		for (const [name, chat] of [["smoke-question-reveal", "mobile_reveal_regression"], ["smoke-mobile-layout", "mobile_panels"]]) {
+		for (const [suite, name, chat] of [["reveal", "smoke-question-reveal", "mobile_reveal_regression"], ["layout", "smoke-mobile-layout", "mobile_panels"]]) {
 			console.log(`RUN: ${name}`);
+			await reportBrowserEvent({ type: "start", suite });
 			const test = processes.spawn(process.execPath, [`scripts/${name}.mjs`], {
-				cwd: root, env: { ...process.env, LH_SMOKE_URL: origin, LH_SMOKE_CHAT_ID: chat, LH_SMOKE_NOTEBOOK_FIXTURE: "1" }, stdio: ["ignore", "pipe", "pipe"],
+				cwd: dir, env: { ...process.env, LH_SMOKE_URL: origin, LH_SMOKE_CHAT_ID: chat, LH_SMOKE_NOTEBOOK_FIXTURE: "1" }, stdio: ["ignore", "pipe", "pipe"],
 			});
 			captureOutput(test, path.join(dir, `${name}.log`));
 			await completed(test);
+			await reportBrowserEvent({ type: "pass", suite });
 		}
 		console.log("PASS: all three mobile browser suites");
 	}

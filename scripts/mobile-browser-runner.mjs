@@ -1,17 +1,21 @@
 /** Shared disposable directories, logs and owned process groups for browser checks. */
-import { existsSync, appendFileSync } from "node:fs";
+import { appendFileSync } from "node:fs";
 import { mkdir, mkdtemp } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { tmpdir } from "node:os";
+import { homedir } from "node:os";
 import path from "node:path";
 
 export async function createRunDirectory() {
-	const base = path.resolve(process.env.LH_MOBILE_TEST_DIR ?? process.env.TMPDIR ?? (existsSync("/tmp/opencode") ? "/tmp/opencode" : tmpdir()));
+	const cache = process.platform === "win32"
+		? process.env.LOCALAPPDATA ?? path.join(homedir(), "AppData", "Local")
+		: process.platform === "darwin" ? path.join(homedir(), "Library", "Caches")
+			: process.env.XDG_CACHE_HOME ?? path.join(homedir(), ".cache");
+	const base = path.resolve(process.env.LH_MOBILE_TEST_DIR ?? process.env.TMPDIR ?? path.join(cache, "learnharness", "mobile-browser"));
 	await mkdir(base, { recursive: true });
 	return mkdtemp(path.join(base, "mobile-input-browser-"));
 }
 
-export function processScope() {
+export function processScope({ onSignal = () => {} } = {}) {
 	const children = new Set();
 	let closing;
 	const own = child => { children.add(child); return child; };
@@ -37,7 +41,10 @@ export function processScope() {
 	};
 	const close = () => closing ??= Promise.all([...children].map(stop));
 	const handlers = new Map([["SIGINT", 130], ["SIGTERM", 143], ["SIGHUP", 129]].map(([signal, code]) => {
-		const handler = () => { void close().finally(() => process.exit(code)); };
+		const handler = () => {
+			try { onSignal(signal); }
+			finally { void close().finally(() => process.exit(code)); }
+		};
 		process.on(signal, handler);
 		return [signal, handler];
 	}));
