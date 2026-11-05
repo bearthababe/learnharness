@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { sameDraftOwner, type TutorDraftOwner } from "@/src/core";
+import { sameDraftOwner, type TutorDraftOwner, type OwnedTutorDraft } from "@/src/core";
 import type { NotebookSession } from "./notebook-session";
 import type { TutorDraftSnapshot } from "./notebook-tutor-drafts";
 
@@ -9,6 +9,11 @@ const empty: TutorDraftSnapshot = { drafts: [], recovery: [], saving: false, err
 const snapshot = () => empty;
 const subscribe = () => () => {};
 const noSession = () => null;
+/** Review and its indicator share activity scope, including all question channels. */
+export function notebookActivityDrafts(drafts: OwnedTutorDraft[], activity: TutorDraftOwner) {
+	return drafts.filter(({ owner }) => activity.kind === "question" ? owner.kind === "question" && owner.toolCallId === activity.toolCallId
+		: activity.kind === "practice" ? owner.kind === "practice" && owner.problemCallId === activity.problemCallId : owner.kind === "ordinary");
+}
 export function useNotebookActivityDraft(session: NotebookSession | undefined, owner: TutorDraftOwner) {
 	const notebook = useSyncExternalStore(session?.subscribe ?? subscribe, session?.getSnapshot ?? noSession, session?.getSnapshot ?? noSession);
 	const state = useSyncExternalStore(session?.tutor.subscribe ?? subscribe, session?.tutor.getSnapshot ?? snapshot, session?.tutor.getSnapshot ?? snapshot);

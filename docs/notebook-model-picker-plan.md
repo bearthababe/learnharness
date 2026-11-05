@@ -69,3 +69,18 @@ The refined round passed all three targeted checks; source `0370c06` is deployed
 after review, build/payload, Electron smoke and actual HTTPS/Reload verification.
 No further calls were made beyond the six separately authorized editor calls. See the
 [canonical verification record](notebook-mobile-verification.md).
+
+## General current-line follow-ups — approved 2026-11-05
+
+The owner approved extending the default beyond equality continuation:
+
+> For follow-up edits, continue on the current line—the line most recently created,
+> edited, explicitly named or selected—unless the learner explicitly switches
+> targets or requests multiple lines or all occurrences. The same expression
+> appearing on other lines is not by itself a reason to ask which line. Ask only
+> when no single current line can be established or the requested edit remains
+> genuinely ambiguous.
+
+Four newly authorized isolated DeepSeek/low checks passed: current-line edit,
+explicit line switch, all occurrences, and genuine ambiguity. No fallback or
+reasoning/model change. Verification/deployment: the canonical record above.

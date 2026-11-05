@@ -203,16 +203,16 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		stash(); publish();
 		void queue(() => flush(owner)).catch(() => {});
 	}
-	function returnToTutor(owner: TutorDraftOwner) {
+	function returnToTutor(owner: TutorDraftOwner, completedOnly = false) {
 		if (locked || view?.pending) return Promise.reject(new Error("Finish the current action before returning to Tutor."));
 		const entry = entries.get(keyOf(owner));
 		if (!entry || !view?.contextId) return queue(() => flush(owner));
-		const throughOperationId = view.lastOperationId;
+		const throughOperationId = completedOnly ? undefined : view.lastOperationId;
 		const reserved = entry.nextCaptures?.at(-1) ?? entry.capture;
-		if (reserved && reserved.command.throughOperationId === throughOperationId) return queue(() => flush(owner));
+		if (reserved && reserved.command.contextId === view.contextId && (throughOperationId ? reserved.command.throughOperationId === throughOperationId : reserved.command.workingRevision === view.workingRevision)) return queue(() => flush(owner));
 		const last = entry.draft.parts.filter((part) => part.kind === "working").at(-1);
 		const lastSnapshot = last?.kind === "working" ? view.snapshots?.find(snapshot => snapshot.id === last.snapshotId) : undefined;
-		if (throughOperationId && lastSnapshot?.throughOperationId === throughOperationId || !view.problem && (!view.lines.length || (last?.kind === "working" && !last.pending && last.contextId === view.contextId && last.revision === view.workingRevision))) return queue(() => flush(owner));
+		if (throughOperationId && lastSnapshot?.throughOperationId === throughOperationId || (completedOnly || !view.problem) && (!view.lines.length || (last?.kind === "working" && !last.pending && last.contextId === view.contextId && last.revision === view.workingRevision))) return queue(() => flush(owner));
 		const command: Extract<DraftCommand, { type: "snapshot" }> = { type: "snapshot", id: crypto.randomUUID(), owner, draftId: entry.draft.id, expectedRevision: entry.base?.revision ?? 0, continuationId: crypto.randomUUID(), contextId: view.contextId,
 			...(throughOperationId ? { throughOperationId } : { workingRevision: view.workingRevision }) };
 		const capture = { before: structuredClone(entry.draft), command };

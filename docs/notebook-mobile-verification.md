@@ -14,6 +14,58 @@ linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#i
 Earlier tracker receipt: [#28 continuation fix](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6643703927),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6643706613).
 
+## Current-line, attachment indicator and clarification-close follow-up — verification in progress
+
+Owner approved the exact additional current-line paragraph in
+`src/agent/notebook-editor.ts`, a small non-clickable paperclip beside the Notebook
+toggle (accessible name **Working attached**) for the current activity, and both
+close controls completing while a clarification is retained. Closing finishes the
+original recording, snapshots the last completed revision once, and preserves the
+unanswered instruction/question for reopening. Ordinary, question/all-channel and
+practice activity scope is shared between review and indicator.
+
+Saved operation `05150765-f32b-49f5-91df-5703f95e136d` in “Handwriting trial” asked
+“line 2, line 3, or both?” after the learner created line 3 and requested removal
+of the multiplication sign in `p × A`. The request contained all 13 prior exchanges,
+including the immediately preceding line-3 insertion; no explicit cursor was set.
+Offline replay reproduced the exact clarification. The earlier wording emphasized
+“that”/“set that equal to”; the approved paragraph covers ordinary follow-up edits
+and says repeated expressions elsewhere do not alone justify clarification.
+
+**4/4 newly authorized DeepSeek/low Zen checks passed**, one attempt each:
+current-line edit affected L3 only; explicit switch affected L2 only; all-occurrences
+edited L2/L3 while preserving `600 × 10`; no-history/no-target ambiguity asked and
+preserved source. Receipt and copied inputs/raw responses:
+`/tmp/opencode/notebook-integration/current-line-check-20261105/receipt.json`;
+log `check-28-current-line-live.log`. Exactly **four** new provider calls, no retries,
+Tutor calls, speech capture or learner-record writes. This new budget is exhausted;
+the six calls from 2026-11-04 remain separately recorded.
+
+An isolated real service/session reproduction also showed why Close failed:
+`settle()` rejected the clarification before visibility could be saved. The new
+named close handoff permits clarification only, captures by completed working
+revision rather than the unresolved operation, and uses the existing persistence
+and deduplication paths. Regression went red (`check-28-close-red.log`) and green
+(`check-28-close-green.log`), covering original recording ownership, no Apply/Send,
+retained question/instruction, repeated close, and durable reopening.
+
+Verification before deployment:
+- **126 affected tests passed** (`check-28-line-close-tests.log`). An additional
+  running-edit→clarification close race was then added; both close tests passed
+  (`check-28-close-green.log`), giving **127 distinct affected tests** covered.
+- Typecheck/lint passed (`check-28-line-close-{types,lint}.log`).
+- Scripted-browser Notebook and layout checks passed (`check-28-line-close-browser.log`):
+  paperclip absent before attachment, present beside the toggle after capture,
+  removed after accepted Send; actual icon and menu Close with clarification;
+  one completed snapshot across repeated close; question/instruction retained on
+  reload; original dictation ownership, review editing, keyboard/gestures, and
+  phone/tablet/wide layouts retained. Artifacts:
+  `/home/bjorn/.cache/opencode/mobile-input-browser-notebook-28-line-close-20261105/`.
+- Self-review: exact approved prompt wording; existing snapshot revision boundary
+  and deduplication reused; only the named close handoff tolerates clarification;
+  ordinary speech switching and other error handling retain their existing gates.
+  The indicator and optional review use one activity filter.
+
 ## Menu review and input-toolbar follow-up — verified and deployed
 
 Owner approved removal of inline previews, menu-only **Review attached working**,

@@ -98,7 +98,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 			return groups;
 		});
 	}
-	function choose(input: NotebookSpeechInput): Promise<void> {
+	function choose(input: NotebookSpeechInput, allowClarification = false): Promise<void> {
 		if (handoff) return handoff;
 		if (selected?.kind === "notebook" && input.kind === "notebook") return Promise.resolve();
 		if (selected?.kind === "tutor" && input.kind === "tutor" && sameDraftOwner(selected.owner, input.owner)) {
@@ -114,10 +114,10 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 				await config.finish();
 				if (active) throw new Error("Finish dictation before switching inputs.");
 			}
-			await session.settle();
+			await session.settle(allowClarification);
 			if (returning && input.kind === "tutor") {
 				target(input);
-				await session.tutor.returnToTutor(input.owner);
+				await session.tutor.returnToTutor(input.owner, allowClarification && session.getSnapshot().view?.problem?.status === "clarification");
 				input = { ...input, partId: undefined };
 			}
 			selected = input;
@@ -268,6 +268,10 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		};
 	};
 	return { begin, choose, adopt, configure(next: typeof config) { config = next; }, isActive: () => active !== null, async idle() { await tail; },
+		async closeNotebook(input: Extract<NotebookSpeechInput, { kind: "tutor" }>) {
+			await choose(input, true);
+			await session.dispatch({ type: "visibility", visible: false });
+		},
 		apply() {
 			if (active && (handoff || session.getSnapshot().editing)) { publish("Still applying. Apply again when finished"); return true; }
 			if (!active || !reserveApply(active.now(), [])) return false;

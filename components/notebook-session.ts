@@ -202,20 +202,20 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	let storage = recoveryStorage;
 	try { storage ??= typeof window === "undefined" ? undefined : window.localStorage; } catch { /* server saves still work */ }
 	const tutor = createNotebookTutorDrafts(chatId, dispatch, refresh, storage, () => !state.editing && !speech.isActive() && !speech.getSnapshot().switching);
-	async function settle() {
+	async function settle(allowClarification = false) {
 		const startedIn = lifetime;
 		await tail;
 		if (operationFailure) throw operationFailure;
 		await refresh();
 		if (refreshFailure) throw refreshFailure;
 		if (startedIn !== lifetime) throw new Error("Handoff cancelled after leaving this session. The draft is retained.");
-		if (state.view?.problem) throw new Error(state.view.problem.message);
+		if (state.view?.problem && !(allowClarification && state.view.problem.status === "clarification")) throw new Error(state.view.problem.message);
 		if (state.editing) await new Promise<void>((resolve, reject) => {
 			const cancel = () => { listeners.delete(check); cancelHandoffs.delete(cancel); reject(new Error("Handoff cancelled after leaving this session. The draft is retained.")); };
 			const check = () => { if (!state.editing) { listeners.delete(check); cancelHandoffs.delete(cancel); resolve(); } };
 			listeners.add(check); cancelHandoffs.add(cancel); check();
 		});
-		if (state.view?.problem) throw new Error(state.view.problem.message);
+		if (state.view?.problem && !(allowClarification && state.view.problem.status === "clarification")) throw new Error(state.view.problem.message);
 	}
 	const speech = createNotebookSpeech(chatId, { tutor, dispatch, settle, getSnapshot: () => state }, storage);
 	let stopObserving: (() => void) | undefined;

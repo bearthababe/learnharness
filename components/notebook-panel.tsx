@@ -10,13 +10,13 @@ import type { Dictation } from "./dictation";
 import type { NotebookViewControls } from "./notebook-layout";
 import { MenuShell } from "./menu-shell";
 import { NotebookDraftReview } from "./learner-explanation";
+import { notebookActivityDrafts } from "./notebook-activity-draft";
 
 export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string }) {
 	const { view, draftText, saving, editing, inputLocked, error, cursorLineId } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
 	const speech = useSyncExternalStore(session.speech.subscribe, session.speech.getSnapshot, session.speech.getSnapshot);
 	const drafts = useSyncExternalStore(session.tutor.subscribe, session.tutor.getSnapshot, session.tutor.getSnapshot);
-	const attached = drafts.drafts.filter(({ owner }) => activity.kind === "question" ? owner.kind === "question" && owner.toolCallId === activity.toolCallId
-		: activity.kind === "practice" ? owner.kind === "practice" && owner.problemCallId === activity.problemCallId : owner.kind === "ordinary");
+	const attached = notebookActivityDrafts(drafts.drafts, activity);
 	const hasWorking = attached.some(draft => draft.parts.some(part => part.kind === "working"));
 	const [menu, setMenu] = useState<"options" | "model" | "history" | "usage" | "review" | null>(null);
 	const trigger = useRef<HTMLButtonElement>(null);

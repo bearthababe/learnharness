@@ -30,8 +30,9 @@ import { SubagentSteerCard } from "@/components/artifacts/steer-card";
 import { Composer } from "@/components/composer";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
 import { useNotebookSession } from "@/components/use-notebook-session";
+import { notebookActivityDrafts } from "@/components/notebook-activity-draft";
 import type { NotebookSession } from "@/components/notebook-session";
-import type { NotebookInputFields } from "@/src/core";
+import type { NotebookInputFields, TutorDraftOwner } from "@/src/core";
 import { NotebookPanel } from "@/components/notebook-panel";
 import { NotebookFrame, NotebookSplit, useNotebookLayout } from "@/components/notebook-layout";
 import { NotebookSavedDrafts } from "@/components/notebook-saved-drafts";
@@ -64,7 +65,7 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -488,6 +489,8 @@ export function Chat({
 	// replaces the composer. Computed from the NATIVE record (the fold is
 	// the gate the tools themselves read), not the projected view.
 	const activeProblem = activeProblemOf(nativeMessages);
+	const notebookActivity: TutorDraftOwner = pending ? { kind: "question", toolCallId: pending.toolCallId, channel: "thinking" } : activeProblem ? { kind: "practice", problemCallId: activeProblem.toolCallId } : { kind: "ordinary" };
+	const workingAttached = notebookActivityDrafts(tutorDraftState.drafts, notebookActivity).some(draft => draft.parts.some(part => part.kind === "working"));
 	const activeProblemRef = useRef(activeProblem);
 	activeProblemRef.current = activeProblem;
 
@@ -1761,15 +1764,17 @@ export function Chat({
 					turns={turns}
 					contextTokens={contextTokens}
 					pricing={pricing}
-					notebookToggle={<button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
+					notebookToggle={<span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
 						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
 						className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
 						onClick={() => {
 							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
 							if (notebookVisible && workspaceRef.current) {
-								void notebook.session.speech.choose(notebookTutorInput(workspaceRef.current)).then(() => notebook.session.dispatch({ type: "visibility", visible: false })).catch(() => {});
+								void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
 							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
-						}}><NotebookPenIcon className="size-4" /></button>}
+						}}><NotebookPenIcon className="size-4" /></button>
+						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="text-muted-foreground"><PaperclipIcon className="size-3" aria-hidden="true" /></span>}
+					</span>}
 					onReserve={setDockReserve}
 					dictationSlot={<DictationBar dictation={dictation} />}
 					dictation={tutorDictation}
@@ -1869,13 +1874,12 @@ export function Chat({
 						onBack={notebookLayout.back}
 						onClose={() => {
 							if (!workspaceRef.current) return;
-							void notebook.session.speech.choose(notebookTutorInput(workspaceRef.current)).then(async () => {
-								await notebook.session.dispatch({ type: "visibility", visible: false });
+							void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).then(() => {
 								requestAnimationFrame(focusDictationDestination);
 							}).catch(() => {});
 						}}>
 						{controls => <NotebookPanel session={notebook.session} dictation={dictation} viewControls={controls} workspaceId={workspaceId}
-							activity={pending ? { kind: "question", toolCallId: pending.toolCallId, channel: "thinking" } : activeProblem ? { kind: "practice", problemCallId: activeProblem.toolCallId } : { kind: "ordinary" }} />}
+							activity={notebookActivity} />}
 					</NotebookFrame>
 				</>}
 			</div>
