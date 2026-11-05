@@ -1070,3 +1070,44 @@ This final receipt-only commit supplies the clean delivery pin in the handoff,
 after fresh ancestry and original-worktree isolation verification. R1–R4 and the
 prior Standards approvals remain recorded above; R5 awaits parent-owned
 independent review. S1 remains deferred to #51; physical #48 remains pending.
+
+### #47 integration completed; #48 ready — 2026-11-05
+
+The exact independently approved source
+`86dff1dd55d757fe34b334d0e8c45e36753a8ce7` from
+`implement/handwriting-47-menu-fix` is integrated by normal merge commit
+`099d4b28b70f32e8b93ce18705f8f7baa719a453`. Its first parent is the complete
+parent review/approval receipt `f1ab3d034abf183ca6b211aaa8ba4ba49ca227ae`; its
+second parent is the exact approved source. Both worktrees were clean at those
+pinned tips before merging. The approved source includes original #47 delivery
+and its corrections, including prior integration `674e3da`.
+
+The only conflict was this receipt's appended histories. Exact byte-content
+verification confirmed the resolved receipt equals the complete source receipt
+with the parent's complete independent review/approval history inserted. All
+other tracked files are byte-identical to the approved source; application code,
+tests and runners have no merge-specific changes.
+
+Both final independent gates are **PASS** at `86dff1d`:
+
+- Standards: `/home/bjorn/.cache/opencode/issue4/47-creation-review-standards.md`;
+  N1/S2/S3/H1 remain closed, with no new findings.
+- Spec: `/home/bjorn/.cache/opencode/issue4/47-creation-review-spec.md`;
+  R1–R5 closed, with no new blocker.
+
+Post-merge verification at `099d4b2` completed successfully:
+
+- `~/.local/bin/agent-integration-check integration/handwriting-45 86dff1dd55d757fe34b334d0e8c45e36753a8ce7`
+  reports the exact source integrated.
+- Parent ancestry check for `f1ab3d034abf183ca6b211aaa8ba4ba49ca227ae`
+  passed; both merge parents and their ordering were verified.
+- The full tracked-tree comparison against the approved source, excluding only
+  this receipt, passed with no differences.
+- `git diff --check` passed and the integration worktree was clean.
+
+This completion entry is a separate receipt-only commit after the merge. Earlier
+pending correction, independent-review and integration statements are historical
+checkpoints superseded by this final completion entry. **#48 is ready.** S1
+keyboard reachability remains explicitly owner-deferred to #51, not fixed and
+not blocking. Physical iPad acceptance remains open; automated evidence above
+does not replace owner device acceptance.
