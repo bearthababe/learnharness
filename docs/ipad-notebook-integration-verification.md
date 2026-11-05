@@ -1316,3 +1316,104 @@ running. Application source is unchanged, no live calls were made, and no issue
 was closed or branch pushed. **Public deployment/live configuration remains
 blocked on the parent/owner decision above; physical iPad acceptance remains
 pending.** The retained #45 HTTPS launch is not advertised as the new integration.
+
+### #48 approved isolated sign-in and completed slot-2 deployment — 2026-11-05
+
+This entry supersedes the earlier configuration/deployment blocker. The owner
+approved the exact question: **“May I publish the integrated preview to the
+approved slot 2 with its own isolated configuration, then have you complete a
+separate ChatGPT sign-in on the host laptop? Your chosen models and dictation
+setup will be retained, with background model use disabled for the trial.”**
+Answer: **“Approve separate sign-in.”** No new application code was needed.
+
+#### Deployed identity and preservation
+
+- **Tested integrated launch:**
+  [teaching review](https://thinkpad.tailfd9bf6.ts.net:8445/chat/handwriting_review_teach).
+  Practice and drill remain in the session list at the same origin.
+- Independently approved source `86dff1dd55d757fe34b334d0e8c45e36753a8ce7`;
+  predeployment integration receipt `29ccc91ecb142c205776778c5316f766be37bac3`.
+  Fresh equivalence check: all **357 application files** match retained
+  `/home/bjorn/.cache/opencode/issue4/build-47-r5`, build
+  **`FK05t14TT6OZj5Z_ygK_h`**. Established build-only Turbopack root variation;
+  no `.env` files or application delta.
+- Production: strict **`127.0.0.1:3001`**, PID **66702**, background shell task
+  **`sh_1ac3e5a89001FQJqIIUVxdR6bS`**, cwd the retained build above. Log:
+  `/home/bjorn/.cache/opencode/issue4/48-slot2-production.log`.
+- `LH_DATA_DIR=/home/bjorn/.cache/opencode/issue45/review-data`;
+  `LH_AUTH_FILE=/home/bjorn/.cache/opencode/issue4/48-review-auth/auth.json`.
+  Launch uses `npm run start -- --hostname 127.0.0.1 --port 3001` in a clean
+  environment containing those paths, HOME/PATH and disabled Next telemetry.
+- Immediately before stopping, all three listeners, cwd/config paths and
+  Tailscale mappings were rechecked. Only verified #45 PID3484369 was stopped.
+  Slot1 PID4152830 and slot3 PID4154558 remain unchanged, as do all tailnet-only
+  mappings on 443/8443/8444/8445/8446/8447.
+- Refreshed byte-verified rollback copy:
+  `/home/bjorn/.cache/opencode/issue4/48-review-data-handoff-backup`.
+  All original review files remain byte-identical after deployment/verification;
+  the only added review file is the authorized `settings.json`. The old #45
+  build, earlier backups and lesson-navigation restoration instructions remain
+  preserved at `/tmp/opencode/issue45-preview-slot.md`. Do not overwrite newer
+  owner working with a historical backup during any later rollback.
+
+#### Isolated configuration and sign-in gate
+
+The new subscription owner is exclusively
+`/home/bjorn/.cache/opencode/issue4/48-review-auth` (0700); credential files are
+0600. **No ChatGPT/native refreshable credentials were copied or shared.** The
+actual supported `createChatGPT().consent(false)` operation initialized and
+validated the isolated store with **`allowBackgroundUse:false`**, no registrations
+and no active account, using a refusing network adapter. Persisted file state
+and both local/HTTPS read-only subscription status confirm background is off,
+sign-in is available, and no login is pending. No sign-in was initiated.
+
+The existing model/thinking settings were copied byte-for-byte from the owner's
+main settings: strong ChatGPT `gpt-6.1-sol` / medium; cheap `gpt-6-luna` / medium;
+vision `gpt-6-luna` / high. There are no background-role overrides or review-session
+model overrides. The actual resolver verifies all six helper roles resolve to
+ChatGPT and are therefore subject to the disabled background consent. No model
+API keys or other subscription credentials were installed. Main settings and
+credentials were not changed.
+
+Only the authorized **Deepgram dictation key** was securely copied into isolated
+auth and verified present/equal without displaying it. Dictation configuration is
+present; **no live speech or model test was made**. The app is intentionally
+disconnected pending the owner's host-laptop login, not yet a verified live tutor.
+
+**Owner host-laptop steps:** open the tested HTTPS link in a browser on the machine
+running LearnHarness, then **Settings → Providers → ChatGPT → Connect**. Leave
+**“Allow background use for all ChatGPT accounts” off**, select **“Continue with
+ChatGPT”**, and complete the provider sign-in in that host browser. The current
+connection notice explicitly requires the same machine; do not perform this
+callback step on the iPad. Labels/behavior are grounded in
+`components/settings/settings-dialog.tsx`, `chatgpt-connection.tsx:11,273–310,317–322,336`.
+The owner then resumes iPad review. Background helper calls remain disabled for
+this trial even after foreground sign-in.
+
+#### Completed actual HTTPS verification
+
+Authoritative machine handoff: `/home/bjorn/.cache/opencode/issue4/48-deployment.json`.
+Supporting evidence in that cache: `48-review-configuration.json`,
+`48-handoff-{before,after}.json`, `48-handoff-{before,after}.log`; reproducible
+read-only browser runner `48-handoff-browser.mjs`.
+
+The **actual new HTTPS app** passed Pages identity, teaching/practice/drill page
+responses, session-scoped manifests (`id`, `start_url`, `scope`, standalone),
+Apple metadata and all icon responses. Identity/assets equal the immediately
+preceding #45 HTTPS baseline. Owner saved ink pixels match before/after deployment
+and after the real **Notebook options → Tools and help → Reload preview** action.
+No service workers were registered. Browser runtime errors: zero.
+
+Browser interception allowed same-origin GET/HEAD only and blocked speech-token,
+extraction and non-read paths; evidence records blocked automatic STT requests
+and a working PUT. This intentionally read-only check leaves original server data
+unchanged; it does not substitute for owner writing/dictation/tutor trials.
+All assigned checks have completed; only the intended production preview remains
+running. Ledger/restoration records now identify this deployment.
+
+Physical iPad Air/Pencil2/palm/tool/orientation/keyboard/dictation and actual
+tutor-learning verdict remain pending under #48. Existing Home Screen identity
+is retained; if installation is needed use **Safari → Share → Add to Home Screen
+→ Open as Web App → Add**. Reload retains saved working. #4/#44/#48 remain open;
+S1 keyboard reachability remains owner-deferred to #51. No push or live inference
+acceptance is claimed.
