@@ -624,3 +624,22 @@ are not claimed fixed. Browser checks use isolated fixtures and scripted
 providers/speech. Physical iPad #47/#48 acceptance and parent-owned independent
 Standards/Spec review remain separate gates. No live provider/speech calls,
 public-preview changes, pushes, PRs or issue closure were performed.
+
+#### #47 committed integration check
+
+Implementation, approved plan and completed verification are committed as
+`e92962ae78aa99b51bbd3d9b3c3efa5056da072b` on `implement/handwriting-47`.
+After that commit, `git merge --no-edit integration/handwriting-45` completed
+with **Already up to date**. The latest committed integration tip was still
+`117bdcf75efb70dd53604940485873c553a4c924`.
+
+Post-commit checks passed:
+
+- `git merge-base --is-ancestor integration/handwriting-45 HEAD` — exit 0.
+- `git diff --check` — exit 0.
+- `git status --porcelain=v1 --untracked-files=all` — empty, clean worktree.
+
+This final receipt addition is documentation-only after the verified implementation
+commit. The final delivery hash is returned with a fresh clean-tree and ancestry
+check in the handoff. Parent-owned independent Standards/Spec review should pin
+that final hash; physical #48 acceptance remains pending.
