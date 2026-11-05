@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { PathInput } from "@/components/path-input";
+import { useHandwritingEditor } from "./handwriting/submission";
 import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import type { NotebookSession } from "./notebook-session";
 import { useNotebookActivityDraft } from "./notebook-activity-draft";
@@ -33,6 +34,7 @@ export function ReadingThinkingField({
 	onOpen,
 	claim,
 	dictation,
+	targetKey = "reading",
 }: {
 	notebook?: NotebookSession;
 	toolCallId?: string;
@@ -49,6 +51,7 @@ export function ReadingThinkingField({
 	/** Primary dictation claim — true while the check is behind its reveal. */
 	claim: boolean;
 	dictation?: Dictation;
+	targetKey?: string;
 }) {
 	const [draft, setDraft] = useState(value);
 	useLayoutEffect(() => { setDraft(value); }, [revision, value]);
@@ -69,6 +72,7 @@ export function ReadingThinkingField({
 		if (notebook?.getSnapshot().view?.contextId) notebook.tutor.updateText(owner, value);
 		if (mounted.current) { setDraft(value); onChange(value); }
 	};
+	const transfer = useHandwritingEditor(targetKey, () => ({ readingThinking: textRef.current }), draft => change(draft.readingThinking ?? ""), claim);
 	useDictationTarget(
 		useCallback(
 			(t: string) => {
@@ -77,6 +81,7 @@ export function ReadingThinkingField({
 			[notebook, toolCallId, onChange],
 		),
 		claim,
+		() => transfer?.retainSpeech(targetKey, "readingThinking"),
 	);
 	return (
 		<div
@@ -121,7 +126,7 @@ export function ReadingThinkingField({
 					if (e.key === "Enter" && onOpen !== undefined && (!e.shiftKey || e.metaKey || e.ctrlKey)) {
 						e.preventDefault();
 						e.stopPropagation();
-						onOpen();
+						if (!transfer?.preparing) onOpen();
 						return;
 					}
 					// The dock's dumping convention: plain Enter is a newline.

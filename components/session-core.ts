@@ -33,6 +33,7 @@ import {
 	type LiveExecution,
 	type QuestionAnswerData,
 	type QuestionDraft,
+	type WritingInputOutcome,
 } from "../src/core";
 
 export type SessionStatus = "ready" | "submitted" | "streaming" | "error";
@@ -649,9 +650,9 @@ export class SessionModel {
 	 * POST + consume. Ready-gated: one turn per client at a time (the
 	 * server's 409 + identity retry covers the wake-race window).
 	 */
-	async send(input: ChatInput, onAccepted?: () => void, questionKey?: string): Promise<boolean> {
+	async send(input: ChatInput, onAccepted?: () => void, questionKey?: string, onWritingOutcome?: (outcome: WritingInputOutcome) => void): Promise<boolean> {
 		const recovering = this.statusValue === "error";
-		if (!this.readyRef && !recovering) return false;
+		if (!this.readyRef && !recovering) { onWritingOutcome?.({ disposition: "not_accepted", original: true }); return false; }
 		const subject = input.type === "answer" ? pendingQuestionOf([...this.base, ...this.tail]) : null;
 		// A render-scoped answer must not move to another occurrence sharing
 		// its id. This identity is local only; the server's wire is unchanged.
@@ -664,7 +665,7 @@ export class SessionModel {
 		this.latestRequest = controller;
 		this.setError(null);
 		this.setStatus("submitted");
-		if (recovering && input.type === "answer") {
+		if (recovering && input.type === "answer" && !input.submissionId) {
 			try {
 				const res = await this.fetch(`/api/chats/${encodeURIComponent(this.chatId)}`, { signal: controller.signal });
 				if (this.consumeAbort !== controller) return false;
@@ -718,6 +719,7 @@ export class SessionModel {
 			this.tail = [...this.tail, ...optimistic];
 		});
 		let accepted = false;
+		let definitelyRejected = false;
 		try {
 			// SUBMITS ARE NOT ABORTABLE BY VIEW TEARDOWN (owner, 2026-10-10 —
 			// the dead-session-start postmortem): the POST must NOT ride
@@ -733,6 +735,7 @@ export class SessionModel {
 			// connection is Diet A's whole job.
 			const res = await this.postInputEvent(input);
 			if (res.status === 409) {
+				definitelyRejected = true;
 				throw new Error("A turn is already running — try again in a moment.");
 			}
 			if (!res.ok) {
@@ -740,6 +743,7 @@ export class SessionModel {
 				// flow parses them. Retry's 400s are ordinary user-facing
 				// guidance, so show their error text without JSON syntax.
 				let message = (await res.text()) || `The send failed (${res.status}).`;
+				try { definitelyRejected = JSON.parse(message)?.inputDisposition === "not_accepted"; } catch { /* Generic failure is unknown. */ }
 				if ((input.type === "retry" || input.type === "retry-question") && res.status === 400) {
 					try {
 						const refusal = JSON.parse(message) as { error?: unknown } | null;
@@ -749,6 +753,7 @@ export class SessionModel {
 				throw new Error(message);
 			}
 			accepted = true;
+			onWritingOutcome?.({ disposition: "accepted", original: true });
 			// Opening-message handover ends at acceptance, not stream completion.
 			onAccepted?.();
 			// CONNECTION DIET B (owner, 2026-10-10 — parallel-session freeze
@@ -766,6 +771,11 @@ export class SessionModel {
 			await this.resumeStream(true);
 			return true;
 		} catch (err) {
+			onWritingOutcome?.({ disposition: accepted ? "accepted" : definitelyRejected ? "not_accepted" : "unknown", original: true });
+			if (onWritingOutcome && definitelyRejected) {
+				const ids = new Set(optimistic.map(message => message.id));
+				this.mutate(() => { this.tail = this.tail.filter(message => !ids.has(message.id)); for (const id of ids) this.unconfirmedAnswers.delete(id); });
+			}
 			const failedOpening = input.type === "text" && onAccepted !== undefined && !accepted;
 			if (failedOpening) {
 				// The POST outlives stop(), including StrictMode's cleanup. Remove

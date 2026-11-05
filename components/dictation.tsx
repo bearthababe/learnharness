@@ -198,14 +198,22 @@ export function rmsToMeter(rms: number): number {
  * sibling subtree far from the hook's owner, and there is exactly one
  * window, one pending question, one target at a time.
  */
-let questionTarget: ((text: string) => void) | null = null;
+type SpeechRetention = () => ((text: string) => void) | undefined;
+type SpeechTarget = { append: (text: string) => void; retain?: SpeechRetention };
+let questionTarget: SpeechTarget | null = null;
+let dictationCancellation = 0;
+/** Attach/Submit retain the existing speech owner through finalization. */
+export function dictationCheckpoint() {
+	const target = questionTarget, cancellation = dictationCancellation;
+	return () => target === questionTarget && cancellation === dictationCancellation;
+}
 let composerTarget: ((text: string) => void) | null = null;
 
 /** File references use the very same default destination as dictation,
  * including claims whose dock is currently collapsed. A focused editor can
  * insert at its caret instead; callers use this only as the fallback. */
 export function appendToPrimaryInput(text: string): boolean {
-	const target = questionTarget ?? composerTarget;
+	const target = questionTarget?.append ?? composerTarget;
 	if (!target) return false;
 	target(text);
 	return true;
@@ -232,12 +240,14 @@ export function joinDictation(current: string, final: string): string {
  * unmount guard is identity-based so dev-mode double-invoked effects
  * can't clear another claimant.
  */
-export function useDictationTarget(append: (text: string) => void, claimed: boolean) {
+export function useDictationTarget(append: (text: string) => void, claimed: boolean, retain?: SpeechRetention) {
+	const retention = useRef(retain); retention.current = retain;
 	useEffect(() => {
 		if (!claimed) return;
-		questionTarget = append;
+		const target = { append, retain: () => retention.current?.() };
+		questionTarget = target;
 		return () => {
-			if (questionTarget === append) questionTarget = null;
+			if (questionTarget === target) questionTarget = null;
 		};
 	}, [append, claimed]);
 }
@@ -312,7 +322,7 @@ export function sampleDictationMeter(
  * composer fallback; the mounted question form's claim wins while a
  * question waits.
  */
-export function useDictation({ append, capture }: { append: (text: string) => void; capture?: DictationCaptureAdapter }): Dictation {
+export function useDictation({ append, capture, retain }: { append: (text: string) => void; capture?: DictationCaptureAdapter; retain?: SpeechRetention }): Dictation {
 	const { getLanguage } = useDictationLanguage();
 	const [phase, setPhase] = useState<DictationPhase>("idle");
 	const [error, setError] = useState<string | null>(null);
@@ -333,6 +343,8 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 	const captureRef = useRef<DictationCaptureRun | null>(null);
 	const sendAudioRef = useRef<((packet: DictationAudioPacket) => void) | null>(null);
 	const finalizeCutoffRef = useRef<number | null>(null);
+	const retainRef = useRef(retain); retainRef.current = retain;
+	const finishingOwner = useRef<{ target: SpeechTarget | null; append: (text: string) => void; detached?: (text: string) => void } | null>(null);
 
 	// Live machinery (non-render values). The MediaStream tracks stop and
 	// the per-run nodes disconnect on teardown; the socket is recreated per
@@ -355,9 +367,6 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 	/** The deferred transcript (owner round 2): finals land here during the
 	 *  run and flush into the primary input once, at teardown. */
 	const bufferRef = useRef<string[]>([]);
-	// A submit/reveal captures its input before awaiting finalization. Timestamped
-	// ownership during ongoing capture is handled separately by the Notebook router.
-	const finishingTargetRef = useRef<((text: string) => void) | null>(null);
 	/** Resolvers waiting for the run to fully end (finish(), owner
 	 *  2026-10-01): released by cleanup() — every terminal path runs it. */
 	const waitersRef = useRef<Array<{ resolve: () => void; reject: (error: Error) => void }>>([]);
@@ -370,7 +379,9 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 		if (bufferRef.current.length === 0) return;
 		const text = bufferRef.current.join(" ");
 		bufferRef.current = [];
-		(finishingTargetRef.current ?? questionTarget ?? appendRef.current)(text);
+		const owner = finishingOwner.current;
+		if (owner && owner.target !== questionTarget && owner.detached) owner.detached(text);
+		else (owner?.append ?? questionTarget?.append ?? appendRef.current)(text);
 	}, []);
 
 	/** Full teardown of one run's machinery. Idempotent; generation-guarded by callers. */
@@ -385,7 +396,7 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 		closeSentRef.current = false;
 		if (!observer) setDictationActive(false);
 		flush(); // the deferred transcript appears when the run ends (owner round 2)
-		finishingTargetRef.current = null;
+		finishingOwner.current = null;
 		if (safetyRef.current) {
 			clearTimeout(safetyRef.current);
 			safetyRef.current = null;
@@ -656,6 +667,9 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 		if ((phase !== "recording" && phase !== "connecting") || stoppingRef.current) return;
 		stoppingRef.current = true;
 		finalizeCutoffRef.current = null;
+		// Claim before requesting finals: a later question/reveal/unmount cannot
+		// redirect this run. Detached field owners retain a target-bound draft.
+		finishingOwner.current ??= { target: questionTarget, append: questionTarget?.append ?? appendRef.current, detached: (questionTarget?.retain ?? retainRef.current)?.() };
 		setPhase("stopping");
 		if (workletRef.current) {
 			// The worklet seals capture and sends its remaining PCM before ack.
@@ -671,6 +685,7 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 	}, [phase, cleanup]);
 
 	const cancel = useCallback(() => {
+		dictationCancellation++;
 		if (phase === "idle") return;
 		// Discard first, teardown second — cleanup() flushes, and the now-empty
 		// buffer makes that flush a no-op. Also kills a "stopping" run: the
@@ -687,7 +702,7 @@ export function useDictation({ append, capture }: { append: (text: string) => vo
 				return;
 			}
 			waitersRef.current.push({ resolve, reject });
-			finishingTargetRef.current ??= questionTarget ?? appendRef.current;
+			finishingOwner.current ??= { target: questionTarget, append: questionTarget?.append ?? appendRef.current, detached: (questionTarget?.retain ?? retainRef.current)?.() };
 			// "stopping" is already ending — the waiter just rides to cleanup.
 			if (phase === "recording" || phase === "connecting") stop();
 		});

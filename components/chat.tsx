@@ -1,6 +1,10 @@
 "use client";
 import { SharedWritingImages, SharedWritingPanel, useSharedWriting } from "@/components/shared-writing";
 import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
+import { HandwritingNotebook } from "@/components/handwriting/notebook";
+import { HandwritingPagesContext } from "@/components/handwriting/pages-context";
+import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
+import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
 import type { SharedWriting } from "@/src/core";
 
 import { createContext, Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -47,7 +51,7 @@ import { dockStateKey } from "@/components/dock-state-key";
 import { clearOpeningPrompt, readOpeningPromptEntry, stashOpeningPrompt, OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { forwardDockWheel, useDockHeight } from "@/components/dock-height";
 import { QueuedSteersBody, type QueuedSteerLine } from "@/components/queued-steers";
-import { DictationBar, finishDictation, joinDictation, useDictation, type Dictation } from "@/components/dictation";
+import { DictationBar, dictationCheckpoint, finishDictation, joinDictation, useDictation, type Dictation } from "@/components/dictation";
 import { useFieldCycle } from "@/components/field-cycle";
 import { JobsContext } from "@/components/jobs-context";
 import { StatsBar } from "@/components/stats-bar";
@@ -268,6 +272,7 @@ export function Chat({
 	// settled terminal's callback — a stable ref assigned below, once
 	// syncFromServer exists (refs, not closures: no stale capture).
 	const reattachSettledRef = useRef<() => void>(() => {});
+	const handwriting = useHandwritingSession(chatId);
 
 	// THE SESSION HOOK (Wave D, owner-approved 2026-09-26): the app-owned
 	// replacement for useChat + the AI-SDK transport. The record is native
@@ -279,6 +284,7 @@ export function Chat({
 		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight });
 	const sharedWriting = useSharedWriting(chatId, nativeMessages);
 	const hasSharedWriting = sharedWriting.pending.length > 0;
+	const handwritingSubmission = useHandwritingSubmission(chatId, sharedWriting.refresh, send, sharedWriting.pending);
 
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
 	const workspaceRef = useRef<HTMLDivElement | null>(null);
@@ -533,12 +539,15 @@ export function Chat({
 	// the dock stays mounted (the problem is still active until the agent
 	// concludes).
 	const submitThinking = useCallback(
-		(text: string, problemCallId: string, fields?: NotebookInputFields) => {
+		(text: string, problemCallId: string, fields?: NotebookInputFields, reviewed?: SharedWriting[]) => {
 			const problem = activeProblemRef.current;
 			if (!problem || problem.toolCallId !== problemCallId) return Promise.resolve(false);
-			return send({ type: "thinking", problemCallId, text, explanation: fields?.explanation, submission: fields?.submission, ...(hasSharedWriting ? { writingIds: sharedWriting.ids() } : {}) });
+			const images = reviewed ?? sharedWriting.pending;
+			if (images.length || handwritingSubmission.hasAttempt()) return handwritingSubmission.submit({ type: "thinking", problemCallId, text, ...fields, writingIds: images.map(image => image.id) }, images, `problem:${problemCallId}`);
+			if (!handwritingSubmission.blocked()) return send({ type: "thinking", problemCallId, text, ...fields });
+			return Promise.resolve(false);
 		},
-		[send, hasSharedWriting, sharedWriting],
+		[send, handwritingSubmission, sharedWriting],
 	);
 
 	// Teach-phase check (W5, vision §2): a pending QUIZ that lands once a
@@ -758,6 +767,7 @@ export function Chat({
 		// send resuming after `await finish()` reads the dictated tail.
 		append: (t) => applyText(joinDictation(textRef.current, t)),
 		capture: notebook.session.speech,
+		retain: () => handwritingSubmission.retainSpeech("composer", "text"),
 	});
 	const tutorDictation = dictation.active && notebookSpeech.destination === "notebook" ? undefined : dictation;
 	/* When a dictation run ends, the bare composer takes focus (owner
@@ -800,7 +810,7 @@ export function Chat({
 	// recovers from it. Later compaction requires new input instead.
 	const retryable = (status === "ready" || status === "error") && !busy && !compacting && endsInFailedTurn(nativeMessages);
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
-	const sendAllowed = !notebook.sendBlocked && !pending && !activeProblem && !compacting && !(hasSharedWriting && busy);
+	const sendAllowed = !notebook.sendBlocked && !pending && !activeProblem && !compacting && !((hasSharedWriting || handwritingSubmission.hasAttempt()) && busy);
 
 	/* THE PRACTICE PAUSE (owner round 16): between problems — practice
 	 * kind, nothing active, nothing in flight, and at least one problem
@@ -1250,22 +1260,25 @@ export function Chat({
 
 	const finishingSend = useRef(false);
 	const onSend = () => {
-		if (finishingSend.current || pending || compacting || !notebook.view || notebook.session.getSnapshot().sendBlocked) return;
+		if (finishingSend.current || pending || compacting || !notebook.view || notebook.session.getSnapshot().sendBlocked || handwritingSubmission.blocked()) return;
+		const reviewed = handwritingSubmission.reviewed(), recovery = handwritingSubmission.recoveryAction();
+		const field = handwritingSubmission.activeField(), validSpeech = dictationCheckpoint();
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): a learner who keeps
 		 * talking right through Enter must not lose the tail — stop the run,
 		 * let the last finals land in the composer, then send the REF value
 		 * (the flush lands via setState, invisible to this closure). */
 		if (!dictation.active) {
-			doSteerOrSend();
+			doSteerOrSend(reviewed, recovery);
 			return;
 		}
 		finishingSend.current = true;
-		void dictation.finish().then(doSteerOrSend).catch(() => {}).finally(() => { finishingSend.current = false; });
+		void dictation.finish().then(() => { if (validSpeech() && handwritingSubmission.activeField() === field) return doSteerOrSend(reviewed, recovery); }).catch(() => {}).finally(() => { finishingSend.current = false; });
 	};
-	const doSend = () => {
-		if (busy || pending || compacting) return;
+	const doSend = (reviewed = handwritingSubmission.reviewed(), recovery = handwritingSubmission.recoveryAction()) => {
+		if (busy || pending || compacting || handwritingSubmission.blocked()) return;
+		if (recovery) { void recovery(); return; }
 		const t = textRef.current.trim();
-		if (!t && !hasSharedWriting) return;
+		if (!t && !reviewed.length && !handwritingSubmission.hasAttempt()) return;
 		if (zeroKeys) {
 			setSetupOpen(true);
 			return;
@@ -1278,9 +1291,14 @@ export function Chat({
 			deliverOpeningPrompt(t);
 			return;
 		}
+		if (reviewed.length || handwritingSubmission.hasAttempt()) {
+			draftRef.current = null;
+			void handwritingSubmission.submit({ type: "text", text: t, writingIds: reviewed.map(image => image.id) }, reviewed, "composer");
+			return;
+		}
 		draftRef.current = t; // the refusal flow's preserve-and-replay seam
 		applyText("");
-		void send({ type: "text", text: t, ...(hasSharedWriting ? { writingIds: sharedWriting.ids() } : {}) });
+		void send({ type: "text", text: t });
 	};
 
 	/* STEER VS SEND (owner arc 2026-10-03): a send while a turn runs steers
@@ -1292,20 +1310,24 @@ export function Chat({
 	 * own stream AND foreign/wake turns — both have a live agent by the
 	 * time the send's POST resolved, so the steer lands. Idle takes the
 	 * plain send; a raced settle 409s and falls back to exactly that. */
-	const doSteerOrSend = () => {
-		if (pending || compacting || notebook.session.getSnapshot().sendBlocked) return;
-		if (hasSharedWriting && busy) return;
+	const doSteerOrSend = (reviewed = handwritingSubmission.reviewed(), recovery = handwritingSubmission.recoveryAction()) => {
+		if (pending || compacting || notebook.session.getSnapshot().sendBlocked || handwritingSubmission.blocked()) return;
+		if (recovery) { if (!busy) doSend(reviewed, recovery); return; }
+		if ((reviewed.length || handwritingSubmission.hasAttempt()) && busy) return;
 		if (notebook.session.getSnapshot().view?.contextId && (!hasSharedWriting || explanationHasContent(notebook.session.tutor.draft({ kind: "ordinary" })?.parts ?? []))) {
 			if (zeroKeys) { setSetupOpen(true); return; }
 			if (selectedModelUnavailable(catalog, selectedModel)) { openModelPicker(); return; }
-			const writingIds = hasSharedWriting ? sharedWriting.ids() : undefined;
 			return notebook.session.tutor.prepareSubmission({ kind: "ordinary" }).then(async (input) => {
 				// Explicit Send is the only authority; switching and autosaves never enter here.
-				try { if (busy) await steer(input.text, input); else await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission, writingIds }); }
+				try {
+					if (reviewed.length) await handwritingSubmission.submit({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission, writingIds: reviewed.map(image => image.id) }, reviewed, "composer");
+					else if (busy) await steer(input.text, input);
+					else await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission });
+				}
 				finally { await notebook.session.tutor.reconcile(input.submission.id); }
 			}).catch(() => {});
 		}
-		if (hasSharedWriting) { if (!busy) doSend(); return; }
+		if (recovery || reviewed.length || handwritingSubmission.hasAttempt()) { if (!busy) doSend(reviewed, recovery); return; }
 		const t = textRef.current.trim();
 		if (!t) return;
 		if (busy) {
@@ -1313,10 +1335,13 @@ export function Chat({
 			void steer(t);
 			return;
 		}
-		doSend();
+		doSend(reviewed, recovery);
 	};
+	useHandwritingEditor("composer", () => ({ text: textRef.current }), draft => applyText(draft.text ?? ""), !pending && !activeProblemRef.current, handwritingSubmission);
 
 	return (
+		<HandwritingSubmissionContext.Provider value={handwritingSubmission}>
+		<HandwritingPagesContext.Provider value={handwriting.actions}>
 		<ChatActionsContext.Provider
 			value={{
 				chatId,
@@ -1340,8 +1365,9 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" className="session-workspace flex h-dvh overflow-hidden">
-			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
+		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" className={`session-workspace flex h-dvh overflow-hidden ${handwriting.open ? "hw-workspace" : ""}`}>
+		<div className={handwriting.open ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
+			<div inert={handwriting.open && handwriting.expanded} className={`session-panes ${handwriting.open ? "hw-chat hw-mobileHidden" : ""}`} data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
 			<div className="session-tutor" inert={notebookLayout.expanded}>
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its
@@ -1460,6 +1486,7 @@ export function Chat({
 					) : (
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
 					)}
+					<Button variant="outline" size="sm" className="shrink-0" onClick={() => handwriting.show(true)} data-testid="open-notebook">Write</Button>
 				</TopBar>
 				{!notebookVisible && notebook.error && <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>}
 
@@ -1769,8 +1796,9 @@ export function Chat({
 				    fold) and NEVER overlaps the composer. */}
 				<DockOverlay
 					notebook={notebook.session}
-					sharedWritingSlot={<SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} />}
-					hasSharedWriting={hasSharedWriting}
+					fullQuestionWidth={handwriting.open}
+					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} /></>}
+					hasSharedWriting={hasSharedWriting || handwritingSubmission.hasAttempt()}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.key)?.form : undefined}
 					onSaveQuestionDraft={(form) => { if (pending) saveQuestionDraft(pending.key, { form }); }}
@@ -1834,7 +1862,7 @@ export function Chat({
 						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}
 						<ChatSessionComposer
 							dictation={tutorDictation}
-							hasContent={hasSharedWriting || !!ordinaryDraft && explanationHasContent(ordinaryDraft.parts)}
+							hasContent={hasSharedWriting || handwritingSubmission.hasAttempt() || !!ordinaryDraft && explanationHasContent(ordinaryDraft.parts)}
 							// Stop aborts ANY in-flight turn (stream-reattach wave): the
 							// square renders while a reattached/wake turn runs too — the
 							// abort channel kills it server-side; stop() alone would
@@ -1858,7 +1886,7 @@ export function Chat({
 						/>
 						</div>
 					}
-					onSubmitAnswer={async (output, toolCallId, fields) => {
+					onSubmitAnswer={async (output, toolCallId, fields, reviewed) => {
 						const pending = pendingRef.current;
 						if (!pending || pending.toolCallId !== toolCallId) return false;
 						// THE ANSWER IS THE QUESTION CALL'S TOOL RESULT (fork 1, owner
@@ -1873,7 +1901,9 @@ export function Chat({
 						const reading = readingThinkingRef.current.trim() || undefined;
 						// The pending-id effect clears this only when the question
 						// actually leaves. An offline preflight keeps the draft visible.
-						await submitAnswer(pending.tool, toolCallId, reading && !fields?.submission ? { ...output, readingThinking: reading } : output, pending.key, { ...fields, writingIds: hasSharedWriting && !output.dismissed ? sharedWriting.ids() : undefined });
+						const images = reviewed ?? sharedWriting.pending, answer = reading && !fields?.submission ? { ...output, readingThinking: reading } : output;
+						if ((images.length || handwritingSubmission.hasAttempt()) && !output.dismissed) return handwritingSubmission.submit({ type: "answer", toolCallId, answer, ...fields, writingIds: images.map(image => image.id) }, images, `question:${toolCallId}`, { readingThinking: readingThinkingRef.current });
+						if (!handwritingSubmission.blocked()) return submitAnswer(pending.tool, toolCallId, answer, pending.key, fields);
 					}}
 				/>
 				</Conversation>
@@ -1912,6 +1942,9 @@ export function Chat({
 					</NotebookFrame>
 				</>}
 			</div>
+			{handwriting.mounted && <HandwritingSplit hidden={!handwriting.open} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
+			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
+		</div>
 		</div>
 		</JobsContext.Provider>
 		</SessionMermaidContext.Provider>
@@ -1931,6 +1964,7 @@ export function Chat({
 			}}
 		/>
 		</ChatActionsContext.Provider>
+		</HandwritingPagesContext.Provider></HandwritingSubmissionContext.Provider>
 	);
 }
 
@@ -2046,6 +2080,7 @@ export function shouldStampGeometryMute(nextH: number, prevH: number, pending: b
 function DockOverlay({
 	notebook,
 	notebookToggle,
+	fullQuestionWidth = false,
 	sharedWritingSlot,
 	hasSharedWriting,
 	pending,
@@ -2078,6 +2113,8 @@ function DockOverlay({
 }: {
 	notebook: NotebookSession;
 	notebookToggle: React.ReactNode;
+	/** In the notebook split, a question fills the context pane. */
+	fullQuestionWidth?: boolean;
 	sharedWritingSlot?: React.ReactNode;
 	hasSharedWriting?: boolean;
 	pending: ReturnType<typeof pendingQuestionOf>;
@@ -2091,7 +2128,7 @@ function DockOverlay({
 	 *  question (the composer is replaced); null in teaching sessions. */
 	practice: { toolCallId: string; input: unknown } | null;
 	/** (commit, text) — the practice dock's two submit lanes. */
-	onSubmitThinking: (text: string, problemCallId: string, fields?: NotebookInputFields) => Promise<boolean>;
+	onSubmitThinking: (text: string, problemCallId: string, fields?: NotebookInputFields, reviewed?: SharedWriting[]) => Promise<boolean>;
 	/** Teach-phase pending question: arrives collapsed behind the reveal button (W5). */
 	requiresReveal: boolean;
 	/** The reading-thinking draft (owner 2026-10-03) — owned by ChatView so
@@ -2134,6 +2171,7 @@ function DockOverlay({
 	setupCta?: React.ReactNode;
 }) {
 	const { isAtBottom, scrollToBottom, scrollRef } = useStickToBottomContext();
+	const wideQuestion = fullQuestionWidth && (!!pending || !!practice);
 	// Render-fresh bottom state (flicker round): the arrival block below reads
 	// it DURING RENDER — the same value the after-paint effect used to read a
 	// frame too late. Assigned per render like the other refs below.
@@ -2483,7 +2521,7 @@ function DockOverlay({
 		<div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }}>
 			<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
 			<div ref={blockRef} className="relative bg-background pb-5">
-				<div className={DOCK}>
+				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
 					{!notebook.getSnapshot().view && <div data-tutor-draft-loading="" role={notebook.getSnapshot().error ? "alert" : "status"} className="px-3 py-2 text-xs text-muted-foreground">
 						{notebook.getSnapshot().error ? <>Saved drafts could not load. <button type="button" className="min-h-11 underline" onClick={() => { void notebook.refresh(); }}>Retry</button></> : "Loading saved drafts…"}
@@ -2505,6 +2543,7 @@ function DockOverlay({
 							key={pending.toolCallId}
 							notebook={notebook}
 							toolCallId={pending.toolCallId}
+							targetKey={`question:${pending.toolCallId}:reading`}
 							dictation={dictation}
 							value={readingThinking}
 							revision={readingThinkingRevision}
@@ -2533,6 +2572,8 @@ function DockOverlay({
 							{pending ? (
 								<QuestionDock
 									notebook={notebook}
+									readingThinking={readingThinking}
+									onRestoreReadingThinking={onReadingThinking}
 									dictation={dictation}
 									hasSharedWriting={hasSharedWriting}
 									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall"}
@@ -2616,7 +2657,7 @@ function DockOverlay({
 				    the flank; below MARGIN_MIN_W it FADES (never pops away — no
 				    mid-question unmount), and widening past the floor fades it
 				    back in. */}
-				{pending && plan && (
+				{pending && plan && !wideQuestion && (
 					<Hint label="Open the full plan" side="bottom">
 <button
 						type="button"

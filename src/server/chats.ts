@@ -153,6 +153,9 @@ function finishChatDeletion(chatId: string, mode: ChatDeleteMode): Extract<ChatD
 
 function finishChatRecordDeletion(chatId: string): number {
 	const jobsRemoved = stores.jobStore.deleteJobsForChat(chatId);
+	// Remove editable working before the session's final deletion. A failed
+	// cleanup leaves a deletable session; delayed saves recheck its existence.
+	stores.handwritingStore.deleteChat(chatId);
 	if (stores.chatStore.deleteChat(chatId)) {
 		stores.sharedWritingStore.deleteChat(chatId);
 		discardChatDeliveries(chatId);

@@ -100,6 +100,7 @@ export type LhMessage = (UserMessage | AssistantMessage | ToolResultMessage | Lh
 	id: string;
 	explanation?: LearnerExplanation;
 	sharedWriting?: SharedWritingReference[];
+	writingSubmission?: { id: string; inputSha256: string };
 	/** CLI-reported effective context budget, not a catalog model maximum.
 	 * App-only metadata: never transmitted as provider/model message content. */
 	cliContextWindow?: number;
@@ -647,7 +648,7 @@ export function toLlmMessages(messages: readonly AgentMessage[]): Message[] {
 			continue;
 		}
 		// Strip app-owned fields: the wire carries the native shape only.
-		const { id: _id, cliContextWindow: _cliContextWindow, explanation: _explanation, sharedWriting, ...native } = m as LhMessage;
+		const { id: _id, cliContextWindow: _cliContextWindow, explanation: _explanation, sharedWriting, writingSubmission: _receipt, ...native } = m as LhMessage;
 		if (native.role === "toolResult" && (QUESTION_TOOLS as readonly string[]).includes(native.toolName) && native.details && typeof native.details === "object" && !Array.isArray(native.details)) {
 			const { textContent: _text, thinkingContent: _thinking, readingThinkingContent: _reading, ...details } = native.details as Record<string, import("@earendil-works/pi-ai").JsonValue>;
 			native.details = details;

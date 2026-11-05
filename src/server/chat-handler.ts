@@ -65,6 +65,7 @@ import {
 import { steerDelivered } from "../core/contracts.ts";
 import type {CallUsage} from "../core/contracts.ts";
 import { resolveSharedWriting } from "./shared-writing.ts";
+import { writingSubmissionReceipt, writingSubmissionResponse } from "./writing-submission.ts";
 
 /**
  * One chat turn over the server-owned native record. Framework-free (plain
@@ -208,8 +209,13 @@ export async function handleChatInput(
 ): Promise<Response> {
 	let record = stores.chatStore.getChat(chatId);
 	if (!record) {
-		return Response.json({ error: "Unknown chat" }, { status: 404 });
+		return Response.json({ error: "Unknown chat", inputDisposition: "not_accepted" }, { status: 404 });
 	}
+	// Image-bearing retries bind the entire combined input, including its
+	// Notebook explanation. Check that identity before either receipt settles it.
+	const submissionReceipt = writingSubmissionReceipt(input);
+	const priorSubmission = writingSubmissionResponse(record.messages, submissionReceipt);
+	if (priorSubmission) return priorSubmission;
 	if ((input.type === "text" || input.type === "thinking" || input.type === "answer") && input.submission) {
 		try {
 			if (notebookSubmissionAccepted(record, input)) return settledTurnResponse();
@@ -252,7 +258,7 @@ export async function handleChatInput(
 	if (!conversation) {
 		const envelope = modelsNotConfigured(["strong"]);
 		console.info(`[chat ${chatId}] turn refused — ${JSON.stringify(envelope)}`);
-		return Response.json(envelope, { status: 503 });
+		return Response.json({ ...envelope, inputDisposition: "not_accepted" }, { status: 503 });
 	}
 
 	// THE KEY-PRESENCE GATE (provider-key interlude, owner, 2026-09-25): a
@@ -273,7 +279,7 @@ export async function handleChatInput(
 	if (!providerKeyPresent(conversation.provider)) {
 		const envelope = providerKeyMissingEnvelope(conversation.provider, ["strong"]);
 		console.info(`[chat ${chatId}] turn refused — ${JSON.stringify(envelope)}`);
-		return Response.json(envelope, { status: 503 });
+		return Response.json({ ...envelope, inputDisposition: "not_accepted" }, { status: 503 });
 	}
 
 	// THE COMPACTION GATE (owner round 14, 2026-10-05 — the structural
@@ -294,7 +300,7 @@ export async function handleChatInput(
 	};
 	let conversationEngine: PiEngine;
 	try { conversationEngine = piEngineForSpec(conversation, () => callPurpose.background, lifecycle, retentionForSlot("strong")); }
-	catch { return Response.json({ error: conversation.provider === "chatgpt" ? chatGPTStreamError("model catalog") : isSubscriptionProvider(conversation.provider) ? nativeSubscriptionError(conversation.provider, "model catalog") : "The selected model is unavailable." }, { status: 503 }); }
+	catch { return Response.json({ error: conversation.provider === "chatgpt" ? chatGPTStreamError("model catalog") : isSubscriptionProvider(conversation.provider) ? nativeSubscriptionError(conversation.provider, "model catalog") : "The selected model is unavailable.", inputDisposition: "not_accepted" }, { status: 503 }); }
 	const modelIdForCompaction = `${conversationEngine.model.provider}:${conversationEngine.model.id}`;
 	await ensureCompacted(
 		{
@@ -315,8 +321,10 @@ export async function handleChatInput(
 		chatId,
 	);
 	const compactedRecord = stores.chatStore.getChat(chatId);
-	if (!compactedRecord) return Response.json({ error: "Unknown chat" }, { status: 404 });
+	if (!compactedRecord) return Response.json({ error: "Unknown chat", inputDisposition: "not_accepted" }, { status: 404 });
 	record = compactedRecord;
+	const freshSubmission = writingSubmissionResponse(record.messages, submissionReceipt);
+	if (freshSubmission) return freshSubmission;
 	if ((input.type === "text" || input.type === "thinking" || input.type === "answer") && input.submission) {
 		try {
 			if (notebookSubmissionAccepted(record, input)) return settledTurnResponse();
@@ -354,9 +362,10 @@ export async function handleChatInput(
 				? input.steers.filter((s) => !steerDelivered(record.messages, s.id))
 				: inputAppends(record, input);
 		if (writing.length && appends.length) appends[appends.length - 1]!.sharedWriting = writing;
+		if (submissionReceipt && appends.length) appends[appends.length - 1]!.writingSubmission = submissionReceipt;
 	} catch (err) {
 		if (err instanceof ChatInputError) {
-			return Response.json({ error: err.message }, { status: 400 });
+			return Response.json({ error: err.message, inputDisposition: "not_accepted" }, { status: 400 });
 		}
 		throw err;
 	}
@@ -390,7 +399,7 @@ export async function handleChatInput(
 	// double-run the teacher and clobber the first turn's persist.
 	if (!beginTurn(chatId)) {
 		console.info(`[chat ${chatId}] turn already in flight — request rejected`);
-		return Response.json({ error: "A turn is already running for this session" }, { status: 409 });
+		return Response.json({ error: "A turn is already running for this session", inputDisposition: "not_accepted" }, { status: 409 });
 	}
 
 	// Write-ahead persistence: the input's native appends go on disk BEFORE

@@ -1,10 +1,63 @@
 import type { LhMessage } from "./native-messages.ts";
+import { z } from "zod";
+import { notebookPageIdSchema, type NotebookSource } from "./handwriting.ts";
 
 /** Original PNGs shared into a session. Submission is derived from the
  * session record, so a failed send cannot consume pending work. */
 export interface SharedWriting {
 	id: string;
 	createdAt: string;
+	editableSource?: { version: 1 };
+	notebook?: { pageId: string; pageRevision: number; contentFingerprint: string };
+}
+
+const writingId = z.string().regex(/^writing_[A-Za-z0-9_-]+$/);
+const revision = z.number().int().positive();
+export const writingIndexSchema = z.object({
+	version: z.literal(1),
+	pages: z.record(notebookPageIdSchema, z.object({ revision, writingId }).strict()),
+	committed: z.record(writingId, z.object({ pageId: notebookPageIdSchema, pageRevision: revision }).strict()),
+}).strict().superRefine((index, context) => {
+	for (const [pageId, head] of Object.entries(index.pages)) {
+		const receipt = index.committed[head.writingId];
+		if (!receipt || receipt.pageId !== pageId || receipt.pageRevision !== head.revision) context.addIssue({ code: "custom", message: "Missing page-head receipt" });
+	}
+	const revisions = new Set<string>();
+	for (const receipt of Object.values(index.committed)) {
+		const key = `${receipt.pageId}:${receipt.pageRevision}`;
+		if (!index.pages[receipt.pageId] || index.pages[receipt.pageId]!.revision < receipt.pageRevision || revisions.has(key)) context.addIssue({ code: "custom", message: "Invalid commit receipt" });
+		revisions.add(key);
+	}
+});
+export type WritingIndex = z.infer<typeof writingIndexSchema>;
+export const emptyWritingIndex = (): WritingIndex => ({ version: 1, pages: {}, committed: {} });
+export type NotebookCapture = { writingId: string; pageId: string; expectedPageRevision: number; image: Uint8Array; source: NotebookSource };
+export type WritingSnapshot = { writing: SharedWriting[]; index: WritingIndex };
+export type NotebookCaptureReceipt = { writing: SharedWriting; committed: boolean; currentPageRevision: number };
+export type PageAttachments = Record<string, { revision: number; writingId: string; contentFingerprint: string }>;
+export class CaptureConflict extends Error {
+	constructor(public code: "capture_conflict" | "page_changed", public currentPageRevision?: number) {
+		super(code === "capture_conflict" ? "This snapshot identity already belongs to different working." : "A newer snapshot of this page is already attached.");
+	}
+}
+/** Publication policy runs inside the adapter's single synchronous boundary. */
+export function commitNotebookCapture(index: WritingIndex, capture: Pick<NotebookCapture, "writingId" | "pageId" | "expectedPageRevision">): WritingIndex {
+	if (index.committed[capture.writingId]) return index;
+	const current = index.pages[capture.pageId]?.revision ?? 0;
+	if (current !== capture.expectedPageRevision) throw new CaptureConflict("page_changed", current);
+	return { version: 1, pages: { ...index.pages, [capture.pageId]: { revision: current + 1, writingId: capture.writingId } }, committed: { ...index.committed, [capture.writingId]: { pageId: capture.pageId, pageRevision: current + 1 } } };
+}
+export function pendingSharedWriting(snapshot: WritingSnapshot, messages: readonly LhMessage[]): SharedWriting[] {
+	const sent = submittedWritingIds(messages);
+	return snapshot.writing.filter(writing => !sent.has(writing.id) && (!writing.notebook || snapshot.index.pages[writing.notebook.pageId]?.writingId === writing.id));
+}
+export function pageAttachments(snapshot: WritingSnapshot): PageAttachments {
+	const byId = new Map(snapshot.writing.map(writing => [writing.id, writing]));
+	return Object.fromEntries(Object.entries(snapshot.index.pages).map(([pageId, head]) => {
+		const writing = byId.get(head.writingId);
+		if (!writing?.notebook) throw new Error("Missing committed snapshot");
+		return [pageId, { ...head, contentFingerprint: writing.notebook.contentFingerprint }];
+	}));
 }
 
 export interface SharedWritingReference extends SharedWriting {

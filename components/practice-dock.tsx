@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRightIcon, CornerDownLeftIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
-import { finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
+import { finishDictation, dictationCheckpoint, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { explanationHasContent, type NotebookInputFields } from "@/src/core";
 import type { NotebookSession } from "./notebook-session";
 import { useNotebookActivityDraft } from "./notebook-activity-draft";
+import { useHandwritingEditor } from "./handwriting/submission";
+import type { SharedWriting } from "@/src/core";
 import { CompactLearningInput } from "@/components/compact-learning-input";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { PathInput } from "@/components/path-input";
@@ -45,7 +47,7 @@ export interface PracticeDockProps {
 	expanded: boolean;
 	onExpand: () => void;
 	/** text — POST {type:"thinking"} (one lane; the register is read from the text). */
-	onSubmit: (text: string, problemCallId: string, fields?: NotebookInputFields) => void | Promise<boolean>;
+	onSubmit: (text: string, problemCallId: string, fields?: NotebookInputFields, reviewed?: SharedWriting[]) => void | Promise<boolean>;
 	notebook?: NotebookSession;
 	/** Escape in the thinking field stops dictation (threaded from the page). */
 	onEscape?: () => void;
@@ -75,6 +77,10 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 		thinkingRef.current = text; setThinking(text);
 		if (owned.enabled) notebook!.tutor.updateText(owner, text);
 	};
+	const alive = useRef(true), current = useRef({ problemCallId, compactionRunning, hasSharedWriting }); current.current = { problemCallId, compactionRunning, hasSharedWriting };
+	useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+	if (owned.enabled && owned.draft) thinkingRef.current = owned.text;
+	const transfer = useHandwritingEditor(`problem:${problemCallId}`, () => ({ thinking: thinkingRef.current }), draft => update(draft.thinking ?? ""), true);
 
 	useDictationTarget(
 		useCallback(
@@ -85,25 +91,29 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 			[notebook, problemCallId, owned.enabled],
 		),
 		true,
+		() => transfer?.retainSpeech(`problem:${problemCallId}`, "thinking"),
 	);
 
 	const submit = async () => {
-		if (compactionRunning || sending.current || notebook?.getSnapshot().sendBlocked) return;
+		if (compactionRunning || sending.current || notebook?.getSnapshot().sendBlocked || transfer?.blocked()) return;
+		const reviewed = transfer?.reviewed(), recovery = transfer?.recoveryAction(), valid = dictationCheckpoint(), target = problemCallId;
 		sending.current = true;
 		// Capture this problem and adapter before finalization can change activity.
 		try {
 			await finishDictation();
+			if ((reviewed?.length || recovery) && (!alive.current || current.current.problemCallId !== target || current.current.compactionRunning || !valid() || transfer?.blocked())) return;
+			if (recovery) { await recovery(); return; }
 			if (notebook?.getSnapshot().view?.contextId && (!hasSharedWriting || explanationHasContent(notebook.tutor.draft(owner)?.parts ?? []))) {
 				const prepared = await notebook!.tutor.prepareSubmission(owner);
-				try { await onSubmit(prepared.text, problemCallId, prepared); }
+				try { await onSubmit(prepared.text, problemCallId, prepared, reviewed); }
 				finally { await notebook!.tutor.reconcile(prepared.submission.id); }
 			} else {
 				// An owned draft was already checked above. Image-only submission
 				// must not revive the legacy field after that draft was consumed.
 				const text = notebook?.getSnapshot().view?.contextId ? "" : thinkingRef.current.trim();
 				if (!text && !hasSharedWriting) return;
-				const accepted = await onSubmit(text, problemCallId);
-				if (accepted !== false && thinkingRef.current.trim() === text) update("");
+				const accepted = await onSubmit(text, problemCallId, undefined, reviewed);
+				if (accepted !== false && !reviewed?.length && !transfer?.hasAttempt() && thinkingRef.current.trim() === text) update("");
 			}
 		} catch { /* The shared draft model exposes recoverable save failures. */ }
 		finally { sending.current = false; }
@@ -186,7 +196,7 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 						type="button"
 						data-testid="practice-send"
 						aria-label="Submit thinking"
-						disabled={owned.blocked || (!(owned.enabled ? explanationHasContent(owned.draft?.parts ?? []) : thinking.trim().length > 0) && !isDictationActive() && !hasSharedWriting) || compactionRunning}
+						disabled={owned.blocked || (!(owned.enabled ? explanationHasContent(owned.draft?.parts ?? []) : thinking.trim().length > 0) && !isDictationActive() && !hasSharedWriting && !transfer?.hasAttempt()) || compactionRunning}
 						onClick={() => submit()}
 						className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 					>

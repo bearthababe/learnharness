@@ -41,7 +41,7 @@ test("ordinary send combines Notebook snapshots and reviewed handwriting once, a
 	const upload = await sharedWritingResponse(new Request("http://test/writing", { method: "POST", body: png }), chat.id);
 	assert.equal(upload.status, 201);
 	const { writing } = await upload.json();
-	const input = { type: "text", text: "Same force.\n\nTwice the area halves pressure.", explanation: draft.parts, writingIds: [writing.id], submission: { id: "submission", draftId: draft.id, draftRevision: draft.revision, owner: draft.owner } };
+	const input = { type: "text", text: "Same force.\n\nTwice the area halves pressure.", explanation: draft.parts, writingIds: [writing.id], submissionId: `submission_${crypto.randomUUID()}`, submission: { id: "submission", draftId: draft.id, draftRevision: draft.revision, owner: draft.owner } };
 	let calls = 0;
 	let seen = "";
 	const tutor = createFauxCore({});
@@ -63,6 +63,8 @@ test("ordinary send combines Notebook snapshots and reviewed handwriting once, a
 	if (running) await new Response(running.subscribe()).text();
 	const duplicate = await handleChatRequest(request(), factory);
 	assert.equal(duplicate.status, 200, await duplicate.clone().text());
+	const conflicting = await handleChatRequest(new Request("http://test/api/chat", { method: "POST", body: JSON.stringify({ chatId: chat.id, input: { ...input, writingIds: ["writing_different"] } }) }), factory);
+	assert.equal(conflicting.status, 422, "An accepted voice Notebook receipt cannot mask a changed handwriting payload");
 	assert.equal(calls, 1);
 	assert.match(seen, /Same force\.[\s\S]*Notebook-assisted working[\s\S]*p=F\/A[\s\S]*Twice the area/);
 	assert.match(seen, /not by itself evidence of independent reasoning/);
@@ -71,6 +73,7 @@ test("ordinary send combines Notebook snapshots and reviewed handwriting once, a
 	assert.equal(saved.messages.filter((message) => message.role === "user").length, 1);
 	assert.match(JSON.stringify(projectView(saved.messages)), /p=F\/A/);
 	assert.equal(saved.messages.filter(message => message.sharedWriting?.length).length, 1);
+	assert.equal(saved.messages.find(message => message.sharedWriting?.length)?.writingSubmission?.id, input.submissionId);
 	assert.ok(projectView(saved.messages).some(message => message.parts.some(part => part.type === "data-shared-writing")));
 	assert.deepEqual((await (await sharedWritingResponse(new Request("http://test/writing"), chat.id)).json()).pending, []);
 	assert.deepEqual(service.view(chat.id).tutorDrafts, [], "only accepted draft consumed");
