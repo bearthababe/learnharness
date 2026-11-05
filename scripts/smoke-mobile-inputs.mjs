@@ -505,7 +505,7 @@ try {
 			const button = document.querySelector(`[data-testid="${trigger}"]`);
 			const startTimes = [animation.startTime, blur.startTime];
 			animation.pause(); blur.pause();
-			const samples = [0, 175, 350].map(time => {
+			const samples = [0, 300, 600].map(time => {
 				animation.currentTime = time; blur.currentTime = time;
 				return { top: menu.getBoundingClientRect().top, blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]) };
 			});
@@ -516,7 +516,7 @@ try {
 		assert.ok(entrance.startTimes[0] !== null);
 		assert.equal(entrance.startTimes[0], entrance.startTimes[1], "Card and blur share the same animation start");
 		for (const timing of entrance.timings) {
-			assert.equal(timing.duration, 350);
+			assert.equal(timing.duration, 600);
 			assert.equal(timing.easing, "cubic-bezier(0.4, 0, 0.2, 1)");
 		}
 		assert.ok(Math.abs(entrance.samples[0].top - entrance.buttonTop) <= 1, "Card starts at its own opener");
@@ -594,7 +594,7 @@ try {
 		await page.$eval(modelRow, e => e.scrollIntoView({ block: "nearest" }));
 		await fitPanel('[data-testid="model-menu"]');
 		const pickedModel = page.waitForResponse(r => new URL(r.url()).pathname === "/api/chats/mobile_panels/settings" && r.request().method() === "PUT" && r.ok());
-		await page.click(modelRow);
+		await page.locator(modelRow).click();
 		await pickedModel;
 		await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
 		await assertReading("Model selection");
@@ -881,7 +881,7 @@ try {
 	await page.click('[data-testid="stats-model"]');
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
 	await page.keyboard.press("Escape");
-	console.log("PASS: lighter 4px blur and 350ms synchronized entrance/reduced motion, visible close-toggle openers, completed taps without click-through, stationary lesson, coordinated keyboard frames, preserved query/results, Plan pinch/pan and drafts");
+	console.log("PASS: lighter 4px blur and 600ms synchronized entrance/reduced motion, visible close-toggle openers, completed taps without click-through, stationary lesson, coordinated keyboard frames, preserved query/results, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	assert.equal((await upload("mobile_panels")).status, 201);

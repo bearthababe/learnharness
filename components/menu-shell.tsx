@@ -218,7 +218,7 @@ export function MenuShell({
 		const trigger = document.querySelector(`[data-testid="${phoneTriggerTestid}"]`);
 		if (!menu || !trigger || !backdrop) return;
 		const distance = Math.max(0, trigger.getBoundingClientRect().top - menu.getBoundingClientRect().top);
-		const timing = { duration: 350, easing: "cubic-bezier(0.4, 0, 0.2, 1)" };
+		const timing = { duration: 600, easing: "cubic-bezier(0.4, 0, 0.2, 1)" };
 		// Rise through the opening edge without moving the positioned shell's
 		// viewport anchor. Individual translate composes with its placement transform.
 		const animation = menu.animate([

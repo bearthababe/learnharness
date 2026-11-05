@@ -87,7 +87,8 @@ stationary lesson, compact placement and the inherited desktop behavior.
 
 **Gentler shared entrance — owner approved 2026-11-05:** the owner found the
 8px blur too strong and the 160ms entrance too quick to follow. Reduce resting
-blur to **4px**, still without a dark/coloured overlay. Use **350ms** with the
+blur to **4px**, still without a dark/coloured overlay. The owner subsequently
+selected **600ms** (superseding the initially approved 350ms) with the
 existing ease-in-out curve for both effects: the card rises from its opener as
 blur grows from 0px to 4px, sharing one start time and finishing together. Keep
 the opener sharp and lesson stationary. Reduced motion skips both effects;
