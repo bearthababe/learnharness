@@ -286,3 +286,26 @@ configuration isolated, and never include credential contents in evidence.
 
 Physical iPad acceptance remains distinct from browser emulation. Keep required
 device gates open until owner confirmation. No push or remote merge is claimed.
+
+### Parent coordination: resolved hidden-question wait — 2026-11-05
+
+At 07:39 UTC, explicit-server inspection on `127.0.0.1:4096` found child
+`ses_e57783d6fffeVnwk66Xqs146kN` waiting inside its `question` tool since
+2026-11-04 22:46:21 UTC. Message `msg_1a8bdb3a4001xPAyw4MajU4vQH` asked
+for a recovery-panel keyboard route. The question had not reached the parent
+conversation; the worktree was still clean at `12f444a`. This was a pending
+decision, not a hung model request. No interrupt or service restart was needed.
+
+The owner superseded the manual panel with automatic recovery and ordinary Send:
+definite nonacceptance returns to pre-send editing; uncertain delivery is checked
+automatically; Send reconciles and safely retries the original attempt without
+duplicate acceptance or accidental submission of newer edits. The decision was
+relayed and accepted as the custom answer to pending form
+`frm_1a8bdec380016yew53fAHv5yfp`, clearing the wait.
+
+After independent re-review, the owner also approved automatic saved-capture
+retry on reopen/reconnection and immediate retry through ordinary Attach,
+preserving newer working and stopping at review without automatic Send.
+Delivery `a7715563170f2877b336699991472caf091aff2c` includes those corrections;
+final independent Standards/Spec re-review is dispatched against that exact
+commit. Integration of corrections and those final review outcomes remain pending.
