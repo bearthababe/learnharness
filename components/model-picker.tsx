@@ -7,6 +7,7 @@ import { prettyModel } from "@/components/usage-format";
 import { ModelMenuList, ThinkingMenuList } from "@/components/settings/model-menu";
 import { composeSlotModel } from "@/components/settings/agent-section";
 import { MenuShell } from "@/components/menu-shell";
+import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { Hint } from "@/components/ui/hint";
 import { notifySettingsSaved, useSettingsSaved } from "@/components/settings-signal";
@@ -49,6 +50,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	// means no session record is known yet, not permission to inherit Strong.
 	const [session, setSession] = useState<{ settings?: ChatSettings }>();
 	const [open, setOpen] = useState<"model" | "thinking" | null>(null);
+	const presence = usePhoneMenuPresence(open, phone);
 	const [error, setError] = useState<string | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 
@@ -340,8 +342,9 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			{/* The shared dropdown body (extracted 2026-09-20): the agent
 			    settings' slot selects and the setup dialog use the exact same
 			    one. */}
-			{open === "model" && (
+			{presence.value === "model" && (
 				<MenuShell
+					closing={presence.closing} onClosed={presence.onClosed}
 					anchorRef={containerRef}
 					testid="model-menu"
 					phoneTriggerTestid="stats-model"
@@ -355,8 +358,9 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				</MenuShell>
 			)}
 
-			{open === "thinking" && (
+			{presence.value === "thinking" && (
 				<MenuShell
+					closing={presence.closing} onClosed={presence.onClosed}
 					anchorRef={containerRef}
 					testid="thinking-menu"
 					phoneTriggerTestid="stats-thinking"

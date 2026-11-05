@@ -5,11 +5,13 @@ import { subscriptionLabels, subscriptionLabel, type SessionPricing, type TurnUs
 import { formatTokens, formatUsd, planCostLabel, prettyModel } from "@/components/usage-format";
 import { ModelControl, catalogLimits, useModelCatalog } from "@/components/model-picker";
 import { MenuShell } from "@/components/menu-shell";
+import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
 
-function UsagePanel({ children, anchorRef, onClose }: { children: ReactNode; anchorRef: RefObject<HTMLDivElement | null>; onClose: () => void }) {
+function UsagePanel({ children, anchorRef, onClose, closing, onClosed }: { children: ReactNode; anchorRef: RefObject<HTMLDivElement | null>; onClose: () => void; closing: boolean; onClosed: () => void }) {
 	const phone = usePhoneLayout();
 	if (phone) return <MenuShell anchorRef={anchorRef} testid="stats-detail" preferredSide="up" align="left"
+		closing={closing} onClosed={onClosed}
 		fitVisualViewport matchAnchorWidth onClose={onClose} phoneTriggerTestid="stats-summary"
 		menuClass="rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</MenuShell>;
 	return <div data-testid="stats-detail" className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</div>;
@@ -71,6 +73,8 @@ export function StatsBar({
 	phonePlan?: ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
+	const phone = usePhoneLayout();
+	const presence = usePhoneMenuPresence(open ? "usage" : null, phone);
 	const [selectedModel, setSelectedModel] = useState<string | undefined>();
 	const modelChanged = useCallback((model: string | undefined) => {
 		setSelectedModel(model);
@@ -157,8 +161,8 @@ export function StatsBar({
 				<span data-testid="stats-cost">{costLabel}</span>
 				</span>
 			</button>
-				{open && (
-					<UsagePanel anchorRef={statsRef} onClose={() => setOpen(false)}>
+				{presence.value && (
+					<UsagePanel anchorRef={statsRef} onClose={() => setOpen(false)} closing={presence.closing} onClosed={presence.onClosed}>
 						<div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 							Session stats
 						</div>

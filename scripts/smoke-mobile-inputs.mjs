@@ -407,12 +407,14 @@ try {
 		const menu = await page.$eval('[data-testid="model-menu"]', e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; });
 		assert.ok(menu.left >= 0 && menu.right <= width && menu.top >= 0 && menu.bottom <= 550, `Real model options fit ${width}px`);
 		await page.keyboard.press("Escape");
+		await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
 		await page.click('[data-testid="stats-summary"]');
 		await page.waitForSelector('[data-testid="stats-detail"]');
 		await page.$eval('[data-testid="stats-detail"]', async e => { await Promise.all(e.getAnimations().map(a => a.finished.catch(() => {}))); });
 		const usage = await page.$eval('[data-testid="stats-detail"]', e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top }; });
 		assert.ok(usage.left >= 0 && usage.right <= width && usage.top >= 0, `Real usage content fits ${width}px`);
 		await page.keyboard.press("Escape");
+		await page.waitForSelector('[data-testid="stats-detail"]', { hidden: true });
 		assert.equal(await page.$eval(input, e => e.value), "Panel round trip keeps this draft.");
 	}
 	const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=", "base64");
@@ -485,6 +487,44 @@ try {
 	// Exercise actual opening animation and split native touch press/release.
 	// A backdrop removed on pointerdown lets the release click the trigger below.
 	const cardTouch = await page.createCDPSession();
+	const assertCardExit = async (trigger, card) => {
+		await page.waitForSelector(`[data-testid="${card}"][data-closing="true"]`);
+		const exit = await page.evaluate(({ trigger, card }) => {
+			const menu = document.querySelector(`[data-testid="${card}"]`), backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
+			const animation = menu.getAnimations()[0], blur = backdrop.getAnimations()[0];
+			const starts = [animation.startTime, blur.startTime], timings = [animation.effect.getTiming(), blur.effect.getTiming()];
+			animation.pause(); blur.pause();
+			const samples = [0, 300, 600].map(time => {
+				animation.currentTime = time; blur.currentTime = time;
+				const inset = getComputedStyle(menu).clipPath.match(/inset\(([^)]+)\)/)[1].split(" ");
+				return { top: menu.getBoundingClientRect().top, clipBottom: parseFloat(inset[2] ?? inset[0]), blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]), shellHeight: document.querySelector('.lh-app-shell').getBoundingClientRect().height };
+			});
+			animation.currentTime = 300; blur.currentTime = 300;
+			return { starts, timings, samples, buttonTop: document.querySelector(`[data-testid="${trigger}"]`).getBoundingClientRect().top,
+				locked: document.querySelector('.lh-app-shell').inert, cardInert: menu.inert };
+		}, { trigger, card });
+		assert.ok(exit.starts[0] !== null);
+		assert.equal(exit.starts[0], exit.starts[1], "Exit card and blur share a start time");
+		for (const timing of exit.timings) { assert.equal(timing.duration, 600); assert.equal(timing.easing, "cubic-bezier(0.4, 0, 0.2, 1)"); }
+		const [start, mid, end] = exit.samples;
+		assert.ok(start.top < mid.top && mid.top < end.top, "Closing card lowers toward its opener");
+		assert.ok(Math.abs(mid.clipBottom - (mid.top - start.top)) <= 1, "Closing edge clips gradually with travel instead of disappearing halfway");
+		assert.ok(Math.abs(end.top - exit.buttonTop) <= 1, "Exit ends at the opener");
+		assert.equal(start.blur, 4); assert.equal(end.blur, 0);
+		assert.ok(Math.abs((mid.top - start.top) / (end.top - start.top) - (4 - mid.blur) / 4) < .001, "Exit blur and card progress together");
+		assert.ok(exit.locked && exit.cardInert, "Lesson and departing options cannot receive input");
+		assert.ok(exit.samples.every(sample => sample.shellHeight === start.shellHeight), "Lesson remains stationary through exit");
+		await page.keyboard.press("Escape");
+		await page.locator('[data-testid="phone-menu-trigger"]').click();
+		assert.ok(await page.$(`[data-testid="${card}"]`), "Repeated Escape neither removes nor restarts the paused exit");
+		assert.equal(await page.$eval(`[data-testid="${card}"]`, e => e.getAnimations()[0].currentTime), 300, "Repeated opener tap does not restart exit");
+		await page.$eval(`[data-testid="${card}"]`, menu => {
+			menu.getAnimations().forEach(animation => animation.finish());
+			document.querySelector('[data-testid="phone-menu-backdrop"]').getAnimations().forEach(animation => animation.finish());
+		});
+		await page.waitForSelector(`[data-testid="${card}"]`, { hidden: true });
+		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Lesson unlocks only after exit completes");
+	};
 	for (const [trigger, card, otherTrigger] of [
 		["stats-model", "model-menu", "stats-thinking"],
 		["stats-thinking", "thinking-menu", "stats-model"],
@@ -549,23 +589,49 @@ try {
 		await tapAt(trigger, true);
 		assert.ok(await page.$(`[data-testid="${card}"]`), "Cancelled opener gesture leaves the card open");
 		await tapAt(trigger);
-		await page.waitForSelector(`[data-testid="${card}"]`, { hidden: true });
+		await assertCardExit(trigger, card);
 		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Opener closes without reopening");
 		await page.locator(`[data-testid="${trigger}"]`).click();
 		await fitPanel(`[data-testid="${card}"]`);
 		await tapAt(otherTrigger, true);
 		assert.ok(await page.$(`[data-testid="${card}"]`), "Cancelled outside gesture leaves the card open");
 		await tapAt(otherTrigger);
-		await page.waitForSelector(`[data-testid="${card}"]`, { hidden: true });
+		await assertCardExit(trigger, card);
 		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Outside tap cannot activate another card underneath");
 	}
 	await cardTouch.detach();
+	// Close during an unfinished rise: the first closing frame must be continuous.
+	await page.locator('[data-testid="stats-model"]').click();
+	await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]')?.getAnimations().length > 0);
+	const partial = await page.$eval('[data-testid="model-menu"]', menu => {
+		const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
+		for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = 150; }
+		return { top: menu.getBoundingClientRect().top, blur: getComputedStyle(backdrop).backdropFilter };
+	});
+	await page.keyboard.press("Escape");
+	await page.waitForSelector('[data-testid="model-menu"][data-closing="true"]');
+	const exitStart = await page.$eval('[data-testid="model-menu"]', menu => {
+		const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
+		for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = 0; }
+		return { top: menu.getBoundingClientRect().top, blur: getComputedStyle(backdrop).backdropFilter };
+	});
+	assert.ok(Math.abs(partial.top - exitStart.top) <= 1, "Quick close starts from the current rise position");
+	assert.equal(exitStart.blur, partial.blur, "Quick close starts from the current blur");
+	await page.evaluate(() => {
+		Object.defineProperty(visualViewport, "height", { configurable: true, get: () => innerHeight - 100 });
+		visualViewport.dispatchEvent(new Event("resize"));
+	});
+	await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
+	assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Viewport interruption releases both exit effects");
+	assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Interrupted exit releases the lesson lock");
+	await page.evaluate(() => { delete visualViewport.height; visualViewport.dispatchEvent(new Event("resize")); });
 	await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
 	await page.locator('[data-testid="stats-model"]').click();
 	assert.equal(await page.$eval('[data-testid="model-menu"]', e => e.getAnimations().length), 0, "Reduced motion skips card entrance");
 	assert.equal(await page.$eval('[data-testid="phone-menu-backdrop"]', e => e.getAnimations().length), 0, "Reduced motion skips blur entrance too");
 	await assertCardBackdrop();
 	await page.keyboard.press("Escape");
+	assert.equal(await page.$('[data-testid="model-menu"]'), null, "Reduced motion closes immediately");
 	await page.emulateMediaFeatures([]);
 	const history = '[data-smoke-panel-history="true"]';
 	await page.evaluate(() => {
@@ -600,7 +666,7 @@ try {
 		const pickedModel = page.waitForResponse(r => new URL(r.url()).pathname === "/api/chats/mobile_panels/settings" && r.request().method() === "PUT" && r.ok());
 		await page.locator(modelRow).click();
 		await pickedModel;
-		await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
+		await assertCardExit("stats-model", "model-menu");
 		await assertReading("Model selection");
 		await page.click('[data-testid="stats-thinking"]');
 		await page.waitForSelector('[data-testid="thinking-menu"]', { visible: true });
@@ -614,6 +680,7 @@ try {
 		const settings = (await (await fetch(`${origin}/api/chats/mobile_panels`)).json()).settings;
 		assert.equal(settings.model.id, longModel.id);
 		assert.equal(settings.thinkingLevel, level, "Real model/thinking choices persist through the session API");
+		await assertCardExit("stats-thinking", "thinking-menu");
 		await assertReading("Thinking selection");
 		await page.focus(input);
 		await page.click('[data-testid="stats-summary"]');
@@ -625,6 +692,7 @@ try {
 		const lastUsageVisible = await page.$eval('[data-testid="stats-detail"] li:last-child', e => { const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return e.contains(hit) && r.bottom <= innerHeight; });
 		assert.ok(lastUsageVisible, "Usage's overflowed final turn is reachable and visible");
 		await page.keyboard.press("Escape");
+		await assertCardExit("stats-summary", "stats-detail");
 		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Card dismissal restores lesson interaction");
 		await assertReading("Usage dismissal");
 		await page.focus(input);
@@ -885,7 +953,7 @@ try {
 	await page.click('[data-testid="stats-model"]');
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
 	await page.keyboard.press("Escape");
-	console.log("PASS: lighter 4px blur and 600ms synchronized entrance/reduced motion, visible close-toggle openers, completed taps without click-through, stationary lesson, coordinated keyboard frames, preserved query/results, Plan pinch/pan and drafts");
+	console.log("PASS: 4px blur and synchronized 600ms opening/closing, selection exits, quick-close continuity, repeated-close guards, viewport interruption/reduced motion, visible openers, safe completed taps, stationary lesson, keyboard/query/results, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	assert.equal((await upload("mobile_panels")).status, 201);

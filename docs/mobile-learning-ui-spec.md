@@ -94,6 +94,16 @@ blur grows from 0px to 4px, sharing one start time and finishing together. Keep
 the opener sharp and lesson stationary. Reduced motion skips both effects;
 viewport changes cancel both together to retain coordinated keyboard placement.
 
+**Matching close — owner approved 2026-11-05:** physical feedback on the live
+600ms opening was “Much better.” On every close of Model, Thinking and Usage,
+including successful option selection, lower the card back into its opener over
+**600ms** as blur fades **4px→0**, with shared timing/easing. Settings updates
+retain their existing immediate semantics. Keep the departing card/backdrop
+mounted and the lesson stationary/inactive until completion; prevent further
+option activation during exit. A close during opening starts at the current
+visual frame. Reduced motion closes immediately; the inherited viewport-change
+interruption rule releases both effects together. Desktop dismissal is retained.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),

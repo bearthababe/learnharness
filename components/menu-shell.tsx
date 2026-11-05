@@ -44,6 +44,7 @@ const EDGE = 8; // viewport floor the menu never enters
 const CAP_VH = 0.6; // 60vh — the graph pattern's cap
 const MIN_USABLE = 96; // floor: a shorter cap is an unusable sliver; the
 // cap then overflows the edge instead of crushing the menu
+const PHONE_MOTION = { duration: 600, easing: "cubic-bezier(0.4, 0, 0.2, 1)" };
 
 /** A MenuShell mounted = a dropdown open (fix wave, owner ruling:
  *  the settings dialog's content column locks while any menu is down —
@@ -143,6 +144,8 @@ export function MenuShell({
 	onClose,
 	matchAnchorWidth = false,
 	phoneTriggerTestid,
+	closing = false,
+	onClosed,
 }: {
 	anchorRef?: RefObject<HTMLElement | null>;
 	anchorTestid?: string;
@@ -164,12 +167,16 @@ export function MenuShell({
 	matchAnchorWidth?: boolean;
 	/** The actual opener, kept visible above the phone blur and used for entrance. */
 	phoneTriggerTestid?: string;
+	/** Retain this shell until the synchronized phone exit has finished. */
+	closing?: boolean;
+	onClosed?: () => void;
 }) {
 	const menuRef = useRef<HTMLDivElement>(null);
 	const phoneBackdropRef = useRef<HTMLDivElement>(null);
 	const [placed, setPlaced] = useState<MenuPlacement | null>(null);
 	const focusedOnceRef = useRef(false);
 	const entranceRef = useRef<Animation[]>([]);
+	const finishExitRef = useRef<(() => void) | null>(null);
 	const searchFocusedRef = useRef(false);
 	const placePhoneRef = useRef<(() => void) | null>(null);
 	const setSearchFocused = (focused: boolean) => {
@@ -218,17 +225,16 @@ export function MenuShell({
 		const trigger = document.querySelector(`[data-testid="${phoneTriggerTestid}"]`);
 		if (!menu || !trigger || !backdrop) return;
 		const distance = Math.max(0, trigger.getBoundingClientRect().top - menu.getBoundingClientRect().top);
-		const timing = { duration: 600, easing: "cubic-bezier(0.4, 0, 0.2, 1)" };
 		// Rise through the opening edge without moving the positioned shell's
 		// viewport anchor. Individual translate composes with its placement transform.
 		const animation = menu.animate([
 			{ translate: `0 ${distance}px`, clipPath: `inset(0 0 ${distance}px 0)` },
 			{ translate: "0 0", clipPath: "inset(0 0 0 0)" },
-		], timing);
+		], PHONE_MOTION);
 		const blur = backdrop.animate([
 			{ backdropFilter: "blur(0px)" },
 			{ backdropFilter: getComputedStyle(backdrop).backdropFilter },
-		], timing);
+		], PHONE_MOTION);
 		// Both effects use one start time as well as one duration/easing. The
 		// backdrop reaches its resting blur exactly when the card finishes rising.
 		const startTime = document.timeline.currentTime;
@@ -236,6 +242,46 @@ export function MenuShell({
 		entranceRef.current = [animation, blur];
 		return () => { animation.cancel(); blur.cancel(); entranceRef.current = []; };
 	}, [placed, fitVisualViewport, phoneTriggerTestid]);
+
+	useLayoutEffect(() => {
+		if (!closing || !onClosed) return;
+		const menu = menuRef.current, backdrop = phoneBackdropRef.current;
+		const trigger = phoneTriggerTestid ? document.querySelector(`[data-testid="${phoneTriggerTestid}"]`) : null;
+		if (!fitVisualViewport || !placed || !menu || !backdrop || !trigger || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			onClosed();
+			return;
+		}
+		// Read the current visual frame before cancelling an unfinished entrance.
+		// A quick dismissal must lower from here, not jump to the fully open card.
+		const css = getComputedStyle(menu);
+		// `none` → inset is discrete; use the equivalent zero inset so the
+		// closing edge clips gradually instead of hiding the whole card halfway.
+		const from = { translate: css.translate === "none" ? "0 0" : css.translate,
+			clipPath: css.clipPath === "none" ? "inset(0 0 0 0)" : css.clipPath };
+		const fromBlur = getComputedStyle(backdrop).backdropFilter;
+		entranceRef.current.forEach(animation => animation.cancel());
+		const distance = Math.max(0, trigger.getBoundingClientRect().top - menu.getBoundingClientRect().top);
+		const timing = { ...PHONE_MOTION, fill: "forwards" as const };
+		const animation = menu.animate([from, { translate: `0 ${distance}px`, clipPath: `inset(0 0 ${distance}px 0)` }], timing);
+		const blur = backdrop.animate([{ backdropFilter: fromBlur }, { backdropFilter: "blur(0px)" }], timing);
+		const startTime = document.timeline.currentTime;
+		if (startTime !== null) { animation.startTime = startTime; blur.startTime = startTime; }
+		let active = true;
+		const finish = () => { if (active) { active = false; onClosed(); } };
+		finishExitRef.current = finish;
+		void Promise.all([animation.finished, blur.finished]).then(finish, () => {});
+		// Keep Escape owned by the departing card, not the lesson underneath.
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); }
+		};
+		document.addEventListener("keydown", onKeyDown, true);
+		return () => {
+			active = false;
+			finishExitRef.current = null;
+			animation.cancel(); blur.cancel();
+			document.removeEventListener("keydown", onKeyDown, true);
+		};
+	}, [closing, onClosed, fitVisualViewport, placed, phoneTriggerTestid]);
 
 	// The standard arrow machine for menus WITHOUT a search (owner: when a
 	// dropdown is expanded, the arrow keys cycle the options and never
@@ -307,6 +353,12 @@ export function MenuShell({
 				const height = viewport?.height ?? innerHeight, width = viewport?.width ?? innerWidth;
 				const offsetTop = viewport?.offsetTop ?? 0, offsetLeft = viewport?.offsetLeft ?? 0;
 				const nextViewport = [height, width, offsetTop, offsetLeft].join(",");
+				if (finishExitRef.current) {
+					// Preserve the inherited viewport-interruption rule: release both
+					// effects together rather than animating against keyboard motion.
+					if (viewportSignature && nextViewport !== viewportSignature) finishExitRef.current();
+					return;
+				}
 				if (viewportSignature && nextViewport !== viewportSignature) entranceRef.current.forEach(animation => animation.cancel());
 				viewportSignature = nextViewport;
 				if (innerWidth !== layoutWidth) { layoutWidth = innerWidth; expandedHeight = Math.max(height, innerHeight); keyboardHeight = expandedHeight; }
@@ -399,11 +451,13 @@ export function MenuShell({
 	// The menu is positioned ONCE and then only re-anchored — no flash.
 	return createPortal(
 		<>
-		{fitVisualViewport && onClose && <PhoneMenuBackdrop onClose={onClose} triggerTestid={phoneTriggerTestid} backdropRef={phoneBackdropRef} />}
+		{fitVisualViewport && onClose && <PhoneMenuBackdrop onClose={() => { if (!closing) onClose(); }} triggerTestid={phoneTriggerTestid} backdropRef={phoneBackdropRef} />}
 		<div
 			ref={menuRef}
 			data-testid={testid}
 			data-lh-menu=""
+			data-closing={closing || undefined}
+			inert={closing}
 			tabIndex={-1}
 			onFocusCapture={(event) => {
 				if (fitVisualViewport && event.target instanceof HTMLInputElement) setSearchFocused(true);
