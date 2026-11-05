@@ -403,11 +403,13 @@ try {
 		await page.click('[data-testid="stats-model"]');
 		await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 		assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Phone Model opens without search focus");
+		await page.$eval('[data-testid="model-menu"]', async e => { await Promise.all(e.getAnimations().map(a => a.finished.catch(() => {}))); });
 		const menu = await page.$eval('[data-testid="model-menu"]', e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; });
 		assert.ok(menu.left >= 0 && menu.right <= width && menu.top >= 0 && menu.bottom <= 550, `Real model options fit ${width}px`);
 		await page.keyboard.press("Escape");
 		await page.click('[data-testid="stats-summary"]');
 		await page.waitForSelector('[data-testid="stats-detail"]');
+		await page.$eval('[data-testid="stats-detail"]', async e => { await Promise.all(e.getAnimations().map(a => a.finished.catch(() => {}))); });
 		const usage = await page.$eval('[data-testid="stats-detail"]', e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top }; });
 		assert.ok(usage.left >= 0 && usage.right <= width && usage.top >= 0, `Real usage content fits ${width}px`);
 		await page.keyboard.press("Escape");
@@ -464,6 +466,7 @@ try {
 	const longModel = catalog.models.filter(m => m.supportedLevels.length > 1).sort((a, b) => b.name.length - a.name.length)[0];
 	assert.ok(longModel, "Installed catalog supplies a long-label model with thinking options");
 	const fitPanel = async selector => {
+		await page.$eval(selector, async e => { await Promise.all(e.getAnimations().map(a => a.finished.catch(() => {}))); });
 		const bounds = await page.$eval(selector, e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: innerWidth, height: innerHeight }; });
 		assert.ok(bounds.left >= 0 && bounds.right <= bounds.width && bounds.top >= 0 && bounds.bottom <= bounds.height, `${selector} fits: ${JSON.stringify(bounds)}`);
 	};
@@ -471,10 +474,80 @@ try {
 		await page.waitForSelector('[data-testid="phone-menu-backdrop"]', { visible: true });
 		assert.ok(await page.$eval('[data-testid="phone-menu-backdrop"]', e => {
 			const css = getComputedStyle(e);
-			return css.backdropFilter !== "none" && css.backgroundColor !== "rgba(0, 0, 0, 0)";
-		}), "Phone card dims and lightly blurs the lesson");
+			return css.backdropFilter !== "none" && css.backgroundColor === "rgba(0, 0, 0, 0)" && css.clipPath.startsWith("polygon(evenodd,");
+		}), "Phone card blurs without dimming and leaves a clear opener aperture");
 		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), true, "Lesson is inactive under the card");
 	};
+	// Exercise actual opening animation and split native touch press/release.
+	// A backdrop removed on pointerdown lets the release click the trigger below.
+	const cardTouch = await page.createCDPSession();
+	for (const [trigger, card, otherTrigger] of [
+		["stats-model", "model-menu", "stats-thinking"],
+		["stats-thinking", "thinking-menu", "stats-model"],
+		["stats-summary", "stats-detail", "stats-model"],
+	]) {
+		await page.evaluate(() => {
+			const animate = Element.prototype.animate;
+			window.__lhRestoreAnimate = () => { Element.prototype.animate = animate; };
+			Element.prototype.animate = function (...args) {
+				const animation = animate.apply(this, args);
+				if (this.matches("[data-lh-menu]")) { animation.pause(); window.__lhCardEntrance = animation; }
+				return animation;
+			};
+		});
+		await page.locator(`[data-testid="${trigger}"]`).click();
+		await page.waitForFunction(() => !!window.__lhCardEntrance);
+		const entrance = await page.evaluate(({ trigger, card }) => {
+			const animation = window.__lhCardEntrance;
+			const menu = document.querySelector(`[data-testid="${card}"]`);
+			const button = document.querySelector(`[data-testid="${trigger}"]`);
+			const samples = [0, 80, 160].map(time => {
+				animation.currentTime = time;
+				return { top: menu.getBoundingClientRect().top, clip: getComputedStyle(menu).clipPath };
+			});
+			const duration = animation.effect.getTiming().duration;
+			animation.finish(); window.__lhRestoreAnimate(); delete window.__lhCardEntrance;
+			return { samples, duration, buttonTop: button.getBoundingClientRect().top };
+		}, { trigger, card });
+		assert.equal(entrance.duration, 160);
+		assert.ok(Math.abs(entrance.samples[0].top - entrance.buttonTop) <= 1, "Card starts at its own opener");
+		assert.ok(entrance.samples[0].top > entrance.samples[1].top && entrance.samples[1].top > entrance.samples[2].top, "Card visibly rises into place");
+		await assertCardBackdrop();
+		const foreground = await page.evaluate(trigger => {
+			const original = document.querySelector(`[data-testid="${trigger}"]`), button = document.querySelector('[data-testid="phone-menu-trigger"]');
+			const r = original.getBoundingClientRect(), hit = button.getBoundingClientRect();
+			return { original: [r.left, r.top, r.width, r.height], foreground: [hit.left, hit.top, hit.width, hit.height], name: button.getAttribute("aria-label"), expectedName: original.getAttribute("aria-label") ?? original.textContent,
+				reachable: document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === button };
+		}, trigger);
+		assert.deepEqual(foreground.foreground, foreground.original, "Sharp opener keeps its original position and target size");
+		assert.equal(foreground.name, foreground.expectedName);
+		assert.ok(foreground.reachable);
+		const tapAt = async (testid, cancel = false) => {
+			const point = await page.$eval(`[data-testid="${testid}"]`, e => { const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+			await cardTouch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ id: 1, ...point }] });
+			await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+			assert.ok(await page.$(`[data-testid="${card}"]`), "Press does not remove the card before release");
+			await cardTouch.send("Input.dispatchTouchEvent", { type: cancel ? "touchCancel" : "touchEnd", touchPoints: [] });
+		};
+		await tapAt(trigger, true);
+		assert.ok(await page.$(`[data-testid="${card}"]`), "Cancelled opener gesture leaves the card open");
+		await tapAt(trigger);
+		await page.waitForSelector(`[data-testid="${card}"]`, { hidden: true });
+		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Opener closes without reopening");
+		await page.locator(`[data-testid="${trigger}"]`).click();
+		await fitPanel(`[data-testid="${card}"]`);
+		await tapAt(otherTrigger, true);
+		assert.ok(await page.$(`[data-testid="${card}"]`), "Cancelled outside gesture leaves the card open");
+		await tapAt(otherTrigger);
+		await page.waitForSelector(`[data-testid="${card}"]`, { hidden: true });
+		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Outside tap cannot activate another card underneath");
+	}
+	await cardTouch.detach();
+	await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
+	await page.locator('[data-testid="stats-model"]').click();
+	assert.equal(await page.$eval('[data-testid="model-menu"]', e => e.getAnimations().length), 0, "Reduced motion skips card entrance");
+	await page.keyboard.press("Escape");
+	await page.emulateMediaFeatures([]);
 	const history = '[data-smoke-panel-history="true"]';
 	await page.evaluate(() => {
 		const log = document.querySelector('[role="log"]');
@@ -706,6 +779,7 @@ try {
 	});
 	await page.click('[data-testid="stats-summary"]');
 	await page.waitForSelector('[data-testid="stats-detail"]');
+	await fitPanel('[data-testid="stats-detail"]');
 	const usagePopup = await visibleBounds('[data-testid="stats-detail"]');
 	assert.ok(usagePopup.height <= 700 * .6 && usagePopup.bottom < usagePopup.visibleBottom, "Usage restores its smaller anchored popup");
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0);
@@ -792,7 +866,7 @@ try {
 	await page.click('[data-testid="stats-model"]');
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
 	await page.keyboard.press("Escape");
-	console.log("PASS: dim/blur phone cards, stationary lesson, coordinated intermediate keyboard frames, preserved query/results, blur/pick stability, Plan pinch/pan and drafts");
+	console.log("PASS: blur-only phone cards, visible close-toggle openers, rise-from-button entrance/reduced motion, completed taps without click-through, stationary lesson, coordinated keyboard frames, preserved query/results, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	assert.equal((await upload("mobile_panels")).status, 201);

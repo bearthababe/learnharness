@@ -344,6 +344,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				<MenuShell
 					anchorRef={containerRef}
 					testid="model-menu"
+					phoneTriggerTestid="stats-model"
 					focusSearch={!phone}
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
@@ -358,6 +359,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				<MenuShell
 					anchorRef={containerRef}
 					testid="thinking-menu"
+					phoneTriggerTestid="stats-thinking"
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
 					preferredSide="up"

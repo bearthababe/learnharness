@@ -73,6 +73,18 @@ model semantics, drafts and reading position; release the backdrop/background
 hold on dismissal and wide-layout transitions. Physical iOS timing must be
 confirmed separately from controlled intermediate-frame browser checks.
 
+**Blur-only and opener-linked entrance — owner approved 2026-11-05:** subsequent
+physical feedback supersedes the dimming above. Keep the light background blur
+without a coloured/dark overlay. The active card's own opener stays sharp and
+visible at its original position, with its existing close-toggle meaning. Keep
+the surrounding lesson inactive. Outside taps dismiss only after the complete
+gesture, so their release cannot activate or reopen a control underneath;
+cancelled gestures leave the card open. Model, Thinking and Usage rise from their
+own opener into place over the existing 160ms easing/timing, rather than appearing
+instantly. Skip this entrance with reduced motion; viewport changes interrupt
+entrance motion so keyboard geometry remains coordinated. Preserve search state,
+stationary lesson, compact placement and the inherited desktop behavior.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),

@@ -10,7 +10,7 @@ import { usePhoneLayout } from "@/components/use-phone-viewport";
 function UsagePanel({ children, anchorRef, onClose }: { children: ReactNode; anchorRef: RefObject<HTMLDivElement | null>; onClose: () => void }) {
 	const phone = usePhoneLayout();
 	if (phone) return <MenuShell anchorRef={anchorRef} testid="stats-detail" preferredSide="up" align="left"
-		fitVisualViewport matchAnchorWidth onClose={onClose}
+		fitVisualViewport matchAnchorWidth onClose={onClose} phoneTriggerTestid="stats-summary"
 		menuClass="rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</MenuShell>;
 	return <div data-testid="stats-detail" className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</div>;
 }

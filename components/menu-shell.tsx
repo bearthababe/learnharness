@@ -142,6 +142,7 @@ export function MenuShell({
 	fitVisualViewport = false,
 	onClose,
 	matchAnchorWidth = false,
+	phoneTriggerTestid,
 }: {
 	anchorRef?: RefObject<HTMLElement | null>;
 	anchorTestid?: string;
@@ -161,10 +162,13 @@ export function MenuShell({
 	fitVisualViewport?: boolean;
 	onClose?: () => void;
 	matchAnchorWidth?: boolean;
+	/** The actual opener, kept visible above the phone blur and used for entrance. */
+	phoneTriggerTestid?: string;
 }) {
 	const menuRef = useRef<HTMLDivElement>(null);
 	const [placed, setPlaced] = useState<MenuPlacement | null>(null);
 	const focusedOnceRef = useRef(false);
+	const entranceRef = useRef<Animation | null>(null);
 	const searchFocusedRef = useRef(false);
 	const placePhoneRef = useRef<(() => void) | null>(null);
 	const setSearchFocused = (focused: boolean) => {
@@ -205,6 +209,22 @@ export function MenuShell({
 		const input = focusSearch ? el.querySelector<HTMLElement>("input") : null;
 		(input ?? el).focus({ preventScroll: true });
 	}, [placed, focusSearch]);
+
+	useLayoutEffect(() => {
+		if (!fitVisualViewport || !placed || !phoneTriggerTestid || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		const menu = menuRef.current;
+		const trigger = document.querySelector(`[data-testid="${phoneTriggerTestid}"]`);
+		if (!menu || !trigger) return;
+		const distance = Math.max(0, trigger.getBoundingClientRect().top - menu.getBoundingClientRect().top);
+		// Rise through the opening edge without moving the positioned shell's
+		// viewport anchor. Individual translate composes with its placement transform.
+		const animation = menu.animate([
+			{ translate: `0 ${distance}px`, clipPath: `inset(0 0 ${distance}px 0)` },
+			{ translate: "0 0", clipPath: "inset(0 0 0 0)" },
+		], { duration: 160, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+		entranceRef.current = animation;
+		return () => { animation.cancel(); entranceRef.current = null; };
+	}, [placed, fitVisualViewport, phoneTriggerTestid]);
 
 	// The standard arrow machine for menus WITHOUT a search (owner: when a
 	// dropdown is expanded, the arrow keys cycle the options and never
@@ -263,6 +283,7 @@ export function MenuShell({
 			let hadSearch = false;
 			let shown = false;
 			let signature = "";
+			let viewportSignature = "";
 			const inputHeight = input?.getBoundingClientRect().height ?? 0;
 			const footerHeight = footer?.getBoundingClientRect().height ?? 0;
 			const footerCss = footer ? getComputedStyle(footer) : null;
@@ -274,6 +295,9 @@ export function MenuShell({
 				if (!trigger || (viewport && viewport.scale !== 1)) return;
 				const height = viewport?.height ?? innerHeight, width = viewport?.width ?? innerWidth;
 				const offsetTop = viewport?.offsetTop ?? 0, offsetLeft = viewport?.offsetLeft ?? 0;
+				const nextViewport = [height, width, offsetTop, offsetLeft].join(",");
+				if (viewportSignature && nextViewport !== viewportSignature) entranceRef.current?.cancel();
+				viewportSignature = nextViewport;
 				if (innerWidth !== layoutWidth) { layoutWidth = innerWidth; expandedHeight = Math.max(height, innerHeight); keyboardHeight = expandedHeight; }
 				expandedHeight = Math.max(expandedHeight, height);
 				if (searchFocusedRef.current) { hadSearch = true; keyboardHeight = height; }
@@ -364,7 +388,7 @@ export function MenuShell({
 	// The menu is positioned ONCE and then only re-anchored — no flash.
 	return createPortal(
 		<>
-		{fitVisualViewport && onClose && <PhoneMenuBackdrop onClose={onClose} />}
+		{fitVisualViewport && onClose && <PhoneMenuBackdrop onClose={onClose} triggerTestid={phoneTriggerTestid} />}
 		<div
 			ref={menuRef}
 			data-testid={testid}
