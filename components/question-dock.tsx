@@ -396,18 +396,19 @@ function QuestionDockForm({
 		// Released while a teach check sits unrevealed (owner 2026-10-03):
 		// the reading-thinking field owns dictated speech during the reading.
 		dictationClaim,
+		() => transfer?.retainSpeech(`question:${toolCallId}`, qd.mode === "text" ? "text" : "thinking"),
 	);
 
 	const toggle = (idx: number) => setSel(toggleOption(selectMode, sel, idx));
 
-	const canSubmit =
+	const canSubmit = transfer?.hasAttempt() || (
 		qd.mode === "text"
 			? text.trim().length > 0 || hasSharedWriting
-			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0;
+			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0);
 
 	const submit = () => {
 		if (!canSubmit || compactionRunning || transfer?.blocked() || submitting.current) return;
-		const reviewed = transfer?.reviewed();
+		const reviewed = transfer?.reviewed(), recovery = transfer?.recoveryAction();
 		const validSpeech = dictationCheckpoint();
 		submitting.current = true;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): Enter may arrive while
@@ -417,13 +418,14 @@ function QuestionDockForm({
 		 * forgotten stop. The field values below come from the REF mirrors
 		 * because the flush lands via setState after an await. */
 		if (!isDictationActive()) {
-			doSubmit(reviewed); submitting.current = false;
+			doSubmit(reviewed, recovery); submitting.current = false;
 			return;
 		}
-		void finishDictation().then(() => { if (validSpeech()) doSubmit(reviewed); }).finally(() => { submitting.current = false; });
+		void finishDictation().then(() => { if (validSpeech()) doSubmit(reviewed, recovery); }).finally(() => { submitting.current = false; });
 	};
-	const doSubmit = (reviewed?: SharedWriting[]) => {
+	const doSubmit = (reviewed?: SharedWriting[], recovery?: () => Promise<boolean>) => {
 		if (!alive.current || latest.current.compactionRunning || !latest.current.dictationClaim || transfer?.blocked()) return;
+		if (recovery) { void recovery(); return; }
 		const { sel, other, confIdx } = latest.current;
 		if (qd.mode === "text" ? !answerTextRef.current.trim() && !(reviewed?.length ?? hasSharedWriting) : !sel.dontKnow && !(sel.otherSelected && other.trim()) && !sel.selected.size) return;
 		const req: AnswerRequest = {

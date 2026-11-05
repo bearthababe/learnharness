@@ -55,6 +55,7 @@ export function ReadingThinkingField({
 			[apply],
 		),
 		claim,
+		() => transfer?.retainSpeech(targetKey, "readingThinking"),
 	);
 	return (
 		<div

@@ -6,7 +6,7 @@ import { handwritingKey, handwritingRecoveryKey } from "../components/handwritin
 import { handwritingVisibilityKey } from "../components/handwriting/device.ts";
 import { normalizeHandwriting } from "../src/core/handwriting.ts";
 
-const data = mkdtempSync("/tmp/opencode/handwriting-recovery-");
+const data = mkdtempSync(`${process.env.LH_HANDWRITING_TEST_ROOT ?? "/tmp/opencode"}/handwriting-recovery-`);
 process.env.LH_DATA_DIR = data;
 const { stores } = await import("../src/server/stores.ts");
 const { handwritingResponse } = await import("../src/server/handwriting.ts");

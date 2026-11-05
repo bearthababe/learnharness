@@ -7,6 +7,8 @@ import { handwritingTransferDevice, type EditorSnapshot } from "./transfer-devic
 import { HandwritingAttachment, type AttachmentReview } from "./attachment";
 import { encodeHandwritingRaster } from "./render";
 import { HANDWRITING_DELETED_EVENT } from "./device";
+import { useServerEvent, useServerResync } from "../server-events";
+import { SharedWritingImages } from "../shared-writing";
 
 type Field = { targetKey: string; active: () => boolean; read: () => EditorSnapshot; restore: (editor: EditorSnapshot) => void };
 type Bridge = ReturnType<typeof useHandwritingSubmission>;
@@ -17,17 +19,28 @@ export function useHandwritingSubmission(chatId: string, review: () => Promise<A
 	const preparingRef = useRef(false), fields = useRef(new Map<string, Field>()), callbacks = useRef({ review, send, pending }); callbacks.current = { review, send, pending };
 	const modelRef = useRef<HandwritingSubmission | null>(null);
 	const attachmentRef = useRef<HandwritingAttachment | null>(null), notebookView = useRef<{ canUpdate: () => boolean; reveal: () => void } | null>(null);
+	const reconcile = () => { const model = modelRef.current; if (model?.attempt && !model.busy) void model.check(); };
+	useServerEvent("record-changed", event => { if (event.chatId === chatId) reconcile(); });
+	useServerEvent("writing-changed", event => { if (event.chatId === chatId) reconcile(); });
+	useServerEvent("turn-settled", event => { if (event.chatId === chatId) reconcile(); });
+	useServerResync(reconcile);
 	useEffect(() => {
 		let mounted = true;
 		const changed = () => { if (mounted && (notebookView.current?.canUpdate() ?? true)) render(value => value + 1); };
-		const model = new HandwritingSubmission(chatId, { device: handwritingTransferDevice, fetch: (...args) => fetch(...args), review: () => callbacks.current.review(), changed: () => { if (mounted) render(value => value + 1); } });
+		const sessionReview = callbacks.current.review;
+		const model = new HandwritingSubmission(chatId, { device: handwritingTransferDevice, fetch: (...args) => fetch(...args), review: sessionReview, changed: () => { if (mounted) render(value => value + 1); } });
 		modelRef.current = model;
-		const attachment = new HandwritingAttachment(chatId, { device: handwritingTransferDevice, fetch: (...args) => fetch(...args), encode: encodeHandwritingRaster, refresh: () => callbacks.current.review(), reveal: () => notebookView.current?.reveal(), changed });
+		const attachment = new HandwritingAttachment(chatId, { device: handwritingTransferDevice, fetch: (...args) => fetch(...args), encode: encodeHandwritingRaster, refresh: sessionReview, reveal: () => notebookView.current?.reveal(), changed });
 		attachmentRef.current = attachment; void attachment.open();
 		void model.open().then(() => { if (mounted) setReady(true); });
 		const deleted = (event: Event) => { if ((event as CustomEvent<string>).detail === chatId) { model.sessionDeleted(); attachment.sessionDeleted(); } };
 		window.addEventListener(HANDWRITING_DELETED_EVENT, deleted);
-		return () => { mounted = false; model.dispose(); attachment.dispose(); window.removeEventListener(HANDWRITING_DELETED_EVENT, deleted); };
+		const check = () => { if (!document.hidden && model.attempt && !model.busy) void model.check(); };
+		const timer = window.setInterval(check, 5000);
+		window.addEventListener("online", check); window.addEventListener("focus", check); document.addEventListener("visibilitychange", check);
+		const recoverUploads = () => { void attachment.recover(); };
+		window.addEventListener("online", recoverUploads);
+		return () => { mounted = false; model.dispose(); attachment.dispose(); clearInterval(timer); window.removeEventListener("online", check); window.removeEventListener("online", recoverUploads); window.removeEventListener("focus", check); document.removeEventListener("visibilitychange", check); window.removeEventListener(HANDWRITING_DELETED_EVENT, deleted); };
 	}, [chatId]);
 	const actions = useMemo(() => ({
 		attachment() { return attachmentRef.current; },
@@ -40,16 +53,26 @@ export function useHandwritingSubmission(chatId: string, review: () => Promise<A
 		field(targetKey: string) { return fields.current.get(targetKey); },
 		claim() { if (preparingRef.current || modelRef.current?.busy) return false; preparingRef.current = true; setPreparing(true); return true; },
 		release() { preparingRef.current = false; setPreparing(false); },
-		blocked() { return preparingRef.current || !!modelRef.current?.busy || !!modelRef.current?.attempt; },
+		blocked() { return preparingRef.current || !!modelRef.current?.busy; },
+		hasAttempt() { return !!modelRef.current?.attempt; },
+		recoveryAction() {
+			const send = callbacks.current.send;
+			return modelRef.current?.recoveryAction((value, outcome) => send(value, undefined, outcome));
+		},
+		retainSpeech(targetKey: string, name: "text" | "thinking" | "readingThinking") {
+			const field = fields.current.get(targetKey), model = modelRef.current;
+			if (!field || !model) return;
+			const editor = structuredClone(field.read()); model.checkpoint(targetKey, editor);
+			return (text: string) => model.retainSpeech(targetKey, editor, name, text);
+		},
 		checkpoint(targetKey: string) { const field = fields.current.get(targetKey), model = modelRef.current; if (!field || !model) throw new Error("Editor unavailable"); return model.checkpoint(targetKey, field.read()); },
 		async submit(input: ChatInput, images: SharedWriting[], targetKey: string, extraEditor: EditorSnapshot = {}) {
 			const model = modelRef.current, field = fields.current.get(targetKey);
 			if (!model || !field || preparingRef.current) return false;
 			const draft = model.checkpoint(targetKey, { ...field.read(), ...extraEditor });
-			return model.submit(input, images, draft, (value, outcome) => callbacks.current.send(value, undefined, outcome));
+			const send = callbacks.current.send;
+			return model.submit(input, images, draft, (value, outcome) => send(value, undefined, outcome));
 		},
-		check() { return modelRef.current?.check(); },
-		retry() { return modelRef.current?.retry((value, outcome) => callbacks.current.send(value, undefined, outcome)); },
 	}), []);
 	return { ...actions, model: modelRef.current, ready, epoch, preparing };
 }
@@ -73,6 +96,8 @@ export function useHandwritingEditor(targetKey: string, read: () => EditorSnapsh
 			if (draft && canonicalHandwriting(mirrors.current.read()) === baseline.current.value) mirrors.current.restore(draft.editor);
 		} else if (lastDraft.current && !draft) {
 			if (canonicalHandwriting(mirrors.current.read()) === lastDraft.current) mirrors.current.restore({});
+		} else if (draft && lastDraft.current && canonicalHandwriting(draft.editor) !== lastDraft.current && canonicalHandwriting(mirrors.current.read()) === lastDraft.current) {
+			mirrors.current.restore(draft.editor);
 		}
 		lastDraft.current = draft ? canonicalHandwriting(draft.editor) : null;
 		model.edit(targetKey, mirrors.current.read());
@@ -83,9 +108,9 @@ export function useHandwritingEditor(targetKey: string, read: () => EditorSnapsh
 export function HandwritingDeliveryNotice({ bridge, activeTarget }: { bridge: Bridge; activeTarget?: string }) {
 	const model = bridge.model, attempt = model?.attempt;
 	return <div className="text-xs" data-testid="handwriting-delivery">
-		{bridge.attachment()?.noticeEntries().map(({ pageId, text, retry }) => <p role="status" key={pageId}>{text}{retry && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.attachment()?.retry(pageId)}>Retry</button>}{text.includes("refresh review") && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.refreshReview().catch(() => {})}>Refresh review</button>}</p>)}
-		{model?.notice && <p role="status">{model.notice}{attempt && <button type="button" className="min-h-11 px-2 underline" disabled={model.busy} onClick={() => void bridge.check()}>Check delivery</button>}</p>}
-		{attempt && <><details><summary>Saved answer</summary><pre className="max-h-48 overflow-auto whitespace-pre-wrap">{JSON.stringify({ input: attempt.input, images: attempt.imageVersions }, null, 2)}</pre><p>Later edits are not part of this saved answer.</p></details>{model.canRetry && <button type="button" className="min-h-11 underline" disabled={model.busy} onClick={() => void bridge.retry()}>Retry saved answer</button>}</>}
-		{model?.savedDrafts().filter(draft => draft.targetKey !== activeTarget && !bridge.field(draft.targetKey)).map(draft => <details key={draft.draftId}><summary>Saved draft</summary><p>This draft belongs to an earlier question.</p><pre className="max-h-48 overflow-auto whitespace-pre-wrap">{JSON.stringify(draft.editor, null, 2)}</pre></details>)}
+		{bridge.attachment()?.noticeEntries().map(({ pageId, text, refresh }) => <p role="status" key={pageId}>{text}{refresh && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.refreshReview().catch(() => {})}>Refresh review</button>}</p>)}
+		{model?.notice && <p role="status">{model.notice}</p>}
+		{attempt && <div data-testid="handwriting-attempt-review"><p>Original answer · delivery unconfirmed</p><pre className="max-h-48 overflow-auto whitespace-pre-wrap">{JSON.stringify(attempt.input, null, 2)}</pre><SharedWritingImages chatId={attempt.chatId} writing={attempt.imageVersions.map(image => ({ id: image.writingId }))} /><p>Later edits are not part of this answer.</p></div>}
+		{model?.savedDrafts().filter(draft => draft.targetKey !== activeTarget && !bridge.field(draft.targetKey)).map(draft => <div key={draft.draftId}><p>This draft belongs to an earlier question.</p><pre className="max-h-48 overflow-auto whitespace-pre-wrap">{JSON.stringify(draft.editor, null, 2)}</pre></div>)}
 	</div>;
 }

@@ -28,9 +28,10 @@ const assistant = (content, id = "assistant") => ({ role: "assistant", content, 
 const conversation = { id: "mobile_conversation", title: "Mobile browser conversation", createdAt: now, updatedAt: now, messages: [assistant([{ type: "text", text: "Explain how pressure changes with area." }])] };
 await writeFile(path.join(dir, "data/chats/mobile_conversation.json"), JSON.stringify(conversation));
 await writeFile(path.join(dir, "data/chats/mobile_other.json"), JSON.stringify({ ...conversation, id: "mobile_other", title: "Other isolated session" }));
-for (const id of ["mobile_transfer_capture", "mobile_transfer_unknown", "mobile_transfer_accepted"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id }));
+for (const id of ["mobile_remount_success", "mobile_remount_failure", "mobile_remount_lost-ack", "mobile_transfer_capture_attach", "mobile_transfer_capture_reopen", "mobile_transfer_capture_online", "mobile_transfer_unknown", "mobile_transfer_accepted", "mobile_transfer_resend", "mobile_transfer_race"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id }));
 const call = (name, args, id) => assistant([{ type: "toolCall", name, arguments: args, id }], `assistant_${id}`);
 const result = (name, details, id) => ({ role: "toolResult", toolName: name, toolCallId: id, id: `result_${id}`, content: [{ type: "text", text: "Ready." }], details, isError: false, timestamp: Date.now() });
+await writeFile(path.join(dir, "data/chats/mobile_transfer_speech.json"), JSON.stringify({ ...conversation, id: "mobile_transfer_speech", messages: [assistant([...["first", "second"].map(id => ({ type: "toolCall", name: "ask_user_question", id, arguments: { question: `${id} speech owner`, mode: "text" } }))])] }));
 const teaching = [
 	call("probe_done", { summary: "Ready for pressure." }, "probe_done"), result("probe_done", { ok: true }, "probe_done"),
 	call("plan_create", {}, "plan"), result("plan_create", { tree: { nodes: [{ id: "pressure", title: "Pressure and area", description: "Relate force, area and pressure." }], edges: [] } }, "plan"),
@@ -42,6 +43,7 @@ for (const [id, tool, question] of [
 ]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, messages: [...teaching, call(tool, question, "question")] }));
 await writeFile(path.join(dir, "data/chats/mobile_other_answer.json"), JSON.stringify({ ...conversation, id: "mobile_other_answer", messages: [call("ask_user_question", { question: "Which approach would you use?", options: [{ label: "Start with force", value: "force" }, { label: "Start with area", value: "area" }], multiSelect: true }, "question")] }));
 await writeFile(path.join(dir, "data/chats/mobile_transfer_reject.json"), JSON.stringify({ ...conversation, id: "mobile_transfer_reject", messages: [call("ask_user_question", { question: "Which approach would you use?", options: [{ label: "Start with force", value: "force" }, { label: "Start with area", value: "area" }], multiSelect: true }, "question")] }));
+await writeFile(path.join(dir, "data/chats/mobile_transfer_choice.json"), JSON.stringify({ ...conversation, id: "mobile_transfer_choice", messages: [call("ask_user_question", { question: "Which approach would you use?", options: [{ label: "Start with force", value: "force" }, { label: "Start with area", value: "area" }], multiSelect: true }, "question")] }));
 const problem = { statement: "Calculate pressure for a 100 N force on 2 square metres.", mode: "apply", target: ["pressure"], modelSolution: "50 Pa." };
 for (const id of ["mobile_practice", "mobile_drill"]) await writeFile(path.join(dir, `data/chats/${id}.json`), JSON.stringify({ ...conversation, id, kind: "practice", ...(id === "mobile_drill" ? { practiceMode: "drill" } : {}), messages: [call("problem", problem, "problem"), result("problem", null, "problem")] }));
 await writeFile(path.join(dir, "data/settings.json"), JSON.stringify({ version: 1, models: { strong: { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } }, cheap: { model: { provider: "openrouter", id: "z-ai/glm-5.3-flash" } } } }));
@@ -61,8 +63,10 @@ await mkdir(path.join(dir, "app/transfer-fixture"), { recursive: true });
 await writeFile(path.join(dir, "app/transfer-fixture/page.tsx"), `"use client";
 import { useEffect } from "react";
 import { IndexedTransferDevice } from "@/components/handwriting/transfer-device";
+import { HandwritingAttachment } from "@/components/handwriting/attachment";
+import { emptyHandwriting, notebookSource, appendHandwriting } from "@/src/core/handwriting";
 export default function Fixture() {
- useEffect(() => { Object.assign(window, { transferDevice: new IndexedTransferDevice() }); }, []);
+  useEffect(() => { Object.assign(window, { transferDevice: new IndexedTransferDevice(), HandwritingAttachment, emptyHandwriting, notebookSource, appendHandwriting }); }, []);
  return <p>Isolated native IndexedDB adapter fixture</p>;
 }`);
 const port = Number(process.env.LH_MOBILE_TEST_PORT ?? 3109);
@@ -287,7 +291,7 @@ try {
 	assert.ok(JSON.stringify(answerRecord).includes("Answer draft. Spoken answer."));
 	assert.ok(JSON.stringify(answerRecord).includes("Reading thought. Before reveal. Late reading thought."));
 	assert.ok(answerRecord.writingSubmission && answerRecord.sharedWriting.length === 1, "Actual free-text adapter carries receipt and image");
-	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Saved answer"));
+	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-attempt-review"]'));
 	await page.goto(`${origin}/chat/mobile_selection`, { waitUntil: "networkidle2" });
 	await page.click('[data-testid="reading-thinking-field"] [data-testid="teach-check-reveal"]');
 	await page.waitForSelector('[data-testid="thinking-field"] textarea', { visible: true });
@@ -306,7 +310,7 @@ try {
 	assert.ok(JSON.stringify(selectionRecord).includes("The force stays the same."));
 	assert.equal(selectionRecord.details.confidence, 50, "Untouched confidence retains its existing meaning");
 	assert.ok(selectionRecord.writingSubmission && selectionRecord.sharedWriting.length === 1);
-	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Saved answer"));
+	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-attempt-review"]'));
 	await page.goto(`${origin}/chat/mobile_other_answer`, { waitUntil: "networkidle2" });
 	await page.waitForSelector('[data-testid="other-option"] input');
 	await page.locator('[role="checkbox"]').filter(button => button.textContent.includes("Start with force")).click();
@@ -318,7 +322,7 @@ try {
 	const otherRecord = (await (await fetch(`${origin}/api/chats/mobile_other_answer`)).json()).messages.find(m => m.role === "toolResult" && m.toolCallId === "question");
 	assert.ok(JSON.stringify(otherRecord).includes("Compare both areas.") && JSON.stringify(otherRecord).includes("Start with force") && JSON.stringify(otherRecord).includes("My custom reasoning."), "Multi-select, Other and thinking survive the real answer contract together");
 	assert.ok(otherRecord.writingSubmission && otherRecord.sharedWriting.length === 1);
-	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Saved answer"));
+	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-attempt-review"]'));
 	for (const id of ["mobile_practice", "mobile_drill"]) {
 		await page.goto(`${origin}/chat/${id}`, { waitUntil: "networkidle2" });
 		const thinking = '[data-testid="practice-thinking-field"] textarea';

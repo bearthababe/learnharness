@@ -198,7 +198,9 @@ export function rmsToMeter(rms: number): number {
  * sibling subtree far from the hook's owner, and there is exactly one
  * window, one pending question, one target at a time.
  */
-let questionTarget: ((text: string) => void) | null = null;
+type SpeechRetention = () => ((text: string) => void) | undefined;
+type SpeechTarget = { append: (text: string) => void; retain?: SpeechRetention };
+let questionTarget: SpeechTarget | null = null;
 let dictationCancellation = 0;
 /** Attach/Submit retain the existing speech owner through finalization. */
 export function dictationCheckpoint() {
@@ -227,12 +229,14 @@ export function joinDictation(current: string, final: string): string {
  * unmount guard is identity-based so dev-mode double-invoked effects
  * can't clear another claimant.
  */
-export function useDictationTarget(append: (text: string) => void, claimed: boolean) {
+export function useDictationTarget(append: (text: string) => void, claimed: boolean, retain?: SpeechRetention) {
+	const retention = useRef(retain); retention.current = retain;
 	useEffect(() => {
 		if (!claimed) return;
-		questionTarget = append;
+		const target = { append, retain: () => retention.current?.() };
+		questionTarget = target;
 		return () => {
-			if (questionTarget === append) questionTarget = null;
+			if (questionTarget === target) questionTarget = null;
 		};
 	}, [append, claimed]);
 }
@@ -276,7 +280,7 @@ export type Dictation = {
  * composer fallback; the mounted question form's claim wins while a
  * question waits.
  */
-export function useDictation({ append }: { append: (text: string) => void }): Dictation {
+export function useDictation({ append, retain }: { append: (text: string) => void; retain?: SpeechRetention }): Dictation {
 	const { getLanguage } = useDictationLanguage();
 	const [phase, setPhase] = useState<DictationPhase>("idle");
 	const [error, setError] = useState<string | null>(null);
@@ -286,6 +290,8 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 	 *  retarget (composer↔question) is honored on the very next final. */
 	const appendRef = useRef(append);
 	appendRef.current = append;
+	const retainRef = useRef(retain); retainRef.current = retain;
+	const finishingOwner = useRef<{ target: SpeechTarget | null; append: (text: string) => void; detached?: (text: string) => void } | null>(null);
 
 	// Live machinery (non-render values). The MediaStream tracks stop and
 	// the per-run nodes disconnect on teardown; the socket is recreated per
@@ -316,7 +322,9 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 		if (bufferRef.current.length === 0) return;
 		const text = bufferRef.current.join(" ");
 		bufferRef.current = [];
-		(questionTarget ?? appendRef.current)(text);
+		const owner = finishingOwner.current;
+		if (owner && owner.target !== questionTarget && owner.detached) owner.detached(text);
+		else (owner?.append ?? questionTarget?.append ?? appendRef.current)(text);
 	}, []);
 
 	/** Full teardown of one run's machinery. Idempotent; generation-guarded by callers. */
@@ -324,6 +332,7 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 		genRef.current++;
 		setDictationActive(false);
 		flush(); // the deferred transcript appears when the run ends (owner round 2)
+		finishingOwner.current = null;
 		if (safetyRef.current) {
 			clearTimeout(safetyRef.current);
 			safetyRef.current = null;
@@ -518,6 +527,9 @@ export function useDictation({ append }: { append: (text: string) => void }): Di
 	const stop = useCallback(() => {
 		const gen = genRef.current;
 		if (phase !== "recording" && phase !== "connecting") return;
+		// Claim before requesting finals: a later question/reveal/unmount cannot
+		// redirect this run. Detached field owners retain a target-bound draft.
+		finishingOwner.current ??= { target: questionTarget, append: questionTarget?.append ?? appendRef.current, detached: (questionTarget?.retain ?? retainRef.current)?.() };
 		setPhase("stopping");
 
 		// Mic dies FIRST — no more audio enqueues (dictate pattern). The

@@ -353,8 +353,8 @@ try {
 	assert.deepEqual((await (await fetch(`${origin}/api/chats/handwriting_teach/writing/${receipt.writing.id}/source`)).json()).journal, frozen);
 	console.log("PASS real IndexedDB Attach explanation reload, exact full source and same-page supersession without tutor input");
 	await page.setViewport({ width: 1400, height: 900, isMobile: true, hasTouch: true });
-	await page.click('[aria-label="Open sidebar"]');
-	await page.click('[data-testid="kind-filter-all"]');
+	await page.locator('[aria-label="Open sidebar"]').click();
+	await page.locator('[data-testid="kind-filter-all"]').click();
 	const kept = await page.evaluate(() => ({ ink: localStorage.getItem("lh:handwriting:v1:handwriting_teach"), visibility: localStorage.getItem("lh:handwriting:open:handwriting_teach") }));
 	for (const id of ["handwriting_practice", "handwriting_drill"]) {
 		await page.evaluate(id => { localStorage.setItem(`lh:handwriting:recovery:v1:${id}`, localStorage.getItem(`lh:handwriting:v1:${id}`)); }, id);
@@ -390,7 +390,12 @@ try {
 	});
 	await page.goto(`${origin}/chat/handwriting_background`, { waitUntil: "networkidle2" });
 	await page.click('[data-testid="open-notebook"]'); await ready();
-	await draw(); await action("Eraser"); await draw();
+	// Notebook readiness covers data/background decoding. Wait for stable
+	// layout and an enabled tool before dispatching coordinate-based input.
+	await page.locator('[data-testid="notebook-paper-scroll"]').hover();
+	await draw(400, 450); await page.locator('[aria-label="Eraser"]').click();
+	await page.waitForFunction(() => document.querySelector('[aria-label="Eraser"]')?.getAttribute("aria-pressed") === "true");
+	await draw(400, 450);
 	const backgroundCapture = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/writing") && response.status() === 201);
 	await page.click('[data-testid="notebook-attach"]');
 	const imageId = (await (await backgroundCapture).json()).writing.id;
@@ -398,10 +403,11 @@ try {
 		const image = new Image(); image.src = `/api/chats/handwriting_background/writing/${imageId}`; await image.decode();
 		const canvas = document.createElement("canvas"); canvas.width = 1400; canvas.height = 1800;
 		const context = canvas.getContext("2d"); context.drawImage(image, 0, 0);
-		return [[100, 110], [1300, 1700]].map(([x, y]) => [...context.getImageData(x, y, 1, 1).data]);
+		return [[400, 450], [1300, 1700]].map(([x, y]) => [...context.getImageData(x, y, 1, 1).data]);
 	}, imageId);
 	assert.deepEqual(pixels, [[255, 0, 0, 255], [255, 0, 0, 255]], "Eraser affects ink only; exported PNG contains the offscreen background");
 	const editable = await (await fetch(`${origin}/api/chats/handwriting_background/writing/${imageId}/source`)).json();
+	assert.deepEqual(Object.values(editable.journal.events).filter(event => event.kind === "stroke").map(event => event.stroke.tool).sort(), ["eraser", "pen"], "The export check exercised actual foreground drawing and erasing");
 	assert.deepEqual(editable.journal.backgrounds, background);
 	await page.reload({ waitUntil: "networkidle2" }); await ready();
 	console.log("PASS independent background decode/reopen, erasable foreground and full-page offscreen PNG export");

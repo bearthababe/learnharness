@@ -47,7 +47,7 @@ export function useSharedWriting(chatId: string, messages: readonly LhMessage[])
 	return { pending, pageAttachments, error, refresh, ids: () => pending.map((w) => w.id) };
 }
 
-export function SharedWritingImages({ chatId, writing }: { chatId: string; writing: readonly SharedWriting[] }) {
+export function SharedWritingImages({ chatId, writing }: { chatId: string; writing: readonly Pick<SharedWriting, "id">[] }) {
 	const [opened, setOpened] = useState<{ url: string; label: string } | null>(null);
 	return <><div className="flex max-h-32 gap-2 overflow-auto overscroll-contain py-2" data-testid="shared-writing-images">
 		{writing.map((item, index) => <button key={item.id} type="button" onClick={() => setOpened({ url: sharedWritingImageUrl(chatId, item.id), label: `Handwritten working ${index + 1}` })} className="shrink-0 rounded border bg-white p-1" style={{ filter: "var(--lh-writing-image-filter)" }} aria-label={`Open handwritten working ${index + 1}`}>
