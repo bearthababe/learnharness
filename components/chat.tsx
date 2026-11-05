@@ -2,6 +2,7 @@
 import { SharedWritingImages, SharedWritingPanel, useSharedWriting } from "@/components/shared-writing";
 import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
 import { HandwritingNotebook } from "@/components/handwriting/notebook";
+import { HandwritingPagesContext } from "@/components/handwriting/pages-context";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
 import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
 import type { SharedWriting } from "@/src/core";
@@ -1272,6 +1273,7 @@ export function Chat({
 
 	return (
 		<HandwritingSubmissionContext.Provider value={handwritingSubmission}>
+		<HandwritingPagesContext.Provider value={handwriting.actions}>
 		<ChatActionsContext.Provider
 			value={{
 				chatId,
@@ -1816,7 +1818,7 @@ export function Chat({
 				</div>
 			</div>
 			{handwriting.mounted && <HandwritingSplit hidden={!handwriting.open} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
-			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
+			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
 		</div>
 		</div>
 		</JobsContext.Provider>
@@ -1837,7 +1839,7 @@ export function Chat({
 			}}
 		/>
 		</ChatActionsContext.Provider>
-		</HandwritingSubmissionContext.Provider>
+		</HandwritingPagesContext.Provider></HandwritingSubmissionContext.Provider>
 	);
 }
 

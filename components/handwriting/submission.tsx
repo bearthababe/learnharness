@@ -18,7 +18,7 @@ export function useHandwritingSubmission(chatId: string, review: () => Promise<A
 	const [epoch, render] = useState(0), [ready, setReady] = useState(false), [preparing, setPreparing] = useState(false);
 	const preparingRef = useRef(false), fields = useRef(new Map<string, Field>()), callbacks = useRef({ review, send, pending }); callbacks.current = { review, send, pending };
 	const modelRef = useRef<HandwritingSubmission | null>(null);
-	const attachmentRef = useRef<HandwritingAttachment | null>(null), notebookView = useRef<{ canUpdate: () => boolean; reveal: () => void } | null>(null);
+	const attachmentRef = useRef<HandwritingAttachment | null>(null), notebookView = useRef<{ canUpdate: () => boolean; reveal: (pageId: string) => void } | null>(null);
 	const reconcile = () => { const model = modelRef.current; if (model?.attempt && !model.busy) void model.check(); };
 	useServerEvent("record-changed", event => { if (event.chatId === chatId) reconcile(); });
 	useServerEvent("writing-changed", event => { if (event.chatId === chatId) reconcile(); });
@@ -30,7 +30,7 @@ export function useHandwritingSubmission(chatId: string, review: () => Promise<A
 		const sessionReview = callbacks.current.review;
 		const model = new HandwritingSubmission(chatId, { device: handwritingTransferDevice, fetch: (...args) => fetch(...args), review: sessionReview, changed: () => { if (mounted) render(value => value + 1); } });
 		modelRef.current = model;
-		const attachment = new HandwritingAttachment(chatId, { device: handwritingTransferDevice, fetch: (...args) => fetch(...args), encode: encodeHandwritingRaster, refresh: sessionReview, reveal: () => notebookView.current?.reveal(), changed });
+		const attachment = new HandwritingAttachment(chatId, { device: handwritingTransferDevice, fetch: (...args) => fetch(...args), encode: encodeHandwritingRaster, refresh: sessionReview, reveal: pageId => notebookView.current?.reveal(pageId), changed });
 		attachmentRef.current = attachment; void attachment.open();
 		void model.open().then(() => { if (mounted) setReady(true); });
 		const deleted = (event: Event) => { if ((event as CustomEvent<string>).detail === chatId) { model.sessionDeleted(); attachment.sessionDeleted(); } };
@@ -44,7 +44,7 @@ export function useHandwritingSubmission(chatId: string, review: () => Promise<A
 	}, [chatId]);
 	const actions = useMemo(() => ({
 		attachment() { return attachmentRef.current; },
-		registerNotebook(view: { canUpdate: () => boolean; reveal: () => void }) { notebookView.current = view; return () => { if (notebookView.current === view) notebookView.current = null; }; },
+		registerNotebook(view: { canUpdate: () => boolean; reveal: (pageId: string) => void }) { notebookView.current = view; return () => { if (notebookView.current === view) notebookView.current = null; }; },
 		refreshNotices() { render(value => value + 1); },
 		refreshReview() { return callbacks.current.review(); },
 		reviewed() { return structuredClone(callbacks.current.pending); },
@@ -52,6 +52,7 @@ export function useHandwritingSubmission(chatId: string, review: () => Promise<A
 		activeField() { return [...fields.current.values()].find(field => field.active()); },
 		field(targetKey: string) { return fields.current.get(targetKey); },
 		claim() { if (preparingRef.current || modelRef.current?.busy) return false; preparingRef.current = true; setPreparing(true); return true; },
+		isPreparing() { return preparingRef.current; },
 		release() { preparingRef.current = false; setPreparing(false); },
 		blocked() { return preparingRef.current || !!modelRef.current?.busy; },
 		hasAttempt() { return !!modelRef.current?.attempt; },

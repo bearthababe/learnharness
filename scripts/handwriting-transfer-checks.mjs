@@ -56,7 +56,8 @@ export async function checkHandwritingTransfers({ page, origin, transferFaults }
 	assert.equal(tutorPosts, 0); assert.equal(uploads, 1);
 	const [captured] = await device("captures", captureId); assert.ok(captured.png && !captured.raster);
 	await open(); await draw(400, 400); await page.click('[data-testid="open-notebook-chat"]');
-	const newerWorking = await page.evaluate(id => localStorage.getItem(`lh:handwriting:v1:${id}`), captureId);
+	const newerWorking = await page.evaluate(id => localStorage.getItem(`lh:handwriting:pages:v1:${id}:page_initial`), captureId);
+	assert.ok(newerWorking, "Newer working has a real compact recovery record");
 	if (trigger === "online") {
 		await page.reload({ waitUntil: "networkidle2" });
 		await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Snapshot saved on this device"));
@@ -73,7 +74,7 @@ export async function checkHandwritingTransfers({ page, origin, transferFaults }
 	assert.deepEqual(JSON.parse(await source(captureId, receipt.writing)), JSON.parse(captured.sourceJson), "Retry freezes the earlier page, not later working");
 	const image = await (await fetch(`${origin}/api/chats/${captureId}/writing/${captured.writingId}`)).arrayBuffer();
 	assert.equal([...new Uint8Array(await crypto.subtle.digest("SHA-256", image))].map(byte => byte.toString(16).padStart(2, "0")).join(""), captured.png.sha256);
-	assert.equal(await page.evaluate(id => localStorage.getItem(`lh:handwriting:v1:${id}`), captureId), newerWorking);
+	assert.equal(await page.evaluate(id => localStorage.getItem(`lh:handwriting:pages:v1:${id}:page_initial`), captureId), newerWorking);
 	assert.equal(await page.evaluate(() => [...document.querySelectorAll('[data-testid="handwriting-delivery"] button')].some(button => button.textContent === "Retry")), false);
 	assert.equal(tutorPosts, 0);
 	assert.equal((await record(captureId)).messages.filter(message => message.role === "user").length, 0);

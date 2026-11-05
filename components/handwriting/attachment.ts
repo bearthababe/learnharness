@@ -2,7 +2,7 @@ import { canonicalHandwriting, handwritingFingerprints, notebookSourceSchema, ty
 import { CaptureRetiredError, type CaptureRecord, type DurableDraft, type TransferDevice } from "./transfer-device.ts";
 
 export type AttachmentReview = { pending: SharedWriting[]; pageAttachments: PageAttachments };
-type Dependencies = { device: TransferDevice; fetch: typeof fetch; encode: (raster: NonNullable<CaptureRecord["raster"]>) => Promise<Blob>; refresh: () => Promise<AttachmentReview>; reveal: () => void; changed: () => void };
+type Dependencies = { device: TransferDevice; fetch: typeof fetch; encode: (raster: NonNullable<CaptureRecord["raster"]>) => Promise<Blob>; refresh: () => Promise<AttachmentReview>; reveal: (pageId: string) => void; changed: () => void };
 export type AttachPreparation = { pageId: string; head: PageAttachments[string] | undefined; valid: () => boolean; finish: () => Promise<boolean>; freeze: () => { source: NotebookSource; draft: DurableDraft; raster: NonNullable<CaptureRecord["raster"]> } };
 const LIMIT = 25 * 1024 * 1024;
 const noticeText = {
@@ -78,7 +78,7 @@ export class HandwritingAttachment {
 		try {
 			const review = await this.deps.refresh(), head = review.pageAttachments[capture.pageId];
 			this.update(capture.pageId, head?.writingId !== capture.writingId ? "superseded" : review.pending.some(item => item.id === capture.writingId) ? capture.expectedPageRevision > 0 ? "updated" : "attached" : "sent");
-			if (!this.disposed) this.deps.reveal();
+			if (!this.disposed) this.deps.reveal(capture.pageId);
 		} catch { this.update(capture.pageId, "refresh_failed"); }
 	}
 	private async reloadCapture(pageId: string, reviewCompletion = false): Promise<boolean> {
@@ -155,7 +155,7 @@ export class HandwritingAttachment {
 			if (preparation.head?.contentFingerprint === fingerprints.contentFingerprint) {
 				await this.deps.device.saveDraft(this.chatId, this.generation, frozen.draft);
 				this.update(pageId, "unchanged");
-				if (!this.disposed && preparation.valid()) this.deps.reveal();
+				if (!this.disposed && preparation.valid()) this.deps.reveal(pageId);
 				return;
 			}
 			const capture: CaptureRecord = { version: 1, chatId: this.chatId, pageId, writingId: `writing_${crypto.randomUUID()}`, expectedPageRevision: preparation.head?.revision ?? 0, sourceJson, ...fingerprints, capturedAt: new Date().toISOString(), explanationDraft: { targetKey: frozen.draft.targetKey, draftId: frozen.draft.draftId, revision: frozen.draft.revision }, raster: frozen.raster, state: "captured" };
@@ -163,7 +163,7 @@ export class HandwritingAttachment {
 			this.drafts.set(pageId, frozen.draft);
 			if (!await this.saveCapture(capture, frozen.draft)) return;
 			if (new TextEncoder().encode(sourceJson).length > LIMIT) throw new CaptureSizeError("source");
-			if (!this.disposed && preparation.valid()) this.deps.reveal();
+			if (!this.disposed && preparation.valid()) this.deps.reveal(pageId);
 			await this.transfer(capture);
 		} catch (error) {
 			this.update(pageId, "local_failed", error instanceof CaptureSizeError ? error.part : undefined);

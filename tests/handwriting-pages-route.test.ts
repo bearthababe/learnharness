@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { after, it } from "node:test";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendHandwriting, copyHandwriting, handwritingFingerprints, notebookSource } from "../src/core/handwriting.ts";
+const root = mkdtempSync(`${process.env.LH_HANDWRITING_TEST_ROOT ?? "/tmp/opencode"}/pages-route-`);
+process.env.LH_DATA_DIR = root;
+const { stores } = await import("../src/server/stores.ts");
+const { handwritingPagesResponse } = await import("../src/server/handwriting.ts");
+after(() => rmSync(root, { recursive: true, force: true }));
+const call = (chat: string, method: string, body?: unknown, pageId?: string) => handwritingPagesResponse(new Request("http://test/pages", { method, body: body === undefined ? undefined : JSON.stringify(body) }), chat, pageId);
+it("page routes distinguish absence/corruption, freeze creation seed, preserve causal tails and refuse deleted sessions", async () => {
+	const chat = stores.chatStore.createChat("Pages"), id = `page_${crypto.randomUUID()}`;
+	const source = notebookSource(appendHandwriting({ version: 1, operations: [] }, { id: "one", kind: "stroke", stroke: { tool: "pen", colour: "#171717", penScale: 1, width: 38, points: [{ x: 1, y: 2, pressure: .5 }] } }));
+	const { sourceFingerprint } = await handwritingFingerprints(notebookSource(copyHandwriting(source.journal, id)));
+	const from = { kind: "working" as const, pageId: "page_initial" };
+	const page = { version: 1, id, origin: { kind: "duplicate", from, seedFingerprint: sourceFingerprint }, createdAt: new Date().toISOString(), journal: copyHandwriting(source.journal, id) };
+	const input = { page, creation: { id: "create", kind: "duplicate", seedFingerprint: sourceFingerprint, from } };
+	assert.equal((await call(chat.id, "GET", undefined, id)).status, 404);
+	assert.equal((await call(chat.id, "PUT", page, id)).status, 404, "PUT cannot implicitly recreate a noninitial page");
+	assert.equal((await call(chat.id, "POST", input)).status, 201);
+	const changed = { ...page, journal: appendHandwriting(page.journal, { id: "clear", kind: "clear" }) };
+	assert.equal((await call(chat.id, "PUT", changed, id)).status, 200);
+	assert.deepEqual((await (await call(chat.id, "POST", input)).json()).page, changed);
+	assert.equal((await call(chat.id, "POST", { ...input, page: { ...page, journal: changed.journal } })).status, 400);
+	writeFileSync(`${root}/handwriting/${chat.id}/${id}.json`, "{corrupt");
+	assert.equal((await call(chat.id, "GET")).status, 503);
+	assert.equal((await call(chat.id, "POST", input)).status, 503);
+	stores.chatStore.deleteChat(chat.id);
+	assert.equal((await call(chat.id, "POST", input)).status, 404);
+});
+
+it("deletion while a page request is parsing cannot recreate working files", async () => {
+	const chat = stores.chatStore.createChat("Delete during parsing");
+	const journal = copyHandwriting({ version: 1, operations: [] }, "page_initial");
+	const page = { version: 1, id: "page_initial", origin: { kind: "working" }, createdAt: null, journal };
+	const request = new Request("http://test/pages/page_initial", { method: "PUT", body: JSON.stringify(page) });
+	request.json = async () => { stores.chatStore.deleteChat(chat.id); return page; };
+	const response = await handwritingPagesResponse(request, chat.id, "page_initial");
+	assert.equal(response.status, 404); assert.equal((await response.json()).code, "not_found");
+	assert.equal(existsSync(`${root}/handwriting/${chat.id}.json`), false);
+});

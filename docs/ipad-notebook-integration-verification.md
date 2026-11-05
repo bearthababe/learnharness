@@ -516,3 +516,111 @@ commit is the final receipt tip, not the merge commit. The historical pending
 integration/re-review statements above describe their earlier checkpoints and
 are superseded by this completion. **#47 is ready for its owner-approved
 implementation.** Physical iPad acceptance remains open as recorded above.
+
+### #47 Pages / Open / Restore / Duplicate / import delivery — 2026-11-05
+
+Implementation follows [the promoted owner-approved contract](handwriting-pages-plan.md),
+whose source SHA-256 is
+`7f1c846802e295d53d1007ef9c44ca4c0221f53a9cc52278fe82e3d812cc2c65`.
+Base: `117bdcf75efb70dd53604940485873c553a4c924` on
+`implement/handwriting-47`. Historical #45/#46 approvals and limitations above
+remain intact; this entry records implementer verification, not independent review.
+
+Delivered surfaces and persistence boundaries:
+
+- Pages with derived thumbnails, current-page navigation and independent copies;
+  one pending/sent snapshot Open flow with the exact four approved choices.
+  Restore is one destination-history edit; copies retain the frozen source graph.
+- Tutor SVG annotation and explicit external PNG flattening use independent
+  full-page backgrounds, the existing painter and native Undo/Redo. Import requires
+  an empty page and never changes the original tutor figure or attachment.
+- Separate native working-IDB assets/pages/actions/selection with transactional
+  acceptance, compact synchronous graph recovery and generation/terminal fencing.
+  Completed-stroke recovery and postcommit background sync remain local-first.
+- Thin page routes and filesystem page wrappers reuse #46 graph/source contracts.
+  Frozen creation retries precede later tails; concurrent originals are retained.
+  Compatible creation responses adopt authoritative metadata only after causal
+  reconciliation. Divergent candidates remain preserved and visibly blocked.
+- #46 attachment identity, automatic recovery, ordinary Send/Attach behavior and
+  immutable submitted bytes are preserved. Late reveal callbacks are scoped to
+  the captured page; page actions do not send tutor input or finalize speech.
+
+Additional regression findings during implementation:
+
+- A controller retired during offscreen concurrent-original preparation could
+  still commit metadata. The public-controller regression failed before the fix
+  (`47-retired-red.log`); both recovery commit paths now use the existing native
+  commit lifecycle guard. `47-controller-expanded.log` verifies retirement,
+  compatible/divergent creation and local-only original recreation.
+- Native `showModal()` overrode the mismatch heading's initial neutral focus.
+  The real sent-snapshot UI assertion caught it (`47-ui-expanded-2.log`); the viewer
+  now restores the neutral heading focus after opening its native modal.
+- First-use annotation reached a controller retired by an effect remount while
+  lazy notebook initialization yielded (`47-ui-expanded-3.log`). The session now
+  follows the current registered controller before accepting the action. The same
+  handoff protects snapshot actions that first mount the notebook.
+- Restore from another page reused the destination's former reading position
+  (`47-reading-position-red.log`, `120 !== 0`). The existing Restore-to-top rule
+  now also applies when selecting a previously visited page; Open current retains
+  its per-page reading position.
+- A persistent postcommit canvas-paint fault exposed the obsolete "source
+  unchanged" error (`47-paint-red-2.log`). The notebook now reports the approved
+  device-saved notice, blocks drawing while rendering is unavailable, and repaints
+  the same accepted page on Retry. Repaint callbacks are fenced on effect cleanup.
+  `47-paint-green.log` verifies the notice, unchanged history during the fault,
+  unchanged accepted page identity after Retry and restored background pixels.
+  The preceding one-shot fault run (`47-paint-red.log`) automatically repainted
+  before its error assertion; the retained regression holds the fault until Retry.
+
+Failed-run artifacts are retained. The parallel full-browser attempts
+`47-handwriting-final.log` and `47-mobile-delivery.log` stopped at 30-second
+navigation/response timeouts; their servers recorded slow page loads. Host
+contention is suspected, not asserted as a confirmed product diagnosis. Final
+full-browser verification is run sequentially with the same behavioral assertions.
+
+All evidence filenames in this entry are relative to
+`/home/bjorn/.cache/opencode/issue4/`. Final check results and integration status
+are recorded below before the delivery commit.
+
+| Check | Result / cache-root evidence |
+|---|---|
+| Handwriting graph/store/route/controller, shared-writing and turn recovery | **105 passed**, `47-focused-final.log`; includes deletion during request parsing, concurrent creation, local-only recreation, exact frozen retries, precommit rollback, committed mirror failure and remount cancellation |
+| Adjacent chat/practice/drill, dictation, SVG, Enter/Escape | **96 passed**, `47-adjacent-final.log` |
+| Session core / source projection | **85 passed**, `47-session-final.log` |
+| Native #47 working IDB | Passed, `47-native-pages-final.log`; actual atomic abort, pointer/action, stale heads, Restore reload Undo/Redo, assets/corruption, hashing cancellation, immediate strokes and offline copy remount |
+| Inherited #46 native lifecycle | **13 cases passed**, `47-native-46-final.log`; exact capture discovery/replay, newer drafts, one-flight ownership and terminal fencing |
+| Targeted real import / cross-page capture UI | Passed, `47-import-green.log`; actual SVG placement, empty-only admission, independent eraser, reload Undo/Redo, external PNG containment/one-origin map and frozen Attach through page switch |
+| Full Chromium handwriting / Pages / import | **Passed**, `47-handwriting-complete.log`; fixture `handwriting-browser-AHsqsG`; includes both cross-page reading-position and postcommit-paint regressions |
+| Full Chromium mobile / input / recovery | **Passed**, `47-mobile-complete.log`; fixture `mobile-input-browser-47-complete`; actual scripted conversation/question/practice/drill Send, speech/focus/gesture, native recovery and all inherited #46 remount/refusal/uncertainty checks |
+| Typecheck / lint | **Passed** after all production corrections, `47-typecheck-final.log`, `47-lint-final.log` |
+| Production build | **Passed**, `47-build-final.log`, disposable `build-47-final`; all 357 copied application files verified byte-identical to the final working source. Only the established environment-specific `turbopack.root` fixture setting differs; four existing dynamic filesystem tracing warnings remain. |
+| Whitespace / integration ancestry | `git diff --check` and `git merge-base --is-ancestor integration/handwriting-45 HEAD` passed; committed integration tip at verification is `117bdcf75efb70dd53604940485873c553a4c924` |
+
+Reproduction commands (from the #47 worktree; fixture paths are isolated):
+
+```sh
+LH_HANDWRITING_TEST_ROOT=/home/bjorn/.cache/opencode/issue4 NODE_ENV=test node --import tsx --test tests/handwriting*.test.ts tests/shared-writing.test.ts tests/turn-*.test.ts tests/retry-failed-turn.test.ts
+NODE_ENV=test node --import tsx --test tests/chat-flow.test.ts tests/practice-flow.test.ts tests/drill-flow.test.ts tests/dictation-flow.test.tsx tests/svg-image.test.tsx tests/svg-native-render.test.ts tests/enter-submits.test.ts tests/esc-layering.test.ts
+NODE_ENV=test node --import tsx --test tests/session-core.test.ts
+LH_HANDWRITING_TEST_ROOT=/home/bjorn/.cache/opencode/issue4 node scripts/check-handwriting-pages-device.mjs
+LH_HANDWRITING_TEST_ROOT=/home/bjorn/.cache/opencode/issue4 node scripts/check-handwriting-precommit.mjs
+LH_HANDWRITING_TEST_ROOT=/home/bjorn/.cache/opencode/issue4 LH_HANDWRITING_TEST_PORT=3127 node scripts/smoke-handwriting.mjs
+LH_MOBILE_TEST_DIR=/home/bjorn/.cache/opencode/issue4/mobile-input-browser-47-complete LH_MOBILE_TEST_PORT=3128 node scripts/smoke-mobile-inputs.mjs
+npm run typecheck
+npm run lint
+# In the disposable, byte-verified build-47-final fixture:
+NEXT_TELEMETRY_DISABLED=1 npm run build
+```
+
+All automated checks above have completed: **286 focused/adjacent/session tests**,
+both native runners, both full browser suites, typecheck, lint, build and diff/
+ancestry checks. No test execution remains pending. Browser suites were run
+sequentially on the final production changes; the full handwriting suite includes
+the final render-failure regression. No behavioral assertion was relaxed to pass
+the earlier timeouts.
+
+The full repository suite was not rerun; the documented #45 baseline failures
+are not claimed fixed. Browser checks use isolated fixtures and scripted
+providers/speech. Physical iPad #47/#48 acceptance and parent-owned independent
+Standards/Spec review remain separate gates. No live provider/speech calls,
+public-preview changes, pushes, PRs or issue closure were performed.
