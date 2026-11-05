@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import fs from "node:fs";
 import { after, test } from "node:test";
 
-const dir = fs.mkdtempSync("/tmp/opencode/notebook-speech-");
+const dir = fs.mkdtempSync(join(tmpdir(), "notebook-speech-"));
 process.env.LH_DATA_DIR = dir;
 process.env.LH_AUTH_FILE = `${dir}/auth.json`;
 const { chatStore } = await import("../src/store/chats.ts");

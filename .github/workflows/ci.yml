@@ -64,6 +64,7 @@ jobs:
           node --check scripts/mobile-browser-result.mjs
           node --check scripts/run-mobile-checks.mjs
           node --check scripts/smoke-mobile-inputs.mjs
+          node --check scripts/handwriting-menu-checks.mjs
           node --check scripts/smoke-question-reveal.mjs
           node --check scripts/smoke-mobile-layout.mjs
           node --check scripts/sidebar-swipe-checks.mjs

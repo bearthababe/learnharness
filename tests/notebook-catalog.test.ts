@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { after, test } from "node:test";
 
-const directory = await fs.mkdtemp("/tmp/opencode/notebook-catalog-");
+const directory = await fs.mkdtemp(path.join(tmpdir(), "notebook-catalog-"));
 process.env.LH_DATA_DIR = path.join(directory, "data");
 process.env.LH_AUTH_FILE = path.join(directory, "auth.json");
 delete process.env.LH_DESKTOP_SERVER; delete process.env.LH_DESKTOP_API_SECRET;

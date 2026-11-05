@@ -1,5 +1,7 @@
 import React, { act } from "react";
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, test } from "node:test";
 import { parseHTML } from "linkedom";
 import { useDictation, useDictationTarget, dictationCheckpoint, type Dictation } from "../components/dictation.tsx";
@@ -159,7 +161,7 @@ afterEach(async () => { await dispose?.(); restore?.(); dispose = undefined; res
 
 test("switching mounted practice to Notebook finishes recording and keeps all its final words in practice", async () => {
 	const fs = await import("node:fs");
-	const dir = fs.mkdtempSync("/tmp/opencode/notebook-speech-mounted-");
+	const dir = fs.mkdtempSync(join(tmpdir(), "notebook-speech-mounted-"));
 	process.env.LH_DATA_DIR = dir; process.env.LH_AUTH_FILE = `${dir}/auth.json`;
 	const { chatStore } = await import("../src/store/chats.ts");
 	const { createNotebookService } = await import("../src/server/notebook.ts");
@@ -197,7 +199,7 @@ test("switching mounted practice to Notebook finishes recording and keeps all it
 
 test("the global dictation shortcut cannot record into a submitted Notebook-assisted draft", async () => {
 	const fs = await import("node:fs");
-	const dir = fs.mkdtempSync("/tmp/opencode/notebook-shortcut-locked-");
+	const dir = fs.mkdtempSync(join(tmpdir(), "notebook-shortcut-locked-"));
 	process.env.LH_DATA_DIR = dir; process.env.LH_AUTH_FILE = `${dir}/auth.json`;
 	const { chatStore } = await import("../src/store/chats.ts");
 	const { createNotebookService } = await import("../src/server/notebook.ts");
@@ -254,7 +256,7 @@ test("capture recovery preserves the actionable missing-key error after startup 
 
 test("clicked Apply flushes after sent audio, follows up once on short coverage, and retains a whole crossing word", async () => {
 	const fs = await import("node:fs");
-	const dir = fs.mkdtempSync("/tmp/opencode/notebook-finalize-mounted-");
+	const dir = fs.mkdtempSync(join(tmpdir(), "notebook-finalize-mounted-"));
 	process.env.LH_DATA_DIR = dir; process.env.LH_AUTH_FILE = `${dir}/auth.json`;
 	const { createFauxCore, fauxAssistantMessage } = await import("@earendil-works/pi-ai");
 	const { chatStore } = await import("../src/store/chats.ts");
@@ -350,7 +352,7 @@ test("a finalization request during connection setup follows queued audio strict
 
 for (const trigger of ["Apply button", "pane Enter"] as const) test(`mounted ${trigger} keeps capture running until a return finalizes the crossing word and completed working`, async () => {
 	const fs = await import("node:fs");
-	const dir = fs.mkdtempSync("/tmp/opencode/notebook-click-mounted-");
+	const dir = fs.mkdtempSync(join(tmpdir(), "notebook-click-mounted-"));
 	process.env.LH_DATA_DIR = dir; process.env.LH_AUTH_FILE = `${dir}/auth.json`;
 	const { createFauxCore, fauxAssistantMessage } = await import("@earendil-works/pi-ai");
 	const { chatStore } = await import("../src/store/chats.ts");

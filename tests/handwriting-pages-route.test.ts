@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, it } from "node:test";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { appendHandwriting, copyHandwriting, handwritingFingerprints, notebookSource } from "../src/core/handwriting.ts";
-const root = mkdtempSync(`${process.env.LH_HANDWRITING_TEST_ROOT ?? "/tmp/opencode"}/pages-route-`);
+const root = mkdtempSync(join(process.env.LH_HANDWRITING_TEST_ROOT ?? tmpdir(), "pages-route-"));
 process.env.LH_DATA_DIR = root;
 const { stores } = await import("../src/server/stores.ts");
 const { handwritingPagesResponse } = await import("../src/server/handwriting.ts");

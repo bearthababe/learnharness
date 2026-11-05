@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { it, after } from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { createHandwritingStore } from "../src/store/handwriting.ts";
 import { appendHandwriting, copyHandwriting, normalizeHandwriting, replayHandwriting, restoreHandwriting, type HandwritingStroke } from "../src/core/handwriting.ts";
 
-const root = mkdtempSync(`${process.env.LH_HANDWRITING_TEST_ROOT ?? "/tmp/opencode"}/pages-test-`);
+const root = mkdtempSync(join(process.env.LH_HANDWRITING_TEST_ROOT ?? tmpdir(), "pages-test-"));
 after(() => rmSync(root, { recursive: true, force: true }));
 const stroke: HandwritingStroke = { tool: "pen", colour: "#2563eb", penScale: 1, width: 38, points: [{ x: 100, y: 200, pressure: 0.6 }] };
 const original = appendHandwriting({ version: 1, operations: [] }, { id: "first", kind: "stroke", stroke });

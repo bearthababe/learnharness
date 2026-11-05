@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, it } from "node:test";
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, chmodSync, existsSync } from "node:fs";
 import { Resvg } from "@resvg/resvg-js";
 import { appendHandwriting, notebookSource, emptyHandwriting, canonicalHandwriting, importHandwritingBackground } from "../src/core/handwriting.ts";
 
-const data = mkdtempSync("/home/bjorn/.cache/opencode/issue4/46-attachment-test-");
+const data = mkdtempSync(join(tmpdir(), "46-attachment-test-"));
 process.env.LH_DATA_DIR = data;
 const { stores } = await import("../src/server/stores.ts");
 const { sharedWritingResponse, sharedWritingSourceResponse, resolveSharedWriting } = await import("../src/server/shared-writing.ts");

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, it } from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { createHandwritingStore } from "../src/store/handwriting.ts";
@@ -8,7 +10,7 @@ import { appendHandwriting, copyHandwriting, handwritingFingerprints, notebookSo
 import type { HandwritingPage } from "../src/core/handwriting-pages.ts";
 import { handwritingKey } from "../components/handwriting/device.ts";
 import { pageDeviceKey, pageRecoveryKey } from "../components/handwriting/pages-device.ts";
-const root = mkdtempSync(`${process.env.LH_HANDWRITING_TEST_ROOT ?? "/tmp/opencode"}/pages-controller-`);
+const root = mkdtempSync(join(process.env.LH_HANDWRITING_TEST_ROOT ?? tmpdir(), "pages-controller-"));
 after(() => rmSync(root, { recursive: true, force: true }));
 const ink: HandwritingStroke = { tool: "pen", colour: "#171717", penScale: 1, width: 38, points: [{ x: 1, y: 2, pressure: .5 }] };
 class MemoryDevice implements PagesDevice {

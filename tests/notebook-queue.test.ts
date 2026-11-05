@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { after, test } from "node:test";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai";
 
-const dir = fs.mkdtempSync("/tmp/opencode/notebook-queue-");
+const dir = fs.mkdtempSync(join(tmpdir(), "notebook-queue-"));
 process.env.LH_DATA_DIR = dir; process.env.LH_AUTH_FILE = `${dir}/auth.json`;
 const { chatStore } = await import("../src/store/chats.ts");
 const { createNotebookService } = await import("../src/server/notebook.ts");

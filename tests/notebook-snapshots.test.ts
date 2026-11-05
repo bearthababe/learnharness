@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
 import fs from "node:fs";
 import path from "node:path";
 import { syncBuiltinESMExports } from "node:module";
 import { after, test } from "node:test";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai";
 
-const dir = fs.mkdtempSync("/tmp/opencode/notebook-snapshots-");
+const dir = fs.mkdtempSync(path.join(tmpdir(), "notebook-snapshots-"));
 process.env.LH_DATA_DIR = dir;
 process.env.LH_AUTH_FILE = path.join(dir, "auth.json");
 const { chatStore } = await import("../src/store/chats.ts");

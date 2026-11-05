@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { it } from "node:test";
 import { appendHandwriting, normalizeHandwriting, replayHandwriting, handwritingSchema, restoreHandwriting, handwritingPrefix, importHandwritingBackground, copyHandwriting, handwritingFingerprints, notebookSource, type HandwritingStroke } from "../src/core/handwriting.ts";
 import { Resvg } from "@resvg/resvg-js";
@@ -82,7 +84,7 @@ it("Restore retains source history but Undo and Redo follow displaced destinatio
 });
 
 it("actual working save/reopen preserves displaced background and both Restore history boundaries", async () => {
-	const dir = mkdtempSync("/home/bjorn/.cache/opencode/issue4/46-history-store-");
+	const dir = mkdtempSync(join(tmpdir(), "46-history-store-"));
 	try {
 		const store = createHandwritingStore(dir);
 		const png = new Resvg('<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1800"><rect width="1400" height="1800" fill="red"/></svg>').render().asPng();

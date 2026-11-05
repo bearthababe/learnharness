@@ -25,6 +25,7 @@ export async function checkHandwritingMenus({ page, origin }) {
 		assert.deepEqual(await page.evaluate(() => window.menuCancellation), before);
 		assert.equal(await page.$eval(field, element => element.textContent), "Keep my typed explanation.");
 		await page.keyboard.press("Escape"); await page.waitForFunction(() => window.speech.readyState === 3);
+		await page.waitForSelector('[data-testid="dictation-toggle"][aria-label="Start dictation"]');
 		assert.deepEqual(await page.evaluate(() => window.menuCancellation), { speech: before.speech + 1, turn: before.turn }, "After dismissal the existing Escape chain resumes");
 	}
 	console.log("PASS S2 focused chat + Pencil Pages/options Escape owns one dismissal, preserves speech/typing and restores trigger focus");
