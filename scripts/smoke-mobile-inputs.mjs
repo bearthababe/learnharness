@@ -442,12 +442,18 @@ try {
 	await page.click('[aria-label="Cancel dictation"]');
 	console.log("PASS: missing-key Settings round trip and subsequent capture");
 	const navigateSession = async title => {
+		const previousInput = await page.$(input);
 		await page.click('button[aria-label="Open sidebar"]');
 		await page.waitForSelector('[data-testid="session-search"]', { visible: true });
 		await fill('[data-testid="session-search"]', title);
 		const row = await page.waitForFunction(title => [...document.querySelectorAll('[data-testid="session-list"] button')].find(e => e.textContent.includes(title)), {}, title);
 		await row.asElement().click();
 		await row.dispose();
+		// App Router can publish the URL while the previous Chat is still
+		// mounted. Wait for its keyed editor to retire before typing in the
+		// destination; visibility alone can still match the previous editor.
+		await page.waitForFunction(element => !element.isConnected, {}, previousInput);
+		await previousInput.dispose();
 		await page.waitForSelector(input, { visible: true });
 	};
 	for (const phase of ["permission", "connecting", "recording", "finishing"]) {

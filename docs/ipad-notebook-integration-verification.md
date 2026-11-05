@@ -1444,6 +1444,16 @@ Combined branch `integrate/main-ipad` starts at
 `887496b48ff3893085bce471863eea9e6f428906` in
 `acf32a285bf8c4007b5b648664b9724b4487fa65`.
 
+The completed peer handoff `4413ec8b9c9e85315ba8c967615bda5ae6186ac6` is
+merged in `e3850c3d55ad2420e4f1a46fbe8a5aa063f3bf14`. Its supplemental
+file-path harness corrections and canonical
+[`mobile-learning-ui-verification.md`](mobile-learning-ui-verification.md)
+are preserved, including the peer receipts
+`/home/bjorn/.cache/opencode/accepted-mobile-main-runs/mobile-input-browser-vbjX9v/result.json`
+and `/home/bjorn/.cache/opencode/accepted-mobile-main-file-paths-final-2.log`.
+These peer results are supporting evidence; combined browser verification is
+recorded below independently.
+
 Conflict resolutions preserve both Notebook submission fields and reviewed
 handwriting snapshots. Recovery identity is captured before speech finalization;
 the upstream `SessionModel.send` question key remains argument three and the
@@ -1466,13 +1476,14 @@ scripted providers/speech and Chromium emulation, not new physical acceptance.
 | Typecheck | Passed, `typecheck-final.log` |
 | Lint | Passed, `lint-final.log`; one existing `<head>` warning in `tests/source-name-ui.test.tsx:26` |
 | Production build and provider-runtime smoke | Passed, `build-final.log`, `provider-runtime.log`; isolated build data/auth |
-| Whole nonlive unit suite | First run: 3,816 passed, four skipped, four child-process timeouts in `custom-provider-restart.test.ts`; `unit-combined.log`. Full bounded-concurrency rerun pending in `unit-bounded.log`. |
+| Whole nonlive unit suite | Passed: 3,820 passed, four platform/filesystem skips, zero failures/cancellations, 573 suites; `unit-bounded.log`, `NODE_ENV=test node --import tsx --test --test-concurrency=2 tests/*.test.ts tests/*.test.tsx`. First default-concurrency run had four child-process timeouts in `custom-provider-restart.test.ts` (`unit-combined.log`); all passed in the complete bounded rerun without product changes. |
 | Native Pages/adoption, precommit/capture, atomic creation retirement | Passed sequentially, `native-pages-clean.log`, `native-precommit-clean.log`, `native-creation-clean.log` |
 | Fresh aggregate mobile | First run failed at Settings recovery with Settings/Notebook fetch failures: `mobile-input-browser-eA6VtP/result.json`; source clean `acf32a2`, SHA-256 `ed5245b006a4f6755a8303ed3eefc2d1b5bf34751a2515320a49d442d0e46c06`. Fresh diagnostic aggregate pending. |
-| Full handwriting browser | Pending, `handwriting-combined.log` |
+| Full handwriting browser | Passed, `handwriting-combined.log`; fixture `handwriting-browser-XkwUJp`, source SHA-256 `ed5245b006a4f6755a8303ed3eefc2d1b5bf34751a2515320a49d442d0e46c06`. Includes all Pages/import, recovery, Attach, and no-implicit-turn checks. |
+| Supplemental Chromium / actual Electron file paths | Passed all eleven checks with zero visual/coverage failures and no external requests, `file-paths-short-root.log`; `TMPDIR=/tmp/opencode LH_TEST_CHROME=/usr/bin/chromium node scripts/smoke-file-paths.mjs`. Long-root launch exceeded Linux's Unix-socket path limit (`file-paths-combined.log`); an overlapping launch was refused by Next's same-checkout lock (`file-paths-short-tmp.log`). Both are excluded from passing evidence. |
 
 The earlier duplicate/interrupted unit/mobile runs and shared `native-*.log`
 files are not completion evidence. The clean native sequence replaces those
-ambiguous logs. Final delivery remains pending the full unit/browser outcomes
-and the peer's supplemental harness/docs commit. Parent owns the single
+ambiguous logs. Final delivery remains pending the full unit/browser outcomes.
+Parent owns the single
 combined PR, remote merge and local main update.
