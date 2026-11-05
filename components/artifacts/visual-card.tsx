@@ -9,6 +9,7 @@ import { useSessionMermaid } from "@/components/session-overlay";
 import { downloadFile } from "@/components/artifacts/download";
 import { DispatchCard } from "@/components/artifacts/dispatch-card";
 import { SvgImage } from "@/components/artifacts/svg-image";
+import { HandwritingPagesContext } from "@/components/handwriting/pages-context";
 import type { ArtifactPartProps, VisualResult } from "@/src/core";
 
 /**
@@ -53,6 +54,7 @@ export function VisualOutputCard({
 	const result = output as VisualResult | undefined;
 	const overlay = useSessionMermaid();
 	const actions = useContext(ChatActionsContext);
+	const notebook = useContext(HandwritingPagesContext), [notebookNotice, setNotebookNotice] = useState<string | null>(null), [importing, setImporting] = useState(false);
 	// Brightness inversion (owner, 2026-10-07): the switch state PERSISTS on
 	// the steer record (details.ui.inverted) — seeded here, written through
 	// the silent artifact-ui route on toggle; without a chat page (tests,
@@ -126,6 +128,7 @@ export function VisualOutputCard({
 			<div className="mt-2 flex items-center justify-between gap-2">
 				<div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Figure</div>
 				<div className="flex items-center gap-1.5">
+					{notebook && <button type="button" className="min-h-11 rounded px-2 text-xs hover:bg-accent" disabled={importing} onClick={() => { setImporting(true); void notebook.annotate(result.svg).then(result => setNotebookNotice(result.kind === "failed" ? result.notice : null)).finally(() => setImporting(false)); }}>Annotate in notebook</button>}
 					{/* The invert affordance (owner round, 2026-10-07): the disc IS
 					    the half-filled contrast circle; the tooltip names it. */}
 					<Toggle
@@ -159,6 +162,7 @@ export function VisualOutputCard({
 					)}
 				</div>
 			</div>
+			{notebookNotice && <p role="status" className="text-xs">{notebookNotice}</p>}
 		</div>
 	);
 }

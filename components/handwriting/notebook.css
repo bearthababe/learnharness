@@ -84,3 +84,7 @@
 .hw-arcInspector > p { font-size: 9px; color: var(--muted-foreground); margin-top: 10px; }
 .hw-arc > .hw-toolButton, .hw-arcUndo, .hw-arcInspector { pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) { .hw-toolButton { transition: none; } }
+.hw-pagesPanel { overflow: auto; overscroll-behavior: contain; max-height: min(55dvh, 520px); touch-action: pan-y pinch-zoom; }
+.hw-pageRow > button:first-child { display: flex; align-items: center; gap: 16px; padding: 8px; width: 100%; text-align: left; }
+.hw-pageRow img { width: 140px; height: 180px; object-fit: contain; border: 1px solid var(--border); }
+.hw-pageRow small { display: block; }

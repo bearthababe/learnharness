@@ -28,6 +28,7 @@ import type {
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
 import type { Handwriting, NotebookSource } from "./handwriting.ts";
+import type { HandwritingPage, PageCreation, PageSummary } from "./handwriting-pages.ts";
 import type { SharedWriting, NotebookCapture, NotebookCaptureReceipt, WritingSnapshot } from "./shared-writing.ts";
 
 export interface SharedWritingStore {
@@ -48,6 +49,10 @@ export interface HandwritingStore {
 	/** Atomically extend a matching causal journal. Older retries acknowledge
 	 * current truth; divergent histories throw without replacing either copy. */
 	save(chatId: string, working: Handwriting): Handwriting;
+	listPages(chatId: string): PageSummary[];
+	readPage(chatId: string, pageId: string): HandwritingPage | null;
+	createPageIfAbsent(chatId: string, page: HandwritingPage, creation: PageCreation): { page: HandwritingPage; existing: boolean };
+	savePage(chatId: string, page: HandwritingPage): HandwritingPage;
 	deleteChat(chatId: string): void;
 }
 
