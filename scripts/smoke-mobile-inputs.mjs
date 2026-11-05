@@ -487,6 +487,36 @@ try {
 	// Exercise actual opening animation and split native touch press/release.
 	// A backdrop removed on pointerdown lets the release click the trigger below.
 	const cardTouch = await page.createCDPSession();
+	await page.evaluate(() => {
+		window.__lhPhoneFrameSample = menu => {
+			const r = menu.getBoundingClientRect(), css = getComputedStyle(menu);
+			const clip = parseFloat(css.clipPath.match(/^inset\(([^p]+)px/)?.[1] ?? "0");
+			// Sample the rendered contour, not just the declared radius (CSS can
+			// shrink that radius silently). Synchronous hit tests also check clips.
+			const inert = menu.inert; menu.inert = false;
+			const hits = (x, y) => menu.contains(document.elementFromPoint(x, y));
+			const baseline = [1, -1].map(sign => {
+				for (let x = .5; x < parseFloat(css.borderBottomLeftRadius) + 2; x += .5) {
+					if (hits(sign === 1 ? r.left + x : r.right - x, r.bottom - .5)) return x;
+				}
+				return null;
+			});
+			const above = hits(r.left + r.width / 2, r.top + clip - .5);
+			menu.inert = inert;
+			return { top: r.top + clip, bottom: r.bottom, height: r.height - clip, width: r.width,
+				baseline, above, opacity: Number(css.opacity), fontSize: css.fontSize };
+		};
+	});
+	const assertContour = samples => {
+		const full = samples.reduce((a, b) => a.height > b.height ? a : b);
+		assert.ok(full.baseline.every(inset => inset > 1), "Resting rounded baseline is shorter than the card width");
+		for (const sample of samples) {
+			// Hit testing snaps transformed coordinates to pixels. Near a circle's
+			// tangent that can move the reported intersection a few horizontal px.
+			assert.ok(sample.baseline.every((inset, i) => inset > 8 && Math.abs(inset - full.baseline[i]) <= 4), "Bottom contour retains resting corners through early/late frames");
+			assert.equal(sample.above, false, "Unrevealed card area cannot receive input");
+		}
+	};
 	const captureCardExit = () => page.evaluate(() => {
 		const animate = Element.prototype.animate, effects = [];
 		const clock = Object.getOwnPropertyDescriptor(Animation.prototype, "startTime");
@@ -522,10 +552,9 @@ try {
 			const animation = menu.getAnimations()[0], blur = backdrop.getAnimations()[0];
 			const starts = window.__lhExitStarts, timings = [animation.effect.getTiming(), blur.effect.getTiming()];
 			animation.pause(); blur.pause();
-			const samples = [0, 100, 200, 300, 400].map(time => {
+			const samples = [0, 1, 4, 8, 16, 32, 100, 200, 300, 368, 384, 392, 396, 399, 400].map(time => {
 				animation.currentTime = time; blur.currentTime = time;
-				const r = menu.getBoundingClientRect(), css = getComputedStyle(menu);
-				return { top: r.top, bottom: r.bottom, height: r.height, width: r.width, opacity: Number(css.opacity), fontSize: css.fontSize,
+				return { time, ...window.__lhPhoneFrameSample(menu),
 					blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]), shellHeight: document.querySelector('.lh-app-shell').getBoundingClientRect().height };
 			});
 			animation.currentTime = 200; blur.currentTime = 200;
@@ -536,11 +565,12 @@ try {
 		assert.equal(exit.starts[0], exit.starts[1], "Exit card and blur share a start time");
 		for (const timing of exit.timings) { assert.equal(timing.duration, 400); assert.equal(timing.easing, "linear"); }
 		const start = exit.samples[0], end = exit.samples.at(-1);
+		assertContour(exit.samples);
 		assert.ok(end.height <= 2, "Card collapses to its fixed bottom edge");
-		for (const [index, sample] of exit.samples.entries()) {
-			const progress = index / (exit.samples.length - 1);
+		for (const sample of exit.samples) {
+			const progress = sample.time / 400;
 			assert.ok(Math.abs(sample.height - (start.height + (end.height - start.height) * progress)) <= 1, "Closing height follows elapsed time linearly");
-			assert.equal(sample.blur, 4 * (1 - progress), "Closing blur shares linear progress");
+			assert.ok(Math.abs(sample.blur - 4 * (1 - progress)) < .001, "Closing blur shares linear progress");
 			assert.equal(sample.opacity, 1, "No separate line-fade phase");
 		}
 		assert.ok(exit.samples.every(s => Math.abs(s.bottom - start.bottom) <= 1 && s.bottom <= exit.buttonTop - 3), "Bottom edge stays above the button for the whole close");
@@ -612,10 +642,9 @@ try {
 			const button = document.querySelector(`[data-testid="${trigger}"]`);
 			const startTimes = window.__lhEntranceStarts;
 			animation.pause(); blur.pause();
-			const samples = [0, 100, 200, 300, 400].map(time => {
+			const samples = [0, 1, 4, 8, 16, 32, 100, 200, 300, 368, 384, 392, 396, 399, 400].map(time => {
 				animation.currentTime = time; blur.currentTime = time;
-				const r = menu.getBoundingClientRect(), css = getComputedStyle(menu);
-				return { top: r.top, bottom: r.bottom, height: r.height, width: r.width, opacity: Number(css.opacity), fontSize: css.fontSize,
+				return { time, ...window.__lhPhoneFrameSample(menu),
 					blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]) };
 			});
 			const timings = [animation.effect.getTiming(), blur.effect.getTiming()];
@@ -631,11 +660,12 @@ try {
 			assert.equal(timing.easing, "linear");
 		}
 		const start = entrance.samples[0], end = entrance.samples.at(-1);
+		assertContour(entrance.samples);
 		assert.ok(start.height <= 2, "Card begins at its bottom edge");
-		for (const [index, sample] of entrance.samples.entries()) {
-			const progress = index / (entrance.samples.length - 1);
+		for (const sample of entrance.samples) {
+			const progress = sample.time / 400;
 			assert.ok(Math.abs(sample.height - (start.height + (end.height - start.height) * progress)) <= 1, "Opening height follows elapsed time linearly");
-			assert.equal(sample.blur, 4 * progress, "Opening blur shares linear progress");
+			assert.ok(Math.abs(sample.blur - 4 * progress) < .001, "Opening blur shares linear progress");
 			assert.equal(sample.opacity, 1, "Expansion starts immediately without a line-reveal phase");
 		}
 		assert.ok(entrance.samples.every(s => Math.abs(s.bottom - end.bottom) <= 1 && s.bottom <= entrance.buttonTop - 3), "Bottom edge never moves or crosses the opener");
@@ -675,13 +705,13 @@ try {
 	}
 	await cardTouch.detach();
 	// Closing during early or later expansion stays continuous.
-	for (const time of [20, 100]) {
+	for (const time of [1, 20, 100]) {
 		await page.locator('[data-testid="stats-model"]').click();
 		await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]')?.getAnimations()[0]?.startTime != null);
 		const partial = await page.$eval('[data-testid="model-menu"]', (menu, time) => {
 			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
 			for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = time; }
-			return { top: menu.getBoundingClientRect().top, opacity: getComputedStyle(menu).opacity, blur: getComputedStyle(backdrop).backdropFilter };
+			return { ...window.__lhPhoneFrameSample(menu), blur: getComputedStyle(backdrop).backdropFilter };
 		}, time);
 		await captureCardExit();
 		await page.keyboard.press("Escape");
@@ -690,9 +720,10 @@ try {
 		const exitStart = await page.$eval('[data-testid="model-menu"]', menu => {
 			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
 			for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = 0; }
-			return { top: menu.getBoundingClientRect().top, opacity: getComputedStyle(menu).opacity, blur: getComputedStyle(backdrop).backdropFilter };
+			return { ...window.__lhPhoneFrameSample(menu), blur: getComputedStyle(backdrop).backdropFilter };
 		});
 		assert.ok(Math.abs(partial.top - exitStart.top) <= 1, "Quick close starts from the current expansion height");
+		assert.deepEqual(exitStart.baseline, partial.baseline, "Quick close preserves the rounded baseline");
 		assert.equal(exitStart.opacity, partial.opacity, "Quick close retains full opacity");
 		assert.equal(exitStart.blur, partial.blur, "Quick close starts from the current blur");
 		await page.evaluate(() => {

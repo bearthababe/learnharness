@@ -126,6 +126,16 @@ constant-speed expansion and collapse over the full **400ms**, with linear blur
 over the same interval. Keep the fixed bottom edge and normal-sized contents.
 There is no pause or opacity phase at the collapsed edge.
 
+**Rounded baseline correction — owner approved 2026-11-05:** the owner observed
+that the full-width starting line lost its ends as the corners appeared, and
+approved **“Yes, exactly”** to starting/ending at the shorter straight baseline
+between the rounded corners. Preserve the actual bottom contour throughout
+opening/closing, revealing its curves upward; retain the uninterrupted linear
+400ms expansion/collapse and matching blur. Do not flatten the corner radii at
+small heights. The frame retains enough height for its corners and clips only
+the unrevealed top until normal height growth can take over, at the same visible
+speed. Interrupted closes start from the current revealed height.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),

@@ -47,26 +47,39 @@ const MIN_USABLE = 96; // floor: a shorter cap is an unusable sliver; the
 const PHONE_DURATION = 400;
 const PHONE_EASING = "linear";
 
-/** Animate the real frame's height about its existing bottom anchor. Give its
+/** Grow about the bottom anchor without compressing the rounded corners. Give
  * contents their resting layout throughout so text never scales or squashes.
  * At rest the wrapper is display:contents and the inherited layout takes over. */
 function animatePhoneFrame(menu: HTMLDivElement, content: HTMLDivElement, backdrop: HTMLDivElement,
 	closing = false, fromHeight?: number, fromBlur = "blur(4px)") {
 	const css = getComputedStyle(menu);
 	const height = menu.getBoundingClientRect().height;
-	const lineHeight = parseFloat(css.borderTopWidth) + parseFloat(css.borderBottomWidth);
+	const borderHeight = parseFloat(css.borderTopWidth) + parseFloat(css.borderBottomWidth);
+	const lineHeight = parseFloat(css.borderBottomWidth);
+	// CSS proportionally shrinks ALL corner radii when they overlap. Never let
+	// the painted frame get that short: reveal its actual bottom contour until
+	// there is room for both corners, then grow the frame normally. The revealed
+	// height moves at one constant speed across that boundary (no extra phase).
+	const cornerHeight = Math.min(height, Math.max(
+		parseFloat(css.borderTopLeftRadius) + parseFloat(css.borderBottomLeftRadius),
+		parseFloat(css.borderTopRightRadius) + parseFloat(css.borderBottomRightRadius),
+	));
+	const start = closing ? fromHeight ?? height : lineHeight;
+	const end = closing ? lineHeight : height;
+	const frameAt = (visibleHeight: number, offset: number) => ({
+		height: `${Math.max(cornerHeight, visibleHeight)}px`,
+		clipPath: `inset(${Math.max(0, cornerHeight - visibleHeight)}px 0px 0px 0px)`,
+		offset,
+	});
+	const crossing = (cornerHeight - start) / (end - start);
+	const frames = [frameAt(start, 0)];
+	if (crossing > 0 && crossing < 1) frames.push(frameAt(cornerHeight, crossing));
+	frames.push(frameAt(end, 1));
 	const layout = { display: css.display, flexDirection: css.flexDirection, gap: css.gap, padding: css.padding };
 	const before = { padding: menu.style.padding, overflowX: menu.style.overflowX, overflowY: menu.style.overflowY, content: content.style.cssText };
-	Object.assign(content.style, { ...layout, position: "absolute", top: "0", left: "0", right: "0", height: `${height - lineHeight}px`, boxSizing: "border-box" });
+	Object.assign(content.style, { ...layout, position: "absolute", top: "0", left: "0", right: "0", height: `${height - borderHeight}px`, boxSizing: "border-box" });
 	menu.style.padding = "0";
 	menu.style.overflow = "hidden";
-	const frames = closing ? [
-		{ height: `${fromHeight ?? height}px` },
-		{ height: `${lineHeight}px` },
-	] : [
-		{ height: `${lineHeight}px` },
-		{ height: `${height}px` },
-	];
 	const animation = menu.animate(frames, { duration: PHONE_DURATION, easing: PHONE_EASING, fill: "both" });
 	const blur = backdrop.animate([
 		{ backdropFilter: closing ? fromBlur : "blur(0px)" },
@@ -87,6 +100,10 @@ function animatePhoneFrame(menu: HTMLDivElement, content: HTMLDivElement, backdr
 	let active = true;
 	return {
 		get active() { return active; },
+		get visibleHeight() {
+			const clip = parseFloat(getComputedStyle(menu).clipPath.match(/^inset\(([^p]+)px/)?.[1] ?? "0");
+			return menu.getBoundingClientRect().height - clip;
+		},
 		finished: Promise.all([animation.finished, blur.finished]),
 		cancel() {
 			if (!active) return;
@@ -300,7 +317,7 @@ export function MenuShell({
 			onClosed();
 			return;
 		}
-		const fromHeight = menu.getBoundingClientRect().height;
+		const fromHeight = entranceRef.current?.active ? entranceRef.current.visibleHeight : menu.getBoundingClientRect().height;
 		const fromBlur = getComputedStyle(backdrop).backdropFilter;
 		entranceRef.current?.cancel();
 		const motion = animatePhoneFrame(menu, content, backdrop, true, fromHeight, fromBlur);
