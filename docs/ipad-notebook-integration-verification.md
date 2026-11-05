@@ -162,4 +162,51 @@ retry on reopen/reconnection and immediate retry through ordinary Attach,
 preserving newer working and stopping at review without automatic Send.
 Delivery `a7715563170f2877b336699991472caf091aff2c` includes those corrections;
 final independent Standards/Spec re-review is dispatched against that exact
-commit. Integration of corrections and those final review outcomes remain pending.
+commit. Integration of corrections remains pending.
+
+Final independent review gates for `a771556`:
+
+- **Standards approved:** S1, H1 and H2 closed; no new findings or blockers.
+  Report: `/home/bjorn/.cache/opencode/issue4/46-final-review-standards.md`.
+- **Spec blocked on C1:** R1 (Send/finalization race) and R2 (empty newer choice
+  selections) passed. Reopening during an outstanding capture upload can start
+  an overlapping transfer; a late old failure can resurrect a retired capture
+  and block newer Attach. No handwriting loss or duplicate tutor input is
+  asserted. Report and reproduction:
+  `/home/bjorn/.cache/opencode/issue4/46-final-review-spec.md` and
+  `/home/bjorn/.cache/opencode/issue4/46-final-review-remount-boundary.log`.
+  C1 correction and lifecycle/native-device regression coverage have been
+  dispatched to the implementer. Integration remains gated on its delivery and
+  independent incremental review.
+
+C1 correction delivered as `d357b54fbaac2798aa046b38fe349cf1e045e2ec`, including
+integration documentation commit `1946bcb`. Implementer reports 187 tests,
+native-IDB lifecycle regressions, both browser suites, typecheck, lint and build
+completed successfully with a clean tree. Independent **Standards PASS** for
+this exact hash: S1/H1/H2 remain closed, with no new findings. Report:
+`/home/bjorn/.cache/opencode/issue4/46-c1-review-standards.md`.
+Independent **Spec BLOCK** at `d357b54`: original C1 overlap/resurrection is
+fixed and R1/R2 remain passed, but a precommit remount can read zero captures,
+miss A's later durable failure, and become stuck trying to persist newer B.
+Original capture and newer drafts remain preserved. Exact controller/native-IDB
+reproduction and report:
+`/home/bjorn/.cache/opencode/issue4/46-c1-review-spec.md` and
+`/home/bjorn/.cache/opencode/issue4/46-c1-review-native-boundary.mjs`.
+The implementer has the reproduction and instructions to correct discovery and
+ownership across preparation, durable save, upload and remount, with regression
+coverage for the previously untested precommit timing. Integration remains gated
+on the next correction and independent review.
+
+Precommit discovery correction delivered as
+`ea74759e2ca2a681e6069ce8ba2b399533d5b827`. Implementer reports 189 focused
+tests, 13 native lifecycle cases, both browser suites, typecheck, lint and build
+completed successfully, with a clean tree. Independent **Standards PASS** for
+this exact commit; S1/H1/H2 remain closed, with no new findings. Report:
+`/home/bjorn/.cache/opencode/issue4/46-precommit-review-standards.md`.
+Independent **Spec PASS** for this exact commit. Four independent native-IDB
+cases and five targeted tests passed: exact A recovers before B without another
+remount, duplicate upload or automatic Send, while newer drafts remain intact.
+R1/R2 and original C1 approvals stand; no new blocker was found. Report:
+`/home/bjorn/.cache/opencode/issue4/46-precommit-review-spec.md`.
+Both final independent gates are now approved; integration of this delivery is
+the next step, followed by the owner-approved #47 implementation.
