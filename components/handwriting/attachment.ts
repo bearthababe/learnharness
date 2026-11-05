@@ -29,10 +29,12 @@ class CaptureSizeError extends Error {
 
 // Controllers are view-owned; transfer ownership outlives a view. The device
 // port scopes the storage namespace, while session/page scopes each flight.
-const deviceFlights = new WeakMap<TransferDevice, Map<string, Promise<void>>>();
-function flightsFor(device: TransferDevice) {
-	let flights = deviceFlights.get(device);
-	if (!flights) { flights = new Map(); deviceFlights.set(device, flights); }
+const deviceFlights = new WeakMap<TransferDevice, Map<string, Map<string, Promise<void>>>>();
+function flightsFor(device: TransferDevice, chatId: string) {
+	let sessions = deviceFlights.get(device);
+	if (!sessions) { sessions = new Map(); deviceFlights.set(device, sessions); }
+	let flights = sessions.get(chatId);
+	if (!flights) { flights = new Map(); sessions.set(chatId, flights); }
 	return flights;
 }
 
@@ -54,15 +56,15 @@ export class HandwritingAttachment {
 	report(pageId: string, kind: NoticeKind) { this.update(pageId, kind); }
 	busy(pageId: string) { return this.flights.has(pageId); }
 	hasCapture(pageId: string) { return this.captures.has(pageId); }
-	private flightKey(pageId: string) { return JSON.stringify([this.chatId, pageId]); }
-	private running(pageId: string) { return flightsFor(this.deps.device).get(this.flightKey(pageId)); }
+	private running(pageId: string) { return flightsFor(this.deps.device, this.chatId).get(pageId); }
 	private beginFlight(pageId: string) {
-		const shared = flightsFor(this.deps.device), key = this.flightKey(pageId);
+		const shared = flightsFor(this.deps.device, this.chatId);
 		let settle!: () => void;
 		const done = new Promise<void>(resolve => { settle = resolve; });
-		this.flights.add(pageId); shared.set(key, done);
+		this.flights.add(pageId); shared.set(pageId, done);
 		return () => {
-			if (shared.get(key) === done) shared.delete(key);
+			if (shared.get(pageId) === done) shared.delete(pageId);
+			if (!shared.size) deviceFlights.get(this.deps.device)?.delete(this.chatId);
 			this.flights.delete(pageId); settle();
 			if (!this.disposed) this.deps.changed();
 		};
@@ -79,20 +81,26 @@ export class HandwritingAttachment {
 			if (!this.disposed) this.deps.reveal();
 		} catch { this.update(capture.pageId, "refresh_failed"); }
 	}
-	private async reloadCapture(pageId: string): Promise<boolean> {
+	private async reloadCapture(pageId: string, reviewCompletion = false): Promise<boolean> {
 		if (this.deleted || this.generation === null) return false;
-		try {
-			const saved = await this.deps.device.read(this.chatId, this.generation);
-			const candidates = saved.captures.filter(capture => capture.pageId === pageId && capture.state !== "conflicted");
-			if (candidates.length > 1) throw new Error("Conflicting device captures");
-			const capture = candidates[0];
-			if (capture) { await this.validateSource(capture); this.captures.set(pageId, capture); return true; }
-			this.captures.delete(pageId);
-			const receipt = saved.captureReceipts.find(receipt => receipt.pageId === pageId);
-			if (receipt) await this.showReview({ ...receipt, expectedPageRevision: receipt.pageRevision - 1 });
-			else if (saved.captures.some(capture => capture.pageId === pageId && capture.state === "conflicted")) this.update(pageId, "conflicted");
-			else { this.notices.delete(pageId); if (!this.disposed) this.deps.changed(); }
-		} catch { this.update(pageId, "recovery_unavailable"); }
+		const saved = await this.deps.device.read(this.chatId, this.generation);
+		const pageCaptures = saved.captures.filter(capture => capture.pageId === pageId);
+		for (const capture of pageCaptures) await this.validateSource(capture);
+		const candidates = pageCaptures.filter(capture => capture.state !== "conflicted");
+		if (candidates.length > 1) throw new Error("Conflicting device captures");
+		const capture = candidates[0], local = this.captures.get(pageId);
+		if (capture) {
+			if (local?.writingId !== capture.writingId) this.drafts.delete(pageId);
+			this.captures.set(pageId, capture); return true;
+		}
+		const receipt = saved.captureReceipts.find(receipt => receipt.pageId === pageId);
+		// A failed first local write still owns frozen pixels in this controller.
+		// Absence is not retirement; only durable conflict/completion can retire it.
+		if (local && !pageCaptures.some(capture => capture.writingId === local.writingId) && (!receipt || (receipt.writingId !== local.writingId && receipt.pageRevision <= local.expectedPageRevision))) return true;
+		this.captures.delete(pageId); this.drafts.delete(pageId);
+		if (pageCaptures.length) this.update(pageId, "conflicted");
+		else if (receipt && reviewCompletion) await this.showReview({ ...receipt, expectedPageRevision: receipt.pageRevision - 1 });
+		else if (reviewCompletion) { this.notices.delete(pageId); if (!this.disposed) this.deps.changed(); }
 		return false;
 	}
 	private async saveCapture(capture: CaptureRecord, draft?: DurableDraft) {
@@ -100,26 +108,28 @@ export class HandwritingAttachment {
 		catch (error) {
 			if (!(error instanceof CaptureRetiredError)) throw error;
 			if (this.captures.get(capture.pageId)?.writingId === capture.writingId) this.captures.delete(capture.pageId);
-			await this.reloadCapture(capture.pageId);
+			await this.reloadCapture(capture.pageId, true);
 			return false;
 		}
 	}
 	async open() {
 		try {
 			this.generation = await this.deps.device.open(this.chatId);
-			const saved = await this.deps.device.read(this.chatId, this.generation);
-			for (const capture of saved.captures) {
-				await this.validateSource(capture);
-				if (capture.state !== "conflicted" && this.captures.has(capture.pageId)) throw new Error("Conflicting device captures");
-				if (capture.state !== "conflicted") this.captures.set(capture.pageId, capture);
-				this.update(capture.pageId, capture.state === "conflicted" ? "conflicted" : "failed");
-			}
 		} catch { this.generation = null; this.update("page_initial", "recovery_unavailable"); return; }
 		await this.recover();
 	}
 	async recover() {
 		if (this.deleted || this.disposed || this.generation === null) return;
-		await Promise.all([...this.captures.keys()].map(pageId => this.retry(pageId)));
+		// Include preparations that have no row yet, even if they settle while the
+		// device read is pending. A prior empty view is never durable discovery.
+		const shared = flightsFor(this.deps.device, this.chatId);
+		const pages = new Set([...this.captures.keys(), ...shared.keys()]);
+		try {
+			const saved = await this.deps.device.read(this.chatId, this.generation);
+			for (const capture of saved.captures) pages.add(capture.pageId);
+			for (const pageId of flightsFor(this.deps.device, this.chatId).keys()) pages.add(pageId);
+		} catch { this.update("page_initial", "recovery_unavailable"); return; }
+		await Promise.all([...pages].map(pageId => this.retry(pageId)));
 	}
 	async attach(preparation: AttachPreparation) {
 		const pageId = preparation.pageId;
@@ -128,6 +138,13 @@ export class HandwritingAttachment {
 		const release = this.beginFlight(pageId); this.update(pageId, "preparing");
 		try {
 			if (this.generation === null) throw new Error("Device unavailable");
+			// Own the page before reading or preparing: saved A always precedes B,
+			// including A committed since this view last opened or reconnected.
+			let unresolved: boolean;
+			try { unresolved = await this.reloadCapture(pageId); }
+			catch { this.update(pageId, "recovery_unavailable"); return; }
+			if (this.deleted || this.disposed) return;
+			if (unresolved) { await this.retryCapture(pageId); return; }
 			if (!await preparation.finish() || !preparation.valid() || this.deleted || this.disposed) { this.notices.delete(pageId); return; }
 			// Freeze all inputs in the caller's one synchronous completed-stroke task.
 			const frozen = preparation.freeze();
@@ -158,19 +175,28 @@ export class HandwritingAttachment {
 		if (running) {
 			this.flights.add(pageId); this.update(pageId, "uploading");
 			let unresolved = false;
-			try { await running; if (!this.deleted && !this.disposed) unresolved = await this.reloadCapture(pageId); }
+			try { await running; if (!this.deleted && !this.disposed) unresolved = await this.reloadCapture(pageId, true); }
+			catch { this.update(pageId, "recovery_unavailable"); }
 			finally { this.flights.delete(pageId); if (!this.disposed) this.deps.changed(); }
 			if (unresolved) await this.retry(pageId);
 			return;
 		}
-		const capture = this.captures.get(pageId);
-		if (!capture || this.generation === null) return;
-		const limit = new TextEncoder().encode(capture.sourceJson).length > LIMIT ? "source" : (capture.png?.size ?? 0) > LIMIT ? "image" : undefined;
-		if (limit) { this.update(pageId, "failed", limit); return; }
+		if (this.generation === null) return;
 		const release = this.beginFlight(pageId);
-		try { if (await this.saveCapture(capture, this.drafts.get(pageId))) await this.transfer(capture); }
+		try {
+			let unresolved: boolean;
+			try { unresolved = await this.reloadCapture(pageId, true); }
+			catch { this.update(pageId, "recovery_unavailable"); return; }
+			if (unresolved && !this.deleted && !this.disposed) await this.retryCapture(pageId);
+		}
 		catch { this.update(pageId, "local_failed"); }
 		finally { release(); }
+	}
+	private async retryCapture(pageId: string) {
+		const capture = this.captures.get(pageId)!;
+		const limit = new TextEncoder().encode(capture.sourceJson).length > LIMIT ? "source" : (capture.png?.size ?? 0) > LIMIT ? "image" : undefined;
+		if (limit) { this.update(pageId, "failed", limit); return; }
+		if (await this.saveCapture(capture, this.drafts.get(pageId))) await this.transfer(capture);
 	}
 	private async transfer(original: CaptureRecord) {
 		let capture = original;

@@ -369,3 +369,75 @@ incremental re-review of the final delivery hash**; implementer checks do not gr
 Spec approval. Earlier approval hashes and physical acceptance gates remain as
 recorded. No live provider/speech calls, public-preview changes, pushes or issue
 closure occurred during this correction.
+
+### Precommit discovery correction after independent review of `d357b54`
+
+The parent-owned `46-c1-review-spec.md` confirms the original C1 overlap and
+terminal-resurrection fix, R1/R2 and Standards pass at
+`d357b54fbaac2798aa046b38fe349cf1e045e2ec`, but withholds Spec approval for an
+adjacent P2. Reopening while A awaits fingerprints can read zero rows; A later
+commits and fails upload, but the replacement's empty map misses A on reconnect
+and attempts obstructed B on ordinary Attach. The preceding receipt's preparation
+claim was too broad: its remount tests began after POST entry. This section records
+the additional boundary and correction without changing any owner approval.
+
+**Exact independent feedback loop:** ran the unmodified
+`46-c1-review-native-boundary.mjs` against the clean reviewed code. Its defect
+assertions passed again (`46-precommit-exact-repro.log`): zero rows at reopen,
+undiscovered A on reconnect, `local_failed` for B, recovery only on another remount.
+The original report/script/log and controlled-device `46-c1-review-precommit.log`
+remain intact under `/home/bjorn/.cache/opencode/issue4/`.
+
+**Correction:** recovery discovers the union of current session/page preparations,
+fresh durable captures and locally retained captures. It observes shared ownership
+before and after the device read, so an empty snapshot cannot hide a preparation
+that settles during discovery. Ordinary Attach acquires page ownership and reads
+durable recovery **before** finalizing/freezing any new input. Retry also reloads
+under ownership; a saved A replaces stale view-local assumptions. A failed first
+local write retains its original frozen capture in that controller until actual
+conflict/terminal evidence retires it. Disposal still cancels unfinished pre-freeze
+preparation and preserves genuinely unresolved captures; no precommit durability
+guarantee or automatic tutor Send is added.
+
+Maintained regression: `scripts/check-handwriting-precommit.mjs`, derived from the
+independently written native repro. The initial regression failed on reviewed code
+with `discoveredOnReopen: false` and `recoveredWithoutRemount: false`
+(`46-precommit-native-red.log`). After correction, all **13 cases pass**
+(`46-precommit-native-green.log`). Its synchronization starts replacement `open()`
+without awaiting completion until the held preparation is released: correct
+recovery now joins that preparation. Native IndexedDB and native WebCrypto remain
+real; transport/PNG preparation are controlled test boundaries, as in the original
+repro. No application server or public preview is used by this narrow runner.
+
+| Boundary actually exercised | Evidence / assertion |
+|---|---|
+| Pre-freeze asynchronous preparation | Actual-controller test disposes while `finish()` waits; no invented capture/upload or stuck uploading notice; next Attach can proceed. |
+| WebCrypto fingerprints, before first capture save | Native browser holds the digest boundary; replacement reads zero rows, joins A, then discovers A after durable upload failure. Both reconnect and ordinary Attach recover exact A before B. |
+| First capture save entry | Gate before invoking native `saveCapture`; zero rows at reopen, same discovery/recovery assertions. This is not an artificial pause inside an IndexedDB transaction. |
+| PNG encoding and PNG save entry | Gate each separately with the initial capture already durable; exact source/PNG/identity/precondition replay, maximum one active request, eventual revision-2 B. |
+| Upload | Hold controlled transport after saved capture; retain/discover real failure and recover through both ordinary triggers. Existing real-HTTP success/failure/lost-ACK remount checks also rerun in the mobile suite. |
+| Terminal save entry | Hold before native `finishCapture` after a valid transport receipt; replacement waits for retirement, then B succeeds. Every native scenario also attempts a stale A write with a revision-99 draft and verifies terminal receipt/capture/draft preservation. |
+| Already-open empty replacement | A is committed by another controller after the replacement opened; reconnect and ordinary Attach each freshly discover/recover A without another remount. |
+| Failed first local persistence | Actual-controller test verifies rereading zero durable rows does not discard its locally retained frozen A or prepare B, and preserves the newer draft. |
+
+The native cases assert exact replay, review completion, newer draft/working-value
+preservation, no remaining capture after success and subsequent revision-2 Attach.
+These are controller/native-boundary tests, not physical iPad navigation claims.
+Full UI/HTTP regression coverage below supplies the existing real notebook/speech/
+image-review paths. Both browser suites were rerun because discovery now precedes
+every Attach/retry, including notebook focus/reveal and same-page replacement.
+
+| Final correction check | Completed result / cache-root evidence |
+|---|---|
+| Focused suites | **189 passed, 0 failed**, `46-precommit-focused.log` |
+| Native lifecycle matrix | **13 passed**, `46-precommit-native-green.log`; run with `LH_HANDWRITING_TEST_ROOT=/home/bjorn/.cache/opencode/issue4 node scripts/check-handwriting-precommit.mjs` |
+| Typecheck / lint | Passed, `46-precommit-typecheck.log`, `46-precommit-lint.log` |
+| Full mobile browser | Passed including existing postcommit C1 and R1/R2 regressions; `46-precommit-browser-mobile.log`, fixture `mobile-input-browser-46-precommit` |
+| Full handwriting browser | Passed, `46-precommit-browser-handwriting.log`, fixture `handwriting-browser-XNTxKG` |
+| Production build | Passed, `46-precommit-build.log`, disposable `build-46-precommit`; environment-only `turbopack.root`, four existing dynamic filesystem tracing warnings |
+| Integration / whitespace | Merge of committed `integration/handwriting-45` tip `1946bcb7071a4cecaf874de7e6425867cfbfa4f1` reports already up to date; `git diff --check` passed |
+
+All required checks completed before delivery. Parent's uncommitted review-status
+notes were not edited. **Independent incremental re-review of this changed delta
+and its final hash remains parent-owned and pending.** No live calls, public-preview
+changes, pushes or issue closure occurred; physical acceptance remains separate.

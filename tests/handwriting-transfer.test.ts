@@ -123,6 +123,40 @@ it("remount joins the running capture, preserves unresolved failure and permits 
 	}
 });
 
+it("remount during unfinished preparation releases ownership without inventing a capture or leaving an upload notice", async () => {
+	const local = device(), source = notebookSource(emptyHandwriting());
+	const draft: DurableDraft = { version: 1, chatId: "chat", targetKey: "composer", draftId: "draft", revision: 1, editor: { text: "A" } };
+	let release!: () => void, entered!: () => void, joined!: () => void;
+	const held = new Promise<boolean>(resolve => { release = () => resolve(true); }), preparing = new Promise<void>(resolve => { entered = resolve; }), joining = new Promise<void>(resolve => { joined = resolve; });
+	let uploads = 0;
+	const deps = { device: local, encode: async () => new Blob(["PNG"]), fetch: async () => { uploads++; throw Error("Offline"); }, refresh: async () => ({ pending: [], pageAttachments: {} }), reveal() {}, changed() {} };
+	const old = new HandwritingAttachment("chat", deps); await old.open();
+	const original = old.attach({ pageId: "page_initial", head: undefined, valid: () => true, finish: () => { entered(); return held; }, freeze: () => { throw Error("Disposed preparation cannot freeze"); } });
+	await preparing; old.dispose();
+	const next = new HandwritingAttachment("chat", { ...deps, changed() { joined(); } });
+	const opening = next.open(); await joining; release(); await Promise.all([original, opening]);
+	assert.equal(uploads, 0); assert.equal(next.notice("page_initial"), undefined); assert.equal(next.busy("page_initial"), false);
+	await next.attach({ pageId: "page_initial", head: undefined, valid: () => true, finish: async () => true, freeze: () => ({ source, draft, raster: { width: 1400, height: 1800, rgba: new ArrayBuffer(1400 * 1800 * 4) } }) });
+	assert.equal(uploads, 1); assert.equal((await local.read("chat", 0)).captures.length, 1);
+	next.dispose();
+});
+
+it("durable discovery preserves a local capture whose first write failed and retries it before newer preparation", async () => {
+	const local = device(), save = local.saveCapture, source = notebookSource(emptyHandwriting());
+	const draft: DurableDraft = { version: 1, chatId: "chat", targetKey: "composer", draftId: "draft", revision: 1, editor: { text: "A" } };
+	let rejected: CaptureRecord | undefined, uploads = 0;
+	local.saveCapture = async (...args) => { if (!rejected) { rejected = args[2]; throw Error("Device write failed"); } await save(...args); };
+	const model = new HandwritingAttachment("chat", { device: local, encode: async () => new Blob(["A pixels"]), fetch: async () => { uploads++; throw Error("Offline"); }, refresh: async () => ({ pending: [], pageAttachments: {} }), reveal() {}, changed() {} });
+	await model.open();
+	await model.attach({ pageId: "page_initial", head: undefined, valid: () => true, finish: async () => true, freeze: () => ({ source, draft, raster: { width: 1400, height: 1800, rgba: new ArrayBuffer(1400 * 1800 * 4) } }) });
+	assert.equal((await local.read("chat", 0)).captures.length, 0); assert.equal(uploads, 0);
+	await local.saveDraft("chat", 0, { ...draft, revision: 2, editor: { text: "Newer B" } });
+	await model.attach({ pageId: "page_initial", head: undefined, valid: () => true, finish: async () => { assert.fail("Saved preparation A must precede newer B"); }, freeze: () => { throw Error("Must not freeze B"); } });
+	const saved = await local.read("chat", 0);
+	assert.equal(uploads, 1); assert.equal(saved.captures[0]!.writingId, rejected!.writingId); assert.equal(saved.captures[0]!.sourceJson, rejected!.sourceJson);
+	assert.equal(saved.drafts[0]!.editor.text, "Newer B"); model.dispose();
+});
+
 it("a rejected retry cannot erase uncertainty about a delayed original; newer page head then fresh record can", async () => {
 	const local = device(), calls: string[] = [];
 	let replaced = false;
