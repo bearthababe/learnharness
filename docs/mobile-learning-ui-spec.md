@@ -104,6 +104,17 @@ option activation during exit. A close during opening starts at the current
 visual frame. Reduced motion closes immediately; the inherited viewport-change
 interruption rule releases both effects together. Desktop dismissal is retained.
 
+**Fixed bottom edge — owner approved 2026-11-05:** the owner subsequently
+rejected the translated/clipped motion's beginning and end: it appears from
+nowhere and travels below the opener. Replace that motion with a full-width card
+whose **bottom edge stays fixed just above its button**. The owner selected
+“Fixed bottom edge,” then approved **600ms total: 60ms to reveal the thin bottom
+line, 540ms to expand upward**; closing reverses the phases (540ms to collapse,
+60ms to fade the remaining line). Keep text at normal size. Blur still transitions
+0↔4px across the same 600ms. Grow the actual card frame; never translate it below
+the button. All-close selection semantics, sharp opener, stationary lesson,
+reduced motion and viewport/keyboard coordination continue to apply.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),

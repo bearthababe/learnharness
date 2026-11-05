@@ -489,15 +489,17 @@ try {
 	const cardTouch = await page.createCDPSession();
 	const assertCardExit = async (trigger, card) => {
 		await page.waitForSelector(`[data-testid="${card}"][data-closing="true"]`);
+		await page.waitForFunction(card => document.querySelector(`[data-testid="${card}"]`)?.getAnimations()[0]?.startTime != null, {}, card);
 		const exit = await page.evaluate(({ trigger, card }) => {
 			const menu = document.querySelector(`[data-testid="${card}"]`), backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
 			const animation = menu.getAnimations()[0], blur = backdrop.getAnimations()[0];
 			const starts = [animation.startTime, blur.startTime], timings = [animation.effect.getTiming(), blur.effect.getTiming()];
 			animation.pause(); blur.pause();
-			const samples = [0, 300, 600].map(time => {
+			const samples = [0, 270, 540, 600].map(time => {
 				animation.currentTime = time; blur.currentTime = time;
-				const inset = getComputedStyle(menu).clipPath.match(/inset\(([^)]+)\)/)[1].split(" ");
-				return { top: menu.getBoundingClientRect().top, clipBottom: parseFloat(inset[2] ?? inset[0]), blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]), shellHeight: document.querySelector('.lh-app-shell').getBoundingClientRect().height };
+				const r = menu.getBoundingClientRect(), css = getComputedStyle(menu);
+				return { top: r.top, bottom: r.bottom, height: r.height, width: r.width, opacity: Number(css.opacity), fontSize: css.fontSize,
+					blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]), shellHeight: document.querySelector('.lh-app-shell').getBoundingClientRect().height };
 			});
 			animation.currentTime = 300; blur.currentTime = 300;
 			return { starts, timings, samples, buttonTop: document.querySelector(`[data-testid="${trigger}"]`).getBoundingClientRect().top,
@@ -505,13 +507,16 @@ try {
 		}, { trigger, card });
 		assert.ok(exit.starts[0] !== null);
 		assert.equal(exit.starts[0], exit.starts[1], "Exit card and blur share a start time");
-		for (const timing of exit.timings) { assert.equal(timing.duration, 600); assert.equal(timing.easing, "cubic-bezier(0.4, 0, 0.2, 1)"); }
-		const [start, mid, end] = exit.samples;
-		assert.ok(start.top < mid.top && mid.top < end.top, "Closing card lowers toward its opener");
-		assert.ok(Math.abs(mid.clipBottom - (mid.top - start.top)) <= 1, "Closing edge clips gradually with travel instead of disappearing halfway");
-		assert.ok(Math.abs(end.top - exit.buttonTop) <= 1, "Exit ends at the opener");
+		for (const timing of exit.timings) assert.equal(timing.duration, 600);
+		assert.equal(exit.timings[1].easing, "cubic-bezier(0.4, 0, 0.2, 1)");
+		const [start, mid, line, end] = exit.samples;
+		assert.ok(start.height > mid.height && mid.height > line.height, "Card collapses downward to its fixed bottom edge");
+		assert.ok(line.height <= 2 && line.opacity === 1, "Closing reaches a visible bottom line at 540ms");
+		assert.equal(end.height, line.height); assert.equal(end.opacity, 0, "Only the line fades in the final 60ms");
+		assert.ok(exit.samples.every(s => Math.abs(s.bottom - start.bottom) <= 1 && s.bottom <= exit.buttonTop - 3), "Bottom edge stays above the button for the whole close");
+		assert.ok(exit.samples.every(s => s.width === start.width && s.fontSize === start.fontSize), "Card width and text size stay constant");
 		assert.equal(start.blur, 4); assert.equal(end.blur, 0);
-		assert.ok(Math.abs((mid.top - start.top) / (end.top - start.top) - (4 - mid.blur) / 4) < .001, "Exit blur and card progress together");
+		assert.ok(mid.blur > 0 && mid.blur < 4, "Blur fades across the shared 600ms");
 		assert.ok(exit.locked && exit.cardInert, "Lesson and departing options cannot receive input");
 		assert.ok(exit.samples.every(sample => sample.shellHeight === start.shellHeight), "Lesson remains stationary through exit");
 		await page.keyboard.press("Escape");
@@ -535,13 +540,23 @@ try {
 			window.__lhRestoreAnimate = () => { Element.prototype.animate = animate; };
 			Element.prototype.animate = function (...args) {
 				const animation = animate.apply(this, args);
-				if (this.matches("[data-lh-menu]")) window.__lhCardEntrance = animation;
+				if (this.matches("[data-lh-menu]")) {
+					// Reproduce a stale timeline tick after expensive layout. Starting
+					// from that old tick would skip the entire 600ms entrance.
+					if (!window.__lhDelayedFrameChecked) {
+						const until = performance.now() + 650;
+						while (performance.now() < until) { /* controlled main-thread stall */ }
+						window.__lhDelayedFrameChecked = true;
+					}
+					window.__lhCreatedAt = performance.now();
+					window.__lhCardEntrance = animation;
+				}
 				if (this.matches('[data-testid="phone-menu-backdrop"]')) window.__lhBlurEntrance = animation;
 				return animation;
 			};
 		});
 		await page.locator(`[data-testid="${trigger}"]`).click();
-		await page.waitForFunction(() => !!window.__lhCardEntrance && !!window.__lhBlurEntrance);
+		await page.waitForFunction(() => window.__lhCardEntrance?.startTime != null && window.__lhBlurEntrance?.startTime != null);
 		const entrance = await page.evaluate(({ trigger, card }) => {
 			const animation = window.__lhCardEntrance, blur = window.__lhBlurEntrance;
 			const menu = document.querySelector(`[data-testid="${card}"]`);
@@ -549,26 +564,31 @@ try {
 			const button = document.querySelector(`[data-testid="${trigger}"]`);
 			const startTimes = [animation.startTime, blur.startTime];
 			animation.pause(); blur.pause();
-			const samples = [0, 300, 600].map(time => {
+			const samples = [0, 60, 330, 600].map(time => {
 				animation.currentTime = time; blur.currentTime = time;
-				return { top: menu.getBoundingClientRect().top, blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]) };
+				const r = menu.getBoundingClientRect(), css = getComputedStyle(menu);
+				return { top: r.top, bottom: r.bottom, height: r.height, width: r.width, opacity: Number(css.opacity), fontSize: css.fontSize,
+					blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]) };
 			});
 			const timings = [animation.effect.getTiming(), blur.effect.getTiming()];
 			animation.finish(); blur.finish(); window.__lhRestoreAnimate(); delete window.__lhCardEntrance; delete window.__lhBlurEntrance;
-			return { samples, timings, startTimes, buttonTop: button.getBoundingClientRect().top };
+			return { samples, timings, startTimes, createdAt: window.__lhCreatedAt, buttonTop: button.getBoundingClientRect().top };
 		}, { trigger, card });
 		assert.ok(entrance.startTimes[0] !== null);
+		assert.ok(entrance.startTimes[0] >= entrance.createdAt - 20, "Fresh shared start does not backdate through a blocked frame");
 		assert.equal(entrance.startTimes[0], entrance.startTimes[1], "Card and blur share the same animation start");
 		for (const timing of entrance.timings) {
 			assert.equal(timing.duration, 600);
-			assert.equal(timing.easing, "cubic-bezier(0.4, 0, 0.2, 1)");
 		}
-		assert.ok(Math.abs(entrance.samples[0].top - entrance.buttonTop) <= 1, "Card starts at its own opener");
-		assert.ok(entrance.samples[0].top > entrance.samples[1].top && entrance.samples[1].top > entrance.samples[2].top, "Card visibly rises into place");
+		assert.equal(entrance.timings[1].easing, "cubic-bezier(0.4, 0, 0.2, 1)");
+		const [start, line, mid, end] = entrance.samples;
+		assert.ok(start.height <= 2 && start.opacity === 0 && line.height === start.height && line.opacity === 1, "First 60ms reveals only the bottom line");
+		assert.ok(line.height < mid.height && mid.height < end.height, "Card expands upward over the remaining 540ms");
+		assert.ok(entrance.samples.every(s => Math.abs(s.bottom - end.bottom) <= 1 && s.bottom <= entrance.buttonTop - 3), "Bottom edge never moves or crosses the opener");
+		assert.ok(entrance.samples.every(s => s.width === end.width && s.fontSize === end.fontSize), "Growing card keeps full width and normal-sized text");
 		assert.equal(entrance.samples[0].blur, 0, "Background starts clear");
-		assert.equal(entrance.samples[2].blur, 4, "Background settles at lighter blur");
-		const cardProgress = (entrance.samples[0].top - entrance.samples[1].top) / (entrance.samples[0].top - entrance.samples[2].top);
-		assert.ok(Math.abs(cardProgress - entrance.samples[1].blur / 4) < .001, "Blur and card advance together at the intermediate frame");
+		assert.equal(end.blur, 4, "Background settles at lighter blur");
+		assert.ok(mid.blur > 0 && mid.blur < 4, "Blur grows throughout the shared interval");
 		await assertCardBackdrop();
 		const foreground = await page.evaluate(trigger => {
 			const original = document.querySelector(`[data-testid="${trigger}"]`), button = document.querySelector('[data-testid="phone-menu-trigger"]');
@@ -600,31 +620,35 @@ try {
 		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Outside tap cannot activate another card underneath");
 	}
 	await cardTouch.detach();
-	// Close during an unfinished rise: the first closing frame must be continuous.
-	await page.locator('[data-testid="stats-model"]').click();
-	await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]')?.getAnimations().length > 0);
-	const partial = await page.$eval('[data-testid="model-menu"]', menu => {
-		const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-		for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = 150; }
-		return { top: menu.getBoundingClientRect().top, blur: getComputedStyle(backdrop).backdropFilter };
-	});
-	await page.keyboard.press("Escape");
-	await page.waitForSelector('[data-testid="model-menu"][data-closing="true"]');
-	const exitStart = await page.$eval('[data-testid="model-menu"]', menu => {
-		const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-		for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = 0; }
-		return { top: menu.getBoundingClientRect().top, blur: getComputedStyle(backdrop).backdropFilter };
-	});
-	assert.ok(Math.abs(partial.top - exitStart.top) <= 1, "Quick close starts from the current rise position");
-	assert.equal(exitStart.blur, partial.blur, "Quick close starts from the current blur");
-	await page.evaluate(() => {
-		Object.defineProperty(visualViewport, "height", { configurable: true, get: () => innerHeight - 100 });
-		visualViewport.dispatchEvent(new Event("resize"));
-	});
-	await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
-	assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Viewport interruption releases both exit effects");
-	assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Interrupted exit releases the lesson lock");
-	await page.evaluate(() => { delete visualViewport.height; visualViewport.dispatchEvent(new Event("resize")); });
+	// Closing during either the line reveal or expansion stays continuous.
+	for (const time of [30, 150]) {
+		await page.locator('[data-testid="stats-model"]').click();
+		await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]')?.getAnimations()[0]?.startTime != null);
+		const partial = await page.$eval('[data-testid="model-menu"]', (menu, time) => {
+			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
+			for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = time; }
+			return { top: menu.getBoundingClientRect().top, opacity: getComputedStyle(menu).opacity, blur: getComputedStyle(backdrop).backdropFilter };
+		}, time);
+		await page.keyboard.press("Escape");
+		await page.waitForSelector('[data-testid="model-menu"][data-closing="true"]');
+		await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]')?.getAnimations()[0]?.startTime != null);
+		const exitStart = await page.$eval('[data-testid="model-menu"]', menu => {
+			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
+			for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = 0; }
+			return { top: menu.getBoundingClientRect().top, opacity: getComputedStyle(menu).opacity, blur: getComputedStyle(backdrop).backdropFilter };
+		});
+		assert.ok(Math.abs(partial.top - exitStart.top) <= 1, "Quick close starts from the current expansion height");
+		assert.equal(exitStart.opacity, partial.opacity, "Quick close retains line opacity");
+		assert.equal(exitStart.blur, partial.blur, "Quick close starts from the current blur");
+		await page.evaluate(() => {
+			Object.defineProperty(visualViewport, "height", { configurable: true, get: () => innerHeight - 100 });
+			visualViewport.dispatchEvent(new Event("resize"));
+		});
+		await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
+		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Viewport interruption releases both exit effects");
+		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Interrupted exit releases the lesson lock");
+		await page.evaluate(() => { delete visualViewport.height; visualViewport.dispatchEvent(new Event("resize")); });
+	}
 	await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
 	await page.locator('[data-testid="stats-model"]').click();
 	assert.equal(await page.$eval('[data-testid="model-menu"]', e => e.getAnimations().length), 0, "Reduced motion skips card entrance");
@@ -717,6 +741,7 @@ try {
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Opening Model does not request a keyboard");
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0, "Model uses the compact floating menu");
+	await fitPanel('[data-testid="model-menu"]');
 	await page.click('[data-testid="model-search"]');
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), true, "Explicit search tap receives focus");
 	await page.evaluate(async () => {
@@ -875,6 +900,8 @@ try {
 	assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false);
 	// A browser can expose new viewport geometry before notifying listeners.
 	await page.click('[data-testid="stats-model"]');
+	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
+	await fitPanel('[data-testid="model-menu"]');
 	await page.click('[data-testid="model-search"]');
 	await page.evaluate(() => {
 		Object.defineProperty(visualViewport, "height", { configurable: true, get: () => 350 });
@@ -953,7 +980,7 @@ try {
 	await page.click('[data-testid="stats-model"]');
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
 	await page.keyboard.press("Escape");
-	console.log("PASS: 4px blur and synchronized 600ms opening/closing, selection exits, quick-close continuity, repeated-close guards, viewport interruption/reduced motion, visible openers, safe completed taps, stationary lesson, keyboard/query/results, Plan pinch/pan and drafts");
+	console.log("PASS: fixed-bottom-edge 600ms opening/closing with 60ms line reveal/fade, normal-sized text, shared 4px blur, selection exits, quick-close continuity, repeated-close guards, viewport interruption/reduced motion, safe taps, stationary lesson, keyboard/query/results, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	assert.equal((await upload("mobile_panels")).status, 201);
