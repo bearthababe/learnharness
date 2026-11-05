@@ -115,6 +115,11 @@ line, 540ms to expand upward**; closing reverses the phases (540ms to collapse,
 the button. All-close selection semantics, sharp opener, stationary lesson,
 reduced motion and viewport/keyboard coordination continue to apply.
 
+**Faster fixed-edge timing — owner approved 2026-11-05:** after “Much better now,”
+the owner selected **400ms total**, preserving the same proportions: **40ms line
+reveal + 360ms expansion**, reversed on close. Opening, closing and matching blur
+all use 400ms; this supersedes the 600ms fixed-edge timing above.
+
 During #42 acceptance, the owner rejected the cluttered floating Usage panel and
 the model picker hidden behind the keyboard, and requested touch interaction for
 Plan. After comparing the prototype at `prototype/mobile-panel-options` (`8c2b7a9`),

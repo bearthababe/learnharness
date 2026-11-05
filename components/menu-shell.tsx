@@ -44,7 +44,7 @@ const EDGE = 8; // viewport floor the menu never enters
 const CAP_VH = 0.6; // 60vh — the graph pattern's cap
 const MIN_USABLE = 96; // floor: a shorter cap is an unusable sliver; the
 // cap then overflows the edge instead of crushing the menu
-const PHONE_DURATION = 600;
+const PHONE_DURATION = 400;
 const PHONE_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
 
 /** Animate the real frame's height about its existing bottom anchor. Give its
