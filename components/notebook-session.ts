@@ -28,7 +28,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 	const listeners = new Set<() => void>();
 	const cancelHandoffs = new Set<() => void>();
 	let lifetime = 0;
-	let state: NotebookSessionSnapshot = { view: null, draftText: "", saving: false, editing: false, sendBlocked: false, inputLocked: false, error: null };
+	let state: NotebookSessionSnapshot = { view: null, draftText: "", saving: false, editing: false, sendBlocked: true, inputLocked: false, error: null };
 	let tail: Promise<unknown> = Promise.resolve();
 	let localRevision = 0;
 	let savedLocalRevision = 0;
@@ -72,7 +72,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		state.inputLocked = selectingCandidate || speech.getSnapshot().switching || !!tutor.getSnapshot().locked;
 		// Explicit Tutor Send may finish its own recording before preparing a
 		// submission. Notebook capture and edits must already be settled.
-		state.sendBlocked = !!state.view?.pending || state.editing || state.inputLocked || (speech.isActive() && speech.getSnapshot().destination === "notebook");
+		state.sendBlocked = !state.view || !!state.view.pending || state.editing || state.inputLocked || (speech.isActive() && speech.getSnapshot().destination === "notebook");
 		for (const listener of listeners) listener();
 	};
 	function adopt(view: NotebookView) {

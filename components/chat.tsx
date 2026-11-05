@@ -590,7 +590,7 @@ export function Chat({
 		setText(v);
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
 	}, [notebook.session]);
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (!notebook.view?.contextId) return;
 		const part = ordinaryDraft?.parts.at(-1);
 		const value = part?.kind === "text" ? part.text : "";
@@ -1233,7 +1233,7 @@ export function Chat({
 
 	const finishingSend = useRef(false);
 	const onSend = () => {
-		if (finishingSend.current || pending || compacting || notebook.session.getSnapshot().sendBlocked) return;
+		if (finishingSend.current || pending || compacting || !notebook.view || notebook.session.getSnapshot().sendBlocked) return;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): a learner who keeps
 		 * talking right through Enter must not lose the tail — stop the run,
 		 * let the last finals land in the composer, then send the REF value
@@ -2452,7 +2452,10 @@ function DockOverlay({
 			<div ref={blockRef} className="relative bg-background pb-5">
 				<div className={DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
-					<div ref={bodyRef}>
+					{!notebook.getSnapshot().view && <div data-tutor-draft-loading="" role={notebook.getSnapshot().error ? "alert" : "status"} className="px-3 py-2 text-xs text-muted-foreground">
+						{notebook.getSnapshot().error ? <>Saved drafts could not load. <button type="button" className="min-h-11 underline" onClick={() => { void notebook.refresh(); }}>Retry</button></> : "Loading saved drafts…"}
+					</div>}
+					<div ref={bodyRef} data-tutor-draft-inputs="" inert={!notebook.getSnapshot().view}>
 					{setupCta}
 					{sharedWritingSlot}
 					{/* The queued-steer indicator (owner spec 2026-10-03): quiet
@@ -2549,7 +2552,7 @@ function DockOverlay({
 						turns={turns}
 						contextTokens={contextTokens}
 						pricing={pricing}
-						dictationSlot={dictationSlot}
+						dictationSlot={notebook.getSnapshot().view ? dictationSlot : undefined}
 						compactInput
 						phonePlan={plan ? <button type="button" className="lh-phone-plan" onClick={onOpenPlan}>Plan</button> : undefined}
 						chatId={chatId}

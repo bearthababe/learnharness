@@ -513,7 +513,7 @@ function QuestionDockForm({
 	useEffect(() => {
 		if (!active || rowCount === 0) return;
 		const onKeyDown = (e: KeyboardEvent) => {
-			if (e.defaultPrevented || notebookOwnsKeyboard(e)) return;
+			if (e.defaultPrevented || notebookOwnsKeyboard(e) || (notebook && !notebook.getSnapshot().view)) return;
 			const t = e.target as HTMLElement | null;
 			// A TYPING field is where keys mean text (owner round 4): the
 			// thinking/answer fields, search boxes, renames — never a range

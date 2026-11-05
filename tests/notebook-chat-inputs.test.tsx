@@ -90,9 +90,14 @@ for (const activity of ["practice", "drill", "ordinary", "answer", "steer"] as c
 		assert.equal(response.status, 200); await started;
 	}
 	const requests: Array<{ input: unknown; status: number; body: string }> = [];
+	let releaseDrafts!: () => void;
+	const draftsReady = new Promise<void>(resolve => { releaseDrafts = resolve; });
 	globalThis.fetch = async (url, init) => {
 		const path = String(url);
-		if (path.endsWith("/notebook")) return service.handle(new Request(`http://test${path}`, init), chat.id);
+		if (path.endsWith("/notebook")) {
+			if (!init?.method) await draftsReady;
+			return service.handle(new Request(`http://test${path}`, init), chat.id);
+		}
 		if (path.endsWith("/steer")) {
 			const response = await steer(new Request(`http://test${path}`, init), { params: Promise.resolve({ id: chat.id }) });
 			requests.push({ input: JSON.parse(String(init?.body)).input, status: response.status, body: await response.clone().text() });
@@ -117,6 +122,11 @@ for (const activity of ["practice", "drill", "ordinary", "answer", "steer"] as c
 				</ServerEventsProvider>
 			</AppRouterContext.Provider>,
 		));
+		assert.ok(host.querySelector('[data-tutor-draft-inputs][inert]'), "Tutor inputs wait for the saved draft before allowing edits");
+		assert.match(host.querySelector('[data-tutor-draft-loading]')!.textContent!, /Loading saved drafts/);
+		await act(async () => { releaseDrafts(); await draftsReady; });
+		assert.equal(host.querySelector('[data-tutor-draft-inputs][inert]'), null);
+		assert.equal(host.querySelector('[data-tutor-draft-loading]'), null);
 		const send = host.querySelector<HTMLButtonElement>(practice ? '[data-testid="practice-send"]' : activity === "answer" ? '[data-testid="question-send"]' : '[data-testid="composer"] [aria-label="Send"]');
 		assert.ok(send, host.textContent!); assert.equal(send.disabled, false);
 		await act(async () => {
@@ -138,6 +148,7 @@ for (const activity of ["practice", "drill", "ordinary", "answer", "steer"] as c
 		assert.match(JSON.stringify(toLlmMessages(saved.messages)), /p=F\/A/);
 		assert.equal(saved.practiceMode, mode);
 	} finally {
+		releaseDrafts();
 		release(); const run = runningTurn(chat.id); if (run) await new Response(run.subscribe()).text();
 		await act(async () => root.unmount()); host.remove(); globalThis.fetch = originalFetch;
 	}

@@ -233,6 +233,7 @@ try {
 	await assertMicSpace('[data-testid="composer"] textarea');
 	const fill = async (selector, text) => {
 		await page.waitForSelector(selector, { visible: true });
+		await page.waitForFunction(selector => !document.querySelector(selector)?.closest('[inert]'), {}, selector);
 		await page.focus(selector);
 		await page.keyboard.down("Control"); await page.keyboard.press("KeyA"); await page.keyboard.up("Control");
 		await page.keyboard.sendCharacter(text);
@@ -385,6 +386,8 @@ try {
 	await page.evaluate(() => { window.speech.final("Final words."); window.speech.close(); });
 	await page.waitForFunction(() => document.body.textContent.includes("Speech only. Final words."));
 	await page.waitForSelector('[data-testid="composer"] [aria-label="Send"]');
+	// Restored speech and the optimistic user row precede the durable send.
+	await page.waitForFunction(async () => (await (await fetch('/api/chats/mobile_conversation')).json()).messages.some(m => m.role === "user" && JSON.stringify(m.content).includes("Speech only. Final words.")));
 	const spoken = await (await fetch(`${origin}/api/chats/mobile_conversation`)).json();
 	assert.equal(spoken.messages.filter(m => m.role === "user" && JSON.stringify(m.content).includes("Speech only. Final words.")).length, 1);
 	console.log("PASS: empty-draft active-dictation finish-before-send persists once");

@@ -212,6 +212,7 @@ export function createNotebookSpeech(chatId: string, session: Pick<NotebookSessi
 		active.requestFinalization(intent.speech.cutoff);
 	}
 	function requireRecordingReady() {
+		if (!session.getSnapshot().view) throw new Error("Wait for saved drafts to load before recording.");
 		if (handoff) throw new Error("Finish switching inputs before recording.");
 		if (session.tutor.getSnapshot().locked) throw new Error("Finish sending before recording.");
 	}

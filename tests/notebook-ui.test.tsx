@@ -301,6 +301,30 @@ test("mounted written answer accepts working-only content, keeps commitment hidd
 	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); }
 });
 
+test("question keyboard actions wait for saved drafts before changing or submitting an answer", async () => {
+	const chat = chatStore.createChat("Loading question");
+	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor calls"); } });
+	const session = createNotebookSession(chat.id, async (_url, init) => service.handle(new Request("http://test/notebook", init), chat.id));
+	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
+	let sends = 0;
+	const keys = async () => {
+		for (const row of host.querySelectorAll<HTMLElement>('[data-kbdrow]')) row.scrollIntoView = () => {};
+		for (const key of ["ArrowDown", " ", "Enter"]) {
+			const event = new window.Event("keydown", { bubbles: true, cancelable: true }); Object.assign(event, { key });
+			await act(async () => { document.dispatchEvent(event); });
+		}
+	};
+	try {
+		await act(async () => root.render(<QuestionDock notebook={session} toolName="probe" toolCallId="q1" input={{ question: "Which unit?", options: [{ label: "Pascal", value: "Pa" }, { label: "Newton", value: "N" }], correctAnswer: "Pa", explanation: "Force per area." }} expanded onExpand={() => {}} onSubmit={async () => { sends++; return false; }} />));
+		await keys();
+		assert.equal(sends, 0);
+		assert.equal(host.querySelector('[role="radio"][aria-checked="true"]'), null);
+		await act(async () => { await session.refresh(); });
+		await keys();
+		assert.equal(sends, 1, "The normal keyboard action resumes after loading");
+	} finally { await act(async () => root.unmount()); session.dispose(); host.remove(); }
+});
+
 test("question selections and confidence reopen with their own notebook thinking draft", async () => {
 	const chat = chatStore.createChat("Question draft");
 	const service = createNotebookService({ chatStore, engine: async () => { throw new Error("No editor call expected"); } });
