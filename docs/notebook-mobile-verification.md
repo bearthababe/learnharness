@@ -17,6 +17,142 @@ linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#i
 Earlier tracker receipt: [#28 continuation fix](https://github.com/bearthababe/learnharness/issues/28#issuecomment-6643703927),
 linked from [parent #18](https://github.com/bearthababe/learnharness/issues/18#issuecomment-6643706613).
 
+## Owner follow-up: interpretation and latency — 2026-11-05
+
+Owner reports the interaction feels better, but conversational mathematical edits
+still hesitate and sometimes take too long; wants to consider stronger models.
+Read-only inspection of the latest “Handwriting trial” operations found:
+
+- `491358d7-597f-419b-9bdb-202994098fdc`: “Take the equation. In line one and
+  insert in line two. Yeah.” → question about copying/replacing/appending.
+- `2d48edcc-7d33-4e61-97ad-c5a8ffaacd89`: the answer explicitly says line one is
+  for p and to insert p into line two. The model again asks copying-versus-substitution.
+  The recorded speech fragments match the instruction. Input includes all three
+  equations and 21 prior exchanges, including its preceding clarification question.
+  Raw model output is already the repeated question; local application preserves
+  state correctly. No missing-context or downstream-rewrite evidence in this case.
+- Offline replay through `runNotebookEditor`, using the captured response, reproduces
+  question/unchanged state and fails the edit-action check:
+  `node --import tsx /tmp/opencode/notebook-integration/replay-latest-substitution.mjs`.
+  This proves handling of the saved output, not repeatability of fresh model generation.
+  No specific substitution expression is assumed: L1 contains several expressions,
+  so clarification of which expression could still be warranted.
+- The current prompt heavily emphasizes preservation/clarification and has no
+  specific substitution guidance. Prompt-induced caution and model interpretation
+  limits remain hypotheses; existing logs cannot separate them causally.
+- Separate contract limitation: “Revert the revert” (`3ce2581f-359a-4603-9492-33bc3279f803`)
+  returned another `undo`. The editor exposes Undo, not Redo, and expressly forbids
+  reconstructing historical source for Undo. Its observed restored expression happened
+  to match the earlier expression because of the preceding remove/reinsert sequence;
+  this is not evidence of general Redo support.
+
+All eight latest operations used DeepSeek V4.1 Flash/low, one attempt each:
+
+| Request | Model-call elapsed | Accepted → attempt recorded | Reasoning tokens |
+| --- | ---: | ---: | ---: |
+| Remove multiplication sign + last expression | 16.315 s | 17.522 s | 1,492 |
+| Revert the revert | 10.174 s | 10.793 s | 1,440 |
+| Substitution clarification answer | 14.033 s | 15.037 s | 1,885 |
+
+The other five model calls took 1.434–2.702 s. Long waits occur chiefly inside
+the model call, with larger reported reasoning counts and no retries. These are
+not measured click-to-visible times; logs do not separate provider waiting from
+generation. A more capable model might reduce total task time by avoiding repeated
+clarifications even with a slower individual response; this is not yet measured.
+
+The prior 20-case suite favored DeepSeek/low but did not establish reliability
+on this real substitution conversation. Recommend a bounded same-prompt comparison
+on recorded tasks before changing the prompt, scoring intended edits, unnecessary
+clarifications, preservation and response time. Live app catalog lists GPT-6 Astra
+and Claude Opus 5.5 through Zen with medium reasoning available. No new live model
+calls, app changes or model selection changes were made during this diagnosis.
+
+### Approved stronger-model experiment
+
+Owner subsequently approved **15 calls, no retries**: the exact saved substitution
+follow-up, targeted removal and equality-continuation inputs on DeepSeek V4.1
+Flash/low and Claude Opus5.5/medium through **Zen**, and GPT-6 Astra/medium,
+GPT-6.1 Sol/medium and GPT-6.1 Terra/medium through **ChatGPT**. The owner corrected
+the proposed Astra/Sol routing to ChatGPT and retained Zen for Opus. Astra/Opus
+serve as higher-cost reference points. No app-model or prompt change approved.
+
+Frozen complete inputs, conversation, current prompt and hashes:
+`/tmp/opencode/notebook-integration/stronger-model-check-20261105/manifest.json`.
+Runner: `compare-28-stronger.mjs` in the parent directory. Native LearnHarness
+pause/reopen explicitly approved for ChatGPT credential ownership. No subscription
+credentials copied. Isolated data directory; actual request bodies checked for
+identical prompts, intended model and reasoning. Per-case dispatch and network
+caps block retries. Offline fixture/catalog/wire preflight passed. Two harness
+preparation runs failed before dispatch (`Request.url` treated as a method);
+zero provider calls, archived receipts, corrected to the property before live runs.
+
+### Stronger-model results — completed
+
+**15/15 provider requests completed, one per cell, zero retries; budget exhausted.**
+All transmitted prompts matched the frozen per-case hashes. Requested reasoning
+was verified in outgoing bodies and all returned model IDs matched. Full inputs,
+raw outputs, request controls, usage and timing: `zen.json`, `chatgpt.json`, and
+projected `summary.json` in `stronger-model-check-20261105/` above.
+
+| Model / reasoning / connection | Substitution follow-up | Remove last expression | Continue equality |
+| --- | --- | --- | --- |
+| DeepSeek V4.1 Flash / low / Zen | **Malformed edit**, 30.237 s | Correct, 1.944 s | Correct, 3.191 s |
+| Claude Opus5.5 / medium / Zen | Clarification, 6.973 s | Correct, 1.740 s | Correct, 3.326 s |
+| GPT-6 Astra / medium / ChatGPT | Targeted clarification, 12.271 s | Correct, 8.859 s | Correct, 6.735 s |
+| GPT-6.1 Sol / medium / ChatGPT | Targeted clarification, 10.909 s | Correct, 3.907 s | Correct, 4.594 s |
+| GPT-6.1 Terra / medium / ChatGPT | Targeted clarification, 4.499 s | Correct, 4.159 s | Correct, 4.595 s |
+
+Times are editor wall times, including response validation and local evidence
+checkpointing, not speech/click-to-visible. Account discovery excluded. One sample
+per task/model, differing providers and uncontrolled prompt cache; no broad ranking
+or tail-latency claim. All 15 preserved unrelated lines and correct Undo behavior.
+
+**Actual substitution outputs:**
+
+- DeepSeek replaced L2 with
+  `F = \frac{F}{A} = \frac{600}{0.005} = \frac{600 \times 5}{1000} \times A`.
+  It spliced the equality chain into p's position without distributing the existing
+  multiplication across its expressions: only the last expression retains `× A`.
+  This introduces a new structural error; it is not merely preserving the learner's
+  existing deliberate numerical mistake. The same input previously produced a
+  redundant copying-versus-substitution question, illustrating variability.
+- Astra and Terra: “Which expression for p from line 1 should replace p in line 2:
+  F/A, 600/0.005, or (600 × 5)/1000?” Sol asked the same selection question without
+  “for p”. These recognize substitution and target correctly. L1 actually contains
+  three expressions, not numerically equivalent; selecting one remains unresolved.
+  They preserve the working rather than silently correcting it. This is a narrower,
+  defensible clarification, but **none completed substitution in one call**.
+- Opus: “Which expression for p should I substitute into line 2: 600/0.005 or
+  (600 × 5)/1000? Should I extend line 2 as F = p × A = … × A, or replace p in the
+  existing expression?” It recognizes substitution but omits the symbolic F/A
+  option and additionally asks replace-versus-extend.
+- All five produced exactly `p = \frac{F}{A} = \frac{600}{0.005}` for removal,
+  and exactly `p = \frac{F}{A} = \frac{600}{0.005} = \frac{600 \times 5}{1000}`
+  for continuation. The latter preserves the dictated mathematical mistake.
+
+**Latency evidence:** DeepSeek's substitution response had headers at 574 ms,
+first provider event at 851 ms, first answer text at 30.046 s, and 4,211 reported
+reasoning tokens. Thus this run was not a 30-second wait to start receiving a
+response; nearly all time preceded the answer text after streaming began. This
+does not establish how much of that interval was computation versus server pacing.
+
+**Recommendation:** Terra/medium is the most promising next in-app candidate from
+this small sample: it gave the same focused substitution question as Astra/Sol,
+with all three tasks around 4–5 seconds. More expensive reference models did not
+resolve the remaining source-expression choice automatically. A default for choosing
+from a chained equality remains an owner behavior decision, not an approved prompt
+patch. Existing app choices/default remain unchanged (Terra is currently **off**).
+
+Zen usage at recorded catalog rates estimates **$0.0059 DeepSeek + $0.0878 Opus**
+for six calls, including cache usage; this is a token-price estimate, not an invoice.
+Astra/Sol/Terra used ChatGPT subscription routing, dollar cost unpriced.
+
+Native app restored with its original `LH_DEV_URL=http://127.0.0.1:3000` Wayland
+launch. Log confirms window opened; observed **PID3911906**, task
+`sh_1ab2a8563001kJxXRYgfaY5l8H`, log `stronger-model-check-20261105/native-restored.log`.
+Slot1/2/3 server PIDs3757905/3484369/3458594 and Tailscale mappings retained.
+No learning-record, app configuration, application code or prompt changes were made.
+
 ## Current-line, attachment indicator and clarification-close follow-up — verified and deployed
 
 Owner approved the exact additional current-line paragraph in
