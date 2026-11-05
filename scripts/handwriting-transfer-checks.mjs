@@ -244,13 +244,19 @@ export async function checkHandwritingTransfers({ page, origin, transferFaults }
 	assert.equal(changed.status, 200);
 	await page.waitForFunction(() => document.querySelector('[data-testid="question-dock"]')?.textContent.includes("second speech owner"));
 	await page.evaluate(() => { window.speech.final("Late words for first only."); window.speech.close(); });
-	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Late words for first only."));
+	// Notebook capture owns speech in the combined app. Its retired activity
+	// remains reviewable in Saved drafts rather than the legacy IDB notice.
+	await page.waitForFunction(() => [...document.querySelectorAll('[aria-label="Saved drafts"] [data-saved-draft]')].some(draft => draft.textContent.includes("Question first · text") && draft.textContent.includes("Original first draft. Late words for first only.")));
 	assert.equal(await page.$eval('[data-testid="question-dock"] [data-file-path-input]', field => field.textContent), "");
 	assert.equal((await device("captures", speechId)).length, 0, "Changed target aborts Attach without freezing the wrong question");
-	const retained = (await device("drafts", speechId)).find(draft => draft.targetKey === "question:first");
-	assert.equal(retained.editor.text, "Original first draft. Late words for first only.");
+	const notebook = await (await fetch(`${origin}/api/chats/${speechId}/notebook`)).json();
+	const retained = notebook.tutorDrafts.find(draft => draft.owner.kind === "question" && draft.owner.toolCallId === "first" && draft.owner.channel === "text");
+	assert.equal(retained.parts.filter(part => part.kind === "text").map(part => part.text).join(""), "Original first draft. Late words for first only.");
+	await page.click('[data-testid="open-notebook-chat"]');
+	await page.waitForSelector(`[data-saved-draft="${retained.id}"]`, { visible: true });
 	await page.reload({ waitUntil: "networkidle2" });
-	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("Late words for first only."));
+	await page.waitForFunction(id => document.querySelector(`[data-saved-draft="${id}"]`)?.textContent.includes("Original first draft. Late words for first only."), {}, retained.id);
+	await page.waitForSelector(`[data-saved-draft="${retained.id}"]`, { visible: true });
 	assert.equal(await page.$eval('[data-testid="question-dock"] [data-file-path-input]', field => field.textContent), "");
 	console.log("PASS actual target unmount during Attach finalization retains old speech durably and never retargets");
 	transferFaults.handle = null;
