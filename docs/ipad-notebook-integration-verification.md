@@ -763,3 +763,24 @@ and is not a blocker for continuing #47/#48. No new keyboard bindings or Tab
 navigation are authorized in this delivery. Existing Escape-priority regressions
 and other non-deferred review findings still require correction and verification.
 Review: `/home/bjorn/.cache/opencode/issue4/47-review-standards.md`.
+
+#### #47 correction integration and pinned handoff
+
+Corrections and completed verification were committed as
+`6d9fa375c28e1adb72e92e798c19713ad6fb975a`. The latest committed integration tip,
+`674e3da638d87e4d6405fa34db785568fca70a1f`, was then merged as
+`ab5294b7a8228c02eaa803691c22dbd7d038be18`.
+
+The sole conflict was this appended receipt. Exact-content verification confirmed
+both complete histories were preserved byte-for-byte, with their shared base
+retained once. The merge changes only this receipt relative to the tested
+correction commit; production source, tests and runners are identical. No broad
+test rerun was needed for this documentation-only integration.
+
+Post-merge ancestry, diff checks and clean-tree verification passed. The merge's
+first parent is the correction commit; its second parent is the integration tip
+above. This final receipt addition is a separate documentation commit. Its exact
+hash is returned after fresh clean-tree, integration-ancestry and original-worktree
+isolation checks in the handoff for parent-owned Standards/Spec rereview.
+S1 remains owner-deferred to #51; independent rereview and physical #48 acceptance
+remain pending.
