@@ -664,7 +664,7 @@ try {
 		for (const timing of exit.timings) { assert.equal(timing.duration, 400); assert.equal(timing.easing, "linear"); }
 		const start = exit.samples[0], end = exit.samples.at(-1);
 		assertContour(exit.samples);
-		assert.ok(end.height <= 2, "Card collapses to its fixed bottom edge");
+		assert.ok(end.height <= 2, `Card collapses to its fixed bottom edge: ${JSON.stringify({ card, ...exit })}`);
 		for (const sample of exit.samples) {
 			const progress = sample.time / 400;
 			assert.ok(Math.abs(sample.height - (start.height + (end.height - start.height) * progress)) <= 1, "Closing height follows elapsed time linearly");

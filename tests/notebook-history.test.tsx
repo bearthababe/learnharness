@@ -1,12 +1,14 @@
 import React, { act } from "react";
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import fs from "node:fs";
 import { after, test } from "node:test";
 import { parseHTML } from "linkedom";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai";
 import { createNotebookSession } from "../components/notebook-session.ts";
 
-const dir = fs.mkdtempSync("/tmp/opencode/notebook-history-");
+const dir = fs.mkdtempSync(join(tmpdir(), "notebook-history-"));
 process.env.LH_DATA_DIR = dir;
 process.env.LH_AUTH_FILE = `${dir}/auth.json`;
 const { chatStore } = await import("../src/store/chats.ts");

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { after, test } from "node:test";
 import { createFauxCore, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 
-const dir = fs.mkdtempSync("/tmp/opencode/notebook-activities-");
+const dir = fs.mkdtempSync(join(tmpdir(), "notebook-activities-"));
 process.env.LH_DATA_DIR = dir;
 process.env.LH_AUTH_FILE = `${dir}/auth.json`;
 process.env.OPENROUTER_API_KEY = "test-key";
