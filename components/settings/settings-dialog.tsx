@@ -21,6 +21,7 @@
  * switching sections never refetches.
  */
 
+import { WritingSection } from "./writing-section";
 import {
 	createContext,
 	useCallback,
@@ -61,6 +62,7 @@ const SECTIONS = [
 	{ id: "agent", label: "Agent" },
 	{ id: "appearance", label: "Appearance" },
 	{ id: "graph", label: "Graph" },
+	{ id: "writing", label: "Writing", hint: "Stored on this device" },
 	{ id: "keyboard", label: "Keyboard", hint: "Stored on this device" },
 	{ id: "general", label: "General" },
 ] as const;
@@ -422,6 +424,15 @@ export function SettingsDialogBody({
 											void write("graph", next)
 										}
 									/>
+								</SettingsSection>
+							)}
+							{active === "writing" && (
+								<SettingsSection
+									title="Writing"
+									hint="Stored on this device"
+									testid="section-writing"
+								>
+									<WritingSection />
 								</SettingsSection>
 							)}
 							{active === "keyboard" && (

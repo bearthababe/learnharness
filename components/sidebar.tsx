@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
@@ -87,9 +87,26 @@ declare global {
 	}
 }
 
-const SidebarContext = createContext<{ open: boolean; phone: boolean; toggle: () => void; closePhone: () => void; holdClosed: () => () => void }>({
+/** Portrait tablets: touch-first, wider than a phone, taller than wide. */
+export const TABLET_PORTRAIT_MEDIA = "(min-width: 768px) and (max-width: 1100px) and (orientation: portrait) and (pointer: coarse)";
+
+function subscribeMedia(query: string) {
+	return (update: () => void) => {
+		const media = typeof window.matchMedia === "function" ? window.matchMedia(query) : null;
+		media?.addEventListener?.("change", update);
+		return () => media?.removeEventListener?.("change", update);
+	};
+}
+/** A live media-query match (false on the server and before hydration). */
+function useMediaMatch(query: string): boolean {
+	const subscribe = useMemo(() => subscribeMedia(query), [query]);
+	return useSyncExternalStore(subscribe, () => typeof window.matchMedia === "function" && window.matchMedia(query).matches, () => false);
+}
+
+const SidebarContext = createContext<{ open: boolean; phone: boolean; overlay: boolean; toggle: () => void; closePhone: () => void; holdClosed: () => () => void }>({
 	open: false,
 	phone: false,
+	overlay: false,
 	toggle: () => {},
 	closePhone: () => {},
 	holdClosed: () => () => {},
@@ -122,10 +139,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, []);
 	const [mounted, setMounted] = useState(false);
 	const phone = usePhoneViewport();
+	// Portrait tablets (whole-app redesign): every horizontal pixel belongs
+	// to the page, so the session list slides over it on demand instead of
+	// standing beside it. Landscape tablets and laptops keep the column.
+	const tabletPortrait = useMediaMatch(TABLET_PORTRAIT_MEDIA);
+	const overlay = phone || tabletPortrait;
 	const [phoneOpen, setPhoneOpen] = useState(false);
 	const closePhone = useCallback(() => setPhoneOpen(false), []);
 	const pathname = usePathname();
-	useEffect(() => { closePhone(); }, [pathname, phone, closePhone]);
+	useEffect(() => { closePhone(); }, [pathname, overlay, closePhone]);
 
 	useEffect(() => {
 		// Electron shell detection (merged chrome, 2026-09-17): keys the
@@ -168,7 +190,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, []);
 
 	const toggle = useCallback(() => {
-		if (phone) {
+		if (overlay) {
 			if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 			setPhoneOpen((value) => !value);
 			return;
@@ -193,7 +215,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 			localStorage.setItem(STORAGE_KEY, v ? "0" : "1");
 			return !v;
 		});
-	}, [held, narrow, open, phone]);
+	}, [held, narrow, open, overlay]);
 
 	// ⌘B: the global shortcut dispatches kbdEventForAction("toggle-sidebar")
 	// and the context answers on exactly that name — the shared spelling
@@ -209,7 +231,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, [toggle]);
 
 	return (
-		<SidebarContext.Provider value={{ open: phone ? phoneOpen : open && !narrow && held === 0, phone, toggle, closePhone, holdClosed }}>
+		<SidebarContext.Provider value={{ open: overlay ? phoneOpen : open && !narrow && held === 0, phone, overlay, toggle, closePhone, holdClosed }}>
 			{/* transitions gated on mount: no slide-in flash on page load */}
 			<div className={cn("lh-app-shell flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")}>{children}</div>
 		</SidebarContext.Provider>
@@ -229,7 +251,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
  *  The icon fades with the slot and is clipped by it as it collapses —
  *  no popping in either direction. */
 export function SidebarToggle() {
-	const { open, phone, toggle } = useSidebar();
+	const { open, phone, overlay, toggle } = useSidebar();
 	return (
 		<span
 			className={cn(
@@ -237,7 +259,7 @@ export function SidebarToggle() {
 				open ? "w-0 -mr-3" : "w-9 mr-0 lh-closed-toggle",
 			)}
 		>
-			<Hint label="Open sidebar" action="toggle-sidebar" disabled={phone}>
+			<Hint label="Open sidebar" action="toggle-sidebar" disabled={overlay}>
 			<Button
 				variant="ghost"
 				size="icon"
@@ -448,10 +470,10 @@ export type SessionKindFilter = "teach" | "all" | "practice";
 const KIND_FILTER_KEY = "lh:session-kind-filter";
 
 function SessionsSidebar() {
-	const { open, phone, toggle, closePhone } = useSidebar();
+	const { open, phone, overlay, toggle, closePhone } = useSidebar();
 	const sidebarRef = useRef<HTMLElement>(null);
 	useEffect(() => {
-		if (!phone || !open) return;
+		if (!overlay || !open) return;
 		const sidebar = sidebarRef.current!;
 		sidebar.querySelector<HTMLButtonElement>('button[aria-label="Close sidebar"]')?.focus({ preventScroll: true });
 		return () => {
@@ -462,7 +484,7 @@ function SessionsSidebar() {
 				}
 			});
 		};
-	}, [phone, open]);
+	}, [overlay, open]);
 	const [chats, setChats] = useState<ChatListItem[] | null>(null);
 	const [query, setQuery] = useState("");
 	const [kindFilter, setKindFilter] = useState<SessionKindFilter>("all");
@@ -728,11 +750,12 @@ function SessionsSidebar() {
 			className={cn("lh-sessions-panel sidebar-motion shrink-0 overflow-hidden duration-200", open ? "w-68 xl:w-72" : "w-0")}
 			aria-hidden={!open}
 			inert={!open}
-			role={phone && open ? "dialog" : undefined}
-			aria-modal={phone && open ? true : undefined}
+			role={overlay && open ? "dialog" : undefined}
+			aria-modal={overlay && open ? true : undefined}
 			aria-label="Sessions"
+			data-overlay={overlay && !phone ? "tablet" : undefined}
 			onKeyDown={(event) => {
-				if (!phone || !open || !sidebarRef.current?.contains(event.target as Node)) return;
+				if (!overlay || !open || !sidebarRef.current?.contains(event.target as Node)) return;
 				if (event.key === "Escape") {
 					event.preventDefault(); event.stopPropagation(); closePhone();
 				} else if (event.key === "Tab") {
@@ -763,7 +786,7 @@ function SessionsSidebar() {
 						label="Home"
 						action="jump-graph"
 						side="right"
-						disabled={phone}
+						disabled={overlay}
 					>
 						<Link
 							href="/"
@@ -777,7 +800,7 @@ function SessionsSidebar() {
 						</Link>
 					</Hint>
 					<h2 className="lh-sessions-title hidden">Sessions</h2>
-					<Hint label="Close sidebar" action="toggle-sidebar" disabled={phone}>
+					<Hint label="Close sidebar" action="toggle-sidebar" disabled={overlay}>
 						<Button
 							variant="ghost"
 							size="icon"
@@ -830,7 +853,7 @@ function SessionsSidebar() {
 
 				<div className="lh-sessions-search mx-3 mb-2 flex items-center gap-2">
 					<span className="lh-sessions-search-label sr-only">Sessions</span>
-					<Hint label="Search sessions" action="sessions-search" side="right" disabled={phone}>
+					<Hint label="Search sessions" action="sessions-search" side="right" disabled={overlay}>
 					<span className="relative flex-1">
 						<Input
 							ref={searchRef}
@@ -963,7 +986,7 @@ function SessionsSidebar() {
 					    New session — quiet, bottom-pinned, opens the centered
 					    dialog (also mod+, in the keyboard registry). */}
 					<div className="lh-sessions-footer border-t border-border/70 px-2 pb-2 pt-1.5">
-						<Hint label="Settings" action="open-settings" side="right" disabled={phone}>
+						<Hint label="Settings" action="open-settings" side="right" disabled={overlay}>
 							<button
 								type="button"
 								onClick={() => openSettings()}
@@ -1065,14 +1088,17 @@ function SessionsSidebar() {
 
 /** The app frame: sidebar inline + content. Rendered once in the root layout. */
 export function AppShell({ children }: { children: React.ReactNode }) {
-	const { phone, open } = useSidebar();
+	const { overlay, phone, open, closePhone } = useSidebar();
 	const pathname = usePathname();
 	// Throwaway whole-shell comparison: its navigation is the subject of the trial.
 	if (process.env.NODE_ENV !== "production" && pathname.startsWith("/prototype/mobile-ui")) return <>{children}</>;
 	return (
 		<SettingsDialogProvider>
 			<SessionsSidebar />
-			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open}>{children}</FilePathDropZone>
+			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={overlay && open}>{children}</FilePathDropZone>
+			{/* The slide-over's scrim (portrait tablets): the page stays in
+			    view, dimmed; a tap outside the list closes it. */}
+			{overlay && !phone && open && <div aria-hidden data-testid="sessions-scrim" className="lh-sessions-scrim fixed inset-0 z-40 bg-black/45" onClick={closePhone} />}
 			{/* The single document-level keydown listener (keyboard wave A) —
 			    after the content in the tree, but it's window-level so order only
 			    matters for the events it dispatches, never for DOM priority. */}

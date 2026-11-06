@@ -190,6 +190,9 @@ try {
 	await page.evaluateOnNewDocument(() => {
 		if (window !== window.top) return;
 		localStorage.setItem("lh:sidebar-open", "0");
+		// The drawing canvas is a tablet surface by default (Settings → Writing);
+		// these phone checks exercise its mechanics, so they switch it on.
+		localStorage.setItem("lh:feature:drawing-canvas", "on");
 		// Keep the real graph/worklet/audio. Only emulate Safari's paused state
 		// between runs; a resumed graph must produce actual PCM again.
 		const NativeAudioContext = window.AudioContext;

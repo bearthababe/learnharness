@@ -104,7 +104,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 		<form className="notebook-instruction-form" onSubmit={(event) => { event.preventDefault(); apply(); }}>
 			<div className="notebook-input-row">
 			<CompactLearningInput dictation={!dictation?.active || speech.destination === "notebook" ? dictation : undefined}>
-			<textarea id="notebook-instruction" aria-label="Notebook instruction" placeholder="Notebook instruction" value={draftText} rows={1}
+			<textarea id="notebook-instruction" aria-label="Notebook instruction" placeholder="Say or type what to write…" value={draftText} rows={1}
 				className="lh-input w-full resize-none bg-transparent text-base"
 				onChange={(event) => { void session.dispatch({ type: "draft", text: event.target.value }).catch(() => {}); }}
 				onKeyDown={(event) => {

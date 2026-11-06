@@ -42,6 +42,7 @@ import type { NotebookInputFields, TutorDraftOwner } from "@/src/core";
 import { NotebookPanel } from "@/components/notebook-panel";
 import { NotebookFrame, NotebookSplit, useNotebookLayout } from "@/components/notebook-layout";
 import { useSidebar } from "@/components/sidebar";
+import { useDeviceFeature } from "@/components/device-features";
 import { NotebookSavedDrafts } from "@/components/notebook-saved-drafts";
 import { useNotebookDestination } from "@/components/notebook-destination";
 import { notebookTutorInput } from "@/components/notebook-speech-input";
@@ -73,7 +74,7 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, RepeatIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, RepeatIcon, SlidersHorizontalIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -115,8 +116,10 @@ import { currentUserThinkingOpen, setAllUserThinkingOpen } from "@/components/th
  * deliberately narrower (~46rem centered) per the reference. Same ELEMENT,
  * same place — width polish only.
  */
-const COLUMN = "mx-auto w-full max-w-[48rem] px-4 md:px-8";
-const DOCK = "mx-auto w-full max-w-[46rem] px-4";
+const COLUMN = "lh-reading-column mx-auto w-full max-w-[48rem] px-4 md:px-8";
+const DOCK = "lh-dock-column mx-auto w-full max-w-[46rem] px-4";
+/** Touch screens wider than a phone (tablets) — keep in sync with globals.css. */
+const TABLET_MEDIA = "(min-width: 768px) and (pointer: coarse)";
 // The DOCK container's fixed width (46rem) and the plan marginalia's
 // geometry (owner, plan-placement round): the bare diagram sits in the
 // dock band's RIGHT flank — MARGIN_GAP from the DOCK container's edge and
@@ -291,7 +294,13 @@ export function Chat({
 	const workspaceRef = useRef<HTMLDivElement | null>(null);
 	const workspaceId = useId();
 	const notebook = useNotebookSession(chatId);
-	const notebookVisible = notebook.view?.visible ?? false;
+	// Device features (owner, 2026-11-06): the equation notebook is a phone
+	// surface and the drawing canvas a tablet one by default (Settings →
+	// Writing). Off = not offered and shown closed; nothing saved is touched.
+	const notebookOffered = useDeviceFeature("equation-notebook");
+	const canvasOffered = useDeviceFeature("drawing-canvas");
+	const notebookVisible = notebookOffered && (notebook.view?.visible ?? false);
+	const canvasOpen = canvasOffered && handwriting.open;
 	const notebookLayout = useNotebookLayout(notebookVisible);
 	// Portrait tablets: the notebook needs the width, so the sidebar steps
 	// aside while it is open (preference untouched; the toggle still works).
@@ -300,6 +309,25 @@ export function Chat({
 		if (!notebookVisible || !window.matchMedia("(min-width: 768px) and (max-width: 1023px)").matches) return;
 		return holdSidebarClosed();
 	}, [notebookVisible, holdSidebarClosed]);
+	// Writing on a tablet: the page gets the whole width (side by side in
+	// landscape), so the session column steps aside while the canvas is up.
+	useEffect(() => {
+		if (!canvasOpen || !window.matchMedia(TABLET_MEDIA).matches) return;
+		return holdSidebarClosed();
+	}, [canvasOpen, holdSidebarClosed]);
+	// The tablet Model card: closes on Escape, on a tap outside it (menus it
+	// opens count as inside) and when the session changes.
+	const [controlsOpen, setControlsOpen] = useState(false);
+	useEffect(() => { setControlsOpen(false); }, [chatId]);
+	useEffect(() => {
+		if (!controlsOpen) return;
+		const inside = (target: EventTarget | null) => target instanceof Element && !!target.closest('[data-testid="stats-bar"], [data-testid="session-controls"], [data-lh-menu]');
+		const onPointer = (event: PointerEvent) => { if (!inside(event.target)) setControlsOpen(false); };
+		const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !document.querySelector("[data-lh-menu]")) { event.stopPropagation(); setControlsOpen(false); } };
+		document.addEventListener("pointerdown", onPointer, true);
+		document.addEventListener("keydown", onKey);
+		return () => { document.removeEventListener("pointerdown", onPointer, true); document.removeEventListener("keydown", onKey); };
+	}, [controlsOpen]);
 	const notebookSpeech = useSyncExternalStore(notebook.session.speech.subscribe, notebook.session.speech.getSnapshot, notebook.session.speech.getSnapshot);
 	const tutorDraftState = useSyncExternalStore(notebook.session.tutor.subscribe, notebook.session.tutor.getSnapshot, notebook.session.tutor.getSnapshot);
 	const ordinaryDraft = tutorDraftState.drafts.find((draft) => draft.owner.kind === "ordinary");
@@ -1034,6 +1062,59 @@ export function Chat({
 	// guess so the static paint has a sane tail. The first layout effect
 	// replaces it with the measured truth before paint.
 	const [dockReserve, setDockReserve] = useState(208);
+	// Tablets: a short transcript lets the dock rise to sit right under the
+	// lesson (owner's tablet review: the current question anchors the
+	// screen, no void between the last message and the composer). Measured
+	// from the dock spacer's top — the end of the content — and zero as soon
+	// as the transcript fills the pane.
+	// Opening a working surface (canvas or notebook) shrinks the lesson
+	// pane; a learner reading the latest turn keeps it in view instead of
+	// being left at the top of the transcript.
+	const atBottomRef = useRef(true);
+	useEffect(() => {
+		const scroller = scrollContextRef.current?.scrollRef.current;
+		if (!scroller) return;
+		const track = () => { atBottomRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120; };
+		track();
+		scroller.addEventListener("scroll", track, { passive: true });
+		return () => scroller.removeEventListener("scroll", track);
+	}, [chatId]);
+	useEffect(() => {
+		if (!(canvasOpen || notebookVisible) || !atBottomRef.current) return;
+		let second = 0;
+		const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => { void scrollContextRef.current?.scrollToBottom("instant"); }); });
+		return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+	}, [canvasOpen, notebookVisible]);
+	const dockSpacerRef = useRef<HTMLDivElement | null>(null);
+	const [dockLift, setDockLift] = useState(0);
+	useIsoLayoutEffect(() => {
+		const spacer = dockSpacerRef.current, scroller = scrollContextRef.current?.scrollRef.current;
+		if (!spacer || !scroller || typeof window.matchMedia !== "function" || typeof ResizeObserver === "undefined") return;
+		const media = window.matchMedia(TABLET_MEDIA);
+		const update = () => {
+			let next = 0;
+			const column = scroller.querySelector<HTMLElement>("[data-session-find-root]");
+			if (media.matches && column) {
+				// The column stretches to the pane; its last child is the
+				// content's real end (plus the column's own 16px rhythm).
+				const bottoms = [...column.children].map((child) => child.getBoundingClientRect().bottom);
+				const end = (bottoms.length ? Math.max(...bottoms) : column.getBoundingClientRect().top) + 16;
+				const contentEnd = end - scroller.getBoundingClientRect().top + scroller.scrollTop;
+				next = Math.max(0, Math.round(scroller.clientHeight - contentEnd - dockReserve));
+			}
+			setDockLift((prior) => Math.abs(prior - next) < 2 ? prior : next);
+		};
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(scroller);
+		const column = scroller.querySelector<HTMLElement>("[data-session-find-root]");
+		if (column) { observer.observe(column); for (const child of column.children) observer.observe(child); }
+		// New messages are new children: re-observe as the transcript grows.
+		const mutations = new MutationObserver(() => { if (column) for (const child of column.children) observer.observe(child); update(); });
+		if (column) mutations.observe(column, { childList: true });
+		media.addEventListener?.("change", update);
+		return () => { observer.disconnect(); mutations.disconnect(); media.removeEventListener?.("change", update); };
+	}, [dockReserve]);
 	const syncTurns = useCallback(async () => {
 		try {
 			const res = await fetch(`/api/chats/${chatId}`);
@@ -1382,7 +1463,7 @@ export function Chat({
 
 	return (
 		<HandwritingSubmissionContext.Provider value={handwritingSubmission}>
-		<HandwritingPagesContext.Provider value={handwriting.actions}>
+		<HandwritingPagesContext.Provider value={canvasOffered ? handwriting.actions : null}>
 		<ChatActionsContext.Provider
 			value={{
 				chatId,
@@ -1406,9 +1487,9 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" className={`session-workspace flex h-dvh overflow-hidden ${handwriting.open ? "hw-workspace" : ""}`}>
-		<div className={handwriting.open ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
-			<div inert={handwriting.open && handwriting.expanded} className={handwriting.open ? "hw-chat hw-mobileHidden flex min-h-0 min-w-0 flex-1 flex-col" : "contents"}>
+		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" className={`session-workspace flex h-dvh overflow-hidden ${canvasOpen ? "hw-workspace" : ""}`}>
+		<div className={canvasOpen ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
+			<div inert={canvasOpen && handwriting.expanded} className={canvasOpen ? "hw-chat hw-mobileHidden flex min-h-0 min-w-0 flex-1 flex-col" : "contents"}>
 			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
 			<div className="session-tutor" inert={notebookLayout.expanded}>
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
@@ -1528,7 +1609,14 @@ export function Chat({
 				    practice never extracts, so an ever-filling ring with no
 				    run behind it would lie. */}
 					{kind !== "practice" && <CoverageRing chatId={chatId} refreshKey={coverageTick} />}
-					<Button variant="secondary" size="sm" className="lh-header-write shrink-0 gap-1.5" onClick={() => handwriting.show(true)} data-testid="open-notebook"><PenLineIcon className="size-4" aria-hidden /><span className="lh-header-write-label">Write</span></Button>
+					{/* Tablets: model, thinking and usage live behind this one
+					    button instead of a permanent row under the composer. */}
+					<button type="button" data-testid="session-controls" aria-expanded={controlsOpen} aria-label="Model and usage"
+						onClick={() => setControlsOpen((value) => !value)}
+						className="lh-session-controls lh-no-drag hidden h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[14.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground">
+						<SlidersHorizontalIcon className="size-4" aria-hidden />Model
+					</button>
+					{canvasOffered && <Button variant="secondary" size="sm" className="lh-header-write shrink-0 gap-1.5" aria-pressed={canvasOpen} onClick={() => handwriting.show(true)} data-testid="open-notebook"><PenLineIcon className="size-4" aria-hidden /><span className="lh-header-write-label">Write</span></Button>}
 				</TopBar>
 				{!notebookVisible && notebook.error && <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>}
 
@@ -1829,7 +1917,7 @@ export function Chat({
 						    effect reports before paint). */}
 						<NotebookSavedDrafts session={notebook.session} questionId={pending?.toolCallId} problemId={activeProblem?.toolCallId} messages={nativeMessages} />
 						<NotebookSpeechRecovery session={notebook.session} />
-						<div aria-hidden data-testid="dock-spacer" style={{ height: dockReserve }} />
+						<div ref={dockSpacerRef} aria-hidden data-testid="dock-spacer" style={{ height: dockReserve }} />
 				</ConversationContent>
 				{/* The dock: an overlay sibling of the scroller (the
 				    use-stick-to-bottom pattern). The scroll-down button lives
@@ -1839,7 +1927,9 @@ export function Chat({
 				    fold) and NEVER overlaps the composer. */}
 				<DockOverlay
 					notebook={notebook.session}
-					fullQuestionWidth={handwriting.open}
+					controlsOpen={controlsOpen}
+					lift={dockLift}
+					fullQuestionWidth={canvasOpen}
 					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} /></>}
 					hasSharedWriting={hasSharedWriting || handwritingSubmission.hasAttempt()}
 					pending={pending}
@@ -1861,7 +1951,7 @@ export function Chat({
 					contextTokens={contextTokens}
 					cliContextWindow={cliContextWindowOf(nativeMessages)}
 					pricing={pricing}
-					notebookToggle={<span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
+					notebookToggle={notebookOffered && <span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
 						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
 						className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
 						onClick={() => {
@@ -1987,8 +2077,8 @@ export function Chat({
 				</>}
 			</div>
 			</div>
-			{handwriting.mounted && <HandwritingSplit hidden={!handwriting.open} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
-			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
+			{handwriting.mounted && <HandwritingSplit hidden={!canvasOpen} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
+			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!canvasOpen} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
 		</div>
 		</div>
 		</JobsContext.Provider>
@@ -2125,6 +2215,8 @@ export function shouldStampGeometryMute(nextH: number, prevH: number, pending: b
 function DockOverlay({
 	notebook,
 	notebookToggle,
+	controlsOpen = false,
+	lift = 0,
 	fullQuestionWidth = false,
 	sharedWritingSlot,
 	hasSharedWriting,
@@ -2158,6 +2250,12 @@ function DockOverlay({
 }: {
 	notebook: NotebookSession;
 	notebookToggle: React.ReactNode;
+	/** Tablets: the model / thinking / usage row is tucked away until the
+	 *  header's Model button opens it as a card above the composer. */
+	controlsOpen?: boolean;
+	/** Tablets: how far a short transcript lets the dock rise, so the
+	 *  composer sits right under the lesson instead of across a void. */
+	lift?: number;
 	/** In the notebook split, a question fills the context pane. */
 	fullQuestionWidth?: boolean;
 	sharedWritingSlot?: React.ReactNode;
@@ -2566,9 +2664,9 @@ function DockOverlay({
 	});
 
 	return (
-		<div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }}>
+		<div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset, bottom: lift }}>
 			<div ref={fadeRef} className="lh-dock-fade h-14 bg-gradient-to-t from-background via-background/85 to-transparent" />
-			<div ref={blockRef} className="lh-dock-block relative bg-background pb-5">
+			<div ref={blockRef} className="lh-dock-block relative bg-background pb-5" data-tablet-controls={controlsOpen ? "open" : "closed"}>
 				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
 					{!notebook.getSnapshot().view && <div data-tutor-draft-loading="" role={notebook.getSnapshot().error ? "alert" : "status"} className="px-3 py-2 text-xs text-muted-foreground">

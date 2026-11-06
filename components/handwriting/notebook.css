@@ -28,7 +28,7 @@
 @media (min-width: 768px) {
 	.hw-splitLayout { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
 	.hw-tabletControl { display: inline-flex; }
-	.hw-chat { flex: 0 0 calc(var(--notebook-context-share, 50%) - 14px); overflow: hidden; }
+	.hw-chat { flex: 0 0 calc(var(--notebook-context-share, 46%) - 14px); overflow: hidden; }
 	.hw-mobileHidden { display: flex; }
 	.hw-mobileSwitch { display: none; }
 	.hw-splitDivider { display: flex; flex: 0 0 28px; align-items: center; justify-content: center; touch-action: none; user-select: none; cursor: ns-resize; background: var(--background); border-block: 1px solid var(--border); }

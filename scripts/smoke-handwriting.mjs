@@ -43,7 +43,7 @@ try {
 	const errors = [], turns = [];
 	page.on("pageerror", error => { errors.push(error.message); console.error("Browser error:", error.message); });
 	page.on("request", request => { if (new URL(request.url()).pathname === "/api/chat" && request.method() === "POST") turns.push(request.url()); });
-	await page.evaluateOnNewDocument(() => { try { localStorage.setItem("lh:sidebar-open", "0"); } catch { /* sandboxed generated-artifact frames have no storage */ } });
+	await page.evaluateOnNewDocument(() => { try { localStorage.setItem("lh:sidebar-open", "0"); localStorage.setItem("lh:feature:drawing-canvas", "on"); } catch { /* sandboxed generated-artifact frames have no storage */ } });
 	let failWrites = false, failReads = false, holdNextWrite = false, heldWrite, holdNextRead = false, heldRead, failDelete = false;
 	const handwritingWrites = [];
 	const workingUrl = url => new URL(url).pathname.endsWith("/handwriting/pages/page_initial");

@@ -1,7 +1,7 @@
 /* Presentation counterpart of handwriting/notebook.css at 329677b. Keep these
  * shell classes independent of equation content for later shared extraction. */
 .session-workspace { container: equation-notebook / inline-size; }
-.session-panes { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; --notebook-context-share: var(--notebook-share-column, 50%); }
+.session-panes { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; --notebook-context-share: var(--notebook-share-column, 56%); }
 .session-tutor { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .session-panes[data-notebook-open="true"] > .session-tutor { flex: 0 0 calc(var(--notebook-context-share) - 14px); }
 .notebook-slot { display: flex; flex-direction: column; }
@@ -79,3 +79,13 @@ html[data-session-input-locked], html[data-session-input-locked] body { overflow
 	width: var(--session-viewport-width); height: calc(var(--session-viewport-height) - var(--lh-safe-top, 0px) - var(--lh-safe-bottom, 0px)); overflow: hidden;
 }
 .session-workspace[data-input-focused] :is(textarea, [data-file-path-input], [data-notebook-scroll], [data-dock-scroll-area], [data-input-owner="tutor"] [style*="overflow"]) { overscroll-behavior: contain; }
+
+/* Phones (whole-app redesign): the working card sits closer to the edges,
+   with a slimmer header, and the instruction field moves to the bottom of
+   the card — next to the thumb, like the lesson's own composer. */
+@media (max-width: 767px) {
+	.session-panes { --notebook-frame-inset: 8px; }
+	.notebook-frame-header { min-height: 44px; padding-block: 0; }
+	.notebook-panel > [data-notebook-scroll] { order: 1; }
+	.notebook-panel > .notebook-instruction-form { order: 2; border-top: 1px solid var(--border); }
+}
