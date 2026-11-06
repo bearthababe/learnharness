@@ -1070,7 +1070,8 @@ export function GraphView({
 	const pickResult = useCallback((id: string) => {
 		const snap = snapshotRef.current;
 		const node = snap?.nodes.find((n) => n.id === id);
-		const anchor = rendererRef.current?.focusNode(id);
+		// Phones keep the details card clear of the composer below.
+		const anchor = rendererRef.current?.focusNode(id, window.matchMedia?.("(max-width: 767px)").matches ? 0.28 : 0.5);
 		setResultsOpen(false);
 		if (!snap || !node || !anchor) return;
 		setSelected({ node, sourceIds: snap.nodeSessions[node.id] ?? [], anchor });
@@ -1518,7 +1519,8 @@ export function GraphView({
 						<div className="lh-graph-empty-title">Your knowledge graph</div>
 						<div className="lh-graph-empty-body max-w-sm">
 							<p>Start a session to begin learning.</p>
-							<p className="mt-1.5">Attach your material with the paperclip or drag and drop.</p>
+							<p className="lh-copy-pointer mt-1.5">Attach your material with the paperclip or drag and drop.</p>
+							<p className="lh-copy-touch mt-1.5">Bring in your own notes with Extract files… above.</p>
 						</div>
 					</div>
 				</div>

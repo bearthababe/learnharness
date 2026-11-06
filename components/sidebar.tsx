@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
@@ -87,12 +87,26 @@ declare global {
 	}
 }
 
-const SidebarContext = createContext<{ open: boolean; phone: boolean; toggle: () => void; closePhone: () => void }>({
+const SidebarContext = createContext<{ open: boolean; phone: boolean; drawer: boolean; toggle: () => void; closePhone: () => void }>({
 	open: false,
 	phone: false,
+	drawer: false,
 	toggle: () => {},
 	closePhone: () => {},
 });
+
+/** Portrait tablets: the sessions list is an overlay drawer, closed by
+ *  default, so the lesson keeps the full width. Wider screens keep the
+ *  inline sidebar and its remembered preference. */
+const DRAWER_MEDIA = "(min-width: 768px) and (max-width: 1023px)";
+function subscribeDrawer(update: () => void) {
+	const media = window.matchMedia?.(DRAWER_MEDIA);
+	media?.addEventListener("change", update);
+	return () => media?.removeEventListener("change", update);
+}
+function useDrawerLayout() {
+	return useSyncExternalStore(subscribeDrawer, () => window.matchMedia?.(DRAWER_MEDIA).matches ?? false, () => false);
+}
 
 export function useSidebar() {
 	return useContext(SidebarContext);
@@ -112,8 +126,10 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	const [narrow, setNarrow] = useState(false);
 	const [mounted, setMounted] = useState(false);
 	const phone = usePhoneViewport();
+	const drawer = useDrawerLayout() && !phone;
 	const [phoneOpen, setPhoneOpen] = useState(false);
-	const closePhone = useCallback(() => setPhoneOpen(false), []);
+	const [drawerOpen, setDrawerOpen] = useState(false);
+	const closePhone = useCallback(() => { setPhoneOpen(false); setDrawerOpen(false); }, []);
 	const pathname = usePathname();
 	useEffect(() => { closePhone(); }, [pathname, phone, closePhone]);
 
@@ -163,6 +179,10 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 			setPhoneOpen((value) => !value);
 			return;
 		}
+		if (drawer) {
+			setDrawerOpen((value) => !value);
+			return;
+		}
 		// Opening while narrow (auto-closed, or the user's own closed-at-
 		// narrow): ask the shell to widen to the threshold — the resize
 		// listener flips `narrow` and the sidebar appears. The preference
@@ -178,7 +198,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 			localStorage.setItem(STORAGE_KEY, v ? "0" : "1");
 			return !v;
 		});
-	}, [narrow, open, phone]);
+	}, [narrow, open, phone, drawer]);
 
 	// ⌘B: the global shortcut dispatches kbdEventForAction("toggle-sidebar")
 	// and the context answers on exactly that name — the shared spelling
@@ -194,9 +214,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, [toggle]);
 
 	return (
-		<SidebarContext.Provider value={{ open: phone ? phoneOpen : open && !narrow, phone, toggle, closePhone }}>
+		<SidebarContext.Provider value={{ open: phone ? phoneOpen : drawer ? drawerOpen : open && !narrow, phone, drawer, toggle, closePhone }}>
 			{/* transitions gated on mount: no slide-in flash on page load */}
-			<div className={cn("lh-app-shell flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")}>{children}</div>
+			<div className={cn("lh-app-shell flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")} data-drawer={drawer || undefined} data-drawer-open={(drawer && drawerOpen) || undefined}>{children}</div>
 		</SidebarContext.Provider>
 	);
 }
@@ -415,7 +435,7 @@ export type SessionKindFilter = "teach" | "all" | "practice";
 const KIND_FILTER_KEY = "lh:session-kind-filter";
 
 function SessionsSidebar() {
-	const { open, phone, toggle, closePhone } = useSidebar();
+	const { open, phone, drawer, toggle, closePhone } = useSidebar();
 	const sidebarRef = useRef<HTMLElement>(null);
 	useEffect(() => {
 		if (!phone || !open) return;
@@ -699,6 +719,7 @@ function SessionsSidebar() {
 			aria-modal={phone && open ? true : undefined}
 			aria-label="Sessions"
 			onKeyDown={(event) => {
+				if (drawer && open && event.key === "Escape") { event.preventDefault(); event.stopPropagation(); toggle(); return; }
 				if (!phone || !open || !sidebarRef.current?.contains(event.target as Node)) return;
 				if (event.key === "Escape") {
 					event.preventDefault(); event.stopPropagation(); closePhone();
@@ -1042,7 +1063,7 @@ function SessionsSidebar() {
 
 /** The app frame: sidebar inline + content. Rendered once in the root layout. */
 export function AppShell({ children }: { children: React.ReactNode }) {
-	const { phone, open } = useSidebar();
+	const { phone, open, drawer, toggle } = useSidebar();
 	const pathname = usePathname();
 	// Throwaway whole-shell comparison: its navigation is the subject of the trial.
 	if (process.env.NODE_ENV !== "production" && pathname.startsWith("/prototype/mobile-ui")) return <>{children}</>;
@@ -1050,6 +1071,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 		<SettingsDialogProvider>
 			<SessionsSidebar />
 			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open}>{children}</FilePathDropZone>
+			{drawer && open && <div className="lh-drawer-scrim" aria-hidden="true" data-testid="sessions-drawer-scrim" onClick={toggle} />}
 			{/* The single document-level keydown listener (keyboard wave A) —
 			    after the content in the tree, but it's window-level so order only
 			    matters for the events it dispatches, never for DOM priority. */}

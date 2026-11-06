@@ -42,6 +42,22 @@ export interface ActivityJob extends JobRecord {
 	contextLimit: number | null;
 }
 
+/** One SETTLED background job (finished, failed or aborted), newest first —
+ *  the sidebar's short history, so outcomes stay findable after the live
+ *  blob disappears. Links back to its session; no result payload. */
+export interface ActivityRecentJob {
+	id: string;
+	kind: JobRecord["kind"];
+	status: JobRecord["status"];
+	chatId: string;
+	title: string;
+	updatedAt: string;
+	error?: string;
+}
+
+/** How many settled jobs the history keeps. */
+const RECENT_JOBS = 8;
+
 /** One extraction-pipeline JOB (title joined), oldest first. Per-chunk
  *  jobs (owner, 2026-09-28): a multi-chunk source owns SEVERAL rows — id
  *  is the unique job key (source id, or "src#i"), chatId stays the SOURCE
@@ -69,11 +85,13 @@ export interface ActivityExtraction {
 export function activityFeed(): {
 	jobs: ActivityJob[];
 	extractions: ActivityExtraction[];
+	recent: ActivityRecentJob[];
 	graphRevision: number;
 } {
 	const chats = chatStore.listChats();
 	const limits = catalogContextLimits();
 	const jobs: ActivityJob[] = [];
+	const recent: ActivityRecentJob[] = [];
 	for (const chat of chats) {
 		for (const job of listJobs(chat.id)) {
 			if (job.status === "running") {
@@ -83,9 +101,20 @@ export function activityFeed(): {
 					title: chat.title ?? chat.id,
 					contextLimit: job.usage ? (limits.get(job.usage.model) ?? null) : null,
 				});
+			} else {
+				recent.push({
+					id: job.id,
+					kind: job.kind,
+					status: job.status,
+					chatId: chat.id,
+					title: chat.title ?? chat.id,
+					updatedAt: job.updatedAt ?? job.createdAt,
+					...(job.error ? { error: job.error } : {}),
+				});
 			}
 		}
 	}
+	recent.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 	const extractions: ActivityExtraction[] = extractionStatuses().map((run) => ({
 		id: run.part ? `${run.chatId}#${run.part.i}` : run.chatId,
 		chatId: run.chatId,
@@ -104,6 +133,7 @@ export function activityFeed(): {
 	return {
 		jobs,
 		extractions: extractions.sort((a, b) => a.startedAt - b.startedAt),
+		recent: recent.slice(0, RECENT_JOBS),
 		graphRevision: graphRevision(),
 	};
 }

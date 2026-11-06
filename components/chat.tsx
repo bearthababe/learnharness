@@ -78,12 +78,12 @@ import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
 import { SessionMessageNavigation } from "@/components/session-navigation";
 import { PracticeDock } from "@/components/practice-dock";
-import { ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
+import { ActiveProblemContext, ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
 import { TopBar } from "@/components/top-bar";
 import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
 import type { LhViewMessage } from "@/src/core";
-import { PhaseChip, PhaseDivider } from "@/components/phase-divider";
+import { PhaseChip, phaseLabel, PhaseDivider } from "@/components/phase-divider";
 import {
 	CompactionCutDivider,
 	CompactionMomentDivider,
@@ -632,15 +632,40 @@ export function Chat({
 	 * read the latest text without a parent render per input event. Explicit
 	 * resets still bump a revision so the local field can sync. */
 	const textRef = useRef("");
+	// Sessions that never opened the notebook have no server-side draft
+	// store (no notebook context), so their unsent composer text is kept per
+	// session on this device instead; the notebook store stays authoritative
+	// wherever a context exists.
+	const localDraftKey = `lh:composer-draft:${chatId}`;
+	const rememberLocalDraft = useCallback((v: string) => {
+		const view = notebook.session.getSnapshot().view;
+		if (!view || view.contextId) return;
+		try {
+			if (v.trim()) localStorage.setItem(localDraftKey, v);
+			else localStorage.removeItem(localDraftKey);
+		} catch { /* storage blocked: the draft lives only in this view */ }
+	}, [notebook.session, localDraftKey]);
 	const applyText = useCallback((v: string) => {
 		textRef.current = v;
 		setComposerDraftRevision((revision) => revision + 1);
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
-	}, [notebook.session]);
+		else rememberLocalDraft(v);
+	}, [notebook.session, rememberLocalDraft]);
 	const recordComposerText = useCallback((v: string) => {
 		textRef.current = v;
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
-	}, [notebook.session]);
+		else rememberLocalDraft(v);
+	}, [notebook.session, rememberLocalDraft]);
+	const localDraftRestored = useRef(false);
+	useEffect(() => {
+		const view = notebook.view;
+		if (localDraftRestored.current || !view) return;
+		localDraftRestored.current = true;
+		if (view.contextId || textRef.current) return;
+		let saved: string | null = null;
+		try { saved = localStorage.getItem(localDraftKey); } catch { /* storage blocked */ }
+		if (saved) applyText(saved);
+	}, [notebook.view, localDraftKey, applyText]);
 	useLayoutEffect(() => {
 		if (!notebook.view?.contextId) return;
 		const part = ordinaryDraft?.parts.at(-1);
@@ -1385,6 +1410,7 @@ export function Chat({
 			}}
 		>
 		<JobsContext.Provider value={jobs}>
+		<ActiveProblemContext.Provider value={activeProblem?.toolCallId ?? null}>
 		{/* The session surface: the transcript column (header + scroller) and
 		    the plan-tree panel as full-height SIBLINGS — the panel spans top to
 		    bottom exactly like the left sidebar, and the header (name + phase
@@ -1448,6 +1474,7 @@ export function Chat({
 						</>
 					) : (
 					<>
+						<span className="lh-title-block">
 						<Hint
 							// F2 renames (registry) — surfaced on the hover.
 							label="Rename session"
@@ -1457,6 +1484,9 @@ export function Chat({
 <button
 							type="button"
 														onClick={() => {
+								// Phones rename from the session's ⋯ menu; a tap on
+								// the header title shouldn't open the keyboard.
+								if (window.matchMedia?.("(max-width: 767px)").matches) return;
 								setTitleDraft(titleText);
 								setRenaming(true);
 							}}
@@ -1465,6 +1495,11 @@ export function Chat({
 							{titleText}
 							</button>
 						</Hint>
+						{/* Phones fold the phase/mode chip into a quiet subtitle. */}
+						<span className="lh-session-subtitle" aria-hidden="true" data-kind={kind === "practice" ? (practiceMode === "drill" ? "drill" : "practice") : "teach"}>
+							{kind === "practice" ? (practiceMode === "drill" ? "Drill session" : "Practice session") : phaseLabel(phases.at(-1) ?? "probe")}
+						</span>
+						</span>
 							{/* flex-1 spacer: keeps the chips at the right edge AND stays a
 							    drag surface (no carve-out) — the freed bar is grippable. */}
 							<div className="min-w-4 flex-1" aria-hidden="true" />
@@ -1975,6 +2010,7 @@ export function Chat({
 			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
 		</div>
 		</div>
+		</ActiveProblemContext.Provider>
 		</JobsContext.Provider>
 		</SessionMermaidContext.Provider>
 		{/* The BYOK setup flow (owner, 2026-09-22): one mount serves the

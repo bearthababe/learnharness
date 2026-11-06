@@ -2011,3 +2011,348 @@ body {
 	text-align: right;
 	color: var(--destructive);
 }
+
+/* Background agents: the header opens a short history of settled jobs. */
+.lh-activity-header:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-activity-history {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 40dvh;
+	margin-top: 2px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+.lh-activity-recent {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 44px;
+	padding: 6px 8px;
+	border-radius: 10px;
+	color: var(--muted-foreground);
+	transition: background-color .15s;
+}
+.lh-activity-recent:hover {
+	background: var(--accent);
+}
+.lh-activity-recent-title {
+	display: block;
+	overflow: hidden;
+	color: var(--foreground);
+	font-size: 13.5px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lh-activity-recent-meta {
+	display: block;
+	overflow: hidden;
+	font-size: 12.5px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lh-activity-recent[data-status="error"] .lh-activity-recent-meta {
+	color: var(--destructive);
+}
+.lh-activity-recent[data-status="error"] > svg {
+	color: var(--destructive);
+}
+@media (max-width: 767px) {
+	.lh-activity-recent { min-height: 52px; }
+	.lh-activity-recent-title { font-size: 15px; }
+	.lh-activity-recent-meta { font-size: 13.5px; }
+}
+
+/* Title block: the session name, and on phones its phase or mode beneath. */
+.lh-title-block {
+	display: flex;
+	min-width: 1rem;
+	flex-direction: column;
+	flex-shrink: 1;
+	justify-content: center;
+}
+.lh-title-block {
+	margin-inline: -6px;
+}
+.lh-title-block > .lh-session-title {
+	max-width: 100%;
+	margin-inline: 0;
+}
+.lh-title-block > .lh-session-subtitle {
+	padding-inline: 6px;
+}
+.lh-session-subtitle {
+	display: none;
+}
+@media (max-width: 767px) {
+	.lh-session-title {
+		line-height: 1.2;
+	}
+	.lh-session-subtitle {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		margin-top: 1px;
+		font-size: 12.5px;
+		line-height: 1.2;
+		color: var(--muted-foreground);
+		user-select: none;
+	}
+	.lh-session-subtitle::before {
+		content: "";
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--lh-kind, var(--lh-kind-teach));
+	}
+	.lh-topbar .lh-session-title {
+		-webkit-user-select: none;
+		user-select: none;
+	}
+
+	/* Chains header: search takes the room; the counts step aside. */
+	.lh-chains-count {
+		display: none;
+	}
+	.lh-chains-search {
+		flex: 1;
+		min-width: 0;
+	}
+	.lh-chains-search input {
+		width: 100%;
+		height: 40px;
+		font-size: 16px;
+	}
+	[data-testid="chain-table-close"] {
+		width: 40px;
+		height: 40px;
+	}
+
+	/* Phone questions: every option stays in view above the confidence row. */
+	.lh-option {
+		min-height: 44px;
+		padding: 8px 12px;
+		font-size: 15px;
+	}
+	[data-testid="question-dock"] [role="radiogroup"], [data-testid="question-dock"] [role="group"] {
+		gap: 6px;
+	}
+	.lh-option-dontknow {
+		min-height: 40px;
+	}
+	.lh-question-text {
+		font-size: 16px;
+		margin-bottom: 10px;
+	}
+}
+
+/* Keyboard focus (only after Tab navigation; see keyboard-shortcuts.tsx). */
+html[data-focus-source="keyboard"] :is(button, a[href], summary, select, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="radio"], [role="checkbox"], [role="switch"], [tabindex="0"]):focus-visible {
+	outline: 2px solid color-mix(in oklab, var(--primary) 85%, white);
+	outline-offset: 2px;
+}
+html[data-focus-source="keyboard"] :is(input, textarea, [contenteditable="true"]):focus-visible {
+	outline: 2px solid color-mix(in oklab, var(--primary) 70%, transparent);
+	outline-offset: 1px;
+}
+html[data-focus-source="keyboard"] [data-attachment-composer] :is(textarea, [contenteditable="true"], [data-file-path-input]):focus-visible {
+	outline: none;
+}
+
+/* The transcript's copy of the active problem points to the dock. */
+.lh-problem-card[data-active] {
+	padding: 10px 14px;
+	border-style: dashed;
+	background: transparent;
+}
+.lh-problem-card[data-active] .lh-prose {
+	display: -webkit-box;
+	overflow: hidden;
+	color: var(--muted-foreground);
+	-webkit-line-clamp: 1;
+	-webkit-box-orient: vertical;
+}
+.lh-problem-active-note {
+	color: var(--lh-brand-ink);
+	text-transform: none;
+	letter-spacing: 0;
+	font-weight: 500;
+}
+
+/* Settings content: readable sizes for every row, touch-sized actions. */
+.lh-settings-content .text-xs {
+	font-size: 13px;
+}
+.lh-settings-content .font-ui.text-xs {
+	font-size: 15px;
+}
+.lh-settings-content :is(.text-\[11px\], .text-\[10px\]) {
+	font-size: 12.5px;
+}
+.lh-settings-content [data-slot="button"] {
+	min-height: 32px;
+	padding-inline: 12px;
+	border-radius: 8px;
+	font-size: 13px;
+}
+.lh-settings-row-label > .text-xs {
+	margin-top: 2px;
+	line-height: 1.4;
+}
+@media (max-width: 767px) {
+	.lh-settings-content [data-slot="button"] {
+		min-height: 40px;
+	}
+	.lh-settings-row {
+		flex-wrap: wrap;
+		row-gap: 8px;
+	}
+	.lh-settings-row > .lh-settings-row-label {
+		flex: 1 1 11rem;
+	}
+	.lh-settings-content :is(button, input, select).h-7 {
+		height: 38px;
+	}
+}
+
+/* Guidance that names an input method matches the device. */
+.lh-copy-touch {
+	display: none;
+}
+@media (pointer: coarse), (max-width: 767px) {
+	.lh-copy-pointer { display: none; }
+	.lh-copy-touch { display: block; }
+}
+
+/* Portrait tablets: sessions slide over the lesson instead of squeezing it. */
+@media (min-width: 768px) and (max-width: 1023px) {
+	.lh-app-shell[data-drawer] .lh-sessions-panel {
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		z-index: 50;
+		height: 100dvh;
+	}
+	.lh-app-shell[data-drawer-open] .lh-sessions-panel {
+		width: 320px;
+		box-shadow: 0 0 0 1px var(--border), 24px 0 48px -12px rgb(0 0 0 / .6);
+	}
+	.lh-app-shell[data-drawer] .lh-sessions-content {
+		width: 320px;
+	}
+	.lh-drawer-scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		background: rgb(8 7 12 / .55);
+		animation: chrome-fade-in .2s ease-out;
+	}
+}
+
+/* A narrow tutor pane (notebook and writing open beside it) gets the
+   compact header and a wrapping stats row, whatever the window width. */
+.session-tutor {
+	container: session-tutor / inline-size;
+}
+@media (min-width: 768px) {
+@container session-tutor (max-width: 600px) {
+	.lh-topbar {
+		gap: 6px;
+	}
+	.lh-topbar [data-testid="phase-chip"] {
+		display: none;
+	}
+	.lh-session-subtitle {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		margin-top: 1px;
+		font-size: 12.5px;
+		line-height: 1.2;
+		color: var(--muted-foreground);
+	}
+	.lh-header-chip, .lh-header-write {
+		width: 34px;
+		padding: 0;
+		justify-content: center;
+	}
+	.lh-header-chip-label, .lh-header-write-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+	.lh-stats-bar {
+		flex-wrap: wrap;
+		row-gap: 6px;
+	}
+}
+}
+
+/* First-run model setup: the same calm panel as Settings. */
+.lh-setup {
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+	font-family: var(--font-prose);
+}
+.lh-setup .text-xs {
+	font-size: 13px;
+	line-height: 1.45;
+}
+.lh-setup .font-ui.text-sm {
+	font-size: 15.5px;
+	font-weight: 600;
+}
+.lh-setup :is(.text-\[10px\], .text-\[11px\]) {
+	font-size: 11.5px;
+}
+.lh-setup :is(button, input).h-7 {
+	height: 34px;
+	border-radius: 8px;
+	font-size: 13.5px;
+}
+.lh-setup button.rounded-sm {
+	border-radius: 8px;
+}
+[data-lh-menu] {
+	max-width: calc(100vw - 24px);
+}
+@media (max-width: 767px) {
+	.lh-setup {
+		width: 100%;
+		max-width: none;
+		height: var(--lh-phone-height, 100dvh);
+		max-height: none;
+		border: 0;
+		border-radius: 0;
+		background: var(--background);
+	}
+	.lh-setup :is(button, input).h-7 {
+		height: 42px;
+		font-size: 15px;
+	}
+	.lh-setup > header {
+		height: 56px;
+	}
+}
+
+/* Tool traces read as quiet sentences, not system logs. */
+.lh-tool-summary {
+	min-height: 28px;
+	font-size: 13px;
+}
+.lh-tool-label {
+	font-weight: 500;
+	color: var(--muted-foreground);
+}
+.lh-tool-arg {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	opacity: .8;
+}

@@ -75,7 +75,8 @@ export function KnowledgeSummary({
 			{empty && (
 				<div className="pt-2 font-ui text-xs text-muted-foreground/70">
 					<p>Start a session to begin learning.</p>
-					<p className="mt-1">Attach your material with the paperclip or drag and drop.</p>
+					<p className="lh-copy-pointer mt-1">Attach your material with the paperclip or drag and drop.</p>
+					<p className="lh-copy-touch mt-1">Bring in your own notes with Extract files… above.</p>
 				</div>
 			)}
 		</div>

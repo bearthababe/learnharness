@@ -42,6 +42,25 @@ function headlineArg(tool: string, input: unknown): string {
 	return "";
 }
 
+/** What the tutor did, in the learner's words; unknown tools keep their
+ *  own name. The raw name and arguments stay in the expanded view. */
+const TOOL_LABEL: Record<string, string> = {
+	read: "Read a file",
+	ls: "Listed a folder",
+	find: "Searched for files",
+	grep: "Searched file contents",
+	show_image: "Looked at an image",
+	list_sessions: "Looked up your sessions",
+	list_propositions: "Looked up ideas from a session",
+};
+
+/** The collapsed line's subject: file paths and search patterns read as
+ *  given; opaque record ids (the propositions' session) stay in the
+ *  expanded input instead of the summary. */
+function summaryArg(tool: string, arg: string): string {
+	return tool === "list_propositions" ? "" : arg;
+}
+
 /** Render a tool result body: plain strings verbatim, image-bearing read
  *  results show their text + an attachment note (the image itself is the
  *  model's — the learner sees only that it happened). */
@@ -73,11 +92,11 @@ export function ToolCallCard({ part }: ArtifactPartProps) {
 			data-tool={tool}
 			className="group my-1 w-full max-w-2xl select-none"
 		>
-			<summary className="flex cursor-pointer list-none items-center gap-2 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
-				<span className={`font-medium uppercase tracking-wide ${failed ? "text-red-500" : ""}`}>
-					{tool}
+			<summary className="lh-tool-summary flex cursor-pointer list-none items-center gap-2 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
+				<span className={`lh-tool-label ${failed ? "text-red-500" : ""}`}>
+					{TOOL_LABEL[tool] ?? tool}{failed ? " — failed" : ""}
 				</span>
-				{arg && <span className="truncate">{arg}</span>}
+				{summaryArg(tool, arg) && <span className="lh-tool-arg truncate">{summaryArg(tool, arg)}</span>}
 				<ChevronRight className="size-3 shrink-0 opacity-50 transition-transform group-open:rotate-90" />
 			</summary>
 			<div className="mt-2 space-y-2 rounded-xl border bg-card p-3 text-xs">

@@ -148,6 +148,21 @@ export function KeyboardShortcuts() {
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [cheatOpen]);
 
+	// Focus rings follow how focus moved: Tab navigation shows them, any
+	// pointer press hides them again — so a clicked control never lights up
+	// later just because other keys (quiz arrows, typing) were pressed.
+	useEffect(() => {
+		const root = document.documentElement;
+		const onKey = (e: KeyboardEvent) => { if (e.key === "Tab") root.dataset.focusSource = "keyboard"; };
+		const onPointer = () => { delete root.dataset.focusSource; };
+		window.addEventListener("keydown", onKey, true);
+		window.addEventListener("pointerdown", onPointer, true);
+		return () => {
+			window.removeEventListener("keydown", onKey, true);
+			window.removeEventListener("pointerdown", onPointer, true);
+		};
+	}, []);
+
 	return <CheatSheet open={cheatOpen} onClose={() => setCheatOpen(false)} />;
 }
 
