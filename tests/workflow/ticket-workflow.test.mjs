@@ -239,3 +239,69 @@ test("9: squash cleanup rejects a rename whose deleted source remains in main", 
 		assert.equal(git(environment.root, "rev-parse", "ticket/renamed"), git(attached.worktree, "rev-parse", "HEAD"));
 	} finally { await environment.stop(); }
 });
+
+test("exploratory previews need no ticket, PR or delivery skill and share the ticket queue", async () => {
+	const environment = await fixture();
+	try {
+		for (const id of ["one", "two", "three"]) await environment.attach(id);
+		await Promise.all(["one", "two", "three"].map(id => environment.cli("preview", id)));
+		const full = await environment.waitFor(state => state.slots.every(slot => slot.ticket), "full ticket pool");
+		const worktree = environment.exploration("spike");
+		const head = git(worktree, "rev-parse", "HEAD");
+		fs.writeFileSync(path.join(worktree, "README.md"), "uncommitted exploration\n");
+		environment.env.LH_DELIVERY_SKILLS_DIR = path.join(environment.directory, "no-installed-skills");
+		await assert.rejects(environment.cli("preview", "one", "--worktree", worktree), /different worktree/);
+		await environment.cli("preview", "spike", "--worktree", worktree);
+		const queued = await environment.cli("status");
+		assert.deepEqual(queued.queue, ["spike"]);
+		assert.deepEqual(queued.slots, full.slots);
+		assert.equal(queued.tickets.spike.kind, "exploration");
+		assert.equal(queued.tickets.spike.delivery, null);
+		assert.equal(queued.tickets.spike.pr, null);
+		assert.equal(queued.tickets.spike.thread, null);
+		assert.equal(git(worktree, "branch", "--show-current"), "");
+		await environment.cli("release", "one");
+		const running = await environment.waitFor(state => state.tickets.spike.preview === "running", "exploratory slot");
+		const ticket = running.tickets.spike;
+		fs.writeFileSync(path.join(ticket.profile, "retained.txt"), "exploratory state");
+		await environment.cli("release", "spike");
+		await environment.waitFor(state => state.tickets.spike.preview === "none", "exploratory release");
+		for (const command of ["delivery", "attach", "idle", "finish"]) await assert.rejects(environment.cli(command, "spike"), /Exploratory previews do not use ticket/);
+		await environment.cli("preview", "spike", "--worktree", worktree);
+		const reopened = await environment.waitFor(state => state.tickets.spike.preview === "running", "exploratory reopen");
+		assert.equal(reopened.tickets.spike.origin, ticket.origin);
+		assert.equal(fs.readFileSync(path.join(ticket.profile, "retained.txt"), "utf8"), "exploratory state");
+		assert.equal(git(worktree, "rev-parse", "HEAD"), head);
+		assert.equal(fs.readFileSync(path.join(worktree, "README.md"), "utf8"), "uncommitted exploration\n");
+		assert.equal(git(environment.root, "branch", "--show-current"), "main");
+		assert.equal(git(environment.root, "rev-parse", "HEAD"), head);
+		git(worktree, "switch", "-c", "exploratory-pr");
+		environment.setPR("spike", 31, "OPEN", { headRefName: "exploratory-pr" });
+		await environment.cli("pr", "spike", "--pr", "31");
+		environment.setPR("spike", 31, "MERGED");
+		await environment.waitFor(state => state.tickets.spike.merged && state.tickets.spike.preview === "none", "optional exploratory PR release");
+		await assert.rejects(environment.cli("finish", "spike"), /Exploratory previews do not use ticket cleanup/);
+		assert.ok(fs.existsSync(worktree));
+		assert.equal(fs.readFileSync(path.join(ticket.profile, "retained.txt"), "utf8"), "exploratory state");
+	} finally { await environment.stop(); }
+});
+
+test("exploratory source registration rejects root, nested sources and owner takeover", async () => {
+	const environment = await fixture();
+	try {
+		const first = environment.exploration("first");
+		const second = environment.exploration("second");
+		const foreign = path.join(environment.directory, "foreign");
+		fs.mkdirSync(foreign);
+		git(foreign, "init", "-b", "main");
+		await assert.rejects(environment.cli("preview", "foreign", "--worktree", foreign), /another repository/);
+		await assert.rejects(environment.cli("preview", "root", "--worktree", environment.root), /project root/);
+		fs.mkdirSync(path.join(first, "nested"));
+		await assert.rejects(environment.cli("preview", "nested", "--worktree", path.join(first, "nested")), /worktree root/);
+		await environment.cli("preview", "spike", "--worktree", first);
+		await assert.rejects(environment.cli("preview", "spike", "--worktree", second), /different worktree/);
+		await assert.rejects(environment.cli("preview", "duplicate", "--worktree", first), /already belongs/);
+		assert.equal(readState(environment.state).tickets.spike.worktree, first);
+		assert.ok(!readState(environment.state).tickets.duplicate);
+	} finally { await environment.stop(); }
+});

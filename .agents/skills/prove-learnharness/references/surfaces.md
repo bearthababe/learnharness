@@ -45,6 +45,16 @@ diagnostics, but do not confuse proposed numbers with approved acceptance.
    transport; prove queued allocation and replay safety. Live GitHub is not merged.
 9. Clean/dirty/ignored/in-use checkouts and root updates on disposable repositories.
 
+## Owner-approved exploratory follow-up
+
+The owner subsequently approved loosening the same preview pool for exploratory
+worktrees, without ticket/PR/delivery-mode setup. This is a separate answer key
+from the unchanged original ticket spec. Exercise `preview NAME --worktree PATH`
+on an existing dirty/detached worktree without delivery-skill lookup. Prove the
+shared queue with ticket previews, source/name ownership checks, retained state
+after release/reopen and refusal of ticket delivery or automatic worktree cleanup.
+The real browser run must show the exploratory worktree's edit without a commit.
+
 ## Existing surfaces and setup
 
 `runtime.mjs start/health/smoke/stop` uses a unique evidence directory and isolated

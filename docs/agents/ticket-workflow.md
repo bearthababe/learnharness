@@ -1,11 +1,42 @@
 # Independent ticket delivery and previews
 
-Use the project-local `ticket-to-main` skill with an approved spec and an explicit
-`full-stop` (ready PR) or `full-send` (authorized end-to-end merge) request. Both
-installed skills are resolved at preparation; no global skill is modified. An
-approved design is not merge authority. The manager itself never merges anything.
+Use the project-local `ticket-to-main` skill for exploratory previews or approved
+ticket delivery. Only delivery needs an approved spec and explicit `full-stop`
+(ready PR) or `full-send` (authorized end-to-end merge) request. Installed delivery
+skills are resolved at ticket preparation; no global skill is modified. Neither
+an approved design nor preview setup grants merge authority. The manager never
+merges anything.
 
 ## Entry points
+
+For exploratory work, use an existing worktree directly; no ticket preparation,
+delivery mode, PR, installed delivery skill or GitHub authentication is required.
+Initialize the shared registry once with `init` if it does not already exist:
+
+```sh
+node scripts/ticket.mjs init
+node scripts/ticket.mjs preview my-experiment --worktree /path/to/worktree
+node scripts/ticket.mjs status
+node scripts/ticket.mjs release my-experiment
+```
+
+The source may contain uncommitted changes or a detached HEAD. It must be the exact
+root of a non-root worktree from this repository, with dependencies installed and
+no dotenv files. It is served in place, without commits, checkout changes or
+deployment. The name owns its retained isolated profile and cannot be reassigned
+to another worktree or adopted over an existing ticket. Repeat `preview NAME` to
+reopen it. Release stops only the preview; it never removes exploratory source.
+The existing JSON `tickets` collection also holds records marked
+`kind: "exploration"`; this is shared preview bookkeeping, not a delivery ticket.
+
+Both entrypoints share the same three slots and FIFO queue. Exploration does not
+require PR association or ticket delivery and never uses automatic worktree
+cleanup. If it later has a matching named branch/direct-main PR, optionally run
+`pr NAME --pr NUMBER` to release its preview automatically on merge. Runtime
+expiry, stronger sandboxing and subscription-helper integration remain deployment
+work; this command does not implement those capabilities.
+
+For approved ticket delivery:
 
 ```sh
 node scripts/ticket.mjs init

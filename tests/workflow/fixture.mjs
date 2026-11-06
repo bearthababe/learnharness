@@ -69,13 +69,22 @@ export async function fixture({ real = false, tailnetHost = null, httpsPorts = n
 		const worktree = path.join(directory, id);
 		git(root, "worktree", "add", "-b", prepared.branch, worktree, prepared.handoff.baseRef);
 		await cli("attach", id, "--worktree", worktree, "--thread", `zz-prove-it-t3-${id}`);
+		install(worktree);
+		return { prepared, worktree };
+	}
+	function install(worktree) {
 		if (real) execFileSync("cp", ["-a", "--reflink=auto", path.join(source, "node_modules"), path.join(worktree, "node_modules")]);
 		else {
 			const next = path.join(worktree, "node_modules", "next", "dist", "bin");
 			fs.mkdirSync(next, { recursive: true });
 			fs.writeFileSync(path.join(next, "next"), `const http=require('node:http');const fs=require('node:fs');fs.writeFileSync(process.env.LH_DATA_DIR+'/launch.json',JSON.stringify({ambient:!!process.env.OPENAI_API_KEY,desktop:!!process.env.LH_DESKTOP_SERVER,home:process.env.HOME}));http.createServer((req,res)=>res.end('zz-prove-it-fake-app')).listen(Number(process.argv[process.argv.indexOf('--port')+1]),'127.0.0.1');`);
 		}
-		return { prepared, worktree };
+	}
+	function exploration(id) {
+		const worktree = path.join(directory, id);
+		git(root, "worktree", "add", "--detach", worktree, "main");
+		install(worktree);
+		return worktree;
 	}
 	function setPR(id, number, status = "OPEN", overrides = {}) {
 		const ticket = readState(state).tickets[id];
@@ -99,5 +108,5 @@ export async function fixture({ real = false, tailnetHost = null, httpsPorts = n
 		await waitFor(snapshot => !snapshot.manager, "manager cleanup");
 		assert.ok(!readState(state).slots.some(slot => slot.ticket), "Owned slots remain after cleanup");
 	}
-	return { directory, root, remote, state, ports, env, cli, attach, setPR, waitFor, stop, tailnetFile };
+	return { directory, root, remote, state, ports, env, cli, attach, exploration, setPR, waitFor, stop, tailnetFile };
 }

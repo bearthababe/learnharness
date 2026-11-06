@@ -81,6 +81,7 @@ jobs:
           path: |
             .prove-it/runs/**/result.json
             .prove-it/runs/**/worktree-preview.png
+            .prove-it/runs/**/exploratory-preview.png
             .prove-it/runs/**/failure.png
           include-hidden-files: true
           if-no-files-found: warn

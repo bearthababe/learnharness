@@ -64,6 +64,7 @@ Ladder: 1 old app, 2 approved snapshot, 3 independent suite, 4 approved spec, 5 
 | Flow | Kind | Answer key | Rung | Author |
 | --- | --- | --- | --- | --- |
 | Ticket lifecycle and previews | new | specs/2026-11-06-ticket-to-main-workflow.md, §3 and §4 cases 1–9 | 4 | owner-approved before implementation |
+| Exploratory previews | new | Owner-approved follow-up: use the same three previews from an existing exploratory worktree without a delivery ticket, PR, or delivery-mode choice | 4 | owner conversation |
 | Existing HTTP/UI behavior | existing | baseline captured before product changes, plus existing browser suites | 2/3 | origin/main d7fa0e8 |
 | Any other new flow | new | Find the spec at run time | 4 | human |
 
@@ -109,6 +110,7 @@ Could fool you: a 200 may hide stale data; compare GET before/after and the reta
 ### CLI, background and delivery agent
 
 Drive node --test tests/workflow/ticket-workflow.test.mjs for disposable Git/remote CLI cases, and node scripts/prove-ticket-previews.mjs for real app/browser cases. Run node scripts/ticket.mjs --help first. See references/surfaces.md for the nine-case map.
+For exploratory entrypoint changes, drive preview NAME --worktree PATH without prepare/attach, installed delivery skills or a PR. Include a dirty/detached source, shared ticket/exploration queue, release/reopen retention, rejected source/name takeover and refusal of ticket-delivery/cleanup commands. Observe the real app render exploratory source changes; do not count the fixture server as browser proof.
 For delivery changes, run node scripts/prove-ticket-delivery.mjs setup, then actually execute both returned installed skills against its disposable test services as described in docs/agents/ticket-workflow.md. Run verify RUN afterward. Skill-path/text assertions alone do not prove acceptance case 2. Record simulated CI/review/GitHub as test doubles, never live service coverage.
 Copies: nothing; answer key is the approved ticket spec. Do not call a fake GitHub transport live GitHub proof. A running implementation, not a mocked helper, must allocate and release the real processes.
 Done: every acceptance case has a passing before/after capture, including queued delivery and replayed merge events. All processes started by the run stop; profiles and evidence survive.

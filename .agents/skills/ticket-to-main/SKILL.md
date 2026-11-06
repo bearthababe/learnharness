@@ -1,6 +1,6 @@
 ---
 name: ticket-to-main
-description: Deliver an approved LearnHarness ticket on a T3-managed worktree directly to main, with a queued isolated preview and the user's selected full-stop or full-send skill. Use when starting, previewing, delivering, or completing an independent ticket. Keep the shared root on main and preserve existing preview owners.
+description: Preview exploratory LearnHarness worktrees or deliver an approved ticket on a T3-managed worktree directly to main. Both use the same three queued isolated preview slots. Use when previewing an exploration or starting, delivering, or completing a ticket. Keep delivery optional, the shared root on main, and existing preview owners safe.
 ---
 
 # Ticket to main
@@ -8,6 +8,28 @@ description: Deliver an approved LearnHarness ticket on a T3-managed worktree di
 The approved ticket controls product behavior. The selected installed delivery
 skill controls the stopping point. This wrapper adds neither merge authority nor
 a shared human approval or preview gate.
+
+## Preview exploratory work
+
+Exploration does not require an approved delivery ticket, a PR, a delivery mode
+or a new branch. Use an existing non-root worktree, including dirty/detached work:
+
+```sh
+node scripts/ticket.mjs preview my-experiment --worktree "$PWD"
+node scripts/ticket.mjs status
+node scripts/ticket.mjs release my-experiment
+```
+
+Initialize the shared registry once with `init` if necessary. The preview name
+identifies retained synthetic state, not a delivery ticket. It uses the same
+three slots, queue, source reload and profile isolation as ticket previews.
+No installed delivery skill, GitHub authentication or T3 attachment is needed.
+Repeat `preview my-experiment` to reopen it; keep its worktree/dependencies intact.
+Never use `finish` to clean exploratory worktrees. Delivery steps below apply only
+when the user actually wants to deliver a ticket. A matching named branch can
+optionally associate its PR using `pr NAME --pr NUMBER` for merge-based release;
+this never grants delivery or worktree-cleanup authority. Runtime expiry/sandbox changes
+belong to the coordinated deployment follow-up, not this entrypoint.
 
 ## Start or resume
 

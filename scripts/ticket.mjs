@@ -19,8 +19,8 @@ const help = `Ticket workflow (POSIX, Git, Node, gh; T3 for worktree binding)
   attach TICKET --worktree PATH --thread T3_THREAD_ID
   delivery TICKET                 resolve selected skill, independent of preview queue
   pr TICKET --pr NUMBER           verify and observe direct-main PR
-  preview TICKET                  claim or queue; starts manager automatically
-  release TICKET                  stop only this ticket's preview; retain its profile
+  preview NAME [--worktree PATH]  claim or queue; PATH registers an exploratory worktree
+  release NAME                    stop only this preview; retain its profile/worktree
   observe                        observe associated PRs without merging
   status                         owners, revisions, URLs, queue, errors (JSON)
   idle TICKET --thread ID         end matching thread lease before cleanup
@@ -107,12 +107,29 @@ async function main() {
 			const profile = path.join(directory, "profiles", id);
 			fs.mkdirSync(path.dirname(profile), { recursive: true, mode: 0o700 });
 			fs.mkdirSync(profile, { recursive: false, mode: 0o700 });
-			state.tickets[id] = { id, branch: `ticket/${id}`, base, delivery: values.delivery, skill, profile, worktree: null, thread: null, inUse: false, preview: "none", pr: null, merged: null };
+			state.tickets[id] = { id, kind: "ticket", branch: `ticket/${id}`, base, delivery: values.delivery, skill, profile, worktree: null, thread: null, inUse: false, preview: "none", pr: null, merged: null };
 			return { ...state.tickets[id], handoff: { branch: `ticket/${id}`, baseRef: "origin/main", startFromOrigin: true,
 				continuationPrompt: `Read .agents/skills/ticket-to-main/SKILL.md. Attach ticket ${id} using node ${cliPath} attach ${id} --state-dir ${JSON.stringify(directory)} --worktree "$PWD" --thread YOUR_T3_THREAD_ID, then implement the approved ticket and use its selected ${values.delivery} skill. Root stays main.` } };
 		}
-		const ticket = state.tickets[id];
-		assert.ok(ticket, "Unknown ticket");
+		let ticket = state.tickets[id];
+		if (command === "preview" && values.worktree) {
+			const worktree = fs.realpathSync(values.worktree);
+			assert.notEqual(worktree, root, "Exploratory previews cannot use the project root");
+			assert.equal(rootOf(worktree), root, "Worktree belongs to another repository");
+			assert.equal(fs.realpathSync(git(worktree, "rev-parse", "--show-toplevel")), worktree, "Select the exact worktree root");
+			if (ticket) assert.equal(ticket.worktree, worktree, "Preview name already owns a different worktree");
+			else {
+				assert.ok(!values.delivery && !values.pr && !values.thread, "Exploratory previews need no delivery mode, PR or thread; use ticket prepare for delivery");
+				assert.ok(!Object.values(state.tickets).some(other => other.worktree === worktree), "Worktree already belongs to another preview");
+				const profile = path.join(directory, "profiles", id);
+				assert.ok(!profile.startsWith(worktree + path.sep), "Profile must remain outside the exploratory worktree");
+				fs.mkdirSync(path.dirname(profile), { recursive: true, mode: 0o700 });
+				fs.mkdirSync(profile, { recursive: false, mode: 0o700 });
+				ticket = state.tickets[id] = { id, kind: "exploration", branch: git(worktree, "branch", "--show-current") || null, base: git(worktree, "rev-parse", "HEAD"), delivery: null, skill: null, profile, worktree, thread: null, inUse: false, preview: "none", pr: null, merged: null };
+			}
+		}
+		assert.ok(ticket, "Unknown ticket/preview; use preview NAME --worktree PATH for exploratory work");
+		assert.ok(ticket.kind !== "exploration" || !["attach", "delivery", "idle"].includes(command), "Exploratory previews do not use ticket delivery or cleanup; use preview/release instead");
 		if (command === "attach") {
 			assert.ok(!ticket.worktree && values.thread && values.worktree, "Attach once with --worktree and --thread");
 			const worktree = fs.realpathSync(values.worktree);
@@ -135,6 +152,10 @@ async function main() {
 			const number = Number(values.pr);
 			assert.ok(Number.isSafeInteger(number) && number > 0, "Provide --pr NUMBER");
 			assert.ok(!ticket.pr || ticket.pr.number === number, "Cannot replace a ticket's PR association");
+			if (ticket.kind === "exploration") {
+				ticket.branch = git(ticket.worktree, "branch", "--show-current");
+				assert.ok(ticket.branch, "Optional PR association needs the matching named source branch");
+			}
 			const pr = prView(state, number);
 			assert.equal(pr.number, number, "GitHub returned a different PR");
 			checkPR(ticket, pr);
@@ -175,6 +196,7 @@ async function main() {
 async function finish(directory, id) {
 	return locked(directory, state => {
 		const ticket = state?.tickets[id];
+		assert.notEqual(ticket?.kind, "exploration", "Exploratory previews do not use ticket cleanup; release the preview and retain its worktree");
 		assert.ok(ticket?.merged, "Observe the merged PR before completion");
 		assert.ok(!ticket.inUse && !ticket.claim && ticket.preview === "none", "Ticket thread or preview still uses the worktree");
 		assert.deepEqual(worktreeUsers(ticket.worktree), [], "A process still uses the worktree; preserve it until all owners finish");
