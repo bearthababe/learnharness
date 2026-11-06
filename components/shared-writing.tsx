@@ -143,6 +143,10 @@ function SharedWritingViewer({ chatId, writing, label, initialDecision = false, 
 	</dialog>;
 }
 
+// The setup's actions are real buttons (finger-sized on touch screens via
+// globals.css), not underlined words.
+const WRITING_ACTION = "lh-writing-action inline-flex h-8 items-center rounded-full border border-border px-3 font-medium text-foreground transition-colors hover:bg-accent";
+
 export function SharedWritingPanel({ chatId, writing, busy }: {
 	chatId: string;
 	writing: ReturnType<typeof useSharedWriting>;
@@ -157,7 +161,7 @@ export function SharedWritingPanel({ chatId, writing, busy }: {
 			<SharedWritingImages chatId={chatId} writing={writing.pending} />
 			<p className="text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Review the images, add an explanation below if needed, then send your answer."}</p>
 		</>}
-		{writing.error && <p role="alert" className="text-destructive">{writing.error} <button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Try again</button></p>}
+		{writing.error && <p role="alert" className="text-destructive">{writing.error} <button type="button" className="lh-writing-retry underline underline-offset-2" onClick={() => void writing.refresh().catch(() => {})}>Try again</button></p>}
 		<details className={`lh-concepts-setup ${writing.pending.length ? "mt-2" : ""}`}>
 			<summary className="lh-concepts-summary cursor-pointer text-muted-foreground transition-colors hover:text-foreground">Share from Concepts</summary>
 			<ol className="my-2 list-decimal space-y-1 pl-5">
@@ -167,12 +171,12 @@ export function SharedWritingPanel({ chatId, writing, busy }: {
 				<li>In Concepts, export as <strong>PNG</strong>, choose Share, then the shortcut. Return here to review and send.</li>
 			</ol>
 			<label className="block">This session’s upload URL<input readOnly value={uploadUrl} onFocus={(e) => e.currentTarget.select()} className="my-1 w-full rounded-lg border bg-background p-2" /></label>
-			<div className="flex flex-wrap gap-4">
-				<button type="button" className="underline" onClick={() => { void navigator.clipboard.writeText(uploadUrl).then(() => setCopied(true)).catch(() => setCopied(false)); }}>{copied ? "Copied" : "Copy upload URL"}</button>
-				<button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Check for writing</button>
-				<button type="button" className="underline" onClick={() => location.reload()}>Reload preview</button>
+			<div className="flex flex-wrap gap-2">
+				<button type="button" className={WRITING_ACTION} onClick={() => { void navigator.clipboard.writeText(uploadUrl).then(() => setCopied(true)).catch(() => setCopied(false)); }}>{copied ? "Copied" : "Copy upload URL"}</button>
+				<button type="button" className={WRITING_ACTION} onClick={() => void writing.refresh().catch(() => {})}>Check for writing</button>
+				<button type="button" className={WRITING_ACTION} onClick={() => location.reload()}>Reload preview</button>
 			</div>
-			<p className="mt-2 text-muted-foreground">Reload keeps uploaded images and saved conversation. Unsent typed text resets.</p>
+			<p className="mt-2 text-muted-foreground">Reload keeps uploaded images, the saved conversation and your unsent message.</p>
 		</details>
 	</section>;
 }

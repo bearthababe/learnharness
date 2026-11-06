@@ -41,6 +41,7 @@ import type { NotebookSession } from "@/components/notebook-session";
 import type { NotebookInputFields, TutorDraftOwner } from "@/src/core";
 import { NotebookPanel } from "@/components/notebook-panel";
 import { NotebookFrame, NotebookSplit, useNotebookLayout } from "@/components/notebook-layout";
+import { useSidebar } from "@/components/sidebar";
 import { NotebookSavedDrafts } from "@/components/notebook-saved-drafts";
 import { useNotebookDestination } from "@/components/notebook-destination";
 import { notebookTutorInput } from "@/components/notebook-speech-input";
@@ -292,6 +293,13 @@ export function Chat({
 	const notebook = useNotebookSession(chatId);
 	const notebookVisible = notebook.view?.visible ?? false;
 	const notebookLayout = useNotebookLayout(notebookVisible);
+	// Portrait tablets: the notebook needs the width, so the sidebar steps
+	// aside while it is open (preference untouched; the toggle still works).
+	const { holdClosed: holdSidebarClosed } = useSidebar();
+	useEffect(() => {
+		if (!notebookVisible || !window.matchMedia("(min-width: 768px) and (max-width: 1023px)").matches) return;
+		return holdSidebarClosed();
+	}, [notebookVisible, holdSidebarClosed]);
 	const notebookSpeech = useSyncExternalStore(notebook.session.speech.subscribe, notebook.session.speech.getSnapshot, notebook.session.speech.getSnapshot);
 	const tutorDraftState = useSyncExternalStore(notebook.session.tutor.subscribe, notebook.session.tutor.getSnapshot, notebook.session.tutor.getSnapshot);
 	const ordinaryDraft = tutorDraftState.drafts.find((draft) => draft.owner.kind === "ordinary");
@@ -1530,10 +1538,7 @@ export function Chat({
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
 					<ConversationContent className="min-h-full gap-0 p-0">
-						{/* justify-end: a short transcript sits just above the dock
-						    (like a chat thread) instead of leaving an empty band
-						    between the lesson and the input. Long ones scroll as before. */}
-						<div data-session-find-root="" className={`${COLUMN} flex flex-1 flex-col justify-end gap-4 pt-4`}>
+						<div data-session-find-root="" className={`${COLUMN} flex flex-1 flex-col gap-4 pt-4`}>
 							{messages.length === 0 && !busy && (
 								<ConversationEmptyState
 									title="New session"

@@ -75,6 +75,9 @@ interface ModelsBody {
 	slots?: Record<ModelSlotName, { model: { provider: string; id: string }; thinkingLevel?: ThinkingLevel } | null>;
 }
 
+/** What the price pairs in the model lists mean, in plain words. */
+const PRICE_NOTE = "Prices are US dollars per million tokens read / written. A million tokens is roughly 750,000 words.";
+
 /** Pure: which stage the flow opens at — no keyed provider = keys first
  *  (owner's dependency ordering). Exported for tests. */
 export function setupStage(
@@ -538,7 +541,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 														});
 														setOpenMenu(null);
 													}}
-													footer={imageCapable && imageCapable.length === 0 ? "No image-capable models. Pick each tier below instead." : "Models that can also read images"}
+													footer={imageCapable && imageCapable.length === 0 ? "No image-capable models. Pick each tier below instead." : `Models that can also read images. ${PRICE_NOTE}`}
 												/>
 											</MenuShell>
 										)}
@@ -564,7 +567,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 										{!catalog?.slots?.[slot]?.model && !picked[slot] && (
 											<span
 												data-testid={`setup-needed-${slot}`}
-												className="rounded-full bg-accent px-2 py-0.5 text-[11.5px] font-medium text-muted-foreground"
+												className="rounded-full bg-accent px-2 py-0.5 text-[12.5px] font-medium text-muted-foreground"
 											>
 												needed
 											</span>
@@ -624,7 +627,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 															}));
 															setOpenMenu(null);
 														}}
-														footer={slotCatalog && slotCatalog.length === 0 && slot === "vision" ? "No image-capable models. Add a provider key with access to a vision model." : undefined}
+														footer={slotCatalog && slotCatalog.length === 0 && slot === "vision" ? "No image-capable models. Add a provider key with access to a vision model." : PRICE_NOTE}
 													/>
 												</MenuShell>
 											)}

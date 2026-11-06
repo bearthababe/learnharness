@@ -260,7 +260,7 @@ function SettingSlider({
 }) {
 	return (
 		<label className={`flex flex-col gap-1${disabled ? " opacity-40" : ""}`}>
-			<span className="flex items-center justify-between text-[11px] text-muted-foreground">
+			<span className="flex items-center justify-between text-xs text-muted-foreground">
 				{label}
 				<span className="tabular-nums">{display ?? value}</span>
 			</span>
@@ -396,7 +396,7 @@ function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 	return (
 		<div className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
 			<div className="mb-2 flex items-baseline justify-between">
-				<span className="text-[11.5px] font-semibold text-muted-foreground">
+				<span className="text-[12.5px] font-semibold text-muted-foreground">
 					Graph pipeline costs
 				</span>
 				<span className="text-foreground tabular-nums">
@@ -408,7 +408,7 @@ function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 			</div>
 			<div className="flex flex-col gap-1">
 				{stageRows.map(([label, stage]) => (
-					<div key={label} className="flex items-baseline justify-between gap-2 text-[11px]">
+					<div key={label} className="flex items-baseline justify-between gap-2 text-xs">
 						<span className="shrink-0 text-muted-foreground">{label}</span>
 						<span className="min-w-0 text-right tabular-nums">
 							{fmtRunCost(stage.runs - stage.unpricedRuns - (stage.subscriptionRuns ?? 0) <= 0 ? null : stage.dollars, graphProviders(stage))}
@@ -425,7 +425,7 @@ function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 			</div>
 			<div className="mt-2 flex flex-col gap-0.5 border-t pt-2">
 				{costs.runs.map((run) => (
-						<div key={run.startedAt} className="flex items-baseline justify-between gap-2 text-[11px]">
+						<div key={run.startedAt} className="flex items-baseline justify-between gap-2 text-xs">
 							<span className="min-w-0 flex-1 truncate text-muted-foreground">
 								<span className="text-foreground/70">{timeAgo(run.startedAt)}</span>{" "}
 								{run.title}
@@ -560,10 +560,10 @@ function GraphSettingsControl({
 						    the whole build (splat/blur/readback/blit), not just
 						    the paint. */}
 						<div className="mt-1.5 flex flex-col gap-1.5 border-t pt-1.5">
-							<span className="text-[11.5px] font-semibold text-muted-foreground">
+							<span className="text-[12.5px] font-semibold text-muted-foreground">
 								Regions
 							</span>
-							<label className="flex cursor-pointer items-center justify-between text-[11px] text-muted-foreground">
+							<label className="flex cursor-pointer items-center justify-between text-xs text-muted-foreground">
 								<span>Colour regions</span>
 								<input
 									type="checkbox"
@@ -620,7 +620,7 @@ function GraphSettingsControl({
 									}))}
 							/>
 							<label
-								className={`flex items-center justify-between gap-2 text-[11px] text-muted-foreground${!regionTuning.enabled ? " opacity-40" : ""}`}
+								className={`flex items-center justify-between gap-2 text-xs text-muted-foreground${!regionTuning.enabled ? " opacity-40" : ""}`}
 							>
 								<span>Region detail</span>
 								<select
@@ -646,7 +646,7 @@ function GraphSettingsControl({
 							    the Background colors switch above — labels follow
 							    their own clusterLabels toggle. Size is screen px
 							    (constant at any zoom, unlike node labels). */}
-							<label className="flex cursor-pointer items-center justify-between text-[11px] text-muted-foreground">
+							<label className="flex cursor-pointer items-center justify-between text-xs text-muted-foreground">
 								<span>Cluster labels</span>
 								<input
 									type="checkbox"
@@ -681,7 +681,7 @@ function GraphSettingsControl({
 						    Order (user 2026-09-17): general forces first; depth
 						    anchor + its gray-out-able controls last. */}
 						<details className="lh-graph-physics mt-1.5 flex flex-col gap-1.5 border-t pt-1.5">
-							<summary className="cursor-pointer text-[11.5px] font-semibold text-muted-foreground">
+							<summary className="cursor-pointer text-[12.5px] font-semibold text-muted-foreground">
 								Layout physics (advanced)
 							</summary>
 							<SettingSlider
@@ -1350,6 +1350,34 @@ export function GraphView({
 	const namedClusters = useMemo(() => (snapshot?.clusters ?? [])
 		.filter((c): c is typeof c & { label: string } => !!c.label && c.members.length > 0)
 		.sort((a, b) => b.members.length - a.members.length), [snapshot]);
+	// The toolbar column's bottom edge: the lead column (caption + source
+	// chips) starts below it, so status lines never collide with it.
+	const [toolbarBottom, setToolbarBottom] = useState(96);
+	const toolbarObserver = useRef<ResizeObserver | null>(null);
+	const toolbarRef = useCallback((el: HTMLDivElement | null) => {
+		toolbarObserver.current?.disconnect();
+		toolbarObserver.current = null;
+		if (!el) return;
+		const update = () => { const next = Math.round(el.offsetTop + el.offsetHeight); setToolbarBottom((prior) => prior === next ? prior : next); };
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(el);
+		toolbarObserver.current = observer;
+	}, []);
+	// The chip strip scrolls sideways; a fade at the right edge says so.
+	const chipsRef = useRef<HTMLDivElement>(null);
+	const [chipsMoreRight, setChipsMoreRight] = useState(false);
+	const updateChipsMore = useCallback(() => {
+		const el = chipsRef.current;
+		if (!el) return;
+		const more = el.scrollWidth - el.scrollLeft - el.clientWidth > 4;
+		setChipsMoreRight((prior) => prior === more ? prior : more);
+	}, []);
+	useEffect(() => {
+		updateChipsMore();
+		window.addEventListener("resize", updateChipsMore);
+		return () => window.removeEventListener("resize", updateChipsMore);
+	}, [updateChipsMore, namedClusters]);
 	useEffect(() => {
 		if (isEmpty) return;
 		const canvas = canvasRef.current;
@@ -1659,32 +1687,40 @@ export function GraphView({
 			    against the full-bleed parent) — the row NEVER wraps (owner
 			    rejected the two-row fold); in narrow windows the search is
 			    the flexible element and shrinks instead. */}
-			{/* What the canvas is (whole-app redesign): a quiet caption so the
-			    graph explains itself — counts plus the one action that opens a
-			    node. Wide screens only; phones keep the search placeholder. */}
+			{/* The lead column (phones and tablets) — what the canvas is, then
+			    every source as a chip (only the biggest cluster's name fits on
+			    a small canvas; tap one to frame it). It sits BELOW the toolbar
+			    column, measured, so import errors, notices, costs and running
+			    pipelines push it down instead of painting over it. Laptops keep
+			    the caption in the top-left corner beside the toolbar. */}
 			{!isEmpty && snapshot && (
-				<div data-testid="graph-caption" className={`lh-graph-caption pointer-events-none absolute z-[5] max-w-[min(24rem,36%)] select-none max-md:hidden md:top-[140px] md:max-w-[min(26rem,70%)] lg:top-3 lg:max-w-[min(24rem,36%)] ${sidebarOpen ? "left-5" : "left-16"}`}>
-					<div className="font-title text-[20px] leading-tight tracking-tight text-foreground">Knowledge graph</div>
-					<div className="mt-1 text-[13px] leading-snug text-muted-foreground">
-						{snapshot.nodes.length} {snapshot.nodes.length === 1 ? "idea" : "ideas"} from {snapshot.clusters.length} {snapshot.clusters.length === 1 ? "session or source" : "sessions and sources"}. Each glow is where they were learned — search, or select a dot, to see an idea and open its session.
+				<div data-testid="graph-lead" style={{ ["--lh-lead-top" as string]: `${toolbarBottom + 10}px` }}
+					className={`lh-graph-lead pointer-events-none absolute inset-x-0 top-(--lh-lead-top) z-[6] flex flex-col gap-3 lg:top-3 lg:right-auto lg:max-w-[min(24rem,36%)] ${sidebarOpen ? "lg:left-5" : "lg:left-16"}`}>
+					<div data-testid="graph-caption" className="lh-graph-caption select-none px-5 max-md:hidden md:max-w-[34rem] lg:px-0">
+						<div className="font-title text-[20px] leading-tight tracking-tight text-foreground">Knowledge graph</div>
+						<div className="mt-1 text-[13px] leading-snug text-muted-foreground">
+							{snapshot.nodes.length} {snapshot.nodes.length === 1 ? "idea" : "ideas"} from {snapshot.clusters.length} {snapshot.clusters.length === 1 ? "session or source" : "sessions and sources"}. Each glow is where they were learned — search, or select a dot, to see an idea and open its session.
+						</div>
 					</div>
+					{namedClusters.length > 1 && (
+						<div ref={chipsRef} data-testid="graph-clusters" data-more-right={chipsMoreRight} onScroll={updateChipsMore}
+							className="lh-graph-clusters pointer-events-auto flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:px-5 lg:hidden" role="group" aria-label="Sources in the graph">
+							<button type="button" onClick={() => rendererRef.current?.showAll()}
+								className="flex h-9 shrink-0 items-center rounded-full border border-border/70 bg-card/90 px-3 text-[13px] font-medium text-foreground backdrop-blur transition-colors hover:bg-accent">
+								Whole graph
+							</button>
+							{namedClusters.map((c) => (
+								<button key={c.id} type="button" onClick={() => rendererRef.current?.focusNodes(c.members)}
+									className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card/90 px-3 text-[13px] font-medium text-foreground/85 backdrop-blur transition-colors hover:bg-accent">
+									<span aria-hidden className="size-2 rounded-full" style={{ background: `hsl(${clusterHue(c.id)}, 70%, 70%)` }} />
+									{c.label}
+								</button>
+							))}
+						</div>
+					)}
 				</div>
 			)}
-			{/* The sources, named (phones and tablets): on small canvases only
-			    the biggest cluster's caption fits, so every source is listed as
-			    a chip — tap one to frame it. */}
-			{!isEmpty && snapshot && namedClusters.length > 1 && (
-				<div data-testid="graph-clusters" className="lh-graph-clusters pointer-events-auto absolute inset-x-0 top-[148px] z-[6] flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none] md:top-[92px] lg:hidden" role="group" aria-label="Sources in the graph">
-					{namedClusters.map((c) => (
-						<button key={c.id} type="button" onClick={() => rendererRef.current?.focusNodes(c.members)}
-							className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card/90 px-3 text-[12.5px] font-medium text-foreground/85 backdrop-blur transition-colors hover:bg-accent max-md:h-9">
-							<span aria-hidden className="size-2 rounded-full" style={{ background: `hsl(${clusterHue(c.id)}, 70%, 70%)` }} />
-							{c.label}
-						</button>
-					))}
-				</div>
-			)}
-			<div className="lh-home-toolbar lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
+			<div ref={toolbarRef} className="lh-home-toolbar lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
 			{/* z-20 (2026-09-20): the row paints above the cost number below
 			    it — without this, the later-in-DOM cost control layered over
 			    the settings/coverage dropdowns (owner report), still hoverable

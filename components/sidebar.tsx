@@ -87,11 +87,12 @@ declare global {
 	}
 }
 
-const SidebarContext = createContext<{ open: boolean; phone: boolean; toggle: () => void; closePhone: () => void }>({
+const SidebarContext = createContext<{ open: boolean; phone: boolean; toggle: () => void; closePhone: () => void; holdClosed: () => () => void }>({
 	open: false,
 	phone: false,
 	toggle: () => {},
 	closePhone: () => {},
+	holdClosed: () => () => {},
 });
 
 export function useSidebar() {
@@ -110,6 +111,15 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	// mismatch); the stored value is applied after mount.
 	const [open, setOpen] = useState(false);
 	const [narrow, setNarrow] = useState(false);
+	// A surface that needs the width (the notebook on a portrait tablet)
+	// holds the sidebar closed while it is up — the stored preference is
+	// untouched, so closing that surface brings the sidebar straight back.
+	const [held, setHeld] = useState(0);
+	const holdClosed = useCallback(() => {
+		let released = false;
+		setHeld((count) => count + 1);
+		return () => { if (released) return; released = true; setHeld((count) => Math.max(0, count - 1)); };
+	}, []);
 	const [mounted, setMounted] = useState(false);
 	const phone = usePhoneViewport();
 	const [phoneOpen, setPhoneOpen] = useState(false);
@@ -168,6 +178,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 		// listener flips `narrow` and the sidebar appears. The preference
 		// persists like any other open, so a restart at a narrow width
 		// still auto-restores when widened.
+		// Held closed by a wide surface: the toggle simply shows it again.
+		if (held > 0 && open) {
+			setHeld(0);
+			return;
+		}
 		if (narrow && !open) {
 			localStorage.setItem(STORAGE_KEY, "0");
 			setOpen(true);
@@ -178,7 +193,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 			localStorage.setItem(STORAGE_KEY, v ? "0" : "1");
 			return !v;
 		});
-	}, [narrow, open, phone]);
+	}, [held, narrow, open, phone]);
 
 	// ⌘B: the global shortcut dispatches kbdEventForAction("toggle-sidebar")
 	// and the context answers on exactly that name — the shared spelling
@@ -194,7 +209,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, [toggle]);
 
 	return (
-		<SidebarContext.Provider value={{ open: phone ? phoneOpen : open && !narrow, phone, toggle, closePhone }}>
+		<SidebarContext.Provider value={{ open: phone ? phoneOpen : open && !narrow && held === 0, phone, toggle, closePhone, holdClosed }}>
 			{/* transitions gated on mount: no slide-in flash on page load */}
 			<div className={cn("lh-app-shell flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")}>{children}</div>
 		</SidebarContext.Provider>
@@ -965,7 +980,7 @@ function SessionsSidebar() {
 								<RotateCwIcon className="size-3" />
 								Reload preview
 							</button>
-							<p className="pb-1 text-[11px]">Reload keeps saved conversations and uploads. Unsent text and prototype ink reset.</p>
+							<p className="pb-1 text-xs">Reload keeps saved conversations and uploads. Unsent text and prototype ink reset.</p>
 						</details>}
 					</div>
 				</div>

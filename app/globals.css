@@ -107,16 +107,18 @@
 	   distinction with no visible difference, and 10px sits at the mono
 	   legibility floor; quiet labels get their quiet from color +
 	   tracking, not a notch of size. Reading prose = the 16px rung via
-	   --lh-prose-size.) */
+	   --lh-prose-size.) Whole-app redesign: the chrome is Source Sans 3
+	   now, which sets smaller than the old mono — the floor rung is 12px
+	   and the small rung 13px. */
 	/* --font-title lives in the NON-inline @theme below: inline tokens get
 	   their literal values baked into the utilities (.font-title{font-family:
 	   lh-cmu,serif}), which made the appearance "session names in serif"
 	   toggle write a runtime --font-title no consumer ever read (owner, fix
 	   wave: toggle looked dead). Non-inline emits :root { --font-title: … }
 	   and the utility reads var(--font-title) — appearance overrides win. */
-	--text-xs: 11px;
+	--text-xs: 12px;
 	--text-xs--line-height: 1.4;
-	--text-sm: 12.5px;
+	--text-sm: 13px;
 	--text-sm--line-height: 1.4;
 	--text-base: 14px;
 	--text-base--line-height: 1.45;
@@ -397,20 +399,13 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.lh-session-header .lh-coverage-ring {
 		display: none;
 	}
+	/* Pencil plus its word (a lone pencil reads as "rename"), packed
+	   tight so the session title keeps as much width as possible. */
 	.lh-header-write {
-		width: 44px;
-		height: 44px;
-		padding: 0;
+		height: 40px;
+		padding-inline: 10px;
+		gap: 4px;
 		font-size: 15px;
-	}
-	/* Icon-only on phones (the title needs the width); still named. */
-	.lh-header-write-label {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
 	}
 	.lh-stats-bar {
 		flex-wrap: wrap;
@@ -989,6 +984,8 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.lh-session-header .lh-header-write { height: 40px; padding-inline: 12px; font-size: 14.5px; }
 	.lh-coverage-ring > button { min-width: 40px; min-height: 40px; }
 	.lh-stats-bar :is([data-testid="stats-model"], [data-testid="stats-thinking"], [data-testid="stats-summary"], [data-testid="dictation-toggle"]) { height: 40px; font-size: 14px; }
+	.lh-writing-action { min-height: 44px; padding-inline: 16px; font-size: 14px; }
+	.lh-writing-retry { min-height: 44px; }
 	.lh-mode-switch button { height: 38px; padding-inline: 14px; font-size: 14.5px; }
 	.lh-graph-chains button, .lh-graph-import button { height: 40px; font-size: 14.5px; }
 	.lh-graph-search input { height: 40px; }
@@ -1075,8 +1072,17 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 .lh-graph-physics > summary::after { content: " ›"; }
 .lh-graph-physics[open] > summary::after { content: " ⌄"; }
 
-/* The Concepts share (an iPad workflow): offered on touch tablets; with a
-   mouse it appears only once shared writing is actually waiting. */
-@media not all and (pointer: coarse) {
-	.lh-shared-writing[data-has-writing="false"] { display: none; }
+/* The source-chip strip scrolls sideways: fade the right edge while more
+   chips wait off-screen. */
+.lh-graph-clusters[data-more-right="true"] {
+	-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+	mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+
+/* Beside the session (tablets and up): Dictate keeps its whole label; the
+   model name is the element that gives way in a narrow composer row. */
+@media (min-width: 768px) {
+	.lh-dictation-slot { min-width: fit-content; }
+	.lh-stats-bar [data-testid="model-control"] { min-width: 0; flex-shrink: 1; }
+	.lh-stats-bar [data-testid="stats-model"] > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }

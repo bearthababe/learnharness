@@ -50,7 +50,7 @@ export function GraphContextCard({ data }: { data: GraphContextData }) {
 					{chains.length > 0 && (
 						<div className="pt-1">
 							{chains.map((c, i) => (
-								<div key={i} className="font-mono text-[11px] text-muted-foreground">
+								<div key={i} className="font-mono text-xs text-muted-foreground">
 									{c}
 								</div>
 							))}

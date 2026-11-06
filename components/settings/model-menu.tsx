@@ -27,7 +27,8 @@ import { SearchMenuList } from "./search-menu-list";
 
 function priceLabel(cost: ModelCatalogEntry["cost"]): string {
 	if (!cost) return "Unpriced";
-	const fmt = (n: number) => `$${n < 1 ? n.toFixed(2).replace(/0$/, "") : n.toFixed(2)}`;
+	// Two decimals everywhere ($0.10, not $0.1), more only for sub-cent prices.
+	const fmt = (n: number) => `$${n === 0 || n >= 0.01 ? n.toFixed(2) : String(Number(n.toPrecision(2)))}`;
 	return `${fmt(cost.input)}/${fmt(cost.output)}`;
 }
 
@@ -229,7 +230,7 @@ export function ProviderMenuList({
 							}`}
 						>
 							<span className="truncate text-card-foreground">{p.label}</span>
-							<span className="shrink-0 font-mono text-[11px] text-muted-foreground">{p.envVar}</span>
+							<span className="shrink-0 font-mono text-xs text-muted-foreground">{p.envVar}</span>
 						</button>
 					</li>
 				))}

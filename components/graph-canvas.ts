@@ -901,6 +901,17 @@ export class GraphCanvasRenderer {
 		select(this.canvas).call(this.zoomBehavior.transform, zoomIdentity.translate(w / 2 - cx * k, h / 2 - cy * k).scale(k));
 	}
 
+	/** Frame the whole graph as a learner action (the "Whole graph" chip):
+	 *  persisted like any other camera move, and still re-fits on resize. */
+	showAll(): void {
+		if (!this.worldBBox) return;
+		const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+		if (w < 10 || h < 10) return;
+		const t = fitTransform(this.worldBBox, w, h, FIT_PADDING);
+		select(this.canvas).call(this.zoomBehavior.transform, zoomIdentity.translate(t.x, t.y).scale(t.k));
+		this.autoFitted = true;
+	}
+
 	/** Glow one node as if hovered (search result hover), or clear it. */
 	highlight(nodeId: string | null): void {
 		this.setHover(nodeId);
@@ -1799,8 +1810,8 @@ export class GraphCanvasRenderer {
 			const pad = 4 / k;
 			// The visible world span: names near an edge slide inward instead
 			// of running off the canvas.
-			const viewLeft = -this.transform.x / k + 8 / k;
-			const viewRight = (this.canvas.clientWidth - this.transform.x) / k - 8 / k;
+			const viewLeft = -this.transform.x / k + 16 / k;
+			const viewRight = (this.canvas.clientWidth - this.transform.x) / k - 16 / k;
 			const ordered = [...this.regionMeta].sort((a, b) => (b.members ?? 0) - (a.members ?? 0));
 			for (const rm of ordered) {
 				if (!rm.lines) continue;

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ChartNoAxesColumnIcon } from "lucide-react";
 import { CLAUDE_CODE_PROVIDER, sessionCacheHitRate, subscriptionLabels, subscriptionLabel, type cliContextWindowOf, type SessionPricing, type TurnUsage } from "@/src/core";
 import { formatTokens, formatUsd, planCostLabel, prettyModel } from "@/components/usage-format";
 import { ModelControl, catalogLimits, useModelCatalog } from "@/components/model-picker";
@@ -170,7 +169,7 @@ export function StatsBar({
 				aria-label="Usage"
 				className="flex h-8 items-center gap-1.5 rounded-full px-2.5 tabular-nums transition-colors hover:bg-card hover:text-foreground"
 			>
-				<span className="lh-phone-usage-label"><ChartNoAxesColumnIcon aria-hidden className="size-4" /></span>
+				<span className="lh-phone-usage-label">Usage</span>
 				<span className="lh-usage-numbers contents"><span data-testid="stats-context">
 					{contextLabel}
 				</span>

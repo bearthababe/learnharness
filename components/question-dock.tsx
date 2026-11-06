@@ -488,9 +488,10 @@ function QuestionDockForm({
 	   walk stops at the last row). Space acts on the walked row exactly
 	   like a click (multi toggles, single displaces; Other also focuses
 	   its input for typing), Enter submits once an answer exists.
-	   Tab toggles FOCUS between the thinking field and the answer rows
-	   (owner round 3) — nothing else; Shift+Tab is NOT ours (the global
-	   thinking-level cycle owns it). Two guards keep native behavior
+	   Tab from nowhere enters the answer rows and Tab from the rows moves
+	   to the thinking field; from there on Tab and Shift+Tab are the
+	   browser's (whole-app redesign — the old rows↔thinking toggle trapped
+	   keyboard users away from Submit). Two guards keep native behavior
 	   intact: keys from a TYPING SURFACE keep their meaning (arrows move
 	   the caret, space types), and modifier combos are never ours
 	   (Alt+arrows cycle sessions — they must not ALSO walk the rows).
@@ -553,15 +554,19 @@ function QuestionDockForm({
 			// Alt/Cmd/Ctrl combos are never ours (Alt+arrows cycle sessions
 			// globally — they must not ALSO walk the question rows).
 			const modded = e.altKey || e.metaKey || e.ctrlKey;
-			// Plain Tab toggles focus: rows → thinking. The confidence
-			// slider takes NO focus at all (owner, UI round 2026-10-01) —
-			// global ←/→ own its keyboard, so it never joins the chain.
-			// Shift+Tab falls through (the global thinking-level cycle owns
-			// it), so the shift check matters.
+			// The confidence slider takes NO focus at all (owner, UI round
+			// 2026-10-01) — global ←/→ own its keyboard, so it never joins
+			// the chain.
+			// From the thinking field (or anywhere else focused) Tab is the
+			// browser's: on to Submit and the rest of the page — the rows are
+			// ONE stop, entered from nowhere, left for the thinking field.
 			if (e.key === "Tab" && !e.shiftKey && !modded) {
+				const inRows = !!t?.closest?.("[data-kbdrow]");
+				const nowhere = !t || t === document.body || t === document.documentElement;
+				if (!inRows && !nowhere) return;
 				e.preventDefault();
 				e.stopPropagation();
-				if (t?.closest?.("[data-kbdrow]")) thinkingRef.current?.focus();
+				if (inRows) thinkingRef.current?.focus();
 				else {
 					const idx = kbdIdx ?? 0;
 					setKbdIdx(idx);
@@ -629,20 +634,34 @@ function QuestionDockForm({
 		return () => { area?.removeEventListener("scroll", updateMoreBelow); window.removeEventListener("resize", updateMoreBelow); };
 	}, [updateMoreBelow]);
 
-	// Keep the walked row visible (the question area scrolls internally).
+	// Keep a walked or chosen row in full view: the question area scrolls
+	// internally and fades at its lower edge, so a row is scrolled clear of
+	// that fade (a learner's own pick is never left half-faded).
+	const revealRow = useCallback((row: Element | null | undefined) => {
+		const area = rootRef.current?.querySelector<HTMLElement>("[data-dock-scroll-area]");
+		if (!area || !(row instanceof HTMLElement) || typeof row.getBoundingClientRect !== "function") return;
+		const a = area.getBoundingClientRect(), r = row.getBoundingClientRect();
+		const fade = area.scrollHeight - area.scrollTop - area.clientHeight > 4 ? 36 : 0;
+		if (r.bottom > a.bottom - fade) area.scrollTop += r.bottom - (a.bottom - fade) + 6;
+		else if (r.top < a.top) area.scrollTop -= a.top - r.top + 6;
+		updateMoreBelow();
+	}, [updateMoreBelow]);
 	useEffect(() => {
 		if (kbdIdx === null) return;
-		rootRef.current
-			?.querySelector(`[data-kbdrow="${kbdIdx}"]`)
-			?.scrollIntoView({ block: "nearest" });
-	}, [kbdIdx]);
+		revealRow(rootRef.current?.querySelector(`[data-kbdrow="${kbdIdx}"]`));
+	}, [kbdIdx, revealRow]);
 
 	return (
 		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-notebook-question={toolCallId} data-notebook-channel={owner.channel}>
 			{/* Question area — scrolls internally if very tall; the bottom row stays put.
 			    Capped by the measured column (--dock-max-h; the old fixed 55dvh cut
 			    long questions short — owner round, 2026-10-05). */}
-			<div data-dock-scroll-area="" data-session-find-root="" className="max-h-[var(--dock-max-h,55dvh)] overflow-y-auto px-4 pt-3">
+			<div data-dock-scroll-area="" data-session-find-root="" className="max-h-[var(--dock-max-h,55dvh)] overflow-y-auto px-4 pt-3"
+				onClickCapture={(e) => {
+					const row = (e.target as HTMLElement).closest?.("[data-kbdrow]");
+					// After the pick re-renders (layout settled) — never inside the click.
+					if (row && typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(() => revealRow(row));
+				}}>
 				<div className="mb-1 text-[12.5px] font-semibold text-muted-foreground">
 					{toolName === "probe"
 						? "Probe"
