@@ -8,6 +8,34 @@ existing lower-level tests, not a product gap implementation or data cutover.
 See `verification/learning/reference.feature` and the owner-approved
 `specs/2026-11-06-learning-journey-verification.md`.
 
+## Story catalog
+
+`verification/learning/stories.json` is the single canonical catalog. Each story
+has a stable `LJ-` ID, a learner goal, approved sources, happy/alternative/
+failure-or-return acceptance examples, dependencies, tickets, and three separate
+facts: **availability** (`available`, `partial`, `unavailable`, `unknown`, from
+source inspection), **verification readiness** (`executable`,
+`missing-verification`, `blocked`) and the **run outcome**, which only a run's
+`result.json` records. Child stories name a `parent`; never rename or reuse an ID.
+
+`verification/learning/inventory.json` maps every intended behavior in the
+reviewed approved sources (the spec, `docs/fork-vision.md`, `GLOSSARY.md`, #49
+and the open #15 questions) to stories, or records an explicit exclusion or
+deferral with its reason. A `blocked` story must name the owner decision that
+blocks it in the catalog's `decisions`. The catalog writer drafts; only the owner
+resolves decisions or approves expectations.
+
+`npm run verify:learning -- validate` rejects duplicate or untraceable stories,
+unknown sources or dependencies, cycles, missing acceptance examples, executable
+stories without a tagged scenario (and tagged scenarios for non-executable
+stories), unexplained exclusions and any #49 story that is not accounted for
+exactly once. Every other command refuses while the catalog is invalid.
+`npm run verify:learning -- report` prints the owner review view.
+
+To add or split a story: add the catalog entry and its inventory trace, add a
+Cucumber scenario tagged with the ID only when it really executes, then run
+`npm run test:learning` and `validate`.
+
 ## Invariants
 
 | ID | Required rule | Enforcement / remaining boundary |
@@ -22,7 +50,8 @@ See `verification/learning/reference.feature` and the owner-approved
 
 ## Operator commands
 
-`npm run test:learning` checks reporting and admission mechanics without models.
+`npm run test:learning` checks reporting, catalog validation and admission
+mechanics without models.
 `CHROMIUM_PATH=/usr/bin/chromium npm run verify:learning -- run` runs supported
 reference workflow portions. Read its local `coverage.md` and `result.json`;
 checks-passed does not mean the entire journey is verified. Evidence and fixture
