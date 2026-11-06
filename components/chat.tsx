@@ -333,6 +333,11 @@ export function Chat({
 			}
 			// The card itself: its parent is the whole message (lesson text first).
 			scrollSessionTarget(card, scope, scrollContextRef.current);
+			// A downward programmatic scroll re-locks stick-to-bottom (its scroll
+			// handler reads it as the learner heading for the end), and the
+			// streaming reply would then drag the card away. Hold the escape
+			// once the scroll has been handled.
+			for (const delay of [30, 250, 800]) setTimeout(() => scrollContextRef.current?.stopScroll(), delay);
 		};
 		setTimeout(pin, 120);
 	}, [messages]);
