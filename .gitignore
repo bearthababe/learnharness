@@ -1,4 +1,6 @@
 node_modules/
+.prove-it/runs/
+.prove-it/audits/
 data/
 .next/
 *.log

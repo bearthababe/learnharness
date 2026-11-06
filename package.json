@@ -18,6 +18,8 @@
 		"start": "next start",
 		"test": "NODE_ENV=test tsx --test tests/*.test.ts tests/*.test.tsx",
 		"test:mobile": "node scripts/run-mobile-checks.mjs",
+		"test:workflow": "node --test tests/workflow/ticket-workflow.test.mjs",
+		"test:workflow:browser": "node scripts/prove-ticket-previews.mjs",
 		"lint": "eslint .",
 		"typecheck": "tsc --noEmit",
 		"desktop:dev": "concurrently -k \"next dev\" \"LH_DEV_URL=http://localhost:3000 electron .\"",

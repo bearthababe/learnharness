@@ -12,6 +12,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 In an authorized UI experiment, ordinary UI design and implementation choices are delegated to implementers, and independent reviewers decide promotion. Existing interface mechanics are baseline evidence, not settled design requirements. Approved product requirements, teaching policies and explicit technical constraints remain binding.
 
+## Ticket delivery
+
+Keep the shared root on `main`. Before ticket implementation or cleanup, read
+`docs/agents/git-workflow.md` and use `.agents/skills/ticket-to-main/SKILL.md`.
+After changes to ticket tooling, app launch/auth, or previews, run
+`.agents/skills/prove-learnharness/SKILL.md` before saying done.
+
 ## Browser verification
 
 Before running mobile browser checks or integrating UI changes, read
