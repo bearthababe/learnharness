@@ -25,6 +25,7 @@ import { kbdEventForAction } from "@/src/core";
 import { notifySettingsSaved } from "@/components/settings-signal";
 import { usePhoneViewport } from "@/components/use-phone-viewport";
 import { bindSidebarSwipe } from "@/components/sidebar-swipe";
+import { publishWaitingCount, useWaitingCount } from "@/components/sessions-summary";
 
 /**
  * Desktop navigation sits inline and retains its open preference. On phones
@@ -103,6 +104,12 @@ function subscribeDrawer(update: () => void) {
 	const media = window.matchMedia?.(DRAWER_MEDIA);
 	media?.addEventListener("change", update);
 	return () => media?.removeEventListener("change", update);
+}
+/** Read synchronously while rendering: during hydration the store still
+ *  reports its server value, and a tablet must never flash the inline
+ *  sidebar open (the width change unpins the conversation from its end). */
+function drawerNow() {
+	return typeof window !== "undefined" && (window.matchMedia?.(DRAWER_MEDIA).matches ?? false) && !(window.matchMedia?.("(max-width: 767px)").matches ?? false);
 }
 function useDrawerLayout() {
 	return useSyncExternalStore(subscribeDrawer, () => window.matchMedia?.(DRAWER_MEDIA).matches ?? false, () => false);
@@ -214,7 +221,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, [toggle]);
 
 	return (
-		<SidebarContext.Provider value={{ open: phone ? phoneOpen : drawer ? drawerOpen : open && !narrow, phone, drawer, toggle, closePhone }}>
+		<SidebarContext.Provider value={{ open: phone ? phoneOpen : drawer || drawerNow() ? drawerOpen : open && !narrow, phone, drawer, toggle, closePhone }}>
 			{/* transitions gated on mount: no slide-in flash on page load */}
 			<div className={cn("lh-app-shell flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")} data-drawer={drawer || undefined} data-drawer-open={(drawer && drawerOpen) || undefined}>{children}</div>
 		</SidebarContext.Provider>
@@ -235,6 +242,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
  *  no popping in either direction. */
 export function SidebarToggle() {
 	const { open, phone, toggle } = useSidebar();
+	const waiting = useWaitingCount();
 	return (
 		<span
 			className={cn(
@@ -250,12 +258,14 @@ export function SidebarToggle() {
 				aria-hidden={open}
 				tabIndex={open ? -1 : 0}
 				onClick={toggle}
-				className={cn("sidebar-motion duration-200", open ? "pointer-events-none opacity-0" : "opacity-100")}
+				className={cn("sidebar-motion relative duration-200", open ? "pointer-events-none opacity-0" : "opacity-100")}
 			>
 				{/* Owner, round 6: size-4, SAME as the close glyph — the toggle
 				    must not grow when the sidebar is closed (it did: size-5 here).
 				    The small look is the standard, both directions. */}
 				<PanelLeftOpenIcon className="size-4" />
+				{/* Sessions waiting for an answer stay visible while the list is closed. */}
+				{waiting > 0 && <span className="lh-waiting-badge" aria-hidden="true" data-testid="sessions-waiting-badge">{waiting}</span>}
 			</Button>
 			</Hint>
 		</span>
@@ -451,6 +461,9 @@ function SessionsSidebar() {
 		};
 	}, [phone, open]);
 	const [chats, setChats] = useState<ChatListItem[] | null>(null);
+	useEffect(() => {
+		publishWaitingCount((chats ?? []).filter((c) => c.pendingQuestion || ((c.kind ?? "teach") === "practice" && c.pendingProblem)).length);
+	}, [chats]);
 	const [query, setQuery] = useState("");
 	const [kindFilter, setKindFilter] = useState<SessionKindFilter>("all");
 	useEffect(() => {
@@ -708,6 +721,9 @@ function SessionsSidebar() {
 		// Opening + navigation refetch; while open, the events channel owns
 		// freshness (S6) — no interval, nothing standing.
 	}, [open, pathname, refresh]);
+	// One load even while closed: the closed-list button shows how many
+	// sessions wait for an answer (the events channel keeps it current).
+	useEffect(() => { void refresh(); }, [refresh]);
 
 	return (
 		<aside

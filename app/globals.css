@@ -2356,3 +2356,179 @@ html[data-focus-source="keyboard"] [data-attachment-composer] :is(textarea, [con
 	font-size: 12px;
 	opacity: .8;
 }
+.lh-tool-subject {
+	color: var(--foreground);
+	opacity: .85;
+}
+
+/* Home: a short way back into the sessions worth resuming (phones and
+   portrait tablets; the wide sidebar already lists them). */
+.lh-resume {
+	margin-bottom: 12px;
+	pointer-events: auto;
+}
+.lh-resume-label {
+	margin: 0 4px 6px;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--muted-foreground);
+}
+.lh-resume-row {
+	display: flex;
+	gap: 8px;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scroll-snap-type: x mandatory;
+	scrollbar-width: none;
+	padding-bottom: 2px;
+}
+.lh-resume-row::-webkit-scrollbar {
+	display: none;
+}
+.lh-resume-card {
+	display: flex;
+	flex: 0 0 min(78%, 300px);
+	align-items: center;
+	gap: 10px;
+	min-height: 56px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: color-mix(in oklab, var(--card) 92%, transparent);
+	backdrop-filter: blur(8px);
+	scroll-snap-align: start;
+	transition: background-color .15s, border-color .15s;
+}
+.lh-resume-card:hover {
+	background: var(--accent);
+}
+.lh-resume-card[data-waiting] {
+	border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+}
+.lh-resume-title {
+	display: block;
+	overflow: hidden;
+	color: var(--foreground);
+	font-size: 14.5px;
+	font-weight: 550;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lh-resume-meta {
+	display: block;
+	font-size: 12.5px;
+	color: var(--muted-foreground);
+}
+.lh-resume-card[data-waiting] .lh-resume-meta {
+	color: var(--lh-brand-ink);
+}
+.lh-resume-chevron {
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+	color: var(--muted-foreground);
+}
+@media (min-width: 1024px) {
+	.lh-resume { display: none; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+	.lh-resume-card { flex-basis: calc((100% - 16px) / 3); }
+}
+.lh-setup-use-all {
+	align-self: flex-start;
+	min-height: 34px;
+	margin-top: 4px;
+	padding: 0 14px;
+	border: 1px solid color-mix(in oklab, var(--primary) 45%, var(--border));
+	border-radius: 999px;
+	background: var(--lh-brand-soft);
+	color: var(--lh-brand-ink);
+	font-size: 13.5px;
+	font-weight: 550;
+}
+.lh-setup-use-all:hover {
+	background: color-mix(in oklab, var(--primary) 26%, transparent);
+}
+.lh-setup button.lh-setup-save {
+	min-height: 40px;
+	padding: 0 20px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--primary);
+	color: var(--primary-foreground);
+	font-size: 14.5px;
+	font-weight: 600;
+}
+.lh-setup button.lh-setup-save:disabled {
+	background: var(--accent);
+	color: var(--muted-foreground);
+	opacity: 1;
+}
+@media (max-width: 767px) {
+	.lh-setup-use-all { min-height: 44px; }
+	.lh-setup button.lh-setup-save { min-height: 48px; width: 100%; }
+}
+
+/* Touch screens of any width: footer and settings controls reach 40px+. */
+@media (pointer: coarse) {
+	[data-testid="stats-model"], [data-testid="stats-thinking"] {
+		height: 40px;
+		min-height: 40px !important;
+	}
+	.lh-stats-bar [data-testid="stats-summary"],
+	.lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"] {
+		min-height: 40px;
+		height: 40px;
+	}
+	.lh-settings-content [data-slot="button"], .lh-settings-content :is(button, input, select).h-7 {
+		min-height: 40px;
+		height: auto;
+	}
+	.lh-header-chip, .lh-header-write {
+		height: 40px;
+	}
+	.lh-mode-switch > :is(button, a) {
+		min-height: 36px;
+	}
+}
+
+/* Reading measure: about 70–80 characters per line on wide screens. */
+@media (min-width: 768px) {
+	.lh-column {
+		max-width: 44rem;
+	}
+	.lh-stats-bar {
+		font-size: 13px;
+	}
+	[data-testid="stats-model"], [data-testid="stats-thinking"] {
+		font-size: 13px;
+	}
+}
+
+.lh-waiting-badge {
+	position: absolute;
+	top: 1px;
+	right: 0;
+	display: grid;
+	place-items: center;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	border-radius: 999px;
+	background: var(--primary);
+	color: var(--primary-foreground);
+	font-size: 10.5px;
+	font-weight: 700;
+	line-height: 1;
+	box-shadow: 0 0 0 2px var(--background);
+}
+
+/* Phones: the composer hint fits its field. */
+@media (max-width: 767px) {
+	[data-testid="composer"] [data-file-path-input][data-empty="true"][data-placeholder="Ask, answer, or steer the lesson…"]::before {
+		content: "Message your tutor…";
+	}
+}
+.lh-setup button.h-7 > span:first-child, .lh-settings-content button.h-7 > span:first-child {
+	text-align: left;
+}

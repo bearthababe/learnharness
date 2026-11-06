@@ -2,6 +2,7 @@
 
 import { ChevronRight } from "lucide-react";
 import type { ArtifactPartProps } from "@/src/core";
+import { useSessionTitle } from "@/components/session-titles";
 
 /**
  * The generic tool-call card (sources v1, 2026-09-19): a quiet, collapsed
@@ -86,6 +87,11 @@ export function ToolCallCard({ part }: ArtifactPartProps) {
 	const arg = headlineArg(tool, p.input);
 	const out = outputText(p.output);
 	const failed = p.state === "output-error" || typeof p.errorText === "string";
+	// A propositions lookup names its session by title, so repeated steps
+	// stay distinguishable without exposing record ids.
+	const sessionId = tool === "list_propositions" ? arg : undefined;
+	const sessionTitle = useSessionTitle(sessionId || undefined);
+	const subject = sessionTitle ?? summaryArg(tool, arg);
 	return (
 		<details
 			data-testid="tool-call-card"
@@ -96,7 +102,7 @@ export function ToolCallCard({ part }: ArtifactPartProps) {
 				<span className={`lh-tool-label ${failed ? "text-red-500" : ""}`}>
 					{TOOL_LABEL[tool] ?? tool}{failed ? " — failed" : ""}
 				</span>
-				{summaryArg(tool, arg) && <span className="lh-tool-arg truncate">{summaryArg(tool, arg)}</span>}
+				{subject && <span className={sessionTitle ? "lh-tool-subject truncate" : "lh-tool-arg truncate"}>{subject}</span>}
 				<ChevronRight className="size-3 shrink-0 opacity-50 transition-transform group-open:rotate-90" />
 			</summary>
 			<div className="mt-2 space-y-2 rounded-xl border bg-card p-3 text-xs">

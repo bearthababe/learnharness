@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpIcon, BookOpenIcon, DumbbellIcon, TargetIcon } from "lucide-react";
 import { CompactLearningInput } from "@/components/compact-learning-input";
+import { ResumeStrip } from "@/components/resume-strip";
 import { GraphView } from "@/components/graph-view";
 import { MinimalHome } from "@/components/minimal-home";
 import { SetupDialog } from "@/components/setup-dialog";
@@ -221,6 +222,7 @@ export function Home({
 					    send consumes it). Practice mode with nothing picked
 					    shows the pick HINT so the affordance is discoverable;
 					    teaching mode with nothing picked renders nothing. */}
+					{configured && <ResumeStrip />}
 					<div className="lh-mode-row">
 						<div className="lh-segmented lh-mode-switch" role="group" aria-label="Session type" data-testid="home-mode-switch">
 								{(["teach", "practice", "drill"] as const).map((m) => (

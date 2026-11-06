@@ -63,6 +63,10 @@ export function ProbeDoneCard({ part }: { part: { input?: unknown; output?: unkn
 						<p className="px-1 text-sm text-muted-foreground">{assessment.summary}</p>
 					)}
 				</div>
+			) : state === "output-available" ? (
+				// Settled without a readable assessment: say so, never a
+				// "writing" state that cannot finish.
+				<p className="text-sm text-muted-foreground">No written assessment was recorded for this check-in.</p>
 			) : (
 				<p className="text-sm text-muted-foreground">Writing the assessment…</p>
 			)}

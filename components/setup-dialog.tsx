@@ -487,7 +487,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 				) : (
 					<div className="flex flex-col gap-4 overflow-y-auto px-6 py-5" data-testid="setup-stage-pickers">
 						<p className="text-xs text-muted-foreground">
-							Pick the model for each tier. All three are required before chats can start.
+							Pick a main model first; use it for every role or choose cheaper or image-reading models for the others. All three roles are needed before chats can start.
 						</p>
 						{SLOT_ORDER.map((slot) => {
 							const entry = picked[slot];
@@ -611,6 +611,33 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 											)}
 										</div>
 									</div>
+									{slot === "strong" && entry && (() => {
+										// One choice instead of three: reuse the main model for the
+										// other roles (vision only when the model reads images).
+										const meta = catalog?.models.find((m) => m.id === entry.id && m.provider === entry.provider);
+										const reads = !!meta?.input.includes("image") || entry.provider === CUSTOM_PROVIDER.id;
+										const same = (other: typeof entry | undefined) => !!other && other.id === entry.id && other.provider === entry.provider;
+										if (same(picked.cheap) && (!reads || same(picked.vision))) return null;
+										return (
+											<button
+												type="button"
+												data-testid="setup-use-for-all"
+												className="lh-setup-use-all"
+												onClick={() => {
+													editedSlots.current.add("cheap");
+													if (reads) editedSlots.current.add("vision");
+													setPicked((prev) => ({ ...prev, cheap: entry, ...(reads ? { vision: entry } : {}) }));
+													setLevels((prev) => ({
+														...prev,
+														cheap: populateLevel(prev.cheap, meta?.supportedLevels ?? []),
+														...(reads ? { vision: populateLevel(prev.vision, meta?.supportedLevels ?? []) } : {}),
+													}));
+												}}
+											>
+												Use {prettyModel(entry.id)} for {reads ? "all three roles" : "the Cheap role too"}
+											</button>
+										);
+									})()}
 								</div>
 							);
 						})}
@@ -620,7 +647,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 								data-testid="setup-save"
 								disabled={!allPicked || saving}
 								onClick={() => void save()}
-								className="rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
+								className="lh-setup-save rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
 							>
 								{saving ? "Saving…" : "Save models"}
 							</button>

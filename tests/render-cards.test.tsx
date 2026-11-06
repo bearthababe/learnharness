@@ -499,7 +499,7 @@ describe("probe-done card", () => {
 		const echoless = renderToStaticMarkup(
 			<ProbeDoneCard part={{ state: "output-available", output: { ok: true } } as never} />,
 		);
-		assert.match(echoless, /Writing the assessment…/);
+		assert.match(echoless, /No written assessment was recorded/); // settled: never a pending state that cannot finish
 		assert.ok(!echoless.includes("modal logic basics"), "no assessment echo in the result");
 	});
 

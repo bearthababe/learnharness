@@ -298,6 +298,30 @@ export function Chat({
 	useSessionInputViewport(workspaceRef, notebookVisible);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
 	useMobileChatFocus(workspaceRef, scrollContextRef, !notebookVisible);
+	// The stick-to-bottom scroller re-pins when its CONTENT resizes, not when
+	// the viewport itself shrinks (the notebook or writing pane opening, a
+	// split loading). Keep a reader who was at the end at the end.
+	useEffect(() => {
+		let observer: ResizeObserver | null = null;
+		let frame = 0;
+		let lastHeight = 0;
+		const attach = () => {
+			const ctx = scrollContextRef.current;
+			const el = ctx?.scrollRef.current;
+			if (!ctx || !el) { frame = requestAnimationFrame(attach); return; }
+			lastHeight = el.clientHeight;
+			observer = new ResizeObserver(() => {
+				const height = el.clientHeight;
+				const shrank = height < lastHeight - 1;
+				lastHeight = height;
+				const state = scrollContextRef.current?.state;
+				if (shrank && state && state.isAtBottom && !state.escapedFromLock) void scrollContextRef.current?.scrollToBottom("instant");
+			});
+			observer.observe(el);
+		};
+		attach();
+		return () => { cancelAnimationFrame(frame); observer?.disconnect(); };
+	}, []);
 	const sourceTextParts = useMemo(() => firstSourceTextParts(messages), [messages]);
 
 	// The reattach settled terminal → the sync-and-continue seam (below).
@@ -664,7 +688,32 @@ export function Chat({
 		if (view.contextId || textRef.current) return;
 		let saved: string | null = null;
 		try { saved = localStorage.getItem(localDraftKey); } catch { /* storage blocked */ }
-		if (saved) applyText(saved);
+		if (!saved) return;
+		applyText(saved);
+		// Continue a restored draft where it ends: the first focus moves a
+		// caret left at the very start to the end of the text.
+		const editor = composerInputRef.current;
+		if (!editor) return;
+		const onFocus = () => {
+			editor.removeEventListener("focus", onFocus);
+			requestAnimationFrame(() => {
+				const selection = window.getSelection();
+				if (!selection || !editor.textContent) return;
+				const inside = selection.anchorNode && editor.contains(selection.anchorNode);
+				if (inside && selection.rangeCount) {
+					const before = document.createRange();
+					before.selectNodeContents(editor);
+					before.setEnd(selection.getRangeAt(0).startContainer, selection.getRangeAt(0).startOffset);
+					if (before.toString().length > 0) return;
+				}
+				const end = document.createRange();
+				end.selectNodeContents(editor);
+				end.collapse(false);
+				selection.removeAllRanges();
+				selection.addRange(end);
+			});
+		};
+		editor.addEventListener("focus", onFocus);
 	}, [notebook.view, localDraftKey, applyText]);
 	useLayoutEffect(() => {
 		if (!notebook.view?.contextId) return;
@@ -1484,9 +1533,6 @@ export function Chat({
 <button
 							type="button"
 														onClick={() => {
-								// Phones rename from the session's ⋯ menu; a tap on
-								// the header title shouldn't open the keyboard.
-								if (window.matchMedia?.("(max-width: 767px)").matches) return;
 								setTitleDraft(titleText);
 								setRenaming(true);
 							}}
