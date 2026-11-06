@@ -193,7 +193,9 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.waitForSelector('.notebook-notice summary');
 	await page.reload({ waitUntil: 'networkidle2' });
 	await page.waitForSelector('.notebook-notice summary');
-	await page.click('[aria-label="Close notebook"]');
+	// Phones: the lesson's control row steps aside while the notebook is open;
+	// the notebook's own header closes it.
+	await page.click('.notebook-frame-header [aria-label="Close equation notebook"]');
 	await page.waitForFunction(() => document.querySelector('.notebook-slot').hidden);
 	assert.ok(await page.$('[aria-label="Working attached"]'));
 	const readClose = () => fetch(`${origin}/api/chats/mobile_notebook_close/notebook`).then(response => response.json());

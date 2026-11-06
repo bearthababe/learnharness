@@ -50,7 +50,7 @@ export function useSharedWriting(chatId: string, messages: readonly LhMessage[])
 	return { pending, pageAttachments, error, refresh, ids: () => pending.map((w) => w.id) };
 }
 
-export function SharedWritingImages({ chatId, writing }: { chatId: string; writing: readonly Pick<SharedWriting, "id">[] }) {
+export function SharedWritingImages({ chatId, writing, small = false }: { chatId: string; writing: readonly Pick<SharedWriting, "id">[]; small?: boolean }) {
 	const actions = useContext(HandwritingPagesContext);
 	const [opened, setOpened] = useState<{ item: SnapshotWriting; label: string; decision?: boolean } | null>(null), [menu, setMenu] = useState<string | null>(null), [notice, setNotice] = useState<string | null>(null), [busy, setBusy] = useState(false);
 	async function run(item: SnapshotWriting, duplicate: boolean) {
@@ -58,11 +58,11 @@ export function SharedWritingImages({ chatId, writing }: { chatId: string; writi
 		try { const result = await actions.openSnapshot(item, duplicate); setNotice(result.kind === "failed" ? result.notice : null); if (result.kind === "choice") setOpened({ item, label: "Handwritten working", decision: true }); }
 		finally { setBusy(false); }
 	}
-	return <><div className="flex max-h-32 gap-2 overflow-auto overscroll-contain py-2" data-testid="shared-writing-images">
+	return <><div className={small ? "flex max-h-16 min-w-0 gap-2 overflow-auto overscroll-contain py-1" : "flex max-h-32 gap-2 overflow-auto overscroll-contain py-2"} data-testid="shared-writing-images">
 		{writing.map((item, index) => <div key={item.id} className="shrink-0" data-writing-id={item.id}><button type="button" onClick={() => { setMenu(null); setOpened({ item, label: `Handwritten working ${index + 1}` }); }} className="rounded border bg-white p-1" style={{ filter: "var(--lh-writing-image-filter)" }} aria-label={`Open handwritten working ${index + 1}`}>
 			{/* Theme presentation only; the private endpoint retains original PNG bytes. */}
 			{/* eslint-disable-next-line @next/next/no-img-element */}
-			<img src={sharedWritingImageUrl(chatId, item.id)} alt={`Handwritten working ${index + 1}`} className="h-24 max-w-48 object-contain" />
+			<img src={sharedWritingImageUrl(chatId, item.id)} alt={`Handwritten working ${index + 1}`} className={small ? "h-11 max-w-24 object-contain" : "h-24 max-w-48 object-contain"} />
 		</button>{actions && <button type="button" className="min-h-11 px-3" aria-label="Snapshot actions" aria-expanded={menu === item.id} disabled={busy} onClick={() => setMenu(value => value === item.id ? null : item.id)}>⋯</button>}
 		</div>)}
 	</div>{menu && <SnapshotMenu duplicate={() => void run(writing.find(item => item.id === menu)!, true)} open={() => void run(writing.find(item => item.id === menu)!, false)} close={() => { const id = menu; setMenu(null); document.querySelector<HTMLButtonElement>(`[data-writing-id="${id}"] [aria-label="Snapshot actions"]`)?.focus(); }} />}
@@ -147,20 +147,26 @@ function SharedWritingViewer({ chatId, writing, label, initialDecision = false, 
 // globals.css), not underlined words.
 const WRITING_ACTION = "lh-writing-action inline-flex h-8 items-center rounded-full border border-border px-3 font-medium text-foreground transition-colors hover:bg-accent";
 
-export function SharedWritingPanel({ chatId, writing, busy }: {
+export function SharedWritingPanel({ chatId, writing, busy, compact = false }: {
 	chatId: string;
 	writing: ReturnType<typeof useSharedWriting>;
 	busy: boolean;
+	/** Beside an open page (the drawing canvas): one line with small
+	 *  thumbnails, so the question being answered stays in view. */
+	compact?: boolean;
 }) {
 	const [uploadUrl, setUploadUrl] = useState("");
 	const [copied, setCopied] = useState(false);
 	useEffect(() => { setUploadUrl(`${location.origin}/api/chats/${encodeURIComponent(chatId)}/writing`); }, [chatId]);
 	return <section className="lh-shared-writing mb-2 rounded-xl border border-border bg-card px-3 py-2 text-[13px]" data-has-writing={writing.pending.length > 0 || !!writing.error} aria-label="Shared writing">
-		{writing.pending.length > 0 && <>
+		{writing.pending.length > 0 && (compact ? <div className="flex min-w-0 items-center gap-3">
+			<p className="shrink-0 font-medium">{writing.pending.length} shared {writing.pending.length === 1 ? "image" : "images"} · not sent</p>
+			<SharedWritingImages chatId={chatId} writing={writing.pending} small />
+		</div> : <>
 			<p className="font-medium">{writing.pending.length} shared {writing.pending.length === 1 ? "image" : "images"} · not sent</p>
 			<SharedWritingImages chatId={chatId} writing={writing.pending} />
 			<p className="text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Review the images, add an explanation below if needed, then send your answer."}</p>
-		</>}
+		</>)}
 		{writing.error && <p role="alert" className="text-destructive">{writing.error} <button type="button" className="lh-writing-retry underline underline-offset-2" onClick={() => void writing.refresh().catch(() => {})}>Try again</button></p>}
 		<details className={`lh-concepts-setup ${writing.pending.length ? "mt-2" : ""}`}>
 			<summary className="lh-concepts-summary cursor-pointer text-muted-foreground transition-colors hover:text-foreground">Share from Concepts</summary>

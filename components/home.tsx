@@ -15,6 +15,10 @@ import { StatsBar } from "@/components/stats-bar";
 import { OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { PathInput } from "@/components/path-input";
 import { AttachFilesButton } from "@/components/attach-files-button";
+import { CompactLearningInput } from "@/components/compact-learning-input";
+import { TabletModelButton, useTabletControls, useTabletLayout } from "@/components/tablet-controls";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { startPlaceholder } from "@/components/composer-actions";
 import { SessionStarter } from "@/components/start-session";
 import type { TurnUsage } from "@/src/core";
 
@@ -107,6 +111,11 @@ export function Home({
 	 *  the composer opens the picker; the picks seed the opening prompt).
 	 *  Not enforcing any input format — the picks are a convenience. */
 	const [mode, setMode] = useState<"teach" | "practice" | "drill">("teach");
+	// Tablets: model / thinking behind the same Model button as in a lesson.
+	const tablet = useTabletLayout();
+	const [controlsOpen, setControlsOpen] = useTabletControls();
+	// Phones: the mic shares the field, so the prompt is shorter (never "…").
+	const phone = usePhoneLayout();
 	const [practiceProps, setPracticeProps] = useState<{ id: string; name: string; statement: string }[]>([]);
 	const [chainSelectOpen, setChainSelectOpen] = useState(false);
 	// The chain table is CONTROLLED off this id set (the lifted pick).
@@ -227,7 +236,7 @@ export function Home({
 			    bottom edge). Matches chat.tsx's DOCK geometry (max-w-[46rem]
 			    px-4) so nothing shifts when a session starts (owner). */}
 			<div className="pointer-events-none absolute inset-x-0 bottom-0 pb-5">
-				<div className="pointer-events-auto mx-auto w-full max-w-[46rem] px-4">
+				<div className="lh-dock-column pointer-events-auto relative mx-auto w-full max-w-[46rem] px-4" data-tablet-controls={tablet ? (controlsOpen ? "open" : "closed") : undefined}>
 					{/* The pick bar (owner vision, 2026-10-04): the chain
 					    table's selection is PERSISTENT — picked
 					    propositions show here as a count + Clear in EITHER
@@ -239,6 +248,7 @@ export function Home({
 						leading={
 							<ModeSwitch mode={mode} onChange={setMode} />
 						}
+						trailing={tablet && <TabletModelButton open={controlsOpen} onToggle={() => setControlsOpen((value) => !value)} />}
 						picker={(practiceProps.length > 0 || mode === "practice") && (
 							<NodePickerControl
 								count={practiceProps.length}
@@ -264,13 +274,14 @@ export function Home({
 					{startError && <p role="alert" className="mb-2 text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
 					<form
 						data-attachment-composer=""
-						className="flex items-end gap-1.5 rounded-2xl border bg-card p-1.5 shadow-[var(--lh-shadow)]"
+						data-testid="home-composer"
+						className="lh-compact-row flex items-end gap-1.5 rounded-2xl border bg-card p-1.5 shadow-[var(--lh-shadow)]"
 					onSubmit={(e) => {
 						e.preventDefault();
 						void start();
 					}}
 				>
-					<PathInput
+					<CompactLearningInput dictation={dictation}><PathInput
 						ref={topicInputRef}
 						value={topic}
 						onValueChange={(value) => {
@@ -293,10 +304,10 @@ export function Home({
 								void start();
 							}
 						}}
-						placeholder={mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
+						placeholder={startPlaceholder(mode, phone)}
 						autoFocus
 						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground/80"
-					/>
+					/></CompactLearningInput>
 					<AttachFilesButton editorRef={topicInputRef} />
 					{/* No tooltip on the start square — the ↵ glyph is the
 					    affordance (owner, subtlety round 2026-09-25). */}
@@ -313,9 +324,12 @@ export function Home({
 					    session yet, so the LEFT side renders nothing (wave 7 sweep)
 					    while the RIGHT keeps the strong-slot control (fix wave: the
 					    pills write /api/settings/models). */}
+					{/* compactInput: phones and tablets dictate from the mic in the
+					    field (as in a lesson); laptops keep the Dictate strip. */}
 					<StatsBar
 						dictationSlot={<DictationBar dictation={dictation} />}
 						turns={[] as TurnUsage[]}
+						compactInput
 					/>
 				</div>
 			</div>

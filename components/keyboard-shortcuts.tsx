@@ -36,6 +36,7 @@ import {
 	KEYBOARD_ACTIONS,
 } from "@/src/core";
 import { isDictationActive } from "@/components/dictation";
+import { clearTabWrap, noteTabFromElement, tabbedOffEnd } from "@/components/tab-wrap";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 
 // Re-exported for the contract pin (tests/keyboard-toggle-sidebar.test.ts):
@@ -63,7 +64,7 @@ export function KeyboardShortcuts() {
 	useEffect(() => {
 		const root = document.documentElement;
 		const onKey = (e: KeyboardEvent) => { if (e.key === "Tab") root.dataset.lhKeyboard = ""; };
-		const onPointer = () => { delete root.dataset.lhKeyboard; };
+		const onPointer = () => { delete root.dataset.lhKeyboard; clearTabWrap(); };
 		window.addEventListener("keydown", onKey, true);
 		window.addEventListener("pointerdown", onPointer, true);
 		return () => {
@@ -84,7 +85,12 @@ export function KeyboardShortcuts() {
 			// the active surface's main field; every later Tab is native.
 			if (e.key === "Tab") {
 				const active = document.activeElement;
-				if (!e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && (!active || active === document.body)) {
+				const nowhere = !active || active === document.body;
+				if (!nowhere) { noteTabFromElement(); return; }
+				// Walked off the end of the page: the browser continues from
+				// the start instead of jumping back into the main field.
+				if (tabbedOffEnd()) { clearTabWrap(); return; }
+				if (!e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
 					window.dispatchEvent(new CustomEvent("lh:kbd-cycle-fields"));
 					if (document.activeElement !== active) e.preventDefault();
 				}

@@ -88,4 +88,8 @@ html[data-session-input-locked], html[data-session-input-locked] body { overflow
 	.notebook-frame-header { min-height: 44px; padding-block: 0; }
 	.notebook-panel > [data-notebook-scroll] { order: 1; }
 	.notebook-panel > .notebook-instruction-form { order: 2; border-top: 1px solid var(--border); }
+	/* The lesson's Plan / model / thinking / usage row steps aside while the
+	   notebook shares the screen — two more lines of lesson; it returns
+	   when the notebook closes (its header has a direct Close). */
+	.session-panes[data-notebook-open="true"] .lh-stats-bar { display: none; }
 }

@@ -5,16 +5,16 @@ import { BookOpenIcon, DumbbellIcon, RepeatIcon } from "lucide-react";
 
 /** Home and the draft share one wrapping action row. Picker controls lead;
  * setup is centered only when it is the sole action. */
-export function ComposerActions({ picker, setup, leading }: { picker?: ReactNode; setup?: ReactNode; leading?: ReactNode }) {
-	if (!picker && !setup && !leading) return null;
+export function ComposerActions({ picker, setup, leading, trailing }: { picker?: ReactNode; setup?: ReactNode; leading?: ReactNode; trailing?: ReactNode }) {
+	if (!picker && !setup && !leading && !trailing) return null;
 	return (
 		<div
 			data-testid="composer-actions"
-			className={`pointer-events-auto mb-2 flex flex-wrap items-center gap-2 ${leading ? "justify-between" : picker ? "justify-start" : "justify-center"}`}
+			className={`pointer-events-auto mb-2 flex flex-wrap items-center gap-2 ${leading || trailing ? "justify-between" : picker ? "justify-start" : "justify-center"}`}
 		>
-			{leading ? <>
-				{leading}
-				{(picker || setup) && <div className="flex flex-wrap items-center gap-2">{picker}{setup}</div>}
+			{leading || trailing ? <>
+				{leading ?? <span aria-hidden />}
+				{(picker || setup || trailing) && <div className="flex flex-wrap items-center gap-2">{picker}{setup}{trailing}</div>}
 			</> : <>
 				{picker}
 				{setup}
@@ -93,4 +93,11 @@ export function ModeSwitch({ mode, onChange, testid = "home-mode-switch", itemTe
 			))}
 		</div>
 	);
+}
+
+/** The start composer's prompt for a mode; phones get the short form so it
+ *  never ends in an ellipsis beside the field's microphone. */
+export function startPlaceholder(mode: "teach" | "practice" | "drill", phone: boolean): string {
+	if (phone) return mode === "drill" ? "What will you drill?" : mode === "practice" ? "What will you practice?" : "What will you learn?";
+	return mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?";
 }

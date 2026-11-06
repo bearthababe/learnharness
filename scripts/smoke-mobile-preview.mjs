@@ -82,7 +82,7 @@ async function checkLaunch(page, destination, manifestPath) {
 }
 
 async function checkReload(page, destination) {
-	const input = '[data-file-path-input][data-placeholder="What do you want to learn?"]';
+	const input = '[data-attachment-composer] [data-file-path-input]'; // the start composer (its prompt is shorter on phones)
 	const draft = "Preview verification: unsent draft survives the reload.";
 	await page.locator(input).fill(draft);
 	assert.equal(await page.$eval(input, element => element.textContent), draft);

@@ -42,7 +42,7 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	assert.equal(await page.$('[data-testid="notebook-options"]'), null);
 	assert.equal(await page.$eval('#notebook-instruction', e => getComputedStyle(e).fontSize), '16px', 'Instruction uses the shared readable input type rung');
 	assert.ok(await page.$eval('[data-notebook-scroll]', e => e.clientHeight > e.closest('.notebook-frame').clientHeight * .5), "Working is the largest part of the phone card");
-	assert.deepEqual(await page.$$eval('.notebook-frame-header button', buttons => buttons.map(e => e.getAttribute('aria-label'))), ['Undo', 'Expand notebook', 'Notebook options']);
+	assert.deepEqual(await page.$$eval('.notebook-frame-header button', buttons => buttons.map(e => e.getAttribute('aria-label'))), ['Undo', 'Expand notebook', 'Notebook options', 'Close equation notebook']);
 	await page.screenshot({ path: path.join(artifacts, "notebook-phone-split.png") });
 	// Drive the same divider by pointer and keyboard, retaining the chosen share.
 	await page.mouse.move(r.divider.x + r.divider.width / 2, r.divider.y + r.divider.height / 2);

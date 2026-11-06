@@ -1133,8 +1133,8 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	:root .lh-compact-field[data-recording] > :is(textarea, [data-file-path-input]) { opacity: 0; height: var(--lh-capture-height); min-height: var(--lh-capture-height, 50px); }
 	:root .lh-compact-speech { display: block; position: absolute; right: 3px; bottom: 3px; }
 	:root .lh-compact-field[data-recording] .lh-compact-speech { left: 3px; }
-	:root .lh-compact-speech button, :root .lh-compact-row > button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; flex-shrink: 0; border-radius: 10px; }
-	:root .lh-compact-row > button { margin-bottom: 4px; }
+	:root .lh-compact-speech button, :root .lh-compact-row > button:not(.lh-phone-reveal) { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; flex-shrink: 0; border-radius: 10px; }
+	:root .lh-compact-row > button:not(.lh-phone-reveal) { margin-bottom: 4px; }
 	:root .lh-compact-speech button:disabled { opacity: .4; }
 	:root .lh-compact-recording { display: flex; align-items: center; min-width: 0; }
 	:root .lh-compact-feedback { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; padding-left: 6px; }
@@ -1151,16 +1151,17 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	/* Model, thinking and usage: no permanent row across the page — the
 	   header's Model button opens them as a card above the composer. */
 	.lh-session-controls { display: inline-flex; }
-	.lh-dock-block .lh-stats-bar { display: none; }
+	[data-tablet-controls] .lh-stats-bar { display: none; }
 	/* A tablet that has switched the equation notebook on keeps its toggle
 	   in reach: a slim row holding only that toggle. */
-	.lh-dock-block[data-tablet-controls="closed"] .lh-stats-bar:has([data-notebook-view-control]) { display: flex; justify-content: flex-start; padding-top: 4px; }
-	.lh-dock-block[data-tablet-controls="closed"] .lh-stats-bar:has([data-notebook-view-control]) > :not(:first-child) { display: none; }
-	.lh-dock-block[data-tablet-controls="open"] .lh-stats-bar {
-		display: flex; position: absolute; z-index: 30; bottom: calc(100% + 10px); right: max(24px, calc((100% - 580px) / 2 + 24px));
+	[data-tablet-controls="closed"] .lh-stats-bar:has([data-notebook-view-control]) { display: flex; justify-content: flex-start; padding-top: 4px; }
+	[data-tablet-controls="closed"] .lh-stats-bar:has([data-notebook-view-control]) > :not(:first-child) { display: none; }
+	[data-tablet-controls="open"] .lh-stats-bar {
+		display: flex; position: absolute; z-index: 30; bottom: calc(100% + 10px); right: 24px;
 		gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 18px;
 		background: var(--popover); box-shadow: 0 16px 40px #0007;
 	}
+	.lh-dock-block[data-tablet-controls="open"] .lh-stats-bar { right: max(24px, calc((100% - 580px) / 2 + 24px)); }
 
 	/* Portrait: the session list slides over the page (320px, the platform
 	   primary-column width), dimming it; choosing a session closes it. */
@@ -1182,4 +1183,29 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 @media (min-width: 768px) and (pointer: coarse) {
 	/* The Concepts share disclosure is a real, finger-sized row. */
 	.lh-concepts-summary { display: flex; align-items: center; min-height: 44px; font-size: 14px; }
+}
+
+/* Phones: the quiz reveal names itself ("Check ›"), not a bare chevron. */
+@media (max-width: 767px) {
+	.lh-compact-row > .lh-phone-reveal { gap: 2px; padding-inline: 12px 8px; font-size: 15px; font-weight: 600; }
+}
+
+/* ── Laptops and desktops: the lesson reads as a page too ───────────────
+   A step larger than the learner's Appearance size (16px → 17px) at a
+   ~75-character measure, so explanations no longer run 100 characters
+   wide; the composer card lines up with that column. */
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	.lh-reading-column :is(.lh-prose, [data-streamdown="table"]) { font-size: calc(var(--lh-prose-size) * 1.0625); }
+	.lh-reading-column { max-width: 608px; }
+	.lh-dock-column { max-width: 640px; }
+	.lh-stats-bar { font-size: 13px; }
+}
+@media (max-width: 767px) {
+	/* The practice pause's green button reads "Next →" (the field keeps room). */
+	.lh-next-word { display: none; }
+}
+@media (max-width: 767px) {
+	/* Settings tabs are one sideways-scrolling row on phones; the edge fade
+	   says more tabs follow. */
+	.lh-settings-nav { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); padding-right: 36px; }
 }

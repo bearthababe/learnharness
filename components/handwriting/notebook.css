@@ -89,3 +89,10 @@
 .hw-pageRow > button:first-child { display: flex; align-items: center; gap: 16px; padding: 8px; width: 100%; text-align: left; }
 .hw-pageRow img { width: 140px; height: 180px; object-fit: contain; border: 1px solid var(--border); }
 .hw-pageRow small { display: block; }
+/* Status lines stack at the foot of the paper (whole-app redesign). */
+.hw-notices { position: absolute; z-index: 4; inset-inline: 8px; bottom: 8px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.hw-notices:empty { display: none; }
+.hw-notices > .hw-notice { position: static; inset: auto; pointer-events: auto; }
+@media (min-width: 768px) {
+	.hw-splitLayout:not(.hw-fullNotebook) .hw-attachmentNotice { display: none; }
+}

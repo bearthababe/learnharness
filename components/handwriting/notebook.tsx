@@ -300,8 +300,6 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				<button type="button" className="min-h-11 underline" {...handlers("Reload preview", () => location.reload())}>Reload preview</button>
 				<p>Reload keeps your notebook, Undo and Redo, attached snapshots and explanation saved at Attach.</p>
 			</div>}
-			{flattened && <p className="hw-notice">Flattened image · original marks cannot be erased</p>}
-			{fingerHint && !fingerDraw && <div className="hw-notice" role="status" data-testid="notebook-finger-hint">Fingers scroll the page. <button type="button" className="min-h-11 px-2 font-semibold underline" onClick={() => setFingerDraw(true)}>Draw with finger</button><button type="button" className="min-h-11 px-2 text-muted-foreground" aria-label="Dismiss" onClick={() => setFingerHint(false)}>Not now</button></div>}
 			<div className="hw-drawingWorkspace"><div className="hw-paperArea"><div ref={areaRef} className="hw-paperScroll" data-testid="notebook-paper-scroll">
 				<div className={`hw-paperStack ${dimPaper ? "hw-dimPaper" : ""}`} style={{ width: paperSize.width, height: paperSize.height }}>
 					<canvas ref={backgroundRef} width={WIDTH} height={HEIGHT} className="hw-figureBackground" aria-hidden="true" data-testid="notebook-background" />
@@ -309,8 +307,15 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 					<canvas ref={highlightRef} width={WIDTH} height={HEIGHT} className="hw-highlightOverlay" style={{ opacity: HIGHLIGHT_OPACITY }} aria-hidden="true" data-testid="notebook-highlight-overlay" />
 				</div>
 			</div><HandwritingToolbar tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} clear={clear} togglePaper={() => setDimPaper(v => !v)} fingerDraw={fingerDraw} toggleFingerDraw={() => setFingerDraw(!fingerDrawRef.current)} /></div></div>
-			{saved.notice && <div className="hw-notice" role="status">{saved.notice}{saved.notice !== "Opening notebook…" && <button type="button" className="min-h-11 px-3 underline" {...handlers("Retry", () => { void recovery.current?.retry().then(() => refreshStatus.current()); })}>Retry</button>}</div>}
-			{attachmentNotice && <div className="hw-notice" role="status">{attachmentNotice.text}{attachmentNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
+			{/* Status lines stack at the paper's foot instead of overlapping;
+			    the page-attached line shows here only when the chat (which has
+			    its own delivery line) is out of view. */}
+			<div className="hw-notices">
+				{flattened && <p className="hw-notice">Flattened image · original marks cannot be erased</p>}
+				{fingerHint && !fingerDraw && <div className="hw-notice" role="status" data-testid="notebook-finger-hint">Fingers scroll the page. <button type="button" className="min-h-11 px-2 font-semibold underline" onClick={() => setFingerDraw(true)}>Draw with finger</button><button type="button" className="min-h-11 px-2 text-muted-foreground" aria-label="Dismiss" onClick={() => setFingerHint(false)}>Not now</button></div>}
+				{saved.notice && <div className="hw-notice" role="status">{saved.notice}{saved.notice !== "Opening notebook…" && <button type="button" className="min-h-11 px-3 underline" {...handlers("Retry", () => { void recovery.current?.retry().then(() => refreshStatus.current()); })}>Retry</button>}</div>}
+				{attachmentNotice && <div className="hw-notice hw-attachmentNotice" role="status">{attachmentNotice.text}{attachmentNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
+			</div>
 		</aside>
 	</div>;
 }

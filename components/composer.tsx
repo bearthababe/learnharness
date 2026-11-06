@@ -219,7 +219,9 @@ export function Composer({
 						aria-label="Next problem"
 						className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[12px] bg-green-600 px-4 font-ui text-[13.5px] font-semibold text-white transition-colors hover:bg-green-500"
 					>
-						Next problem
+						{/* Phones show "Next →" so the field keeps its width; the
+						    accessible name stays "Next problem". */}
+						Next<span className="lh-next-word"> problem</span>
 						<ArrowRightIcon className="size-4" />
 					</button>
 				) : (

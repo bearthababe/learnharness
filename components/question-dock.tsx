@@ -1,5 +1,6 @@
 "use client";
 
+import { tabbedOffEnd } from "@/components/tab-wrap";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -564,6 +565,8 @@ function QuestionDockForm({
 				const inRows = !!t?.closest?.("[data-kbdrow]");
 				const nowhere = !t || t === document.body || t === document.documentElement;
 				if (!inRows && !nowhere) return;
+				// A walk that ran off the end of the page continues natively.
+				if (!inRows && tabbedOffEnd()) return;
 				e.preventDefault();
 				e.stopPropagation();
 				if (inRows) thinkingRef.current?.focus();

@@ -16,7 +16,7 @@ const FEATURES: { id: DeviceFeature; label: string; hint: string }[] = [
 	{
 		id: "drawing-canvas",
 		label: "Drawing canvas",
-		hint: "Write and sketch with Pencil or a finger on a page beside the lesson, then attach the page to your answer.",
+		hint: "Write and sketch with Apple Pencil on a page beside the lesson, then attach the page to your answer. Fingers scroll the page; drawing with a finger can be turned on from the page's Page menu.",
 	},
 	{
 		id: "equation-notebook",

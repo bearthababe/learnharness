@@ -10,6 +10,9 @@ import { SidebarToggle } from "@/components/sidebar";
 import { SetupDialog } from "@/components/setup-dialog";
 import { useModelSetup, selectedModelUnavailable, openModelPicker, ZeroKeysPill } from "@/components/setup-cta";
 import { StatsBar } from "@/components/stats-bar";
+import { TabletModelButton, useTabletControls, useTabletLayout } from "@/components/tablet-controls";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { startPlaceholder } from "@/components/composer-actions";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { ComposerActions, ModeSwitch, NodePickerControl } from "@/components/composer-actions";
 import { OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
@@ -129,6 +132,11 @@ export function DraftShell({
 	// buffer — Enter must reach the finish-first send, not be gated out by
 	// an empty textarea. Nothing said → the send no-ops.
 	const canSend = text.trim().length > 0 || dictation.active;
+	// Tablets: model / thinking behind the same Model button as in a lesson.
+	const tablet = useTabletLayout();
+	const [controlsOpen, setControlsOpen] = useTabletControls();
+	// Phones: the mic shares the field, so the prompt is shorter (never "…").
+	const phone = usePhoneLayout();
 	/* FINISH DICTATION FIRST (owner, 2026-10-01): stop the run, let the
 	 * last finals land through onChange, THEN call the parent's send —
 	 * which reads its REF mirror, so the post-await timing of React's
@@ -193,12 +201,13 @@ export function DraftShell({
 						</Conversation>
 						<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
 						<div className="bg-background pb-4">
-							<div className={DOCK}>
+							<div className={`${DOCK} relative`} data-tablet-controls={tablet ? (controlsOpen ? "open" : "closed") : undefined}>
 								<ComposerActions
 									picker={(picks.length > 0 || mode !== "teach") && (
 										<NodePickerControl count={picks.length} onOpen={onOpenPicker} onClear={onClearPicks} />
 									)}
 									setup={setupCta}
+									trailing={tablet && <TabletModelButton open={controlsOpen} onToggle={() => setControlsOpen((value) => !value)} />}
 								/>
 								{startError && <p role="alert" className="pointer-events-auto mb-2 text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
 								<div data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-[var(--lh-shadow)]">
@@ -212,16 +221,18 @@ export function DraftShell({
 										inputRef={composerInputRef}
 										autoFocus
 										onEscape={dictation.active ? dictation.cancel : undefined}
+										dictation={dictation}
 										// The opening question, same as the graph view's new-session
 										// input (owner refinement round, 2026-09-24) — no lesson has
 										// started yet, so the composer must not read like one is in
 										// flight.
-										placeholder={mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
+										placeholder={startPlaceholder(mode, phone)}
 									/>
 								</div>
 								<StatsBar
 									dictationSlot={<DictationBar dictation={dictation} />}
 									turns={[]}
+									compactInput
 								/>
 							</div>
 						</div>
