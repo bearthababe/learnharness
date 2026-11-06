@@ -4,7 +4,7 @@
  * Only completed strokes touch recovery. No React/storage work on movement. */
 import { useCallback, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { Maximize2Icon, Minimize2Icon, MoreHorizontalIcon, XIcon } from "lucide-react";
+import { FilesIcon, Maximize2Icon, Minimize2Icon, MoreHorizontalIcon, PaperclipIcon, XIcon } from "lucide-react";
 import { useSidebar } from "@/components/sidebar";
 import { HandwritingPages, type PagesState } from "./pages";
 import { handwritingPagesDevice } from "./pages-device";
@@ -265,10 +265,10 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		<aside ref={controlsRef} className="rounded-2xl border bg-card shadow-lg hw-notebook" aria-label="Handwriting notebook" data-testid="handwriting-notebook" data-ready={saved.ready} data-page-id={pageId} data-expanded={expanded}
 			style={{ position: "absolute", inset: 16, margin: 0, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 			<header className="hw-notebookHeader"><h2>Writing</h2>
-				<Button variant="ghost" size="sm" className="hw-headerAction" disabled={!saved.ready || submission?.preparing} {...handlers("Attach snapshot", () => { void attachSnapshot(); })} data-testid="notebook-attach">Attach snapshot</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Pages" aria-expanded={pagesOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Pages", () => { setPagesOpen(value => !value); setOptionsOpen(false); setToolsOpen(false); void recovery.current?.refreshPages().catch(() => {}); })}>Pages</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction" disabled={!saved.ready || submission?.preparing} {...handlers("Attach snapshot", () => { void attachSnapshot(); })} data-testid="notebook-attach"><PaperclipIcon aria-hidden />Attach page</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Pages" aria-expanded={pagesOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Pages", () => { setPagesOpen(value => !value); setOptionsOpen(false); setToolsOpen(false); void recovery.current?.refreshPages().catch(() => {}); })}><FilesIcon aria-hidden />Pages</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? "Back to question" : "Expand notebook"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? "Back to question" : "Expand"}</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close notebook" {...handlers("Close writing", () => { if (expanded) prepareViewChange(false); onClose(); })}>Close</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close notebook" {...handlers("Close writing", () => { if (expanded) prepareViewChange(false); onClose(); })}><XIcon aria-hidden />Close</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" {...handlers("Chat", onClose)} data-testid="open-notebook-chat">Chat</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Notebook options" aria-expanded={optionsOpen} {...handlers("Notebook options", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
 			</header>

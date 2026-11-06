@@ -22,6 +22,7 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.evaluateOnNewDocument(() => {
 		if (window !== window.top) return;
 		localStorage.setItem("lh:sidebar-open", "0");
+		localStorage.setItem("lh:device-tool:writing", "on"); localStorage.setItem("lh:device-tool:notebook", "on"); // both working tools, whatever the emulated device
 		const d = window.notebookSmoke = { time: 10, captures: 0, sockets: [], closes: 0, sends: [] };
 		const fetch = window.fetch.bind(window);
 		window.fetch = (url, init) => {
@@ -190,7 +191,9 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.waitForSelector('.notebook-notice summary');
 	await page.reload({ waitUntil: 'networkidle2' });
 	await page.waitForSelector('.notebook-notice summary');
-	await page.click('[aria-label="Close notebook"]');
+	// The phone split keeps its own close in the notebook toolbar (the
+	// composer's tool row steps aside while the notebook is open).
+	await page.click('[data-testid="notebook-close"]');
 	await page.waitForFunction(() => document.querySelector('.notebook-slot').hidden);
 	assert.ok(await page.$('[aria-label="Working attached"]'));
 	const readClose = () => fetch(`${origin}/api/chats/mobile_notebook_close/notebook`).then(response => response.json());

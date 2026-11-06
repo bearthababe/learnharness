@@ -190,6 +190,7 @@ try {
 	await page.evaluateOnNewDocument(() => {
 		if (window !== window.top) return;
 		localStorage.setItem("lh:sidebar-open", "0");
+		localStorage.setItem("lh:device-tool:writing", "on"); localStorage.setItem("lh:device-tool:notebook", "on"); // both working tools, whatever the emulated device
 		// Keep the real graph/worklet/audio. Only emulate Safari's paused state
 		// between runs; a resumed graph must produce actual PCM again.
 		const NativeAudioContext = window.AudioContext;

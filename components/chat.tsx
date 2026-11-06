@@ -78,6 +78,7 @@ import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
 import { SessionMessageNavigation, scrollSessionTarget } from "@/components/session-navigation";
 import { friendlyProviderError } from "@/components/friendly-error";
+import { useDeviceFeature } from "@/components/device-features";
 import { PracticeDock } from "@/components/practice-dock";
 import { ActiveProblemContext, ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
@@ -291,7 +292,15 @@ export function Chat({
 	const workspaceRef = useRef<HTMLDivElement | null>(null);
 	const workspaceId = useId();
 	const notebook = useNotebookSession(chatId);
-	const notebookVisible = notebook.view?.visible ?? false;
+	// Working tools follow the device (Settings → General): a switched-off
+	// tool only hides; its saved state stays in the session.
+	const notebookOn = useDeviceFeature("notebook");
+	const writingOn = useDeviceFeature("writing");
+	const notebookVisible = notebookOn && (notebook.view?.visible ?? false);
+	// Switching the canvas off closes it (its pages stay saved).
+	useEffect(() => {
+		if (!writingOn && handwriting.open) handwriting.show(false);
+	}, [writingOn, handwriting]);
 	const notebookLayout = useNotebookLayout(notebookVisible);
 	const notebookSpeech = useSyncExternalStore(notebook.session.speech.subscribe, notebook.session.speech.getSnapshot, notebook.session.speech.getSnapshot);
 	const tutorDraftState = useSyncExternalStore(notebook.session.tutor.subscribe, notebook.session.tutor.getSnapshot, notebook.session.tutor.getSnapshot);
@@ -1495,7 +1504,7 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" className={`session-workspace flex h-dvh overflow-hidden ${handwriting.open ? "hw-workspace" : ""}`}>
+		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" data-writing-off={writingOn ? undefined : ""} className={`session-workspace flex h-dvh overflow-hidden ${handwriting.open ? "hw-workspace" : ""}`}>
 		<div className={handwriting.open ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
 			<div inert={handwriting.open && handwriting.expanded} className={handwriting.open ? "hw-chat hw-mobileHidden flex min-h-0 min-w-0 flex-1 flex-col" : "contents"}>
 			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
@@ -1624,7 +1633,7 @@ export function Chat({
 					) : (
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
 					)}
-					<Button variant="outline" size="sm" className="lh-header-write shrink-0" onClick={() => handwriting.show(true)} data-testid="open-notebook" aria-label="Write"><PenLineIcon aria-hidden /><span className="lh-header-write-label">Write</span></Button>
+					{writingOn && <Button variant="outline" size="sm" className="lh-header-write shrink-0" onClick={() => handwriting.show(true)} data-testid="open-notebook" aria-label="Write"><PenLineIcon aria-hidden /><span className="lh-header-write-label">Write</span></Button>}
 				</TopBar>
 				{!notebookVisible && notebook.error && <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>}
 
@@ -1956,7 +1965,7 @@ export function Chat({
 					contextTokens={contextTokens}
 					cliContextWindow={cliContextWindowOf(nativeMessages)}
 					pricing={pricing}
-					notebookToggle={<span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
+					notebookToggle={<>{writingOn && <button type="button" className="lh-dock-write pointer-events-auto" data-testid="dock-open-writing" aria-label="Write by hand" onClick={() => handwriting.show(true)}><PenLineIcon aria-hidden /><span>Write</span></button>}{notebookOn && <span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
 						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
 						className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
 						onClick={() => {
@@ -1966,7 +1975,7 @@ export function Chat({
 							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
 						}}><NotebookPenIcon className="size-4" /></button>
 						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="text-muted-foreground"><PaperclipIcon className="size-3" aria-hidden="true" /></span>}
-					</span>}
+					</span>}</>}
 					onReserve={setDockReserve}
 					dictationSlot={<DictationBar dictation={dictation} />}
 					dictation={tutorDictation}

@@ -28,6 +28,7 @@ import {
 	useEffect,
 	useRef,
 	useState,
+	useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 import { useBackdropDismiss } from "@/components/backdrop-dismiss";
@@ -42,6 +43,7 @@ import {
 import { useAppearance } from "./appearance.tsx";
 import { SettingsSection } from "./controls.tsx";
 import { UpdateSettings } from "./update-settings.tsx";
+import { DeviceToolsSettings } from "./device-tools.tsx";
 import { AgentSection } from "./agent-section.tsx";
 import type { ModelsSettings } from "@/src/core";
 import { MENU_CLOSE_EVENT, MENU_OPEN_EVENT } from "@/components/menu-shell";
@@ -64,8 +66,18 @@ const SECTIONS = [
 	{ id: "appearance", label: "Appearance", blurb: "Reading size, fonts and colours" },
 	{ id: "graph", label: "Graph", blurb: "Knowledge graph and extraction" },
 	{ id: "keyboard", label: "Keyboard", hint: "Stored on this device", blurb: "Shortcuts" },
-	{ id: "general", label: "General", blurb: "Updates" },
+	{ id: "general", label: "General", blurb: "Tools on this device, updates" },
 ] as const;
+const NARROW_SETTINGS = "(max-width: 839px)";
+function subscribeNarrow(update: () => void) {
+	const media = window.matchMedia?.(NARROW_SETTINGS);
+	media?.addEventListener("change", update);
+	return () => media?.removeEventListener("change", update);
+}
+function useNarrowSettings() {
+	return useSyncExternalStore(subscribeNarrow, () => window.matchMedia?.(NARROW_SETTINGS).matches ?? false, () => false);
+}
+
 const SECTION_ICON = {
 	keys: KeyRoundIcon,
 	agent: BrainIcon,
@@ -207,7 +219,10 @@ export function SettingsDialogBody({
 	useEffect(() => {
 		setActive(initialSection);
 	}, [initialSection]);
-	const phone = usePhoneLayout();
+	// Below 840px wide settings is one column that drills into a section.
+	const phoneLayout = usePhoneLayout();
+	const narrowSettings = useNarrowSettings();
+	const phone = phoneLayout || narrowSettings;
 	const [listOpen, setListOpen] = useState(startWithList);
 	const phoneList = phone && listOpen;
 	const activeLabel = SECTIONS.find((x) => x.id === active)?.label ?? "Settings";
@@ -396,6 +411,7 @@ export function SettingsDialogBody({
 									title="General"
 									testid="section-general"
 								>
+									<DeviceToolsSettings />
 									<UpdateSettings
 										autoUpdate={record.general?.autoUpdate ?? true}
 										onAutoUpdateChange={(on) =>

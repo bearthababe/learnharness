@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeftIcon, CheckIcon, EllipsisIcon, Loader2Icon, Maximize2Icon, Minimize2Icon, Undo2Icon } from "lucide-react";
+import { ArrowLeftIcon, CheckIcon, EllipsisIcon, Loader2Icon, Maximize2Icon, Minimize2Icon, Undo2Icon, XIcon } from "lucide-react";
 import type { NotebookSession } from "./notebook-session";
 import { NotebookWorking } from "./notebook-working";
 import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, NOTEBOOK_PICKER_MODELS, notebookCandidateFor, notebookPickerModel, type NotebookPickerModel, type TutorDraftOwner } from "@/src/core";
@@ -100,6 +100,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 					</div>}
 				</MenuShell>}
 			</div>
+			{viewControls && <button type="button" aria-label="Hide notebook" title="Hide notebook" data-testid="notebook-close" onClick={viewControls.close}><XIcon /></button>}
 		</header>
 		<form className="notebook-instruction-form" onSubmit={(event) => { event.preventDefault(); apply(); }}>
 			<div className="notebook-input-row">
