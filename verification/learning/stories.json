@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "expectations": "specs/2026-11-06-learning-journey-verification.md",
+  "approval": "Owner-approved requirements, November 6, 2026",
+  "stories": [
+    { "id": "LJ-START", "title": "Start learning from a goal and probe prerequisites", "dependencies": [], "tickets": [], "availability": "available", "automation": "executable", "expectations": ["section 4, checks 1 and 2"], "claims": ["synthetic goal persisted", "successful probe_done persisted"] },
+    { "id": "LJ-PROGRESS", "title": "Plan, teach, respond to uncertainty and retry", "dependencies": ["LJ-START"], "tickets": [], "availability": "available", "automation": "executable", "expectations": ["section 4, checks 2 and 5"], "claims": ["validated plan persisted", "scripted feedback and retry persisted, not tutor accuracy"] },
+    { "id": "LJ-RETURN", "title": "Close, reopen and continue with earlier work accessible", "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "available", "automation": "executable", "expectations": ["section 4, check 3"], "claims": ["same-process continuity only", "earlier messages and plan survive reopen"] },
+    { "id": "LJ-REVIEW", "title": "Review earlier learning", "dependencies": ["LJ-RETURN"], "tickets": [], "availability": "unknown", "automation": "missing-verification", "expectations": ["section 2, goal 2"], "claims": ["requires a separately approved review scenario; no product-gap inference"] },
+    { "id": "LJ-CHECK", "title": "Check understanding on demand", "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "unknown", "automation": "missing-verification", "expectations": ["section 2, goal 2"], "claims": ["requires approved assessment expectations; visited is not mastery"] },
+    { "id": "LJ-CONTINUE", "title": "Continue toward the goal using learner evidence", "dependencies": ["LJ-RETURN", "LJ-CHECK"], "tickets": [], "availability": "unknown", "automation": "missing-verification", "expectations": ["section 2, goals 2 and 3"], "claims": ["saved conversation alone does not establish evidence-guided adaptation"] },
+    { "id": "LJ-TUTOR", "title": "Independent subject and teaching evaluation", "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "unknown", "automation": "blocked", "expectations": ["section 3, V-3 through V-5"], "claims": ["subject key, calibration and enforceable live adapter need approval"] }
+  ]
+}
