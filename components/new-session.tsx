@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { BookOpenIcon, DumbbellIcon, TargetIcon } from "lucide-react";
 import { Conversation, ConversationContent, ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { Composer } from "@/components/composer";
 import { DictationBar, joinDictation, useDictation } from "@/components/dictation";
@@ -170,6 +172,9 @@ export function DraftShell({
 						<Conversation className="h-full min-w-0 flex-1" initial="instant">
 							<ConversationContent className="min-h-full gap-0 p-0">
 								<ConversationEmptyState
+									className="lh-empty-state"
+									data-kind={mode}
+									icon={<span className="lh-kind-tile lh-empty-icon" data-kind={mode}>{mode === "drill" ? <TargetIcon aria-hidden="true" /> : mode === "practice" ? <DumbbellIcon aria-hidden="true" /> : <BookOpenIcon aria-hidden="true" />}</span>}
 									title={mode === "drill" ? "New drill" : mode === "practice" ? "New practice session" : "New session"}
 									description={
 										mode === "drill" ? "Describe the skill or difficulty you want to work on." : mode === "practice"
@@ -182,6 +187,23 @@ export function DraftShell({
 						<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
 						<div className="bg-background pb-4">
 							<div className={DOCK}>
+								<div className="lh-mode-row pointer-events-auto">
+									<nav className="lh-segmented lh-mode-switch" aria-label="Session type" data-testid="new-session-mode-switch">
+											{(["teach", "practice", "drill"] as const).map((m) => (
+												<Link
+													key={m}
+													href={m === "teach" ? "/chat/new" : `/chat/new?mode=${m}`}
+													replace
+													data-kind={m}
+													data-active={mode === m}
+													aria-current={mode === m ? "page" : undefined}
+												>
+													{m === "teach" ? <BookOpenIcon aria-hidden="true" /> : m === "drill" ? <TargetIcon aria-hidden="true" /> : <DumbbellIcon aria-hidden="true" />}
+													{m === "teach" ? "Teach" : m === "drill" ? "Drill" : "Practice"}
+												</Link>
+											))}
+										</nav>
+								</div>
 								<ComposerActions
 									picker={(picks.length > 0 || mode !== "teach") && (
 										<NodePickerControl count={picks.length} onOpen={onOpenPicker} onClear={onClearPicks} />
@@ -205,11 +227,13 @@ export function DraftShell({
 										// started yet, so the composer must not read like one is in
 										// flight.
 										placeholder={mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
+										dictation={dictation}
 									/>
 								</div>
 								<StatsBar
 									dictationSlot={<DictationBar dictation={dictation} />}
 									turns={[]}
+									compactInput
 								/>
 							</div>
 						</div>
@@ -364,7 +388,7 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 								type="button"
 								data-testid="setup-cta"
 								onClick={() => setSetupOpen(true)}
-								className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
+								className="lh-setup-cta cursor-pointer"
 							>
 								Set up your models
 							</button>

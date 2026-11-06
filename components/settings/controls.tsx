@@ -26,9 +26,9 @@ export function SettingsSection({
 	testid?: string;
 }) {
 	return (
-		<section data-testid={testid} className="px-6 py-5">
-			<h2 className="text-sm uppercase tracking-widest text-foreground">{title}</h2>
-			{hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+		<section data-testid={testid} className="lh-settings-section px-6 py-5">
+			<h2 className="lh-settings-section-title">{title}</h2>
+			{hint && <p className="mt-1 text-sm text-muted-foreground">{hint}</p>}
 			<div className="mt-4 flex flex-col gap-3">{children}</div>
 		</section>
 	);

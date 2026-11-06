@@ -28,83 +28,57 @@
 	outline: none;
 }
 
-/* Palette (owner's hexes): main #141414, raised #1C1C1C, edges #434343.
-   Mono chrome = JetBrains Mono; prose = Source Sans 3; titles = CMU Serif. */
-:root {
+/* Palette — warm ink. One accent hue (iris) carries action, selection and
+   focus; three quiet kind hues tell teaching / practice / drill apart; the
+   semantic greens/ambers/reds are reserved for outcomes. Surfaces step up
+   in small, even increments so depth reads without heavy borders. */
+:root,
+.dark {
 	color-scheme: dark;
-	--radius: 8px;
-	--background: #141414;
-	--foreground: #e6e6e6;
-	--card: #1c1c1c;
-	--card-foreground: #e6e6e6;
-	--popover: #1c1c1c;
-	--popover-foreground: #e6e6e6;
-	--primary: #e6e6e6;
-	--primary-foreground: #141414;
-	--secondary: #1c1c1c;
-	--secondary-foreground: #e6e6e6;
-	--muted: #1c1c1c;
-	--muted-foreground: #8d8d8d;
-	--accent: #2a2a2a;
-	--accent-foreground: #e6e6e6;
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: #434343;
-	--input: #434343;
-	--ring: #8d8d8d;
+	--radius: 10px;
+	--background: #131218;
+	--foreground: #eceaf2;
+	--card: #1b1a21;
+	--card-foreground: #eceaf2;
+	--popover: #201f27;
+	--popover-foreground: #eceaf2;
+	--primary: #8577f5;
+	--primary-foreground: #ffffff;
+	--secondary: #1b1a21;
+	--secondary-foreground: #eceaf2;
+	--muted: #1e1d24;
+	--muted-foreground: #a29fae;
+	--accent: #292831;
+	--accent-foreground: #f4f3f8;
+	--destructive: #f07a7a;
+	--border: #312f39;
+	--input: #3b3944;
+	--ring: #8577f5;
+	/* Accent ink: the iris tuned for text/icons on the dark surfaces. */
+	--lh-brand-ink: #b4abff;
+	--lh-brand-soft: color-mix(in oklab, #8577f5 18%, transparent);
+	--lh-success: #5fd39a;
+	--lh-success-soft: color-mix(in oklab, #5fd39a 16%, transparent);
+	--lh-warning: #f2b766;
+	--lh-warning-soft: color-mix(in oklab, #f2b766 16%, transparent);
+	--lh-danger-soft: color-mix(in oklab, #f07a7a 16%, transparent);
+	--lh-kind-teach: #a99dff;
+	--lh-kind-practice: #57cdbd;
+	--lh-kind-drill: #f2b766;
+	--lh-shadow-pop: 0 1px 0 rgb(255 255 255 / .04) inset, 0 12px 32px -8px rgb(0 0 0 / .55), 0 2px 6px rgb(0 0 0 / .3);
+	--lh-shadow-dock: 0 1px 0 rgb(255 255 255 / .05) inset, 0 10px 30px -10px rgb(0 0 0 / .6);
 	/* Writing stays white in storage; its on-screen paper follows the theme. */
 	--lh-dim-paper-filter: invert(1) hue-rotate(180deg) contrast(.65) brightness(1.3);
-	--lh-writing-image-filter: none;
-	/* Emphasis inks default to the REGULAR TEXT COLOR (owner ruling,
-	   appearance wave 2026-09-26 — the old #ee928c/#6fa9d6 factory
-	   emphasis colors are gone). Explicit overrides land via the
-	   appearance settings vars. */
-	--lh-ink-strong: var(--foreground);
-	--lh-ink-italic: var(--foreground);
-	/* THE READING SIZE = the ladder's 16px rung (--text-lg). Can't be
-	   var()-linked: @theme inline inlines literals into utilities without
-	   emitting runtime vars — so this is the one documented duplication:
-	   change one, change both. (owner, typography round 4: snapped from
-	   the reskin's hand-tuned 16.5 to the ladder's 16.) */
-	--lh-prose-size: 16px;
-	--lh-prose-leading: 1.5;
-	/* Markdown heading weight (appearance settings; 900 = the Black cut). */
-	--lh-heading-weight: 900;
-}
-
-/* The app is always dark (<html class="dark">); mirror the same values so
-   the block stays coherent under Tailwind's variant. */
-.dark {
 	--lh-writing-image-filter: var(--lh-dim-paper-filter);
-	--background: #141414;
-	--foreground: #e6e6e6;
-	--card: #1c1c1c;
-	--card-foreground: #e6e6e6;
-	--popover: #1c1c1c;
-	--popover-foreground: #e6e6e6;
-	--primary: #e6e6e6;
-	--primary-foreground: #141414;
-	--secondary: #1c1c1c;
-	--secondary-foreground: #e6e6e6;
-	--muted: #1c1c1c;
-	--muted-foreground: #8d8d8d;
-	--accent: #2a2a2a;
-	--accent-foreground: #e6e6e6;
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: #434343;
-	--input: #434343;
-	--ring: #8d8d8d;
-	/* Same emphasis ruling as the block above: unset = text color. */
+	/* Emphasis inks default to the regular text colour; appearance
+	   settings may override them. */
 	--lh-ink-strong: var(--foreground);
 	--lh-ink-italic: var(--foreground);
-	/* THE READING SIZE = the ladder's 16px rung (--text-lg). Can't be
-	   var()-linked: @theme inline inlines literals into utilities without
-	   emitting runtime vars — so this is the one documented duplication:
-	   change one, change both. (owner, typography round 4: snapped from
-	   the reskin's hand-tuned 16.5 to the ladder's 16.) */
+	/* The reading size (= --text-lg). Appearance settings override it. */
 	--lh-prose-size: 16px;
-	--lh-prose-leading: 1.5;
-	/* Markdown heading weight (appearance settings; 900 = the Black cut). */
-	--lh-heading-weight: 900;
+	--lh-prose-leading: 1.6;
+	/* Markdown heading weight (appearance settings). */
+	--lh-heading-weight: 700;
 }
 
 /* CMU Serif bold (titles) — bundled local file, no CDN dependency. */
@@ -123,7 +97,7 @@
 	   fonts: `font-mono`/`font-sans` utilities would otherwise fall to the
 	   SYSTEM stacks — a fourth font the app never chose — and streamdown's
 	   code-block chrome + mermaid-error + demo-card all use them. */
-	--font-ui: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
+	--font-ui: var(--font-sans3), ui-sans-serif, system-ui, sans-serif;
 	--font-prose: var(--font-sans3), ui-sans-serif, system-ui, sans-serif;
 	--font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
 	--font-sans: var(--font-sans3), ui-sans-serif, system-ui, sans-serif;
@@ -140,26 +114,27 @@
 	   toggle write a runtime --font-title no consumer ever read (owner, fix
 	   wave: toggle looked dead). Non-inline emits :root { --font-title: … }
 	   and the utility reads var(--font-title) — appearance overrides win. */
-	--text-xs: 11px;
+	--text-xs: 12px;
 	--text-xs--line-height: 1.4;
-	--text-sm: 12.5px;
-	--text-sm--line-height: 1.4;
-	--text-base: 14px;
-	--text-base--line-height: 1.45;
+	--text-sm: 13.5px;
+	--text-sm--line-height: 1.45;
+	--text-base: 15px;
+	--text-base--line-height: 1.5;
 	--text-lg: 16px;
-	--text-lg--line-height: 1.45;
+	--text-lg--line-height: 1.5;
 	--text-xl: 20px;
-	--text-xl--line-height: 1.4;
-	--text-2xl: 25px;
+	--text-xl--line-height: 1.35;
+	--text-2xl: 24px;
 	--text-2xl--line-height: 1.3;
-	--text-3xl: 32px;
+	--text-3xl: 28px;
 	--text-3xl--line-height: 1.25;
 	/* Radii ladder — 4/8/12/16 multiples of the 4px base. */
-	--radius-sm: 4px;
-	--radius-md: 8px;
-	--radius-lg: 12px;
-	--radius-xl: 16px;
-	--radius: 8px;
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 14px;
+	--radius-xl: 18px;
+	--radius-2xl: 22px;
+	--radius: 10px;
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
@@ -255,27 +230,31 @@ body {
 	.lh-sessions-header {
 		display: grid;
 		grid-template-columns: 1fr auto 1fr;
-		min-height: 60px;
-		padding: 8px 16px;
+		height: 60px;
+		padding: 8px 12px;
+	}
+	.lh-sessions-header .lh-wordmark {
+		display: none;
 	}
 	.lh-sessions-header a {
 		justify-self: start;
 		width: auto;
 		min-height: 44px;
-		gap: 7px;
-		font-size: 15px;
+		gap: 8px;
+		padding-inline: 6px;
+		font-size: 16px;
 		color: var(--color-muted-foreground);
 	}
 	.lh-sessions-header a svg {
-		width: 20px;
-		height: 20px;
+		width: 22px;
+		height: 22px;
 	}
 	.lh-sessions-title {
 		display: block;
-		font-size: 21px;
-		font-weight: 600;
+		font-size: 18px;
+		font-weight: 650;
 		line-height: 1.2;
-		letter-spacing: -.02em;
+		letter-spacing: -.01em;
 	}
 	.lh-phone-home-label, .lh-phone-close-label {
 		display: inline;
@@ -284,117 +263,84 @@ body {
 		justify-self: end;
 		width: auto;
 		min-width: 44px;
-		padding-inline: 4px;
+		padding-inline: 8px;
 		font-size: 16px;
-		font-weight: 500;
+		font-weight: 600;
+		color: var(--lh-brand-ink);
 	}
-	.lh-desktop-close-icon, .lh-sessions-search-label {
+	.lh-desktop-close-icon {
 		display: none;
 	}
+	.lh-sessions-create-label {
+		margin: 6px 16px 8px;
+	}
 	.lh-sessions-create {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 8px;
-		margin: 0 16px 12px;
+		margin: 0 16px 14px;
 	}
 	.lh-sessions-create button {
-		justify-content: center;
-		gap: 5px;
-		padding: 8px;
-		border: 1px solid var(--color-border);
-		border-radius: 12px;
-		background: var(--color-card);
-		color: var(--color-foreground);
+		min-height: 48px;
 		font-size: 15px;
-		font-weight: 500;
-		text-transform: none;
-		letter-spacing: normal;
-		white-space: nowrap;
-	}
-	.lh-sessions-create svg {
-		width: 15px;
-		height: 15px;
-		flex-shrink: 0;
 	}
 	.lh-sessions-search {
-		margin: 0 16px 12px;
+		margin: 0 16px 10px;
 	}
-	.lh-sessions-search input {
+	.lh-sessions-search input.lh-sessions-search-input {
 		height: 44px;
-		padding-left: 36px;
-		border-radius: 12px;
-		background: var(--color-card);
+		font-size: 16px;
 	}
-	.lh-sessions-search svg {
-		left: 12px;
-		width: 16px;
-		height: 16px;
+	.lh-sessions-filter {
+		margin: 0 16px 8px;
 	}
-	.lh-sessions-content [data-testid="session-kind-filter"] {
-		margin-inline: 16px;
-		padding: 3px;
-		border: 0;
-		border-radius: 12px;
-		background: var(--color-card);
-	}
-	.lh-sessions-content [data-testid="session-kind-filter"] button {
-		border-radius: 9px;
-		font-size: 14px;
-		font-weight: 500;
-		text-transform: none;
-		letter-spacing: normal;
+	.lh-sessions-filter button {
+		min-height: 38px;
+		font-size: 14.5px;
 	}
 	.lh-sessions-content > [data-testid="session-list"] {
 		min-height: 6rem;
-		padding: 8px 12px;
+		padding: 4px 8px 8px;
 	}
 	.lh-session-row {
-		min-height: 64px;
-		margin-bottom: 3px;
-		padding: 10px 12px;
-		border-radius: 12px;
+		min-height: 60px;
+		gap: 12px;
+		padding: 9px 10px;
+		border-radius: 14px;
+	}
+	.lh-session-row .lh-kind-tile {
+		width: 34px;
+		height: 34px;
+		border-radius: 10px;
+	}
+	.lh-session-row .lh-kind-tile svg {
+		width: 17px;
+		height: 17px;
 	}
 	.lh-session-name {
-		font-size: 17px;
-		font-weight: 500;
-		line-height: 23px;
+		font-size: 16.5px;
+		line-height: 22px;
 	}
 	.lh-session-meta {
-		margin-top: 2px;
-		font-size: 13px;
+		margin-top: 1px;
+		font-size: 13.5px;
 		line-height: 18px;
 	}
 	.lh-sessions-content > [data-testid="activity-section"] {
-		padding: 10px 16px 4px;
+		padding: 6px 12px 0;
 	}
-	.lh-sessions-content > [data-testid="activity-section"] > div:first-child {
-		margin-bottom: 0;
-		font-size: 13px;
-		line-height: 20px;
-		text-transform: none;
-		letter-spacing: normal;
+	.lh-activity-header {
+		min-height: 44px;
+		font-size: 15px;
 	}
 	.lh-sessions-footer {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		align-items: start;
-		gap: 8px;
-		padding: 4px 16px 8px;
+		padding: 0 12px 8px;
 	}
-	.lh-sessions-footer [data-testid="settings-entry"], .lh-sessions-tools summary {
-		font-size: 16px;
-		font-weight: 500;
+	.lh-sessions-footer .lh-footer-row {
+		min-height: 44px;
+		font-size: 15px;
+	}
+	.lh-sessions-tools summary {
+		font-size: 15px;
 		line-height: 28px;
-		text-transform: none;
-		letter-spacing: normal;
-	}
-	.lh-sessions-footer [data-testid="settings-entry"] {
-		width: 100%;
-		gap: 8px;
-	}
-	.lh-sessions-footer [data-testid="settings-entry"] svg {
-		width: 16px;
-		height: 16px;
 	}
 	.lh-sessions-tools {
 		margin-top: 0;
@@ -536,7 +482,8 @@ body {
    font takes it, and CMU (a single 700 face) snaps to its nearest
    available weight — the same rendering it already had. */
 .font-title {
-	font-weight: 900;
+	font-weight: 650;
+	letter-spacing: -0.01em;
 }
 
 .lh-prose :where(strong, b) {
@@ -936,4 +883,929 @@ body {
 	background-color: var(--accent);
 	outline: 1px solid var(--border);
 	border-radius: 0.25rem;
+}
+
+/* ============================================================
+ * Shell & navigation (whole-app redesign, 2026-11)
+ * One calm frame: a quiet sidebar, the work in the middle. Kind hues
+ * (teach / practice / drill) appear only as small tiles and icons.
+ * ============================================================ */
+:root {
+	--lh-sidebar: #17161d;
+}
+.lh-sessions-content {
+	background: var(--lh-sidebar);
+	border-color: var(--border);
+	font-family: var(--font-prose);
+}
+.lh-sessions-header {
+	height: 60px;
+	flex-shrink: 0;
+}
+.lh-wordmark {
+	font-size: 15px;
+	font-weight: 650;
+	letter-spacing: -.01em;
+	color: var(--foreground);
+	pointer-events: none;
+	user-select: none;
+}
+.lh-sessions-close {
+	margin-left: auto;
+	color: var(--muted-foreground);
+}
+.lh-sessions-create-label {
+	margin: 4px 16px 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--muted-foreground);
+}
+.lh-sessions-create {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 6px;
+	margin: 0 12px 14px;
+}
+.lh-sessions-create button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 36px;
+	padding: 0 6px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--card);
+	color: var(--foreground);
+	font-size: 13.5px;
+	font-weight: 550;
+	white-space: nowrap;
+	transition: background-color .15s, border-color .15s;
+}
+.lh-sessions-create button:hover {
+	background: var(--accent);
+	border-color: color-mix(in oklab, var(--border) 60%, var(--muted-foreground));
+}
+.lh-sessions-create button svg {
+	width: 15px;
+	height: 15px;
+	flex-shrink: 0;
+}
+[data-kind="teach"] { --lh-kind: var(--lh-kind-teach); }
+[data-kind="practice"] { --lh-kind: var(--lh-kind-practice); }
+[data-kind="drill"] { --lh-kind: var(--lh-kind-drill); }
+.lh-sessions-create button svg, .lh-kind-tile {
+	color: var(--lh-kind, var(--muted-foreground));
+}
+.lh-sessions-search {
+	position: relative;
+	margin: 0 12px 8px;
+}
+.lh-sessions-search > span {
+	display: block;
+}
+@media (max-width: 767px) {
+	.lh-sessions-list-label {
+		display: none;
+	}
+}
+.lh-sessions-search input.lh-sessions-search-input {
+	height: 36px;
+	padding-left: 34px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--card);
+	font-size: 14px;
+	box-shadow: none;
+}
+.lh-sessions-search input.lh-sessions-search-input:focus {
+	border-color: color-mix(in oklab, var(--primary) 70%, transparent);
+	background: var(--background);
+}
+.lh-sessions-search input::placeholder {
+	color: var(--muted-foreground);
+	opacity: .8;
+}
+
+/* Segmented control: one shared look for every few-way switch. */
+.lh-segmented {
+	display: flex;
+	align-items: stretch;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 11px;
+	background: color-mix(in oklab, var(--card) 70%, black);
+	border: 1px solid var(--border);
+}
+.lh-segmented > :is(button, a) {
+	display: inline-flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 28px;
+	padding: 0 10px;
+	border-radius: 8px;
+	color: var(--muted-foreground);
+	font-size: 13px;
+	font-weight: 550;
+	letter-spacing: 0;
+	text-transform: none;
+	white-space: nowrap;
+	transition: background-color .15s, color .15s;
+}
+.lh-segmented > :is(button, a):hover {
+	color: var(--foreground);
+}
+.lh-segmented > :is(button, a)[data-active="true"] {
+	background: var(--accent);
+	color: var(--foreground);
+	box-shadow: 0 1px 2px rgb(0 0 0 / .35), 0 0 0 1px rgb(255 255 255 / .04) inset;
+}
+.lh-segmented > :is(button, a) svg {
+	width: 14px;
+	height: 14px;
+}
+.lh-sessions-filter {
+	margin: 0 12px 6px;
+}
+
+.lh-session-row {
+	min-height: 52px;
+}
+.lh-kind-tile {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 30px;
+	height: 30px;
+	border-radius: 9px;
+	background: color-mix(in oklab, var(--lh-kind, var(--muted-foreground)) 15%, transparent);
+}
+.lh-kind-tile svg {
+	width: 15px;
+	height: 15px;
+}
+.lh-kind-tile [data-testid="braille-spinner"] {
+	color: var(--foreground);
+}
+.lh-session-name {
+	font-size: 14.5px;
+	font-weight: 500;
+	line-height: 20px;
+	color: var(--foreground);
+}
+.lh-session-meta {
+	margin-top: 1px;
+	font-size: 12.5px;
+	line-height: 17px;
+	color: var(--muted-foreground);
+}
+.lh-session-row[data-state="waiting"] .lh-session-meta {
+	color: var(--lh-brand-ink);
+}
+.lh-session-row[data-state="working"] .lh-session-meta {
+	color: var(--foreground);
+}
+.lh-session-row[aria-current="page"] {
+	background: var(--accent);
+}
+.lh-session-row[aria-current="page"]::before {
+	content: "";
+	position: absolute;
+	left: -6px;
+	top: 14px;
+	bottom: 14px;
+	width: 3px;
+	border-radius: 3px;
+	background: var(--primary);
+}
+.lh-activity-section {
+	border-color: var(--border);
+}
+.lh-activity-header {
+	min-height: 36px;
+	border-radius: 8px;
+}
+.lh-sessions-footer {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 0 12px 10px;
+}
+.lh-footer-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 36px;
+	padding: 0 8px;
+	border-radius: 8px;
+	color: var(--muted-foreground);
+	font-size: 14px;
+	transition: background-color .15s, color .15s;
+}
+.lh-footer-row:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+
+/* Session header: the title leads; chips are small, sentence-case, and
+   give way first when space runs out. */
+.lh-topbar {
+	background: var(--background);
+	border-color: var(--border);
+}
+.lh-session-title {
+	font-size: 19px;
+	line-height: 1.3;
+	font-weight: 650;
+	letter-spacing: -.012em;
+}
+.lh-header-chip {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--card);
+	color: var(--foreground);
+	font-size: 13.5px;
+	font-weight: 550;
+	cursor: pointer;
+	transition: background-color .15s, border-color .15s;
+}
+.lh-header-chip:hover {
+	background: var(--accent);
+}
+.lh-header-chip svg {
+	width: 15px;
+	height: 15px;
+	color: var(--lh-brand-ink);
+}
+[data-testid="phase-chip"] {
+	gap: 6px;
+	font-size: 13px;
+	font-weight: 500;
+	letter-spacing: 0;
+	text-transform: none;
+	color: var(--muted-foreground);
+}
+[data-testid="phase-chip"]:not(.lh-phase-tag)::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--lh-kind-teach);
+	opacity: .9;
+}
+.lh-phase-tag svg {
+	color: var(--lh-kind);
+}
+.lh-header-write {
+	height: 32px;
+	gap: 6px;
+	padding: 0 12px;
+	border-radius: 999px;
+	border-color: var(--border);
+	background: var(--card);
+	font-size: 13.5px;
+	font-weight: 550;
+}
+.lh-header-write svg {
+	width: 15px;
+	height: 15px;
+}
+
+@media (max-width: 767px) {
+	.lh-topbar {
+		height: 56px;
+		gap: 6px;
+		padding-inline: 6px 8px;
+	}
+	.lh-topbar .lh-closed-toggle,
+	.lh-topbar .lh-closed-toggle button {
+		width: 44px;
+		height: 44px;
+	}
+	.lh-session-title {
+		font-size: 17px;
+		font-weight: 650;
+	}
+	.lh-topbar [data-testid="phase-chip"] {
+		display: none;
+	}
+	.lh-header-chip {
+		width: 40px;
+		height: 40px;
+		padding: 0;
+		justify-content: center;
+	}
+	.lh-header-chip-label, .lh-header-write-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+	.lh-header-write {
+		width: 40px;
+		height: 40px;
+		padding: 0;
+	}
+	.lh-header-chip svg, .lh-header-write svg {
+		width: 18px;
+		height: 18px;
+	}
+}
+
+/* ============================================================
+ * The dock: one rounded composer, quiet controls beneath it.
+ * ============================================================ */
+[data-attachment-composer] {
+	border-color: color-mix(in oklab, var(--border) 80%, var(--muted-foreground) 20%);
+	border-radius: 20px;
+	background: var(--card);
+	box-shadow: var(--lh-shadow-dock);
+	transition: border-color .15s, box-shadow .15s;
+}
+[data-attachment-composer]:focus-within {
+	border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
+	box-shadow: var(--lh-shadow-dock), 0 0 0 3px color-mix(in oklab, var(--primary) 14%, transparent);
+}
+.lh-send-button {
+	box-shadow: 0 1px 2px rgb(0 0 0 / .35);
+}
+.lh-send-button:disabled {
+	background: var(--accent);
+	color: var(--muted-foreground);
+	opacity: 1;
+}
+[data-testid="attach-files"] {
+	color: var(--muted-foreground);
+}
+
+/* Stats row: small, muted, evenly spaced. */
+.lh-stats-bar {
+	gap: 8px;
+	padding-top: 10px;
+	font-size: 12.5px;
+	color: var(--muted-foreground);
+}
+.lh-stats-bar [data-testid="stats-summary"] {
+	min-height: 30px;
+	padding: 0 8px;
+	border-radius: 8px;
+	font-variant-numeric: tabular-nums;
+}
+.lh-stats-bar [data-testid="stats-summary"]:hover {
+	background: var(--accent);
+}
+[data-testid="model-control"] {
+	gap: 0 !important;
+}
+[data-testid="stats-model"], [data-testid="stats-thinking"] {
+	height: 30px;
+	padding-inline: 11px !important;
+	border-color: var(--border) !important;
+	background: var(--card) !important;
+	box-shadow: none !important;
+	backdrop-filter: none !important;
+	font-size: 12.5px;
+	color: var(--muted-foreground);
+}
+[data-testid="stats-model"] > span:first-child, [data-testid="stats-thinking"] > span:first-child {
+	color: var(--foreground);
+}
+[data-testid="stats-model"] {
+	border-radius: 999px 0 0 999px !important;
+}
+[data-testid="stats-thinking"] {
+	border-radius: 0 999px 999px 0 !important;
+	border-left-width: 0 !important;
+}
+[data-testid="stats-model"]:hover, [data-testid="stats-thinking"]:hover {
+	background: var(--accent) !important;
+}
+.lh-stats-bar .lh-dictation-slot > :only-child[data-testid="dictation-toggle"],
+.lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"]:not([class*="destructive"]) {
+	width: auto;
+	height: 30px;
+	padding: 0 14px;
+	border-radius: 999px;
+	border-color: var(--border);
+	background: var(--card);
+	box-shadow: none;
+	backdrop-filter: none;
+	color: var(--muted-foreground);
+	font-size: 12.5px;
+}
+.lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"]:not([class*="destructive"]):hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-mode-switch {
+	flex-shrink: 0;
+}
+.lh-mode-switch > :is(button, a) {
+	min-height: 26px;
+	padding-inline: 10px;
+	font-size: 12.5px;
+}
+.lh-mode-switch > :is(button, a)[data-active="true"] svg {
+	color: var(--lh-kind);
+}
+
+/* Concepts sharing is a setup aid, not part of every reply: a quiet
+   disclosure line until writing actually arrives. */
+.lh-shared-writing[data-has-writing="false"] {
+	margin-bottom: 6px;
+	padding: 0 6px;
+	border: 0;
+	background: none;
+	font-size: 12px;
+}
+.lh-shared-writing[data-has-writing="false"] summary {
+	width: fit-content;
+	list-style-position: inside;
+	opacity: .75;
+}
+
+@media (max-width: 767px) {
+	/* Phone composer: one pill holds text, mic, attach and send. */
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]) > .lh-compact-field {
+		border-color: transparent;
+		background: transparent;
+	}
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]) > .lh-compact-field:focus-within {
+		border-color: transparent;
+	}
+	[data-attachment-composer] {
+		border-radius: 24px;
+	}
+	.lh-compact-row > button.lh-send-button {
+		border-radius: 999px;
+		margin: 0 3px 5px 0;
+	}
+	.lh-compact-stats {
+		gap: 4px;
+		padding-top: 6px;
+	}
+	.lh-compact-stats [data-testid="stats-model"], .lh-compact-stats [data-testid="stats-thinking"] {
+		height: 36px;
+		min-height: 36px !important;
+	}
+	.lh-compact-stats .lh-phone-plan, .lh-compact-stats [data-testid="stats-summary"] {
+		font-size: 13.5px;
+		color: var(--muted-foreground);
+	}
+	.lh-mode-switch > :is(button, a) {
+		min-height: 36px;
+		font-size: 13.5px;
+	}
+}
+
+/* Mode choice sits above the composer: choose, then type. */
+.lh-mode-row {
+	display: flex;
+	justify-content: center;
+	margin-bottom: 10px;
+	pointer-events: auto;
+}
+.lh-mode-row .lh-segmented {
+	width: auto;
+}
+
+/* Empty states: an inviting title, one line of guidance. */
+.lh-empty-state {
+	gap: 14px;
+}
+.lh-empty-state h3 {
+	font-family: var(--font-prose);
+	font-size: 24px;
+	line-height: 1.25;
+	font-weight: 650;
+	letter-spacing: -.015em;
+	color: var(--foreground);
+}
+.lh-empty-state p {
+	max-width: 30rem;
+	margin-inline: auto;
+	font-size: 15.5px;
+	line-height: 1.5;
+}
+.lh-empty-state .space-y-1 > :not(:first-child) {
+	margin-top: 8px;
+}
+.lh-empty-icon {
+	width: 52px;
+	height: 52px;
+	border-radius: 16px;
+}
+.lh-empty-icon svg {
+	width: 24px;
+	height: 24px;
+}
+@media (max-width: 767px) {
+	.lh-empty-state h3 { font-size: 22px; }
+	.lh-topbar div:has(> [data-testid="coverage-ring"]) { display: none; }
+	/* Attach leads the phone composer, as in most messaging apps. */
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]):has([data-testid="attach-files"]) {
+		grid-template-columns: auto minmax(0, 1fr) auto;
+	}
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]) > :has([data-testid="attach-files"]),
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]) > [data-testid="attach-files"] {
+		order: -1;
+	}
+}
+
+/* ============================================================
+ * Learning activities: questions, options, problems.
+ * The question is the loudest thing on screen; choices are large,
+ * calm targets; the chosen one is unmistakable.
+ * ============================================================ */
+.text-xs.uppercase {
+	font-size: 11.5px;
+	font-weight: 600;
+	letter-spacing: .07em;
+}
+.lh-eyebrow {
+	color: var(--lh-brand-ink);
+}
+.lh-question-text {
+	font-family: var(--font-prose);
+	font-size: 17px;
+	line-height: 1.45;
+	font-weight: 600;
+	letter-spacing: -.005em;
+}
+.lh-option {
+	min-height: 46px;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 14px;
+	border-radius: 12px;
+	border-color: var(--border);
+	background: color-mix(in oklab, var(--background) 55%, var(--card));
+	font-family: var(--font-prose);
+	font-size: 15.5px;
+	line-height: 1.4;
+	transition: background-color .15s, border-color .15s, box-shadow .15s;
+}
+.lh-option:hover {
+	border-color: color-mix(in oklab, var(--border) 50%, var(--muted-foreground));
+	background: var(--accent);
+}
+.lh-option[aria-checked="true"], .lh-option[aria-pressed="true"] {
+	border-color: var(--primary);
+	background: var(--lh-brand-soft);
+	box-shadow: 0 0 0 1px var(--primary) inset;
+}
+.lh-option-dontknow {
+	background: transparent;
+	color: var(--muted-foreground);
+}
+.lh-option-mark {
+	width: 20px;
+	height: 20px;
+	margin-top: 0;
+	border-width: 1.5px;
+	border-color: color-mix(in oklab, var(--muted-foreground) 65%, transparent);
+}
+.lh-option-mark.rounded-sm {
+	border-radius: 6px;
+}
+.lh-option[aria-checked="true"] .lh-option-mark, .lh-option[aria-pressed="true"] .lh-option-mark {
+	border-color: var(--primary);
+	background: var(--primary);
+	color: #fff;
+}
+.lh-option-mark .size-1\.5 {
+	width: 8px;
+	height: 8px;
+}
+
+/* ============================================================
+ * Settings: a calm two-pane panel on wide screens; a drill-in list
+ * of sections on phones.
+ * ============================================================ */
+[data-testid="settings-backdrop"] {
+	background: rgb(8 7 12 / .72);
+	backdrop-filter: blur(6px);
+}
+.lh-settings {
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+	font-family: var(--font-prose);
+}
+.lh-settings-title {
+	font-size: 18px;
+	font-weight: 650;
+	letter-spacing: -.01em;
+}
+.lh-settings-nav {
+	background: color-mix(in oklab, var(--popover) 70%, black);
+	padding: 10px 8px;
+}
+.lh-settings-nav-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 40px;
+	padding: 6px 10px;
+	border-radius: 10px;
+	color: var(--muted-foreground);
+	text-align: left;
+	transition: background-color .15s, color .15s;
+}
+.lh-settings-nav-item:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-settings-nav-item[aria-current="true"] {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-settings-nav-icon {
+	display: grid;
+	place-items: center;
+	width: 22px;
+	flex-shrink: 0;
+}
+.lh-settings-nav-icon svg {
+	width: 17px;
+	height: 17px;
+}
+.lh-settings-nav-item[aria-current="true"] .lh-settings-nav-icon svg {
+	color: var(--lh-brand-ink);
+}
+.lh-settings-nav-label {
+	display: block;
+	font-size: 14.5px;
+	font-weight: 550;
+}
+.lh-settings-nav-blurb, .lh-settings-nav-chevron {
+	display: none;
+}
+.lh-settings-section {
+	max-width: 44rem;
+	padding: 24px 32px 32px;
+}
+.lh-settings-section-title {
+	font-size: 22px;
+	font-weight: 650;
+	letter-spacing: -.015em;
+	color: var(--foreground);
+}
+.lh-settings-content [data-testid] > p.text-xs.uppercase,
+.lh-settings-content p.text-xs.uppercase {
+	color: var(--muted-foreground);
+}
+.lh-settings-content :is(button, input, select).h-7 {
+	height: 32px;
+	border-radius: 8px;
+	font-size: 13px;
+	padding-inline: 10px;
+}
+.lh-settings-content input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+	border-radius: 8px;
+}
+.lh-settings-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	min-height: 44px;
+	margin-left: -8px;
+	padding-right: 8px;
+	color: var(--lh-brand-ink);
+	font-size: 16px;
+}
+.lh-settings-back svg {
+	width: 22px;
+	height: 22px;
+}
+
+@media (max-width: 767px) {
+	[data-testid="settings-backdrop"] {
+		align-items: stretch;
+		backdrop-filter: none;
+	}
+	.lh-settings {
+		width: 100%;
+		max-width: none;
+		height: var(--lh-phone-height, 100dvh);
+		max-height: none;
+		border: 0;
+		border-radius: 0;
+		padding-top: env(safe-area-inset-top, 0px);
+		padding-bottom: env(safe-area-inset-bottom, 0px);
+		background: var(--background);
+	}
+	.lh-settings-header {
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
+		height: 56px;
+		padding-inline: 12px;
+	}
+	.lh-settings-header > .lh-settings-title {
+		grid-column: 2;
+		justify-self: center;
+		font-size: 17px;
+	}
+	.lh-settings-header > .lh-settings-back {
+		grid-column: 1;
+		justify-self: start;
+	}
+	.lh-settings-header > :last-child {
+		grid-column: 3;
+		justify-self: end;
+	}
+	.lh-settings-close {
+		width: 44px;
+		height: 44px;
+	}
+	[data-phone-view] > div {
+		flex-direction: column;
+	}
+	.lh-settings-nav {
+		width: 100%;
+		flex: 1;
+		gap: 0;
+		margin: 16px;
+		padding: 4px 0;
+		border: 1px solid var(--border);
+		border-radius: 16px;
+		background: var(--card);
+		align-self: stretch;
+		max-height: max-content;
+		width: auto;
+	}
+	.lh-settings-nav[hidden] {
+		display: none;
+	}
+	.lh-settings-nav-item {
+		min-height: 60px;
+		gap: 14px;
+		padding: 8px 14px;
+		border-radius: 0;
+		color: var(--foreground);
+	}
+	.lh-settings-nav-item + .lh-settings-nav-item {
+		border-top: 1px solid var(--border);
+	}
+	.lh-settings-nav-icon svg {
+		width: 20px;
+		height: 20px;
+		color: var(--lh-brand-ink);
+	}
+	.lh-settings-nav-label {
+		font-size: 16.5px;
+		font-weight: 500;
+	}
+	.lh-settings-nav-blurb {
+		display: block;
+		margin-top: 1px;
+		font-size: 13.5px;
+		color: var(--muted-foreground);
+	}
+	.lh-settings-nav-chevron {
+		display: block;
+		width: 18px;
+		height: 18px;
+		color: var(--muted-foreground);
+	}
+	.lh-settings-content[hidden] {
+		display: none;
+	}
+	.lh-settings-section {
+		padding: 16px 16px 32px;
+	}
+	.lh-settings-section > .lh-settings-section-title {
+		display: none;
+	}
+}
+
+/* ============================================================
+ * Menus, dialogs, tables — one popover language.
+ * ============================================================ */
+.lh-menu, [data-testid="session-context-menu"], [data-testid="attachment-popup"], [data-testid="model-menu"], [data-testid="stats-detail"], [data-testid="coverage-ring-popover"] {
+	background: var(--popover);
+	border-color: var(--border);
+	box-shadow: var(--lh-shadow-pop);
+}
+[data-testid="session-context-menu"] {
+	font-size: 14px;
+}
+.lh-menu-item {
+	min-height: 38px;
+}
+[data-testid="session-context-menu"] .text-xs {
+	font-size: 12.5px;
+}
+.lh-dialog-backdrop {
+	background: rgb(8 7 12 / .72);
+	backdrop-filter: blur(6px);
+}
+.lh-dialog {
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+}
+.lh-dialog p.text-sm {
+	font-size: 14.5px;
+	line-height: 1.5;
+}
+
+/* Chains table: readable rows, quiet headers. */
+[data-testid="chain-table"] {
+	font-family: var(--font-prose);
+}
+[data-testid="chain-table"] .text-xs {
+	font-size: 13.5px;
+}
+[data-testid="chain-table"] [data-chain-nav-row] {
+	min-height: 36px;
+}
+[data-testid="chain-table"] [data-chain-nav-row]:hover {
+	background: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+@media (max-width: 767px) {
+	[data-testid="chain-table"] .text-xs {
+		font-size: 14.5px;
+	}
+	[data-testid="chain-table"] [data-chain-nav-row] {
+		min-height: 44px;
+	}
+}
+
+/* Transcript: learner turns read as the learner's voice; dividers stay quiet. */
+[data-testid="user-message"] {
+	border-radius: 14px;
+}
+[data-testid^="phase-divider-"] > span:not([aria-hidden]) {
+	padding: 3px 10px;
+	border-color: var(--border);
+	background: var(--background);
+	color: var(--muted-foreground);
+	font-size: 11px;
+}
+.lh-column .lh-prose {
+	letter-spacing: .002em;
+}
+
+/* First run: one welcoming line, one obvious next step. */
+.lh-graph-empty-icon {
+	display: grid;
+	place-items: center;
+	width: 56px;
+	height: 56px;
+	border-radius: 18px;
+	background: var(--lh-brand-soft);
+	color: var(--lh-brand-ink);
+}
+.lh-graph-empty-icon svg {
+	width: 26px;
+	height: 26px;
+}
+.lh-graph-empty-title {
+	font-size: 24px;
+	font-weight: 650;
+	letter-spacing: -.015em;
+	color: var(--foreground);
+}
+.lh-graph-empty-body {
+	font-family: var(--font-prose);
+	font-size: 15.5px;
+	line-height: 1.5;
+}
+.lh-graph-empty-body p + p {
+	font-size: 14px;
+	opacity: .85;
+}
+.lh-setup-cta {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 40px;
+	padding: 0 18px;
+	border-radius: 999px;
+	background: var(--primary);
+	color: var(--primary-foreground);
+	font-family: var(--font-prose);
+	font-size: 14.5px;
+	font-weight: 600;
+	box-shadow: 0 6px 20px -6px color-mix(in oklab, var(--primary) 70%, transparent);
+	transition: filter .15s;
+}
+.lh-setup-cta:hover {
+	filter: brightness(1.08);
+}
+@media (max-width: 767px) {
+	.lh-setup-cta { min-height: 44px; }
+	.lh-graph-empty-title { font-size: 22px; }
 }
