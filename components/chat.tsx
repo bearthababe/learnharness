@@ -332,7 +332,8 @@ export function Chat({
 				if (++tries < 10) setTimeout(pin, 80);
 				return;
 			}
-			scrollSessionTarget(card.parentElement ?? card, scope, scrollContextRef.current);
+			// The card itself: its parent is the whole message (lesson text first).
+			scrollSessionTarget(card, scope, scrollContextRef.current);
 		};
 		setTimeout(pin, 120);
 	}, [messages]);
