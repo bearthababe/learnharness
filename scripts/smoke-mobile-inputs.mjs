@@ -908,7 +908,7 @@ try {
 		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Card dismissal restores lesson interaction");
 		await assertReading("Usage dismissal");
 		await page.focus(input);
-		await page.click('.lh-phone-plan');
+		await page.click('[data-testid="plan-chip"]'); // phones open Plan from the header (the composer row no longer repeats it)
 		await page.waitForSelector('[data-testid="plan-popup"]');
 		await fitPanel('[data-testid="plan-popup"]');
 		assert.match(await page.$eval('[data-testid="plan-popup"]', e => e.textContent), /Pressure and area/);
@@ -1202,7 +1202,7 @@ try {
 		delete visualViewport.height; delete visualViewport.offsetTop;
 		visualViewport.dispatchEvent(new Event("resize"));
 	});
-	await page.click('.lh-phone-plan');
+	await page.click('[data-testid="plan-chip"]'); // phones open Plan from the header (the composer row no longer repeats it)
 	await page.waitForSelector('[data-testid="plan-popup-dialog"]');
 	const fullPlan = await visibleBounds('[data-testid="plan-popup"]');
 	assert.equal(fullPlan.top, 0);
@@ -1338,7 +1338,7 @@ try {
 	await page.locator('[role="radio"]').filter(button => button.textContent.includes("Halve the area")).click();
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "The force stays the same.");
 	assert.ok(await page.$('[data-testid="confidence-slider"]'), "Selection questions retain confidence");
-	await page.click('.lh-phone-plan');
+	await page.click('[data-testid="plan-chip"]'); // phones open Plan from the header (the composer row no longer repeats it)
 	await page.waitForSelector('[data-testid="plan-popup"]');
 	await page.keyboard.press("Escape");
 	assert.equal(await page.$eval('[data-testid="thinking-field"] [data-file-path-input]', e => e.textContent), "The force stays the same.", "Real Plan dismissal preserves the question draft");

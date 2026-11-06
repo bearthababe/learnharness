@@ -65,6 +65,8 @@ export async function postNotesImport(files: readonly File[]): Promise<NotesImpo
 // Client module singleton: shared by both home views and successive selections.
 // SSR never appends Files, and uses the immutable empty server snapshot.
 const pageImportQueue = createNotesImportQueue(postNotesImport);
+/** Dismiss the page's settled import errors and notices. */
+export function dismissNotesImportResults() { pageImportQueue.dismiss(); }
 export function useNotesImport(callbacks: { onStart?: () => void; onFinish?: () => void } = {}) {
 	const snapshot = useSyncExternalStore(pageImportQueue.subscribe, pageImportQueue.getSnapshot, () => EMPTY_IMPORT_QUEUE);
 	const latest = useRef(callbacks);
@@ -135,8 +137,24 @@ export function friendlyImportError(error: string): string {
 		: "The model provider returned an error; try again in a moment.";
 	return `${m[1]} couldn't be imported. ${hint} (${status}${detail ? ` · ${detail}` : ""})`;
 }
-export function NotesImportErrors({ errors }: { errors: readonly string[] }) {
-	return <>{errors.map((error, i) => <p key={i} role="alert" className="lh-import-error max-w-full whitespace-pre-wrap break-words text-xs text-red-400">{friendlyImportError(error)}</p>)}</>;
+/** Failed imports as one contained panel: what failed, in a sentence, with
+ *  the fix one tap away (provider settings) and a way to dismiss. Without
+ *  handlers it renders the plain lines alone. */
+export function NotesImportErrors({ errors, onOpenSettings, onDismiss }: { errors: readonly string[]; onOpenSettings?: () => void; onDismiss?: () => void }) {
+	if (errors.length === 0) return null;
+	const lines = errors.map((error, i) => <p key={i} role="alert" className="lh-import-error max-w-full whitespace-pre-wrap break-words text-xs text-red-400">{friendlyImportError(error)}</p>);
+	if (!onOpenSettings && !onDismiss) return <>{lines}</>;
+	const auth = errors.some((error) => /: 40[13]: /.test(error));
+	return (
+		<div className="lh-import-error-panel" data-testid="import-error-panel">
+			<div className="lh-import-error-title">{errors.length === 1 ? "Import didn't finish" : `${errors.length} imports didn't finish`}</div>
+			{lines}
+			<div className="lh-import-error-actions">
+				{auth && onOpenSettings && <button type="button" data-testid="import-error-settings" onClick={onOpenSettings}>Open provider settings</button>}
+				{onDismiss && <button type="button" data-testid="import-error-dismiss" onClick={onDismiss}>Dismiss</button>}
+			</div>
+		</div>
+	);
 }
 export function NotesImportNotices({ notices }: { notices: readonly string[] }) {
 	return <>{notices.map((notice, i) => <p key={i} role="status" className="max-w-full whitespace-pre-wrap break-words text-xs text-muted-foreground">{notice}</p>)}</>;

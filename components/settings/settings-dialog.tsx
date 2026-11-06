@@ -68,7 +68,9 @@ const SECTIONS = [
 	{ id: "keyboard", label: "Keyboard", hint: "Stored on this device", blurb: "Shortcuts" },
 	{ id: "general", label: "General", blurb: "Tools on this device, updates" },
 ] as const;
-const NARROW_SETTINGS = "(max-width: 839px)";
+// Phones only: tablets keep the two-pane list beside the section, so
+// switching categories stays one tap.
+const NARROW_SETTINGS = "(max-width: 767px)";
 function subscribeNarrow(update: () => void) {
 	const media = window.matchMedia?.(NARROW_SETTINGS);
 	media?.addEventListener("change", update);

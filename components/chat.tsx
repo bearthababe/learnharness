@@ -308,7 +308,7 @@ export function Chat({
 	useSessionInputViewport(workspaceRef, notebookVisible);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
 	useMobileChatFocus(workspaceRef, scrollContextRef, !notebookVisible);
-	// After answering on a short screen, keep the result in view: the new
+	// After answering, keep the result in view: the new
 	// answered card settles near the top and the reply streams in below it
 	// (the scroll-down disc offers the rest) instead of pushing it away.
 	const pinAnswerRef = useRef(0);
@@ -318,7 +318,6 @@ export function Chat({
 		const scroller = scrollContextRef.current?.scrollRef.current;
 		const scope = workspaceRef.current;
 		if (!scroller || !scope) return;
-		if (scroller.clientHeight >= 640) { pinAnswerRef.current = 0; return; }
 		if (!scroller.querySelector('[data-testid="answered-card"]')) return;
 		pinAnswerRef.current = 0;
 		// The optimistic card can be re-rendered as the record lands: look it
@@ -1966,7 +1965,7 @@ export function Chat({
 					contextTokens={contextTokens}
 					cliContextWindow={cliContextWindowOf(nativeMessages)}
 					pricing={pricing}
-					notebookToggle={<>{writingOn && <button type="button" className="lh-dock-write pointer-events-auto" data-testid="dock-open-writing" aria-label="Write by hand" onClick={() => handwriting.show(true)}><PenLineIcon aria-hidden /><span>Write</span></button>}{notebookOn && <span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
+					notebookToggle={<>{notebookOn && <span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
 						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
 						className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
 						onClick={() => {

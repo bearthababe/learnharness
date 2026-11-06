@@ -2669,9 +2669,10 @@ body:has(.lh-graph-results, [data-testid="graph-node-card"]) .lh-resume {
 	}
 }
 
-/* Without the drawing canvas, the Concepts sharing setup steps aside too
-   (pending shared writing still shows: it is saved work awaiting send). */
-[data-writing-off] .lh-shared-writing[data-has-writing="false"] {
+/* The Concepts sharing setup belongs to handwriting: it shows only while
+   the writing surface is open (pending shared writing always shows: it is
+   saved work awaiting send). */
+.session-workspace:not(.hw-workspace) .lh-shared-writing[data-has-writing="false"] {
 	display: none;
 }
 
@@ -2753,8 +2754,6 @@ body:has(.lh-graph-results, [data-testid="graph-node-card"]) .lh-resume {
 	/* While writing, voice stays (Dictate); model and usage step aside. */
 	.hw-workspace .lh-stats-bar [data-testid="model-control"],
 	.hw-workspace .lh-stats-bar .lh-usage,
-	.hw-workspace .lh-stats-bar .lh-dock-write,
-	.hw-workspace .lh-shared-writing[data-has-writing="false"],
 	.hw-workspace .lh-dock-fade {
 		display: none;
 	}
@@ -2873,4 +2872,117 @@ button[role="switch"][aria-checked="true"] > span {
 }
 @media (max-width: 767px) {
 	.lh-dock-write { display: none; }
+}
+
+/* Import failures: one contained, readable panel with its fix. */
+.lh-import-error-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: min(24rem, calc(100vw - 32px));
+	padding: 12px 14px;
+	border: 1px solid color-mix(in oklab, var(--destructive) 40%, var(--border));
+	border-radius: 14px;
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+	pointer-events: auto;
+	text-align: left;
+}
+.lh-import-error-title {
+	font-family: var(--font-prose);
+	font-size: 14.5px;
+	font-weight: 650;
+	color: var(--foreground);
+}
+.lh-import-error-panel .lh-import-error {
+	max-width: none;
+	text-align: left;
+	color: var(--muted-foreground);
+}
+.lh-import-error-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 4px;
+}
+.lh-import-error-actions button {
+	min-height: 36px;
+	padding: 0 14px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--card);
+	font-size: 13.5px;
+	font-weight: 550;
+}
+.lh-import-error-actions button[data-testid="import-error-settings"] {
+	border-color: var(--primary);
+	background: var(--primary);
+	color: var(--primary-foreground);
+}
+@media (pointer: coarse) {
+	.lh-import-error-actions button { min-height: 44px; }
+}
+.lh-tool-body {
+	max-width: 40rem;
+	font-family: var(--font-prose);
+}
+.lh-tool-output {
+	font-size: 13.5px;
+	line-height: 1.5;
+	color: var(--foreground);
+}
+.lh-tool-technical summary {
+	min-height: 28px;
+	font-size: 12.5px;
+}
+
+/* Usage reads as one label on every device; its numbers live in the panel. */
+.lh-stats-bar .lh-usage-numbers {
+	display: none;
+}
+.lh-stats-bar .lh-phone-usage-label {
+	display: inline;
+}
+@media (max-width: 767px) {
+	/* The header carries Plan; the composer row keeps notebook, model, usage. */
+	.lh-stats-bar.lh-compact-stats .lh-phone-plan {
+		display: none;
+	}
+	.lh-compact-stats [data-testid="stats-model"], .lh-compact-stats [data-testid="stats-thinking"] {
+		height: 44px;
+		min-height: 44px !important;
+	}
+}
+
+/* Left-handed writing: the palette mirrors to the left edge; the page
+   menu moves to the right so the two never collide. */
+.hw-notebook[data-tools-side="left"] .hw-arc {
+	right: auto;
+	left: 8px;
+	transform: scaleX(-1);
+}
+.hw-notebook[data-tools-side="left"] .hw-arc > .hw-toolButton,
+.hw-notebook[data-tools-side="left"] .hw-arcUndo,
+.hw-notebook[data-tools-side="left"] .hw-arcInspector {
+	transform: scaleX(-1);
+}
+.hw-notebook[data-tools-side="left"] .hw-pageActions {
+	left: auto;
+	right: 12px;
+}
+.hw-notebook[data-tools-side="left"] .hw-pageMenu {
+	left: auto;
+	right: 0;
+}
+
+/* Portrait tablets: a short lesson sits on the composer instead of leaving
+   a void between them (the current task anchors the screen); the dock card
+   already shows the active problem, so its transcript pointer steps aside. */
+@media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
+	.lh-column > :first-child {
+		margin-top: auto;
+	}
+	.lh-problem-card[data-active] {
+		display: none;
+	}
 }

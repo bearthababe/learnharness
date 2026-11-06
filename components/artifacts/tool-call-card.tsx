@@ -105,17 +105,7 @@ export function ToolCallCard({ part }: ArtifactPartProps) {
 				{subject && <span className={sessionTitle ? "lh-tool-subject truncate" : "lh-tool-arg truncate"}>{subject}</span>}
 				<ChevronRight className="size-3 shrink-0 opacity-50 transition-transform group-open:rotate-90" />
 			</summary>
-			<div className="mt-2 space-y-2 rounded-xl border bg-card p-3 text-xs">
-				{p.input != null && (
-					<div>
-						<div className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">
-							Input
-						</div>
-						<pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
-							{JSON.stringify(p.input, null, 2)}
-						</pre>
-					</div>
-				)}
+			<div className="lh-tool-body mt-2 space-y-2 rounded-xl border bg-card p-3 text-xs">
 				{typeof p.errorText === "string" ? (
 					<div>
 						<div className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">
@@ -130,14 +120,26 @@ export function ToolCallCard({ part }: ArtifactPartProps) {
 						<div className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">
 							Output
 						</div>
-						<pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
+						{/* The result first, as readable text; raw call data stays below. */}
+						<div className="lh-tool-output max-h-64 overflow-auto whitespace-pre-wrap break-words">
 							{out}
-						</pre>
+						</div>
 					</div>
 				) : (
 					p.state !== "output-available" && (
 						<div className="text-muted-foreground italic">running…</div>
 					)
+				)}
+				{p.input != null && (
+					<details className="lh-tool-technical">
+						<summary className="cursor-pointer text-muted-foreground">Technical details</summary>
+						<div className="mb-1 mt-2 font-medium uppercase tracking-wide text-muted-foreground">
+							Input
+						</div>
+						<pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
+							{JSON.stringify(p.input, null, 2)}
+						</pre>
+					</details>
 				)}
 			</div>
 		</details>

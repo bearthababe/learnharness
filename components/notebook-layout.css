@@ -79,3 +79,14 @@ html[data-session-input-locked], html[data-session-input-locked] body { overflow
 	width: var(--session-viewport-width); height: calc(var(--session-viewport-height) - var(--lh-safe-top, 0px) - var(--lh-safe-bottom, 0px)); overflow: hidden;
 }
 .session-workspace[data-input-focused] :is(textarea, [data-file-path-input], [data-notebook-scroll], [data-dock-scroll-area], [data-input-owner="tutor"] [style*="overflow"]) { overscroll-behavior: contain; }
+/* Phones: the notebook card hugs the screen (8px inset, not 16), its header
+   and instruction row are compact, so more working and lesson stay visible. */
+@media (max-width: 767px) {
+	.notebook-slot { padding: 8px !important; }
+	.notebook-slot > .notebook-frame { inset: 8px !important; border-radius: 14px; }
+	.notebook-frame-header { min-height: 44px; padding: 0 4px; }
+	.notebook-instruction-form { padding: 6px; }
+	.notebook-input-row .lh-compact-field { min-height: 46px; }
+	.notebook-input-row textarea { min-height: 44px; padding-block: 10px; }
+	.notebook-split-divider { flex-basis: 20px; }
+}

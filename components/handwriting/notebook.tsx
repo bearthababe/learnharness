@@ -48,6 +48,14 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const attachmentNotice = submission?.attachment()?.notice(normalizeHandwriting(recovery.current?.getSnapshot().working ?? { version: 1, operations: [] }).pageId);
 	const [saved, setSaved] = useState<Pick<PagesState, "ready" | "notice">>({ ready: false, notice: "Opening notebook…" });
 	const [pageId, setPageId] = useState("page_initial"), [pages, setPages] = useState<PageSummary[]>([]), [pagesOpen, setPagesOpen] = useState(false), [optionsOpen, setOptionsOpen] = useState(false);
+	// Handedness: the tool palette sits on the right by default; left-handed
+	// writers can move it to the left (stored on this device).
+	const [toolsLeft, setToolsLeft] = useState(false);
+	useEffect(() => { try { setToolsLeft(localStorage.getItem("lh:writing-tools-side") === "left"); } catch { /* storage blocked */ } }, []);
+	const toggleToolsSide = () => setToolsLeft((left) => {
+		try { localStorage.setItem("lh:writing-tools-side", left ? "right" : "left"); } catch { /* storage blocked */ }
+		return !left;
+	});
 	const [flattened, setFlattened] = useState(false);
 	const positions = useRef(new Map<string, { split: number; full?: number }>()), displayedPage = useRef("page_initial");
 	const [history, setHistory] = useState({ canUndo: false, canRedo: false });
@@ -262,7 +270,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const sizes = tool === "pen" ? PEN_SIZES : BROAD_SIZES, currentSize = tool === "pen" ? penScale : tool === "eraser" ? eraserWidth : highlighterWidth;
 	return <div ref={slotRef} className="hw-notebookSlot" hidden={hidden} data-testid="notebook-slot" data-layout-revision="component-sized-card"
 		style={{ position: expanded ? "absolute" : "relative", inset: expanded ? 0 : undefined, flex: "1 1 0px", minWidth: 0, minHeight: 0, boxSizing: "border-box", padding: 16, overflow: "hidden" }}>
-		<aside ref={controlsRef} className="rounded-2xl border bg-card shadow-lg hw-notebook" aria-label="Handwriting notebook" data-testid="handwriting-notebook" data-ready={saved.ready} data-page-id={pageId} data-expanded={expanded}
+		<aside ref={controlsRef} className="rounded-2xl border bg-card shadow-lg hw-notebook" aria-label="Handwriting notebook" data-testid="handwriting-notebook" data-ready={saved.ready} data-page-id={pageId} data-expanded={expanded} data-tools-side={toolsLeft ? "left" : "right"}
 			style={{ position: "absolute", inset: 16, margin: 0, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 			<header className="hw-notebookHeader"><h2>Writing</h2>
 				<Button variant="ghost" size="sm" className="hw-headerAction" disabled={!saved.ready || submission?.preparing} {...handlers("Attach snapshot", () => { void attachSnapshot(); })} data-testid="notebook-attach"><PaperclipIcon aria-hidden />Attach page</Button>
@@ -274,6 +282,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 			</header>
 			{optionsOpen && <div className="hw-toolsPanel" data-testid="notebook-options">
 				<Button variant="ghost" disabled={!saved.ready || submission?.preparing} {...handlers("Duplicate", () => { setOptionsOpen(false); void recovery.current?.duplicateWorking(); })}>Duplicate</Button><hr />
+				<Button variant="ghost" {...handlers("Tools side", () => { setOptionsOpen(false); toggleToolsSide(); })} data-testid="notebook-tools-side">{toolsLeft ? "Tools on the right" : "Tools on the left (left-handed)"}</Button><hr />
 				<Button variant="ghost" {...handlers("Tools and help", () => { setOptionsOpen(false); setToolsOpen(true); })} data-testid="notebook-tools-toggle">Tools and help</Button>
 			</div>}
 			{pagesOpen && <div className="hw-toolsPanel hw-pagesPanel" data-testid="notebook-pages">

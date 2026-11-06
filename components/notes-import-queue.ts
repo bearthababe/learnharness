@@ -55,6 +55,12 @@ export function createNotesImportQueue(post: (files: readonly File[]) => Promise
 	}
 	return {
 		getSnapshot: () => snapshot,
+		/** Clear settled errors and notices (the learner dismissed them). */
+		dismiss() {
+			if (failures.size === 0 && notices.size === 0) return;
+			failures.clear(); notices.clear();
+			publish();
+		},
 		subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
 		append(files: readonly File[]) {
 			if (files.length === 0) return;

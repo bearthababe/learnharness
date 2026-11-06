@@ -64,7 +64,8 @@
  */
 
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
+import { NotesImportControl, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
+import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
 import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon, XIcon } from "lucide-react";
 import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
@@ -1117,6 +1118,7 @@ export function GraphView({
 	// start; from its first setPhase the run announces itself on the events
 	// channel (S5), and the dock rides those announcements thereafter.
 	const refreshActivity = useActivity().refresh;
+	const { open: openSettings } = useSettingsDialog();
 	const notesImport = useNotesImport({
 		onStart: () => {
 			refreshActivity();
@@ -1637,7 +1639,7 @@ export function GraphView({
 				/>
 			</div>
 
-			<NotesImportErrors errors={notesImport.errors} />
+			<NotesImportErrors errors={notesImport.errors} onOpenSettings={() => openSettings("keys")} onDismiss={dismissNotesImportResults} />
 			<NotesImportNotices notices={notesImport.notices} />
 			{/* Top-right tail (owner, 2026-09-20): the pipeline cost number —
 			    just a number, hover-highlighted, dropdown breakdown — then

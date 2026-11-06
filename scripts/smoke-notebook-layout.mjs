@@ -19,11 +19,13 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 		return { workspace: rect(".session-workspace"), tutor: rect(".session-tutor"), slot: rect(".notebook-slot"), card: rect(".notebook-frame"), divider: rect(".notebook-split-divider"), direction: getComputedStyle(document.querySelector(".session-panes")).flexDirection };
 	});
 	const frame = r => {
-		assert.equal(Math.round(r.card.x - r.slot.x), 16);
-		assert.equal(Math.round(r.card.y - r.slot.y), 16);
-		assert.equal(Math.round(r.slot.right - r.card.right), 16);
-		assert.equal(Math.round(r.slot.bottom - r.card.bottom), 16);
-		assert.ok(r.card.height > 52 && r.card.bottom <= r.workspace.bottom, JSON.stringify(r));
+		// The card is inset evenly in its slot: 8px on phones, 16px wider up.
+		const inset = r.workspace.width < 768 ? 8 : 16;
+		assert.equal(Math.round(r.card.x - r.slot.x), inset);
+		assert.equal(Math.round(r.card.y - r.slot.y), inset);
+		assert.equal(Math.round(r.slot.right - r.card.right), inset);
+		assert.equal(Math.round(r.slot.bottom - r.card.bottom), inset);
+		assert.ok(r.card.height > 44 && r.card.bottom <= r.workspace.bottom, JSON.stringify(r));
 	};
 	let r = await rects();
 	assert.equal(r.direction, "column"); frame(r);
