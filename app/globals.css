@@ -60,6 +60,8 @@
 	/* Third text tier (hints, timestamps) and the success register. */
 	--lh-faint: #6f6f79;
 	--lh-success: #4cc38a;
+	/* Graph edges: neutral, so cluster tints read as the structure. */
+	--lh-graph-edge: #8d8d96;
 	--lh-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 12px 32px -12px rgb(0 0 0 / 0.6);
 	/* Writing stays white in storage; its on-screen paper follows the theme. */
 	--lh-dim-paper-filter: invert(1) hue-rotate(180deg) contrast(.65) brightness(1.3);
@@ -987,22 +989,22 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 
 /* Session row actions: on hover the "…" takes the kind tag's place; touch
    screens keep it visible and reserve its lane. */
-.lh-session-item:is(:hover, :focus-within) .lh-kind-tag {
-	visibility: hidden;
+.lh-session-item:is(:hover, :focus-within) .lh-session-row {
+	padding-right: 44px;
 }
 @media (pointer: coarse) {
+	/* Touch: the "…" stays visible in a slim lane; its 44px hit area
+	   extends over the row's padding instead of taking title width. */
 	.lh-session-item .lh-session-row {
-		padding-right: 52px;
-	}
-	.lh-session-item .lh-kind-tag {
-		visibility: visible;
+		padding-right: 36px;
 	}
 	.lh-session-actions {
-		width: 44px;
+		right: 0;
+		width: 40px;
 		height: 44px;
 		opacity: 1;
 		background: transparent;
-		color: color-mix(in oklab, var(--color-muted-foreground) 70%, transparent);
+		color: color-mix(in oklab, var(--color-muted-foreground) 65%, transparent);
 	}
 }
 
@@ -1012,4 +1014,38 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.lh-touch-hit { position: relative; }
 	.lh-touch-hit::after { content: ""; position: absolute; inset: -12px -5px; }
 	.lh-chain-check { width: 18px; height: 18px; }
+}
+
+/* Question options that continue below the fold fade out at the edge. */
+[data-dock-scroll-area][data-more-below="true"] {
+	-webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+	mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+}
+
+@media (max-width: 767px) {
+	/* After the check opens, an empty reading field shrinks to one line so
+	   the question keeps its options in view. */
+	.lh-reading-input[data-reading-claim="false"]:has([data-file-path-input][data-empty="true"]) > div:first-child {
+		display: none;
+	}
+	.lh-reading-input[data-reading-claim="false"]:has([data-file-path-input][data-empty="true"]) .lh-compact-field {
+		min-height: 44px;
+	}
+	.lh-reading-input[data-reading-claim="false"]:has([data-file-path-input][data-empty="true"]) .lh-compact-field > :is(textarea, [data-file-path-input]) {
+		min-height: 42px;
+		padding-block: 9px;
+	}
+	.lh-option {
+		padding-block: 8px;
+		line-height: 1.35;
+	}
+}
+
+@media (max-width: 767px) {
+	/* The fade above the dock: shorter on phones, and nearly gone when the
+	   notebook shares the screen, so the lesson keeps visible lines. */
+	.lh-dock-fade { height: 56px; }
+	.session-panes[data-notebook-open="true"] .lh-dock-fade { height: 16px; }
+	.session-panes[data-notebook-open="true"] .lh-stats-bar { padding-top: 0; }
+	.session-panes[data-notebook-open="true"] .session-tutor > header { height: 52px; }
 }

@@ -342,16 +342,20 @@ export function SessionRow({
 				    rule, finally applied to the picker too (owner, typography
 				    round): mono = chrome, Source Sans = human words. */}
 				<span className={cn("lh-session-name block truncate font-prose text-[15px] leading-5", active ? "text-foreground" : "text-foreground/85")}>{chat.title}</span>
-				<span className="lh-session-meta mt-0.5 block truncate text-[12.5px] leading-4 text-muted-foreground">{sessionMeta(chat)}</span>
+				<span className="lh-session-meta mt-0.5 block truncate text-[12.5px] leading-4 text-muted-foreground">
+					{/* The kind rides the meta line (whole-app redesign): a right-hand
+					    badge cost the title its distinguishing words on touch screens. */}
+					{chat.kind === "practice" && chat.practiceMode === "drill" ? (
+						<><span className="lh-kind-tag font-medium text-foreground/70">Drill</span> · </>
+					) : (chat.kind ?? "teach") === "practice" && (
+						<><span className="lh-kind-tag font-medium text-foreground/70" aria-label="Practice session">Practice</span> · </>
+					)}
+					{sessionMeta(chat)}
+				</span>
 			</span>
 			{/* The dumbbell rides the FAR RIGHT (owner round 6, 2026-10-05) —
 			    was left of the name; right-aligned keeps the titles flush with
 			    the teaching rows and reads cleaner. */}
-			{chat.kind === "practice" && chat.practiceMode === "drill" ? (
-				<span className="lh-kind-tag shrink-0 rounded-md bg-background/60 px-1.5 py-0.5 text-[11.5px] text-muted-foreground">Drill</span>
-			) : (chat.kind ?? "teach") === "practice" && (
-				<span className="lh-kind-tag shrink-0 rounded-md bg-background/60 px-1.5 py-0.5 text-[11.5px] text-muted-foreground" aria-label="Practice session">Practice</span>
-			)}
 		</button>
 	);
 	if (!onActions) return row;

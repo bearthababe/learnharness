@@ -22,7 +22,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ListTreeIcon } from "lucide-react";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { GraphCostControl } from "@/components/graph-view.tsx";
-import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
+import { NotesImportControl, NotesImportErrors, NotesImportNotices, NotesImportRecovery, useNotesImport } from "@/components/notes-import.tsx";
+import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import { Hint } from "@/components/ui/hint";
 import { useSidebar } from "@/components/sidebar";
 import type { ChatSummary, GraphCostSummary, GraphSnapshot } from "@/src/core";
@@ -129,6 +130,7 @@ export function MinimalHome({
 
 	// Refetch even after incomplete imports: earlier writes and spend remain.
 	const notesImport = useNotesImport({ onFinish: readState });
+	const { open: openSettings } = useSettingsDialog();
 	const { importing, onImportFiles } = notesImport;
 
 	const teachSessions = chats.filter((c) => c.kind === "teach").length;
@@ -174,6 +176,7 @@ export function MinimalHome({
 					<NotesImportControl importing={importing} onImportFiles={onImportFiles} />
 				</div>
 				<NotesImportErrors errors={notesImport.errors} />
+				<NotesImportRecovery errors={notesImport.errors} retryable={notesImport.retryable} onRetry={notesImport.retry} onDismiss={notesImport.dismiss} onOpenSettings={() => openSettings("keys")} />
 				<NotesImportNotices notices={notesImport.notices} />
 				{costs && costs.runs.length > 0 && <GraphCostControl costs={costs} />}
 			</div>

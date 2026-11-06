@@ -264,7 +264,8 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 	const editedSlots = useRef(new Set<ModelSlotName>());
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [openMenu, setOpenMenu] = useState<{ slot: ModelSlotName; kind: "model" | "thinking" } | null>(null);
+	// "all" = the quick-setup picker that fills every tier at once.
+	const [openMenu, setOpenMenu] = useState<{ slot: ModelSlotName | "all"; kind: "model" | "thinking" } | null>(null);
 	// Stage 1's first-key screen (zero-keys wave): the provider roster,
 	// the chosen provider + pasted value, its busy/error pair, and its own
 	// menu-open bit (the slot menus' dismissal machinery covers it too —
@@ -487,35 +488,65 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 				) : (
 					<div className="flex flex-col gap-4 overflow-y-auto px-6 py-5" data-testid="setup-stage-pickers">
 						<p className="text-[13.5px] leading-relaxed text-muted-foreground">
-							Pick the model for each tier. All three are required before chats can start — the quickest start is one capable model for every tier.
+							Sessions need a model for each of three tiers. Pick one model for all of them, or choose each tier yourself.
 						</p>
-						{picked.strong && SLOT_ORDER.some((slot) => slot !== "strong" && !(picked[slot]?.id === picked.strong!.id && picked[slot]?.provider === picked.strong!.provider)) && (() => {
-							const strong = picked.strong!;
-							const meta = catalog?.models.find((m) => m.id === strong.id && m.provider === strong.provider);
-							const seesImages = !!meta && (meta.input.includes("image") || meta.provider === CUSTOM_PROVIDER.id);
+						{(() => {
+							// QUICK SETUP (whole-app redesign): one image-capable model
+							// fills all three tiers; the per-tier rows below stay for
+							// anyone who wants cheaper helpers.
+							const imageCapable = (catalog?.models ?? (failed ? [] : undefined))?.filter((m) => m.input.includes("image") || m.provider === CUSTOM_PROVIDER.id);
+							const strong = picked.strong;
+							const allSame = !!strong && SLOT_ORDER.every((slot) => picked[slot]?.id === strong.id && picked[slot]?.provider === strong.provider);
 							return (
-								<button
-									type="button"
-									data-testid="setup-use-strong-everywhere"
-									onClick={() => {
-										setPicked((prev) => {
-											const next = { ...prev, cheap: strong };
-											editedSlots.current.add("cheap");
-											if (seesImages) { next.vision = strong; editedSlots.current.add("vision"); }
-											return next;
-										});
-										setLevels((prev) => ({ ...prev, cheap: prev.strong, ...(seesImages ? { vision: prev.strong } : {}) }));
-									}}
-									className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border px-3.5 py-2.5 text-left text-[13.5px] transition-colors hover:bg-accent/50"
-								>
+								<div data-testid="setup-quick" className="flex flex-col gap-2.5 rounded-xl border border-border bg-background/50 p-3.5">
 									<span>
-										<span className="block font-semibold text-foreground">Use {prettyModel(strong.id)} for {seesImages ? "every tier" : "the Cheap tier too"}</span>
-										<span className="block text-[12.5px] text-muted-foreground">{seesImages ? "Simplest setup; you can pick cheaper helpers later in Settings." : "This model can't read images, so Vision still needs its own pick."}</span>
+										<span className="block text-[14.5px] font-semibold text-foreground">One model for everything</span>
+										<span className="block text-[12.5px] leading-relaxed text-muted-foreground">The quickest start: one model teaches, helps and reads images. You can give each tier its own model later in Settings.</span>
 									</span>
-									<span className="shrink-0 rounded-full bg-primary px-3 py-1 text-[12.5px] font-semibold text-primary-foreground">Apply</span>
-								</button>
+									<div className="relative">
+										<button
+											type="button"
+											aria-label="One model for every tier"
+											data-testid="setup-trigger-all"
+											aria-expanded={openMenu?.slot === "all"}
+											onClick={() => setOpenMenu(openMenu?.slot === "all" ? null : { slot: "all", kind: "model" })}
+											className="flex h-10 w-full items-center gap-1.5 rounded-lg border border-border bg-background px-3 font-ui text-[14px] text-foreground transition-colors hover:border-muted-foreground/50"
+										>
+											<span className="min-w-0 flex-1 truncate text-left">{allSame ? prettyModel(strong!.id) : "Pick one model…"}</span>
+											<span aria-hidden className="text-muted-foreground">▾</span>
+										</button>
+										{openMenu?.slot === "all" && (
+											<MenuShell
+												anchorTestid="setup-trigger-all"
+												testid="setup-menu-all"
+												preferredSide="down"
+												align="left"
+												menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
+											>
+												<ModelMenuList
+													models={imageCapable}
+													effectiveId={allSame ? strong?.id : undefined}
+													effectiveProvider={allSame ? strong?.provider : undefined}
+													vision
+													onPick={(m) => {
+														for (const slot of SLOT_ORDER) editedSlots.current.add(slot);
+														setPicked((prev) => ({ ...prev, strong: m, cheap: m, vision: m }));
+														setLevels((prev) => {
+															const next = { ...prev };
+															for (const slot of SLOT_ORDER) next[slot] = populateLevel(prev[slot], m.supportedLevels);
+															return next;
+														});
+														setOpenMenu(null);
+													}}
+													footer={imageCapable && imageCapable.length === 0 ? "No image-capable models. Pick each tier below instead." : "Models that can also read images"}
+												/>
+											</MenuShell>
+										)}
+									</div>
+								</div>
 							);
 						})()}
+						<div aria-hidden className="flex items-center gap-3 text-[12px] text-(--lh-faint)"><span className="h-px flex-1 bg-border" />or pick each tier<span className="h-px flex-1 bg-border" /></div>
 						{SLOT_ORDER.map((slot) => {
 							const entry = picked[slot];
 							const level = levels[slot];

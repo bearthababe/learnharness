@@ -611,6 +611,24 @@ function QuestionDockForm({
 		return () => document.removeEventListener("keydown", onKeyDown);
 	});
 
+	// More-below cue (whole-app redesign): on short screens the options can
+	// continue under the confidence row; a fade at the scroll edge says so.
+	// Re-checked after every render (the dock-height budget re-renders on
+	// size changes) and on scroll/resize; no observer of its own.
+	const updateMoreBelow = useCallback(() => {
+		const area = rootRef.current?.querySelector<HTMLElement>("[data-dock-scroll-area]");
+		if (!area) return;
+		const more = area.scrollHeight - area.scrollTop - area.clientHeight > 4;
+		if ((area.dataset.moreBelow === "true") !== more) area.dataset.moreBelow = String(more);
+	}, []);
+	useEffect(() => { updateMoreBelow(); });
+	useEffect(() => {
+		const area = rootRef.current?.querySelector<HTMLElement>("[data-dock-scroll-area]");
+		area?.addEventListener("scroll", updateMoreBelow, { passive: true });
+		window.addEventListener("resize", updateMoreBelow);
+		return () => { area?.removeEventListener("scroll", updateMoreBelow); window.removeEventListener("resize", updateMoreBelow); };
+	}, [updateMoreBelow]);
+
 	// Keep the walked row visible (the question area scrolls internally).
 	useEffect(() => {
 		if (kbdIdx === null) return;

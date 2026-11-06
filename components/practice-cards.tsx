@@ -20,7 +20,7 @@ import type { ArtifactPartProps, LearnerExplanation } from "@/src/core";
  *   language in a faint user-side shell, never collapsible.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ThinkingBlock } from "@/components/thinking-block";
@@ -56,13 +56,28 @@ export interface PracticeThinkingData {
 	text: string;
 }
 
+/** The problem the learner is answering right now (the dock shows its full
+ *  statement). Its transcript card shrinks to a marker so the statement is
+ *  not shown twice; concluded problems keep their full card. */
+export const ActiveProblemContext = createContext<string | null>(null);
+
 export function ProblemCard({ part }: ArtifactPartProps) {
+	const activeId = useContext(ActiveProblemContext);
 	// Always open, no chevron (owner round, 2026-10-05): the record IS the
 	// statement — same container + eyebrow discipline as the answered card
 	// and the dock (which mirrors this in Slice D). The commitment never
 	// renders — only the call's statement.
 	const input = (part.input ?? {}) as { statement?: string };
 	const statement = typeof input.statement === "string" ? input.statement : "";
+	if (activeId !== null && activeId === part.toolCallId) {
+		return (
+			<div data-testid="problem-card" data-active="true" className="lh-card-enter my-1 flex items-center gap-2 rounded-xl border border-dashed border-border px-4 py-2.5 text-[13.5px] text-muted-foreground">
+				<span className="size-1.5 shrink-0 rounded-full bg-(--lh-accent)" aria-hidden />
+				<span className="font-semibold text-foreground/85">Problem</span>
+				<span className="min-w-0 truncate">In progress — work on it in the answer area below</span>
+			</div>
+		);
+	}
 	return (
 		<div data-testid="problem-card" className="lh-card-enter my-1 rounded-xl border bg-card p-4">
 			<div className="mb-1 text-[12.5px] font-semibold text-muted-foreground">Problem</div>

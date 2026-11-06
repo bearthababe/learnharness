@@ -63,13 +63,13 @@ it("POST includes captured files and relative identities, preserving provider de
 	assert.deepEqual(await postNotesImport([file]), [refused]);
 });
 
-for (const outcome of ["completed", "failed", "partial", "aborted", "busy"] as const) it(`${outcome} preserves escaped raw failure details without result/retry controls`, async () => {
+for (const outcome of ["completed", "failed", "partial", "aborted", "busy"] as const) it(`${outcome} preserves escaped raw failure details; the alert itself carries no controls`, async () => {
 	const file = new File(["notes"], "<script>notes.md");
 	const result: NotesImportResult = { ...completed(0, file.name), outcome, ok: outcome === "completed", error: "<img>synthetic failure", code: "provider_key_missing", provider: "openai", missing: ["OPENAI_API_KEY"], slots: ["cheap", "strong"] };
 	globalThis.fetch = async () => Response.json({ results: [result] });
 	await mount(); await submit([file]);
 	assert.equal(current.importing, false); assert.equal(starts, 1); assert.equal(finishes, 1);
-	assert.deepEqual(Object.keys(current).sort(), ["errors", "importing", "notices", "onImportFiles"]);
+	assert.deepEqual(Object.keys(current).sort(), ["dismiss", "errors", "importing", "notices", "onImportFiles", "retry", "retryable"]);
 	const html = host!.innerHTML;
 	assert.doesNotMatch(html, /<button|<section|<ul|border|bg-card|rounded|shadow|Retry|Dismiss|Import complete/);
 	if (outcome === "completed") { assert.equal(html, ""); assert.deepEqual(current.errors, []); }

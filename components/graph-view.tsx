@@ -64,9 +64,10 @@
  */
 
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
+import { NotesImportControl, NotesImportErrors, NotesImportNotices, NotesImportRecovery, useNotesImport } from "@/components/notes-import.tsx";
+import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
-import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon } from "lucide-react";
+import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon, XIcon } from "lucide-react";
 import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
 import { planCostLabel } from "@/components/usage-format";
 import { GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
@@ -880,7 +881,7 @@ export function GraphChromeRow({
 	return (
 		<>
 			{!isEmpty && (
-				<div className="lh-graph-search graph-chrome-fade-in w-64 min-w-0 shrink rounded-[18px] border border-border/70 bg-card/90 p-0.5 shadow-lg backdrop-blur">
+				<div className="lh-graph-search graph-chrome-fade-in relative z-30 w-64 min-w-0 shrink rounded-full border border-border/70 bg-card/90 p-0.5 shadow-lg backdrop-blur">
 					<Hint
 						// ⌘F focuses node search (surface-scoped registry action).
 						label="Search nodes"
@@ -908,10 +909,10 @@ export function GraphChromeRow({
 					</div>
 					</Hint>
 					{noMatch && (
-						<div className="px-3 pb-1.5 pt-1 text-[12.5px] text-muted-foreground">No matching nodes.</div>
+						<div className="lh-graph-results absolute inset-x-0 top-full z-30 mt-2 rounded-2xl border bg-popover px-3.5 py-2.5 text-[13px] text-muted-foreground shadow-2xl">No matching nodes.</div>
 					)}
 					{shownResults.length > 0 && (
-						<ul data-testid="graph-search-results" role="listbox" aria-label="Matching nodes" className="lh-graph-results mt-1 max-h-72 overflow-y-auto border-t border-border/70 p-1">
+						<ul data-testid="graph-search-results" role="listbox" aria-label="Matching nodes" className="lh-graph-results absolute inset-x-0 top-full z-30 mt-2 max-h-[min(20rem,55dvh)] overflow-y-auto overscroll-contain rounded-2xl border bg-popover p-1 shadow-2xl">
 							{shownResults.map((node) => (
 								<li key={node.id} role="none">
 									<button type="button" role="option" aria-selected={false}
@@ -1067,7 +1068,12 @@ export function GraphView({
 		if (!snap || !node || !container) return;
 		const w = container.clientWidth, h = container.clientHeight;
 		let anchor = rendererRef.current?.screenPositionOf(nodeId) ?? null;
-		if (!anchor || anchor.x < 0 || anchor.y < 0 || anchor.x > w || anchor.y > h) anchor = { x: w / 2, y: h / 3 };
+		// Narrow screens: open the card just under the toolbar, clear of the
+		// composer at the bottom.
+		const toolbar = container.parentElement?.querySelector(".lh-home-toolbar")?.getBoundingClientRect();
+		const top = container.getBoundingClientRect().top;
+		if (w < 768) anchor = { x: w / 2, y: toolbar ? toolbar.bottom - top : 120 };
+		else if (!anchor || anchor.x < 0 || anchor.y < 0 || anchor.x > w || anchor.y > h) anchor = { x: w / 2, y: h / 3 };
 		setSelected({ node, sourceIds: snap.nodeSessions[node.id] ?? [], anchor });
 	}, []);
 	const posRef = useRef<Map<string, { x: number; y: number }> | null>(null);
@@ -1134,6 +1140,7 @@ export function GraphView({
 	// start; from its first setPhase the run announces itself on the events
 	// channel (S5), and the dock rides those announcements thereafter.
 	const refreshActivity = useActivity().refresh;
+	const { open: openSettings } = useSettingsDialog();
 	const notesImport = useNotesImport({
 		onStart: () => {
 			refreshActivity();
@@ -1338,6 +1345,7 @@ export function GraphView({
 	// away (the empty-graph placeholder replaces it). The callbacks are
 	// created once and read through refs, so they never go stale.
 	const isEmpty = snapshot === null || snapshot.nodes.length === 0;
+	const { open: sidebarOpen } = useSidebar();
 	useEffect(() => {
 		if (isEmpty) return;
 		const canvas = canvasRef.current;
@@ -1408,10 +1416,12 @@ export function GraphView({
 				// it, and (debounced) remember where the camera stands. The
 				// context menu closes with it: a menu floating over a moved
 				// graph is anchored to nothing.
-				onCameraMove: (t) => {
+				onCameraMove: (t, user = true) => {
 					setSelected(null);
 					setCtxNode(null);
-					persistCamera(t);
+					// The renderer's own framing is not the learner's camera:
+					// persisting it would pin a frame computed for another size.
+					if (user) persistCamera(t);
 				},
 				// Live physics settled: persist the new rest state. Fire-and-
 				// forget — the next snapshot fetch carries the ledger anyway.
@@ -1463,9 +1473,12 @@ export function GraphView({
 			clusters: snapshot.clusters.map((c) => ({ id: c.id, label: c.label, members: c.members })),
 			colors: {
 				node: tokenHex(NODE_COLOR_TOKEN),
-				edge: tokenHex("--ring"),
+				// Edges stay a quiet neutral so the cluster tints carry the
+				// structure (the accent would paint every edge the same hue).
+				edge: tokenHex("--lh-graph-edge"),
 				label: tokenHex("--muted-foreground"),
 				hoverText: tokenHex("--foreground"),
+				halo: tokenHex("--background"),
 			},
 			// Match the app typography (Geist via the body's stack).
 			fontFamily: getComputedStyle(document.body).fontFamily,
@@ -1501,6 +1514,19 @@ export function GraphView({
 	useEffect(() => {
 		rendererRef.current?.setPhysicsTuning(physicsTuning);
 	}, [physicsTuning, isEmpty]);
+
+	// Escape closes the node card (whole-app redesign) — claimed, so nothing
+	// else in the window's Escape chain also acts on it.
+	useEffect(() => {
+		if (!selected) return;
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.key !== "Escape" || e.defaultPrevented) return;
+			e.preventDefault();
+			setSelected(null);
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [selected]);
 
 	// Position the detail card: below the clicked node, flipped above near
 	// the bottom edge, clamped horizontally. Imperative (ref + layout effect,
@@ -1629,6 +1655,17 @@ export function GraphView({
 			    against the full-bleed parent) — the row NEVER wraps (owner
 			    rejected the two-row fold); in narrow windows the search is
 			    the flexible element and shrinks instead. */}
+			{/* What the canvas is (whole-app redesign): a quiet caption so the
+			    graph explains itself — counts plus the one action that opens a
+			    node. Wide screens only; phones keep the search placeholder. */}
+			{!isEmpty && snapshot && (
+				<div data-testid="graph-caption" className={`lh-graph-caption pointer-events-none absolute top-3 z-[5] max-w-[min(24rem,36%)] select-none max-lg:hidden ${sidebarOpen ? "left-5" : "left-16"}`}>
+					<div className="font-title text-[20px] leading-tight tracking-tight text-foreground">Knowledge graph</div>
+					<div className="mt-1 text-[13px] leading-snug text-muted-foreground">
+						{snapshot.nodes.length} {snapshot.nodes.length === 1 ? "idea" : "ideas"} from {snapshot.clusters.length} {snapshot.clusters.length === 1 ? "session or source" : "sessions and sources"}. Each glow is where they were learned — search, or select a dot, to see an idea and open its session.
+					</div>
+				</div>
+			)}
 			<div className="lh-home-toolbar lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
 			{/* z-20 (2026-09-20): the row paints above the cost number below
 			    it — without this, the later-in-DOM cost control layered over
@@ -1657,6 +1694,7 @@ export function GraphView({
 			</div>
 
 			<NotesImportErrors errors={notesImport.errors} />
+				<NotesImportRecovery errors={notesImport.errors} retryable={notesImport.retryable} onRetry={notesImport.retry} onDismiss={notesImport.dismiss} onOpenSettings={() => openSettings("keys")} />
 			<NotesImportNotices notices={notesImport.notices} />
 			{/* Top-right tail (owner, 2026-09-20): the pipeline cost number —
 			    just a number, hover-highlighted, dropdown breakdown — then
@@ -1690,7 +1728,11 @@ export function GraphView({
 					data-testid="graph-node-card"
 					className="lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-2xl border bg-popover p-4 text-left shadow-2xl"
 				>
-					<div className="text-[15px] font-semibold leading-snug">{selected.node.name}</div>
+					<button type="button" aria-label="Close details" data-testid="graph-node-card-close" onClick={() => setSelected(null)}
+						className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-md:size-10">
+						<XIcon className="size-4" />
+					</button>
+					<div className="pr-8 text-[15px] font-semibold leading-snug">{selected.node.name}</div>
 					<div className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">{selected.node.statement}</div>
 					{selected.sourceIds.length > 0 ? (
 						<div className="mt-3 flex flex-col gap-1 border-t border-border/70 pt-3">

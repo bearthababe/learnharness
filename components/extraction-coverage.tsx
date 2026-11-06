@@ -309,7 +309,8 @@ export function CoverageRing({ chatId, refreshKey = 0 }: { chatId: string; refre
 					data-testid="coverage-ring"
 					onClick={() => setOpen((o) => !o)}
 					aria-expanded={open}
-					className="relative flex size-5 cursor-pointer items-center justify-center transition-opacity hover:opacity-80"
+					aria-label="Extraction coverage — how much of this session isn't mapped yet"
+					className="relative flex size-8 cursor-pointer items-center justify-center rounded-full p-1.5 transition-colors hover:bg-accent"
 				>
 					{/* The donut: track + fill. The whole ring pulses while a run
 					    is in flight (motion = the working-state signal). */}
@@ -319,7 +320,7 @@ export function CoverageRing({ chatId, refreshKey = 0 }: { chatId: string; refre
 			{open && (
 				<div
 					data-testid="coverage-ring-popover"
-					className="absolute top-full right-0 z-40 mt-1.5 w-64 rounded-xl border bg-card p-3 text-xs shadow-xl"
+					className="absolute top-full right-0 z-40 mt-2 w-72 rounded-2xl border bg-popover p-3.5 text-[13px] shadow-2xl"
 				>
 					<CoverageRingDetail coverage={coverage} chunkTokens={graph.chunkTokens} />
 				</div>

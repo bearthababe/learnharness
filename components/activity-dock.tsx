@@ -322,6 +322,17 @@ export function ActivitySection({ feed: feedProp, onOpenChat }: { feed?: Activit
 	// Reload whenever the running set changes: a job that just settled
 	// moves from the live blobs into this history.
 	useEffect(() => { void loadRecent(); }, [loadRecent, blobs.length]);
+	// The history opens as a popover over the list (it must not squeeze the
+	// sessions); outside presses and Escape close it.
+	const sectionRef = useRef<HTMLElement>(null);
+	useEffect(() => {
+		if (!recentOpen) return;
+		const onPointerDown = (e: PointerEvent) => { if (!sectionRef.current?.contains(e.target as Node)) setRecentOpen(false); };
+		const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setRecentOpen(false); } };
+		document.addEventListener("pointerdown", onPointerDown);
+		document.addEventListener("keydown", onKeyDown);
+		return () => { document.removeEventListener("pointerdown", onPointerDown); document.removeEventListener("keydown", onKeyDown); };
+	}, [recentOpen]);
 	// Refs for stable abort handlers (no re-created closures per tick).
 	const abortRef = useRef({ blobs, refresh, setAbortStates });
 	abortRef.current = { blobs, refresh, setAbortStates };
@@ -370,7 +381,7 @@ export function ActivitySection({ feed: feedProp, onOpenChat }: { feed?: Activit
 	// rows match the session rows' hover. Empty means empty: the header sits
 	// alone (the cost span is population, not decoration).
 	return (
-		<section data-testid="activity-section" className="border-t border-border/70 px-2 pb-1 pt-1.5">
+		<section ref={sectionRef} data-testid="activity-section" className="relative border-t border-border/70 px-2 pb-1 pt-1.5">
 			<div className="flex min-h-9 items-center gap-2.5 px-2.5 text-[14px] font-medium text-muted-foreground">
 				<ActivityIcon className="size-4" />
 				Background agents
@@ -389,7 +400,7 @@ export function ActivitySection({ feed: feedProp, onOpenChat }: { feed?: Activit
 				)}
 			</div>
 			{blobs.length === 0 && recentOpen && recent.length > 0 && (
-				<ul data-testid="activity-recent" className="flex max-h-[32dvh] flex-col gap-px overflow-y-auto pb-1">
+				<ul data-testid="activity-recent" aria-label="Recent background jobs" className="absolute inset-x-2 bottom-full z-30 mb-1 flex max-h-[min(22rem,50dvh)] flex-col gap-px overflow-y-auto overscroll-contain rounded-2xl border bg-popover p-1.5 shadow-2xl">
 					{recent.map((job) => (
 						<li key={job.id}>
 							<button type="button" onClick={() => onOpenChat?.(job.chatId)} data-testid="activity-recent-row"

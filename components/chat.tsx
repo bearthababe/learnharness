@@ -78,7 +78,7 @@ import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
 import { SessionMessageNavigation } from "@/components/session-navigation";
 import { PracticeDock } from "@/components/practice-dock";
-import { ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
+import { ThinkingCard, type PracticeThinkingData, ActiveProblemContext } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
 import { TopBar } from "@/components/top-bar";
 import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
@@ -1508,7 +1508,7 @@ export function Chat({
 							className="lh-header-plan lh-no-drag flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 						>
 							<WaypointsIcon className="size-4" aria-hidden />
-							<span className="max-lg:sr-only">Plan</span>
+							Plan
 						</button>
 </Hint>
 					)}
@@ -1526,6 +1526,7 @@ export function Chat({
 
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
 				<div ref={sessionFindScopeRef} data-input-owner="tutor" className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+				<ActiveProblemContext.Provider value={activeProblem?.toolCallId ?? null}>
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
 					<ConversationContent className="min-h-full gap-0 p-0">
@@ -1941,6 +1942,7 @@ export function Chat({
 					}}
 				/>
 				</Conversation>
+				</ActiveProblemContext.Provider>
 
 				{/* The session-scoped focuses (chrome-melt wave, 2026-09-19): mounted
 				    INSIDE the session area — absolute inset-0 siblings of the scroller,
@@ -2332,8 +2334,11 @@ function DockOverlay({
 	// practice problem owns the dock: shrinking flow space could pin a nearby
 	// learner back to the bottom. Composer mode may give space back.
 	const reserveRef = useRef(0);
+	// The fade band is measured (CSS shortens it in cramped panes, e.g. the
+	// phone notebook split); the constant is only the pre-layout fallback.
+	const fadeRef = useRef<HTMLDivElement>(null);
 	const offer = useCallback((blockH: number) => {
-		const next = blockH + GRADIENT_H;
+		const next = blockH + (fadeRef.current?.offsetHeight ?? GRADIENT_H);
 		if (next <= reserveRef.current + 0.5 && pendingRef.current) return;
 		// Stamp growth at the source, including child-only field resizes, so
 		// stick-to-bottom's catch-up is not mistaken for the learner leaving.
@@ -2554,7 +2559,7 @@ function DockOverlay({
 
 	return (
 		<div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }}>
-			<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
+			<div ref={fadeRef} className="lh-dock-fade h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
 			<div ref={blockRef} className="relative bg-background pb-5">
 				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">

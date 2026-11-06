@@ -78,6 +78,9 @@ export function useNotesImport(callbacks: { onStart?: () => void; onFinish?: () 
 	}, [snapshot.completion]);
 	return {
 		errors: snapshot.errors, notices: snapshot.notices, importing: snapshot.importing,
+		retryable: snapshot.retryable ?? 0,
+		retry: () => { latest.current.onStart?.(); pageImportQueue.retry(); },
+		dismiss: () => pageImportQueue.dismiss(),
 		onImportFiles: (files: FileList | null) => {
 			if (!files || files.length === 0) return;
 			latest.current.onStart?.();
@@ -137,6 +140,23 @@ export function readableImportError(error: string): string {
 	} catch { /* keep the status alone */ }
 	const hint = status === "401" || status === "403" ? " Check the provider key in Settings, then try again." : " Try again in a moment.";
 	return `${file}: the model provider refused the extraction — HTTP ${status}${detail}.${hint}`;
+}
+
+/** Recovery for failed imports: retry definitely refused files, jump to the
+ *  provider keys, or clear the messages. Rendered beside the plain alerts. */
+export function NotesImportRecovery({ errors, retryable, onRetry, onDismiss, onOpenSettings }: {
+	errors: readonly string[]; retryable: number; onRetry: () => void; onDismiss: () => void; onOpenSettings?: () => void;
+}) {
+	if (errors.length === 0) return null;
+	const keyProblem = errors.some((error) => /\b(401|403)\b|provider key|api key|authentication/i.test(error));
+	const action = "h-8 rounded-full px-3 text-[13px] font-medium transition-colors";
+	return (
+		<div data-testid="notes-import-recovery" className="pointer-events-auto flex flex-wrap justify-end gap-1.5">
+			{keyProblem && onOpenSettings && <button type="button" onClick={onOpenSettings} className={`${action} bg-primary text-primary-foreground hover:opacity-90`}>Open provider settings</button>}
+			{retryable > 0 && <button type="button" onClick={onRetry} className={`${action} bg-card/90 text-foreground backdrop-blur hover:bg-accent`}>Try again</button>}
+			<button type="button" onClick={onDismiss} className={`${action} text-muted-foreground hover:bg-accent hover:text-foreground`}>Dismiss</button>
+		</div>
+	);
 }
 
 export function NotesImportErrors({ errors }: { errors: readonly string[] }) {

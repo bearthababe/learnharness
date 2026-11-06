@@ -14,7 +14,9 @@ function UsagePanel({ children, anchorRef, onClose, closing, onClosed }: { child
 		closing={closing} onClosed={onClosed}
 		fitVisualViewport matchAnchorWidth onClose={onClose} phoneTriggerTestid="stats-summary"
 		menuClass="rounded-2xl border bg-popover p-3.5 text-[13px] shadow-2xl">{children}</MenuShell>;
-	return <div data-testid="stats-detail" className="absolute bottom-full left-1/2 z-40 mb-1.5 w-80 -translate-x-1/2 rounded-2xl border bg-popover p-3.5 text-[13px] shadow-2xl">{children}</div>;
+	// Opens up from the summary's left edge: the summary sits at the row's
+	// start, so a centred card would run under the sidebar on narrow panes.
+	return <div data-testid="stats-detail" className="absolute bottom-full left-0 z-40 mb-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border bg-popover p-3.5 text-[13px] shadow-2xl">{children}</div>;
 }
 
 export function formatContextMeasurement(tokens: number | null, limit: number | null): string {
