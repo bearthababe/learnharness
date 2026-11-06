@@ -55,6 +55,14 @@ export async function verifyNotebookMobile(browser, origin) {
 		d.final = text => d.sockets.at(-1).dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "Results", is_final: true, speech_final: true, start: 0, duration: 4, channel: { alternatives: [{ transcript: text, words: [{ word: text, punctuated_word: text, start: 0, end: 3.9 }] }] } }) }));
 		d.end = () => { const socket = d.sockets.at(-1); socket.readyState = 3; socket.dispatchEvent(new CloseEvent("close", { code: 1000 })); };
 	});
+	// Unsent composer text now survives leaving a session (it is restored on
+	// return). Earlier checks deliberately leave "Destination draft." in this
+	// session; start this flow from an empty composer, once per tab.
+	await page.evaluateOnNewDocument(() => {
+		if (window !== window.top || sessionStorage.getItem("lh:smoke-notebook-draft-reset")) return;
+		sessionStorage.setItem("lh:smoke-notebook-draft-reset", "1");
+		localStorage.removeItem("lh:composer-draft:mobile_other");
+	});
 	await page.goto(`${origin}/chat/mobile_other`, { waitUntil: "networkidle2", timeout: 240_000 });
 	assert.equal(await page.$('[aria-label="Working attached"]'), null);
 	const tutor = '[data-testid="composer"] [data-file-path-input]';
