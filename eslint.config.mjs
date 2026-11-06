@@ -20,6 +20,7 @@ import importPlugin from "eslint-plugin-import";
  */
 
 export default defineConfig([
+	globalIgnores([".prove-it/**"]),
 	// electron/** — the desktop shell: plain Node, no framework, outside the
 // import law (same rationale as scripts/).
 	globalIgnores([".next/**", "node_modules/**", "data/**", "next-env.d.ts", "scripts/**", "electron/**", "dist/**"]),

@@ -31,6 +31,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:workflow
+      - run: npm run test:learning
       - run: npm run lint
 
   mobile-browser:

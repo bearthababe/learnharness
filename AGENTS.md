@@ -21,5 +21,12 @@ After changes to ticket tooling, app launch/auth, or previews, run
 
 ## Browser verification
 
+For learning-story implementation, run `npm run verify:learning -- select STORY`
+before feature changes. For learning verification/harness changes use
+`.agents/skills/prove-learnharness/SKILL.md`; preserve V-1–V-7 in
+`docs/agents/learning-verification.md`. Report product gaps instead of building
+them as verification work. Subject accuracy requires approved independent keys;
+scripted workflow evidence is not live tutor or physical-device proof.
+
 Before running mobile browser checks or integrating UI changes, read
 `docs/verification/mobile-browser-checks.md` for the standard command and result receipt.

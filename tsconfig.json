@@ -42,6 +42,7 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
+    ".prove-it",
     "node_modules",
     "dist",
     ".next"

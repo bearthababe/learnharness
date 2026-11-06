@@ -19,6 +19,8 @@
 		"test": "NODE_ENV=test tsx --test tests/*.test.ts tests/*.test.tsx",
 		"test:mobile": "node scripts/run-mobile-checks.mjs",
 		"test:workflow": "node --test tests/workflow/ticket-workflow.test.mjs",
+		"test:learning": "node --test tests/verification/*.test.mjs",
+		"verify:learning": "node scripts/verify-learning.mjs",
 		"test:workflow:browser": "node scripts/prove-ticket-previews.mjs",
 		"lint": "eslint .",
 		"typecheck": "tsc --noEmit",
@@ -58,8 +60,8 @@
 		"mdast-util-from-markdown": "2.0.3",
 		"mdast-util-math": "3.0.0",
 		"media-chrome": "^4.19.2",
-		"micromark-extension-math": "3.1.0",
 		"mermaid": "^11.17.0",
+		"micromark-extension-math": "3.1.0",
 		"motion": "^13.1.1",
 		"nanoid": "^6.0.1",
 		"next": "^16.4.3",
@@ -83,6 +85,7 @@
 		"katex": "$katex"
 	},
 	"devDependencies": {
+		"@cucumber/cucumber": "13.3.0",
 		"@next/eslint-plugin-next": "^16.4.3",
 		"@tailwindcss/postcss": "^4.3.3",
 		"@types/node": "^24.0.0",
