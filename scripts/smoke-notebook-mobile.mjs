@@ -58,6 +58,11 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.goto(`${origin}/chat/mobile_other`, { waitUntil: "networkidle2", timeout: 240_000 });
 	assert.equal(await page.$('[aria-label="Working attached"]'), null);
 	const tutor = '[data-testid="composer"] [data-file-path-input]';
+	// Unsent drafts are kept per session, so an earlier check's draft in this
+	// session returns with the page; start this check from an empty composer.
+	await page.waitForFunction(() => !document.querySelector("[data-tutor-draft-loading]"));
+	await page.focus(tutor); await page.keyboard.down("Control"); await page.keyboard.press("KeyA"); await page.keyboard.up("Control"); await page.keyboard.press("Backspace");
+	await page.waitForFunction(selector => document.querySelector(selector)?.textContent === "", {}, tutor);
 	await page.type(tutor, "My explanation before working.");
 	await page.locator('button[data-input-owner="notebook"][aria-expanded]').click();
 	await page.waitForSelector("#notebook-instruction", { visible: true });
