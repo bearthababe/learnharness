@@ -9,7 +9,12 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	page.on("pageerror", error => errors.push(error.message));
 	page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/chat") sends.push(request.postData()); });
 	await page.evaluateOnNewDocument(origin => {
-		if (window === window.top && location.origin === origin) localStorage.setItem("lh:sidebar-open", "0");
+		if (window === window.top && location.origin === origin) {
+			localStorage.setItem("lh:sidebar-open", "0");
+			// The tablet steps below exercise the equation notebook, which is a
+			// phone surface by default (Settings → Writing), so switch it on.
+			localStorage.setItem("lh:feature:equation-notebook", "on");
+		}
 	}, origin);
 	await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 	await page.goto(`${origin}/chat/mobile_layout`, { waitUntil: "networkidle2", timeout: 240_000 });
@@ -18,12 +23,14 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 		const rect = selector => { const r = document.querySelector(selector).getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom, right: r.right }; };
 		return { workspace: rect(".session-workspace"), tutor: rect(".session-tutor"), slot: rect(".notebook-slot"), card: rect(".notebook-frame"), divider: rect(".notebook-split-divider"), direction: getComputedStyle(document.querySelector(".session-panes")).flexDirection };
 	});
-	// Phones inset the working card 8px (whole-app redesign; was 16).
+	// Phones inset the working card 8px (whole-app redesign; was 16); wider
+	// screens keep 16px.
 	const frame = r => {
-		assert.equal(Math.round(r.card.x - r.slot.x), 8);
-		assert.equal(Math.round(r.card.y - r.slot.y), 8);
-		assert.equal(Math.round(r.slot.right - r.card.right), 8);
-		assert.equal(Math.round(r.slot.bottom - r.card.bottom), 8);
+		const inset = r.workspace.width < 768 ? 8 : 16;
+		assert.equal(Math.round(r.card.x - r.slot.x), inset);
+		assert.equal(Math.round(r.card.y - r.slot.y), inset);
+		assert.equal(Math.round(r.slot.right - r.card.right), inset);
+		assert.equal(Math.round(r.slot.bottom - r.card.bottom), inset);
 		assert.ok(r.card.height > 52 && r.card.bottom <= r.workspace.bottom, JSON.stringify(r));
 	};
 	let r = await rects();
