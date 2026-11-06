@@ -2750,10 +2750,16 @@ body:has(.lh-graph-results, [data-testid="graph-node-card"]) .lh-resume {
 
 	/* Writing beside the question: the page gets most of the height, and
 	   the lesson pane above keeps only what answering needs. */
-	.hw-workspace .lh-stats-bar,
+	/* While writing, voice stays (Dictate); model and usage step aside. */
+	.hw-workspace .lh-stats-bar [data-testid="model-control"],
+	.hw-workspace .lh-stats-bar .lh-usage,
+	.hw-workspace .lh-stats-bar .lh-dock-write,
 	.hw-workspace .lh-shared-writing,
 	.hw-workspace .lh-dock-fade {
 		display: none;
+	}
+	.hw-workspace .lh-stats-bar {
+		padding-top: 6px;
 	}
 	.hw-workspace .lh-dock-block {
 		padding-bottom: 10px;
