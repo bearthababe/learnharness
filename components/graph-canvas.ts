@@ -882,6 +882,25 @@ export class GraphCanvasRenderer {
 		return { x: n.x * k + tx, y: n.y * k + ty };
 	}
 
+	/** Frame a set of nodes (a cluster chip): the camera eases to fit them
+	 *  with the standard padding. A learner action, so it is persisted. */
+	focusNodes(ids: readonly string[]): void {
+		const pts = ids.map((id) => this.nodeById.get(id)).filter((n): n is CanvasNode => !!n);
+		if (pts.length === 0) return;
+		const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+		if (w < 10 || h < 10) return;
+		const box = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+		for (const n of pts) {
+			box.minX = Math.min(box.minX, n.x); box.maxX = Math.max(box.maxX, n.x);
+			box.minY = Math.min(box.minY, n.y); box.maxY = Math.max(box.maxY, n.y);
+		}
+		const t = fitTransform(box, w, h, FIT_PADDING);
+		// Never zoom in past a comfortable reading scale for tiny clusters.
+		const k = Math.min(t.k, this.kFit * 4);
+		const cx = (box.minX + box.maxX) / 2, cy = (box.minY + box.maxY) / 2;
+		select(this.canvas).call(this.zoomBehavior.transform, zoomIdentity.translate(w / 2 - cx * k, h / 2 - cy * k).scale(k));
+	}
+
 	/** Glow one node as if hovered (search result hover), or clear it. */
 	highlight(nodeId: string | null): void {
 		this.setHover(nodeId);

@@ -184,7 +184,7 @@ it("alerts/notices stay plain and escaped", () => {
 
 it("provider refusals read as plain guidance instead of a raw payload", () => {
 	assert.equal(readableImportError('buoyancy.md: 401: {"message":"Missing Authentication header","code":401}'),
-		"buoyancy.md: the model provider refused the extraction — HTTP 401 (Missing Authentication header). Check the provider key in Settings, then try again.");
+		"buoyancy.md: nothing was extracted — the model provider turned the request down. Check your provider key in Settings, then try again. (Error 401)");
 	assert.equal(readableImportError("a.pdf: OCR not supported yet."), "a.pdf: OCR not supported yet.");
-	assert.match(readableImportError('n.md: 503: {"error":"busy"}'), /HTTP 503 \(busy\)\. Try again in a moment\./);
+	assert.match(readableImportError('n.md: 503: {"error":"busy"}'), /didn't respond normally\. Try again in a moment\. \(Error 503\)/);
 });

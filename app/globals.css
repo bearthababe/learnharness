@@ -398,9 +398,19 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 		display: none;
 	}
 	.lh-header-write {
-		height: 40px;
-		padding-inline: 12px;
+		width: 44px;
+		height: 44px;
+		padding: 0;
 		font-size: 15px;
+	}
+	/* Icon-only on phones (the title needs the width); still named. */
+	.lh-header-write-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 	.lh-stats-bar {
 		flex-wrap: wrap;
@@ -1011,9 +1021,9 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 /* Dense tree controls keep their alignment, but get finger-sized hit
    areas on touch screens. */
 @media (pointer: coarse) {
-	.lh-touch-hit { position: relative; }
-	.lh-touch-hit::after { content: ""; position: absolute; inset: -12px -5px; }
-	.lh-chain-check { width: 18px; height: 18px; }
+	/* The box itself grows (negative margins keep the staircase aligned). */
+	.lh-touch-hit { width: 30px !important; height: 34px !important; margin: -7px -8px; }
+	.lh-chain-check { width: 22px; height: 22px; margin: -4px; }
 }
 
 /* Question options that continue below the fold fade out at the edge. */
@@ -1026,7 +1036,8 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	/* After the check opens, an empty reading field shrinks to one line so
 	   the question keeps its options in view. */
 	.lh-reading-input[data-reading-claim="false"]:has([data-file-path-input][data-empty="true"]) > div:first-child {
-		display: none;
+		padding-bottom: 2px;
+		font-size: 12px;
 	}
 	.lh-reading-input[data-reading-claim="false"]:has([data-file-path-input][data-empty="true"]) .lh-compact-field {
 		min-height: 44px;
@@ -1048,4 +1059,24 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.session-panes[data-notebook-open="true"] .lh-dock-fade { height: 16px; }
 	.session-panes[data-notebook-open="true"] .lh-stats-bar { padding-top: 0; }
 	.session-panes[data-notebook-open="true"] .session-tutor > header { height: 52px; }
+}
+
+@media (max-width: 767px) {
+	/* Notebook beside the lesson: every spare pixel goes to the lesson. */
+	.session-panes[data-notebook-open="true"] .lh-dock-block { padding-bottom: 2px; }
+	.session-panes[data-notebook-open="true"] .lh-compact-field { min-height: 46px; }
+	.session-panes[data-notebook-open="true"] .lh-compact-field > :is(textarea, [data-file-path-input]) { min-height: 44px; padding-block: 10px; }
+	.session-panes[data-notebook-open="true"] .session-tutor > header { height: 48px; }
+}
+
+.lh-graph-physics[open] { display: flex; }
+.lh-graph-physics > summary { list-style: none; }
+.lh-graph-physics > summary::-webkit-details-marker { display: none; }
+.lh-graph-physics > summary::after { content: " ›"; }
+.lh-graph-physics[open] > summary::after { content: " ⌄"; }
+
+/* The Concepts share (an iPad workflow): offered on touch tablets; with a
+   mouse it appears only once shared writing is actually waiting. */
+@media (pointer: fine) {
+	.lh-shared-writing[data-has-writing="false"] { display: none; }
 }

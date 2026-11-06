@@ -4,9 +4,9 @@
  * Keyboard shortcuts (shortcut wave A, 2026-09-17) — the single document-level
  * keydown listener. Owns the pieces that belong to no surface in particular:
  *
- * - Tab is DEAD: browser tab-focus navigation is abandoned by owner decision
- *   (2026-09-17). Tab is suppressed everywhere (preventDefault, no-op) and
- *   Shift+Tab cycles the thinking level instead.
+ * - Tab / Shift+Tab are the browser's focus navigation (whole-app redesign;
+ *   the 2026-09-17 "Tab is dead" rule trapped keyboard users in fields).
+ *   The thinking-level cycle is Alt+T.
  * - Esc is a layered dismiss: topmost popover first (popovers stopPropagation
  *   on their own Esc — usePopoverDismiss + ModelControl), then dictation
  *   CANCEL (discard the transcript, owner 2026-09-17 round 3), then abort of
@@ -78,16 +78,16 @@ export function KeyboardShortcuts() {
 			// nothing is bound to it — browser tab-focus is abandoned, and
 			// the default action runs after dispatch, so suppressing it here
 			// works from any focus.
+			// Tab / Shift+Tab are the browser's own focus navigation (whole-app
+			// redesign): no field traps focus; the thinking cycle is Alt+T.
+			// One convenience stays: Tab from NOWHERE (nothing focused) enters
+			// the active surface's main field; every later Tab is native.
 			if (e.key === "Tab") {
-				e.preventDefault();
-				if (e.shiftKey) window.dispatchEvent(new CustomEvent("lh:kbd-cycle-thinking"));
-				// Plain Tab cycles the active surface's text fields (owner,
-				// keyboard round 2026-10-06) — forward-only, wrapping; each
-				// composer-bearing page answers with its own chain. The quiz
-				// dock's rows↔thinking claim stops propagation at document
-				// level, so a claimed Tab never reaches this dispatch.
-				else if (!e.metaKey && !e.ctrlKey && !e.altKey)
+				const active = document.activeElement;
+				if (!e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && (!active || active === document.body)) {
 					window.dispatchEvent(new CustomEvent("lh:kbd-cycle-fields"));
+					if (document.activeElement !== active) e.preventDefault();
+				}
 				return;
 			}
 

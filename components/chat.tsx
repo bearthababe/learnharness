@@ -127,8 +127,8 @@ const DOCK = "mx-auto w-full max-w-[46rem] px-4";
 const DOCK_W = 46 * 16;
 const MARGIN_GAP = 16;
 const MARGIN_MIN_W = 220;
-// The dock overlay's gradient band (h-24) — part of the reserved tail.
-const GRADIENT_H = 96;
+// The dock overlay's gradient band (h-14) — part of the reserved tail.
+const GRADIENT_H = 56;
 // Fold thresholds (owner, scroll round 1, tuned round 3): pixel distance
 // from the bottom — position, not velocity. Leave the bottom → the box
 // folds (visual only); reach it again → it re-opens. 96 (was 64, owner
@@ -1520,7 +1520,7 @@ export function Chat({
 				    practice never extracts, so an ever-filling ring with no
 				    run behind it would lie. */}
 					{kind !== "practice" && <CoverageRing chatId={chatId} refreshKey={coverageTick} />}
-					<Button variant="secondary" size="sm" className="lh-header-write shrink-0 gap-1.5" onClick={() => handwriting.show(true)} data-testid="open-notebook"><PenLineIcon className="size-4" aria-hidden />Write</Button>
+					<Button variant="secondary" size="sm" className="lh-header-write shrink-0 gap-1.5" onClick={() => handwriting.show(true)} data-testid="open-notebook"><PenLineIcon className="size-4" aria-hidden /><span className="lh-header-write-label">Write</span></Button>
 				</TopBar>
 				{!notebookVisible && notebook.error && <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>}
 
@@ -1530,7 +1530,10 @@ export function Chat({
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
 					<ConversationContent className="min-h-full gap-0 p-0">
-						<div data-session-find-root="" className={`${COLUMN} flex flex-1 flex-col gap-4 pt-4`}>
+						{/* justify-end: a short transcript sits just above the dock
+						    (like a chat thread) instead of leaving an empty band
+						    between the lesson and the input. Long ones scroll as before. */}
+						<div data-session-find-root="" className={`${COLUMN} flex flex-1 flex-col justify-end gap-4 pt-4`}>
 							{messages.length === 0 && !busy && (
 								<ConversationEmptyState
 									title="New session"
@@ -2559,8 +2562,8 @@ function DockOverlay({
 
 	return (
 		<div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }}>
-			<div ref={fadeRef} className="lh-dock-fade h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
-			<div ref={blockRef} className="relative bg-background pb-5">
+			<div ref={fadeRef} className="lh-dock-fade h-14 bg-gradient-to-t from-background via-background/85 to-transparent" />
+			<div ref={blockRef} className="lh-dock-block relative bg-background pb-5">
 				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
 					{!notebook.getSnapshot().view && <div data-tutor-draft-loading="" role={notebook.getSnapshot().error ? "alert" : "status"} className="px-3 py-2 text-xs text-muted-foreground">

@@ -721,7 +721,7 @@ export function AgentSection({
 										preferredSide="down"
 											anchorTestid={`slot-model-${slot}`}
 										testid={`slot-model-menu-${slot}`}
-										menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
+										menuClass="flex w-[min(22rem,calc(100vw-1.5rem))] flex-col rounded-2xl border border-border bg-popover p-2 text-[13px] shadow-2xl"
 									>
 										<ModelMenuList
 											models={catalog ?? undefined}

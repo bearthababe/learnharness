@@ -6,8 +6,9 @@
  * user-editable key map without touching any component.
  *
  * Design (owner-approved plan):
- * - Tab is DEAD: browser tab-focus navigation is abandoned entirely. Tab
- *   does nothing; Shift+Tab alone cycles the thinking level.
+ * - Tab and Shift+Tab move focus natively (whole-app redesign: keyboard
+ *   users must be able to leave every field). The thinking-level cycle
+ *   moved from Shift+Tab to Alt+T.
  * - Esc is a layered dismiss: topmost popover (each popover stopPropagation's
  *   its own Esc) → dictation stop → abort in-flight turn.
  * - The key map persists overrides in localStorage (`lh:keymap`, overrides
@@ -58,7 +59,7 @@ export const KEYBOARD_ACTIONS: readonly KeyActionDef[] = [
 	{ id: "toggle-dictation", label: "Toggle dictation", scope: "global", binding: "mod+d" },
 	{ id: "open-settings", label: "Open settings", scope: "global", binding: "mod+," },
 	{ id: "open-model-picker", label: "Model selector", scope: "global", binding: "mod+k" },
-	{ id: "cycle-thinking", label: "Cycle thinking level", scope: "global", binding: "shift+tab" },
+	{ id: "cycle-thinking", label: "Cycle thinking level", scope: "global", binding: "alt+t" },
 	{ id: "toggle-sidebar", label: "Toggle sessions sidebar", scope: "global", binding: "mod+b" },
 	{ id: "sessions-search", label: "Search sessions", scope: "global", binding: "mod+shift+f" },
 	// (The Alt+↑/↓/↵ session cycle was RETIRED, owner 2026-10-10: barely

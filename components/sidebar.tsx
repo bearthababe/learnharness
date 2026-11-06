@@ -815,7 +815,7 @@ function SessionsSidebar() {
 
 				<div className="lh-sessions-search mx-3 mb-2 flex items-center gap-2">
 					<span className="lh-sessions-search-label sr-only">Sessions</span>
-					<Hint label="Search sessions" action="sessions-search" side="bottom" disabled={phone}>
+					<Hint label="Search sessions" action="sessions-search" side="right" disabled={phone}>
 					<span className="relative flex-1">
 						<Input
 							ref={searchRef}

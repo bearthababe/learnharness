@@ -79,6 +79,7 @@ import { DeleteNodeDialog } from "@/components/delete-node-dialog.tsx";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { Hint } from "@/components/ui/hint";
 import { useSidebar } from "@/components/sidebar";
+import { clusterHue } from "@/components/cluster-geometry";
 import {
 	ARROW_LENGTH_LADDER,
 	CHARGE_RANGE,
@@ -494,7 +495,7 @@ function GraphSettingsControl({
 				// (pr-2.5) -> scrollbar -> 10px (p-2.5) -> panel edge. The
 				// scrollbar itself does NOT move: it stays pinned at the same
 				// distance from the panel's right border.
-				<div className="absolute right-0 top-full mt-2 flex max-h-[60vh] w-72 flex-col rounded-xl border bg-card/85 p-2.5 shadow-lg backdrop-blur">
+				<div className="absolute right-0 top-full mt-2 flex max-h-[60vh] w-72 max-w-[calc(100vw-1.5rem)] flex-col rounded-2xl border bg-popover/95 p-2.5 shadow-2xl backdrop-blur">
 					<div className="flex flex-col gap-2 overflow-y-auto pr-2.5">
 							{/* Size/zoom/region sliders: LADDER-mapped 0-100, step 10 (11
 							    stops, every DEFAULT dead-center at 50, every value a nice
@@ -563,7 +564,7 @@ function GraphSettingsControl({
 								Regions
 							</span>
 							<label className="flex cursor-pointer items-center justify-between text-[11px] text-muted-foreground">
-								<span>Background colors</span>
+								<span>Colour regions</span>
 								<input
 									type="checkbox"
 									checked={settings.regions.enabled}
@@ -576,7 +577,7 @@ function GraphSettingsControl({
 								/>
 							</label>
 							<SettingSlider
-								label="Dilation"
+								label="Region spread"
 								disabled={!regionTuning.enabled}
 								min={0}
 								max={100}
@@ -590,7 +591,7 @@ function GraphSettingsControl({
 									}))}
 							/>
 							<SettingSlider
-								label="Blur"
+								label="Region softness"
 								disabled={!regionTuning.enabled}
 								min={0}
 								max={100}
@@ -605,7 +606,7 @@ function GraphSettingsControl({
 								}
 							/>
 							<SettingSlider
-								label="Edge alpha"
+								label="Region edge fade"
 								disabled={!regionTuning.enabled}
 								min={0}
 								max={100}
@@ -621,7 +622,7 @@ function GraphSettingsControl({
 							<label
 								className={`flex items-center justify-between gap-2 text-[11px] text-muted-foreground${!regionTuning.enabled ? " opacity-40" : ""}`}
 							>
-								<span>Bitmap resolution</span>
+								<span>Region detail</span>
 								<select
 									disabled={!regionTuning.enabled}
 									className="rounded-md border bg-background px-1.5 py-0.5 text-xs tabular-nums text-foreground"
@@ -679,10 +680,10 @@ function GraphSettingsControl({
 						    the negative it is; cluster pull's far left = off.
 						    Order (user 2026-09-17): general forces first; depth
 						    anchor + its gray-out-able controls last. */}
-						<div className="mt-1.5 flex flex-col gap-1.5 border-t pt-1.5">
-							<span className="text-[11.5px] font-semibold text-muted-foreground">
-								Physics
-							</span>
+						<details className="lh-graph-physics mt-1.5 flex flex-col gap-1.5 border-t pt-1.5">
+							<summary className="cursor-pointer text-[11.5px] font-semibold text-muted-foreground">
+								Layout physics (advanced)
+							</summary>
 							<SettingSlider
 								label="Node repulsion"
 								min={0}
@@ -824,7 +825,7 @@ function GraphSettingsControl({
 										physics: { ...cur.physics, depthBaseRadius: fromSliderPosition(p, DEPTH_BASE_RADIUS_RANGE.min, DEPTH_BASE_RADIUS_RANGE.max) },
 									}))}
 							/>
-						</div>
+						</details>
 					</div>
 				</div>
 			)}
@@ -1346,6 +1347,9 @@ export function GraphView({
 	// created once and read through refs, so they never go stale.
 	const isEmpty = snapshot === null || snapshot.nodes.length === 0;
 	const { open: sidebarOpen } = useSidebar();
+	const namedClusters = useMemo(() => (snapshot?.clusters ?? [])
+		.filter((c): c is typeof c & { label: string } => !!c.label && c.members.length > 0)
+		.sort((a, b) => b.members.length - a.members.length), [snapshot]);
 	useEffect(() => {
 		if (isEmpty) return;
 		const canvas = canvasRef.current;
@@ -1659,11 +1663,25 @@ export function GraphView({
 			    graph explains itself — counts plus the one action that opens a
 			    node. Wide screens only; phones keep the search placeholder. */}
 			{!isEmpty && snapshot && (
-				<div data-testid="graph-caption" className={`lh-graph-caption pointer-events-none absolute top-3 z-[5] max-w-[min(24rem,36%)] select-none max-lg:hidden ${sidebarOpen ? "left-5" : "left-16"}`}>
+				<div data-testid="graph-caption" className={`lh-graph-caption pointer-events-none absolute z-[5] max-w-[min(24rem,36%)] select-none max-md:hidden md:top-[140px] md:max-w-[min(26rem,70%)] lg:top-3 lg:max-w-[min(24rem,36%)] ${sidebarOpen ? "left-5" : "left-16"}`}>
 					<div className="font-title text-[20px] leading-tight tracking-tight text-foreground">Knowledge graph</div>
 					<div className="mt-1 text-[13px] leading-snug text-muted-foreground">
 						{snapshot.nodes.length} {snapshot.nodes.length === 1 ? "idea" : "ideas"} from {snapshot.clusters.length} {snapshot.clusters.length === 1 ? "session or source" : "sessions and sources"}. Each glow is where they were learned — search, or select a dot, to see an idea and open its session.
 					</div>
+				</div>
+			)}
+			{/* The sources, named (phones and tablets): on small canvases only
+			    the biggest cluster's caption fits, so every source is listed as
+			    a chip — tap one to frame it. */}
+			{!isEmpty && snapshot && namedClusters.length > 1 && (
+				<div data-testid="graph-clusters" className="lh-graph-clusters pointer-events-auto absolute inset-x-0 top-[148px] z-[6] flex gap-1.5 overflow-x-auto px-3 pb-1 [scrollbar-width:none] md:top-[92px] lg:hidden" role="group" aria-label="Sources in the graph">
+					{namedClusters.map((c) => (
+						<button key={c.id} type="button" onClick={() => rendererRef.current?.focusNodes(c.members)}
+							className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card/90 px-3 text-[12.5px] font-medium text-foreground/85 backdrop-blur transition-colors hover:bg-accent max-md:h-9">
+							<span aria-hidden className="size-2 rounded-full" style={{ background: `hsl(${clusterHue(c.id)}, 70%, 70%)` }} />
+							{c.label}
+						</button>
+					))}
 				</div>
 			)}
 			<div className="lh-home-toolbar lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
@@ -1726,7 +1744,7 @@ export function GraphView({
 					// when it lands in the top strip it must stay interactive
 					// over home.tsx's drag surface (2026-09-17).
 					data-testid="graph-node-card"
-					className="lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-2xl border bg-popover p-4 text-left shadow-2xl"
+					className="lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-2xl border bg-popover p-4 text-left shadow-2xl max-md:max-h-[42dvh] max-md:overflow-y-auto max-md:overscroll-contain"
 				>
 					<button type="button" aria-label="Close details" data-testid="graph-node-card-close" onClick={() => setSelected(null)}
 						className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-md:size-10">

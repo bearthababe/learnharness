@@ -147,13 +147,13 @@ export function providerKeyLabel(id: string, providers: readonly ProviderKeyInfo
 	return matches?.[0]?.label;
 }
 
-/** The minimal status line, e.g. "…ab12 · 64 chars" (" · env" marks an
- *  environment-owned value — the row itself is read-only then). Pure. */
+/** The minimal status line in words, e.g. "Saved key …ab12" or "From the
+ *  environment · …ca10" (an environment-owned value — the row itself is
+ *  read-only then). The character count was noise to a learner. Pure. */
 export function keyStatusLine(status: AuthKeyStatus): string {
-	if (!status.present || !status.masked) return "not set";
+	if (!status.present || !status.masked) return "Not set";
 	const tail = status.masked.replace(/ \((\d+) chars\)$/, "");
-	const chars = status.masked.match(/\((\d+) chars\)$/)?.[1] ?? "?";
-	return `${tail} · ${chars}${status.source === "env" ? " · env" : ""}`;
+	return status.source === "env" ? `From the environment · ${tail}` : `Saved key ${tail}`;
 }
 
 /** One table row: label left, tiny docs link + status right. Writable
@@ -267,11 +267,11 @@ function KeyTableRow({
 				aria-expanded={expanded}
 				data-testid={`${testid}-row`}
 				onClick={() => !envOwned && onToggle()}
-				className={`flex w-full items-center justify-between gap-3 rounded-sm px-1 py-1.5 text-left ${
+				className={`flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left ${
 					envOwned ? "cursor-default" : "cursor-pointer transition-colors hover:bg-accent/50"
 				}`}
 			>
-				<span className="font-ui text-xs text-foreground">{label}</span>
+				<span className="font-ui text-[14px] text-foreground">{label}</span>
 				<span className="flex items-center gap-2">
 					{docsUrl && (
 						<a
@@ -279,12 +279,12 @@ function KeyTableRow({
 							target="_blank"
 							rel="noreferrer"
 							onClick={(e) => e.stopPropagation()}
-							className="text-[10px] text-muted-foreground/60 underline-offset-2 hover:text-foreground hover:underline"
+							className="text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
 						>
-							key ↗
+							Get a key ↗
 						</a>
 					)}
-					<span data-testid={`${testid}-status`} className="font-mono text-[11px] text-muted-foreground">
+					<span data-testid={`${testid}-status`} className="text-[12.5px] text-muted-foreground">
 						{keyStatusLine(status)}
 					</span>
 				</span>
@@ -339,10 +339,10 @@ function AddProviderRow({
 				aria-expanded={open}
 				data-testid="add-provider"
 				onClick={() => setOpen((v) => !v)}
-				className="flex w-full items-center justify-between gap-3 rounded-sm px-1 py-1.5 text-left font-ui text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+				className="flex min-h-9 w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left font-ui text-[13.5px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
 			>
 				<span>+ Add a provider</span>
-				{addable.length > 0 && <span className="font-mono text-[11px]">{addable.length}</span>}
+				{addable.length > 0 && <span className="text-[12px]">{addable.length} available</span>}
 			</button>
 			{open && (
 				<MenuShell

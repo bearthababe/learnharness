@@ -184,7 +184,7 @@ export function SetupKeysBody({
 							testid="setup-key-provider-menu"
 							preferredSide="down"
 							align="left"
-							menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
+							menuClass="flex w-[min(22rem,calc(100vw-1.5rem))] flex-col rounded-2xl border border-border bg-popover p-2 text-[13px] shadow-2xl"
 						>
 							<ProviderMenuList providers={providers ?? []} onPick={onPick} />
 						</MenuShell>
@@ -521,7 +521,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 												testid="setup-menu-all"
 												preferredSide="down"
 												align="left"
-												menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
+												menuClass="flex w-[min(22rem,calc(100vw-1.5rem))] flex-col rounded-2xl border border-border bg-popover p-2 text-[13px] shadow-2xl"
 											>
 												<ModelMenuList
 													models={imageCapable}
@@ -583,7 +583,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 												onClick={() => setOpenMenu(openMenu?.slot === slot && openMenu.kind === "model" ? null : { slot, kind: "model" })}
 												className="flex h-9 min-w-40 w-full items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 font-ui text-[13.5px] text-foreground transition-colors hover:border-muted-foreground/50"
 											>
-												<span className="min-w-0 flex-1 truncate">{entry ? prettyModel(entry.id) : "Pick a model…"}</span>
+												<span className="min-w-0 flex-1 truncate text-left">{entry ? prettyModel(entry.id) : "Pick a model…"}</span>
 												<span aria-hidden className="text-muted-foreground">
 													▾
 												</span>
@@ -604,7 +604,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 													testid={`setup-menu-${slot}`}
 													preferredSide="down"
 													align="left"
-													menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
+													menuClass="flex w-[min(22rem,calc(100vw-1.5rem))] flex-col rounded-2xl border border-border bg-popover p-2 text-[13px] shadow-2xl"
 												>
 													<ModelMenuList
 														models={slotCatalog}
@@ -672,7 +672,8 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 								</div>
 							);
 						})}
-						<div className="flex items-center gap-3">
+						{/* Save stays reachable without scrolling on short screens. */}
+						<div className="sticky -bottom-5 -mx-6 -mb-5 mt-1 flex items-center gap-3 border-t border-border bg-popover px-6 pb-5 pt-3">
 							<button
 								type="button"
 								data-testid="setup-save"

@@ -228,9 +228,8 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	);
 
 	// Shortcut seams (keyboard wave A): ⌘K opens the model menu (the
-	// universal command convention); Shift+Tab cycles the thinking level
-	// up the ladder (wrapping) — the owner's replacement for browser
-	// tab-focus. Both work from any focus, including mid-typing.
+	// universal command convention); Alt+T cycles the thinking level up
+	// the ladder (wrapping). Both work from any focus, including mid-typing.
 	useEffect(() => {
 		const onOpenPicker = () => {
 			setOpen("model");
@@ -307,8 +306,8 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			</Hint>
 			<Hint
 				// "Thinking" + its real shortcut via the registry (owner interlude
-				// 2026-09-25): ⇧⇥ cycles the level, so "Thinking (⇧⇥)" —
-				// rebind-live like every Hint suffix.
+				// 2026-09-25): the registry binding rides the label
+				// ("Thinking (Alt+T)") — rebind-live like every Hint suffix.
 				label="Thinking"
 				action="cycle-thinking"
 				side="bottom"
@@ -351,7 +350,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
 					preferredSide="up"
-					menuClass="flex w-[22rem] flex-col rounded-2xl border bg-popover p-2 text-[13px] shadow-2xl"
+					menuClass="flex w-[min(22rem,calc(100vw-1.5rem))] flex-col rounded-2xl border bg-popover p-2 text-[13px] shadow-2xl"
 				>
 					{modelMenu}
 				</MenuShell>

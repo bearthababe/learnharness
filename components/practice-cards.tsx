@@ -74,7 +74,7 @@ export function ProblemCard({ part }: ArtifactPartProps) {
 			<div data-testid="problem-card" data-active="true" className="lh-card-enter my-1 flex items-center gap-2 rounded-xl border border-dashed border-border px-4 py-2.5 text-[13.5px] text-muted-foreground">
 				<span className="size-1.5 shrink-0 rounded-full bg-(--lh-accent)" aria-hidden />
 				<span className="font-semibold text-foreground/85">Problem</span>
-				<span className="min-w-0 truncate">In progress — work on it in the answer area below</span>
+				<span className="min-w-0">in progress — answer it below</span>
 			</div>
 		);
 	}

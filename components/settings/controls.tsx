@@ -101,7 +101,7 @@ export function SettingsMenuTrigger({
 			className,
 		)}
 	>
-		<span className="min-w-0 flex-1 truncate">{value}</span>
+		<span className="min-w-0 flex-1 truncate text-left">{value}</span>
 		<ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
 	</button>;
 }

@@ -51,10 +51,12 @@ describe("the ⌘B chain — keypress → binding → action → event", () => {
 	});
 });
 
-describe("the thinking pill suffix — ⇧⇥ via the registry", () => {
-	it("shift+tab uses the platform's modifier label and maps to cycle-thinking", () => {
-		assert.equal(actionForBinding("shift+tab"), "cycle-thinking");
-		assert.equal(formatBinding("shift+tab"), IS_MAC ? "⇧⇥" : "Shift+⇥");
+describe("the thinking pill suffix — Alt+T via the registry (Tab is native focus now)", () => {
+	it("alt+t uses the platform's modifier label and maps to cycle-thinking; Tab binds to nothing", () => {
+		assert.equal(actionForBinding("alt+t"), "cycle-thinking");
+		assert.equal(formatBinding("alt+t"), IS_MAC ? "⌥T" : "Alt+T");
+		assert.equal(actionForBinding("shift+tab") ?? null, null);
+		assert.equal(actionForBinding("tab") ?? null, null);
 	});
 });
 

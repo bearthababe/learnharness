@@ -131,15 +131,10 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 export function readableImportError(error: string): string {
 	const match = /^(.*?): (\d{3}): (\{.*\})\s*$/s.exec(error);
 	if (!match) return error;
-	const [, file, status, payload] = match;
-	let detail = "";
-	try {
-		const parsed = JSON.parse(payload!) as { message?: unknown; error?: unknown };
-		const message = typeof parsed.message === "string" ? parsed.message : typeof parsed.error === "string" ? parsed.error : "";
-		detail = message ? ` (${message})` : "";
-	} catch { /* keep the status alone */ }
-	const hint = status === "401" || status === "403" ? " Check the provider key in Settings, then try again." : " Try again in a moment.";
-	return `${file}: the model provider refused the extraction — HTTP ${status}${detail}.${hint}`;
+	const [, file, status] = match;
+	return status === "401" || status === "403"
+		? `${file}: nothing was extracted — the model provider turned the request down. Check your provider key in Settings, then try again. (Error ${status})`
+		: `${file}: nothing was extracted — the model provider didn't respond normally. Try again in a moment. (Error ${status})`;
 }
 
 /** Recovery for failed imports: retry definitely refused files, jump to the
@@ -149,7 +144,7 @@ export function NotesImportRecovery({ errors, retryable, onRetry, onDismiss, onO
 }) {
 	if (errors.length === 0) return null;
 	const keyProblem = errors.some((error) => /\b(401|403)\b|provider key|api key|authentication/i.test(error));
-	const action = "h-8 rounded-full px-3 text-[13px] font-medium transition-colors";
+	const action = "h-8 rounded-full px-3 text-[13px] font-medium transition-colors max-md:h-11 max-md:px-4 max-md:text-[14px]";
 	return (
 		<div data-testid="notes-import-recovery" className="pointer-events-auto flex flex-wrap justify-end gap-1.5">
 			{keyProblem && onOpenSettings && <button type="button" onClick={onOpenSettings} className={`${action} bg-primary text-primary-foreground hover:opacity-90`}>Open provider settings</button>}

@@ -117,3 +117,14 @@ describe("computeMenuPlacement — cap + position", () => {
 		assert.ok(!("right" in p.style));
 	});
 });
+
+describe("horizontal fit (whole-app redesign)", () => {
+	it("a left-aligned menu near the right edge slides left to stay on screen", () => {
+		const p = computeMenuPlacement({ top: 100, bottom: 140, left: 40, right: 200 }, { width: 375, height: 667 }, 300, "down", "left", 352);
+		assert.equal(p.style.left, 375 - 8 - 352);
+	});
+	it("without a measured width the anchor's own edge is kept", () => {
+		const p = computeMenuPlacement({ top: 100, bottom: 140, left: 40, right: 200 }, { width: 375, height: 667 }, 300, "down", "left");
+		assert.equal(p.style.left, 40);
+	});
+});

@@ -377,7 +377,7 @@ export function ChainTableBody({
 						data-testid="sort-created"
 						onClick={() => onSort("created")}
 						aria-sort={sort.col === "created" ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
-						className="flex w-20 shrink-0 items-center justify-end gap-1 text-right transition-colors hover:text-foreground"
+						className="flex w-20 shrink-0 items-center justify-end max-md:hidden gap-1 text-right transition-colors hover:text-foreground"
 					>
 						Created {dirIcon("created")}
 					</button>
@@ -449,7 +449,7 @@ export function ChainTableBody({
 								<span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
 									{group.nodeIds.length}
 								</span>
-								<span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+								<span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground max-md:hidden">
 									{group.newestCreatedAt.slice(0, 10)}
 								</span>
 							</SourceDragRow>
@@ -530,7 +530,7 @@ export function ChainTableBody({
 												<span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
 													{memberIds.length}
 												</span>
-												<span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+												<span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground max-md:hidden">
 													{dateOf(chain.conclusion)}
 												</span>
 											</div>
@@ -561,7 +561,7 @@ export function ChainTableBody({
 																{node.statement}
 															</span>
 															<span className="w-14 shrink-0" />
-															<span className="w-20 shrink-0" />
+															<span className="w-20 shrink-0 max-md:hidden" />
 														</div>
 													);
 												})}
