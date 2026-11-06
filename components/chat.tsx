@@ -2400,6 +2400,39 @@ function DockOverlay({
 	revealedRef.current = revealed;
 
 	const blockRef = useRef<HTMLDivElement>(null);
+	// Short lessons on tablets and wider: the dock follows the content
+	// instead of waiting at the screen bottom, so the task sits under what
+	// it answers with no void between (the lift falls to 0 as soon as the
+	// lesson fills the view). Phones keep the bottom-anchored composer.
+	const [lift, setLift] = useState(0);
+	useEffect(() => {
+		const scroller = scrollRef.current;
+		const block = blockRef.current;
+		if (!scroller || !block) return;
+		let frame = 0;
+		const measure = () => {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(() => {
+				if (window.matchMedia("(max-width: 767px)").matches) { setLift(0); return; }
+				const column = scroller.querySelector<HTMLElement>("[data-session-find-root]");
+				const last = column?.lastElementChild as HTMLElement | null;
+				if (!column || !last) { setLift(0); return; }
+				const contentEnd = last.getBoundingClientRect().bottom + scroller.scrollTop - scroller.getBoundingClientRect().top;
+				const free = scroller.clientHeight - block.getBoundingClientRect().height - contentEnd - 24;
+				const next = free > 48 && scroller.scrollHeight <= scroller.clientHeight + 1 ? Math.round(free) : 0;
+				setLift((prev) => (Math.abs(prev - next) < 2 ? prev : next));
+			});
+		};
+		const observer = new ResizeObserver(measure);
+		observer.observe(scroller);
+		observer.observe(block);
+		const column = scroller.querySelector<HTMLElement>("[data-session-find-root]");
+		if (column) observer.observe(column);
+		const mutations = new MutationObserver(measure);
+		if (column) mutations.observe(column, { childList: true, subtree: true, characterData: true });
+		measure();
+		return () => { cancelAnimationFrame(frame); observer.disconnect(); mutations.disconnect(); };
+	}, [scrollRef]);
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const bodyRef = useRef<HTMLDivElement>(null);
 	const shellRef = useRef<HTMLDivElement>(null);
@@ -2673,7 +2706,7 @@ function DockOverlay({
 	});
 
 	return (
-		<div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }}>
+		<div className="lh-dock-overlay pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset, bottom: lift || undefined }}>
 			<div className="lh-dock-fade h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
 			<div ref={blockRef} className="lh-dock-block relative bg-background pb-5">
 				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>

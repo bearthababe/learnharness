@@ -2975,14 +2975,95 @@ button[role="switch"][aria-checked="true"] > span {
 	right: 0;
 }
 
-/* Portrait tablets: a short lesson sits on the composer instead of leaving
-   a void between them (the current task anchors the screen); the dock card
-   already shows the active problem, so its transcript pointer steps aside. */
-@media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
-	.lh-column > :first-child {
-		margin-top: auto;
+/* The dock card already shows the active problem, so its transcript copy
+   steps aside on every device (the problem is read once, beside the work). */
+.lh-problem-card[data-active] {
+	display: none;
+}
+
+/* Usage panel (wide layouts): opens from its button's left edge so it never
+   runs off the screen. */
+.lh-usage > [data-testid="stats-detail"] {
+	left: 0;
+	--tw-translate-x: 0;
+	translate: none;
+	transform: none;
+}
+
+/* A lifted dock (short lesson, wide screens) needs no fade above it. */
+.lh-dock-overlay[style*="bottom"] .lh-dock-fade {
+	opacity: 0;
+}
+
+/* Phones: Plan reads as a labelled chip in the header (it left the
+   composer row), so it is found without guessing an icon. */
+@media (max-width: 767px) {
+	.lh-topbar .lh-header-chip {
+		width: auto;
+		padding: 0 12px 0 10px;
 	}
-	.lh-problem-card[data-active] {
-		display: none;
+	.lh-topbar .lh-header-chip .lh-header-chip-label {
+		position: static;
+		width: auto;
+		height: auto;
+		overflow: visible;
+		clip: auto;
+		font-size: 14px;
+	}
+}
+
+/* Background jobs: names and failure reasons wrap to two lines instead of
+   clipping, so a job can be told apart at a glance. */
+.lh-activity-recent-title, .lh-activity-recent-meta {
+	display: -webkit-box;
+	white-space: normal;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.lh-activity-recent {
+	align-items: flex-start;
+	padding-block: 8px;
+}
+.lh-activity-recent > svg {
+	margin-top: 2px;
+}
+
+/* Writing palette: a compact arc (about 15% smaller) keeps more page free. */
+.hw-arc {
+	transform: scale(.86);
+	transform-origin: top right;
+}
+.hw-notebook[data-tools-side="left"] .hw-arc {
+	transform: scale(-.86, .86);
+	transform-origin: top center;
+}
+
+/* First-run setup: a touch-sized close. */
+.lh-setup > header button:last-child {
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	border-radius: 999px;
+}
+
+/* Phones with the notebook open: a one-line composer above it, so the
+   lesson and the working both keep more of their halves. */
+@media (max-width: 767px) {
+	.session-panes[data-notebook-open="true"] .lh-compact-field {
+		min-height: 44px;
+	}
+	.session-panes[data-notebook-open="true"] .lh-compact-field > :is(textarea, [data-file-path-input]) {
+		min-height: 42px;
+		padding-block: 9px;
+	}
+	.session-panes[data-notebook-open="true"] .lh-compact-row > button.lh-send-button {
+		width: 38px;
+		height: 38px;
+		margin-bottom: 3px;
+	}
+	.session-panes[data-notebook-open="true"] .lh-dock-block {
+		padding-bottom: 4px;
 	}
 }

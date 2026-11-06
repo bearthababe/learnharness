@@ -62,6 +62,20 @@ function summaryArg(tool: string, arg: string): string {
 	return tool === "list_propositions" ? "" : arg;
 }
 
+/** The learner-facing reading of a tool result: record ids, birth and
+ *  last-active timestamps are bookkeeping for the tutor, so the readable
+ *  view drops them (the raw text stays under Technical details). Pure. */
+export function readableToolOutput(text: string): string {
+	return text
+		.split("\n")
+		.map((line) => line
+			.replace(/\s+—\s+id:\s*\S+/g, "")
+			.replace(/,\s*(born|last active)\s+[^,)]+/g, "")
+			.replace(/\s*\(as of [^)]+\)/g, "")
+			.trimEnd())
+		.join("\n");
+}
+
 /** Render a tool result body: plain strings verbatim, image-bearing read
  *  results show their text + an attachment note (the image itself is the
  *  model's — the learner sees only that it happened). */
@@ -122,7 +136,7 @@ export function ToolCallCard({ part }: ArtifactPartProps) {
 						</div>
 						{/* The result first, as readable text; raw call data stays below. */}
 						<div className="lh-tool-output max-h-64 overflow-auto whitespace-pre-wrap break-words">
-							{out}
+							{readableToolOutput(out)}
 						</div>
 					</div>
 				) : (
@@ -139,6 +153,14 @@ export function ToolCallCard({ part }: ArtifactPartProps) {
 						<pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
 							{JSON.stringify(p.input, null, 2)}
 						</pre>
+						{out != null && out !== readableToolOutput(out) && <>
+							<div className="mb-1 mt-2 font-medium uppercase tracking-wide text-muted-foreground">
+								Raw output
+							</div>
+							<pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
+								{out}
+							</pre>
+						</>}
 					</details>
 				)}
 			</div>
