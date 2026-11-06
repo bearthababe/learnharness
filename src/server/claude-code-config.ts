@@ -9,5 +9,5 @@ export function claudeCodeEnabled(): boolean {
 
 /** Installation/opt-in availability only, never authenticated readiness. */
 export function claudeCodeAvailable(): boolean {
-	return claudeCodeEnabled() && getClaudeBinary() !== null;
+	return process.env.LH_PREVIEW_PROFILE !== "1" && claudeCodeEnabled() && getClaudeBinary() !== null;
 }

@@ -7,7 +7,7 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 
 const nextConfig: NextConfig = {
 	// Tailnet-only development preview; retain validation for other hosts.
-	allowedDevOrigins: ["thinkpad.tailfd9bf6.ts.net"],
+	allowedDevOrigins: ["thinkpad.tailfd9bf6.ts.net", ...(process.env.LH_PREVIEW_HOST ? [process.env.LH_PREVIEW_HOST] : [])],
 	devIndicators: false,
 	// Public build metadata only; no new runtime Electron version API.
 	env: { LH_VERSION: pkg.version, LH_HOMEPAGE: pkg.homepage },

@@ -30,6 +30,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:workflow
       - run: npm run lint
 
   mobile-browser:
@@ -70,6 +71,21 @@ jobs:
       - run: npm run test:mobile
         env:
           LH_MOBILE_TEST_DIR: ${{ runner.temp }}/mobile-browser-artifacts
+      - name: Ticket workflow real-app isolation
+        run: npm run test:workflow:browser
+      - name: Retain ticket workflow evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ticket-workflow-result-${{ github.run_attempt }}
+          path: |
+            .prove-it/runs/**/result.json
+            .prove-it/runs/**/worktree-preview.png
+            .prove-it/runs/**/exploratory-preview.png
+            .prove-it/runs/**/failure.png
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
       - name: Retain browser run result
         if: always()
         uses: actions/upload-artifact@v7
