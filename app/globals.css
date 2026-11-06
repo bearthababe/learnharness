@@ -2754,7 +2754,7 @@ body:has(.lh-graph-results, [data-testid="graph-node-card"]) .lh-resume {
 	.hw-workspace .lh-stats-bar [data-testid="model-control"],
 	.hw-workspace .lh-stats-bar .lh-usage,
 	.hw-workspace .lh-stats-bar .lh-dock-write,
-	.hw-workspace .lh-shared-writing,
+	.hw-workspace .lh-shared-writing[data-has-writing="false"],
 	.hw-workspace .lh-dock-fade {
 		display: none;
 	}
