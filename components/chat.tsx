@@ -489,6 +489,32 @@ export function Chat({
 		// mount-only by design (turnInFlight read at initial value)
 	}, []);
 
+	// Back/forward navigation can replay a page payload rendered before this
+	// session's later turns (the router cache restores it), which made a
+	// just-used session look empty until reload. Check the record once on
+	// mount and adopt it when it holds MORE than the page was given —
+	// append-only, and only while nothing has happened locally yet.
+	const nativeCountRef = useRef(nativeMessages.length);
+	nativeCountRef.current = nativeMessages.length;
+	const mountFreshness = useRef(false);
+	useEffect(() => {
+		if (mountFreshness.current) return;
+		mountFreshness.current = true;
+		if (initialPrompt || initiallyInFlight) return;
+		const given = initialMessages.length;
+		let cancelled = false;
+		void fetch(`/api/chats/${chatId}`)
+			.then((res) => (res.ok ? res.json() : null))
+			.then((record: { messages?: unknown[] } | null) => {
+				if (cancelled || !record || !Array.isArray(record.messages)) return;
+				if (record.messages.length <= given || nativeCountRef.current !== given) return;
+				void syncFromServer();
+			})
+			.catch(() => {});
+		return () => { cancelled = true; };
+		// mount-only by design
+	}, []);
+
 	const pending = findPendingToolCall(messages, pendingQuestionOf(nativeMessages));
 	const malformedQuestions = malformedQuestionsOf(nativeMessages);
 	// The abort handler reads the pending question from a ref (the window

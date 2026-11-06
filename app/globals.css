@@ -1983,3 +1983,31 @@ body {
 		visibility: hidden;
 	}
 }
+
+[data-testid="attachment-popup"] {
+	border-color: var(--border);
+	border-radius: 12px;
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+}
+[data-testid="attachment-popup"][role="status"] {
+	padding: 10px 12px;
+	font-family: var(--font-prose);
+	font-size: 13.5px;
+	line-height: 1.45;
+	color: var(--foreground);
+}
+[data-testid="attachment-popup"] [role="menuitem"] {
+	min-height: 34px;
+	padding-inline: 10px;
+	font-size: 14px;
+}
+
+.lh-import-error {
+	max-width: min(24rem, 100%);
+	font-family: var(--font-prose);
+	font-size: 13px;
+	line-height: 1.45;
+	text-align: right;
+	color: var(--destructive);
+}

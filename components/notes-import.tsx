@@ -122,8 +122,21 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	);
 }
 
+/** A raw provider failure ("file: 401: {json}") reads as a sentence with a
+ *  next step; anything else is shown as the server worded it. Pure. */
+export function friendlyImportError(error: string): string {
+	const m = /^(.+?): (\d{3}): (\{[\s\S]*\})$/.exec(error);
+	if (!m) return error;
+	let detail = "";
+	try { const parsed = JSON.parse(m[3]!) as { message?: unknown; error?: unknown }; detail = String(parsed.message ?? parsed.error ?? ""); } catch { /* keep the status alone */ }
+	const status = Number(m[2]);
+	const hint = status === 401 || status === 403
+		? "The model provider refused the request; check its key in Settings → Providers."
+		: "The model provider returned an error; try again in a moment.";
+	return `${m[1]} couldn't be imported. ${hint} (${status}${detail ? ` · ${detail}` : ""})`;
+}
 export function NotesImportErrors({ errors }: { errors: readonly string[] }) {
-	return <>{errors.map((error, i) => <p key={i} role="alert" className="max-w-full whitespace-pre-wrap break-words text-xs text-red-400">{error}</p>)}</>;
+	return <>{errors.map((error, i) => <p key={i} role="alert" className="lh-import-error max-w-full whitespace-pre-wrap break-words text-xs text-red-400">{friendlyImportError(error)}</p>)}</>;
 }
 export function NotesImportNotices({ notices }: { notices: readonly string[] }) {
 	return <>{notices.map((notice, i) => <p key={i} role="status" className="max-w-full whitespace-pre-wrap break-words text-xs text-muted-foreground">{notice}</p>)}</>;
