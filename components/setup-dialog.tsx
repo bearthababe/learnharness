@@ -59,9 +59,9 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 /** The pickers' slot identity — same roster language as the Agent
  *  section's slot rows. */
 const SLOT_META: Record<ModelSlotName, { label: string; roster: string }> = {
-	strong: { label: "Strong", roster: "Prober, teacher" },
-	cheap: { label: "Cheap", roster: "Researcher, demo builder, extractor, auditor" },
-	vision: { label: "Vision", roster: "Visual maker + PDF reader" },
+	strong: { label: "Main tutor", roster: "Teaches you and checks what you already know" },
+	cheap: { label: "Helpers", roster: "Research, demos, extraction and grading; a cheaper model works well" },
+	vision: { label: "Images & PDFs", roster: "Draws figures and reads PDFs; needs a model that reads images" },
 };
 const SLOT_ORDER: readonly ModelSlotName[] = ["strong", "cheap", "vision"];
 
@@ -634,7 +634,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 													}));
 												}}
 											>
-												Use {prettyModel(entry.id)} for {reads ? "all three roles" : "the Cheap role too"}
+												Use {prettyModel(entry.id)} for {reads ? "all three roles" : "the helpers too"}
 											</button>
 										);
 									})()}

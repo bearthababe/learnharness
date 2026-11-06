@@ -255,6 +255,8 @@ export function SidebarToggle() {
 				variant="ghost"
 				size="icon"
 				aria-label="Open sidebar"
+				aria-describedby={waiting > 0 ? "lh-waiting-description" : undefined}
+				title={waiting > 0 ? (waiting === 1 ? "1 session waiting for you" : `${waiting} sessions waiting for you`) : undefined}
 				aria-hidden={open}
 				tabIndex={open ? -1 : 0}
 				onClick={toggle}
@@ -266,6 +268,7 @@ export function SidebarToggle() {
 				<PanelLeftOpenIcon className="size-4" />
 				{/* Sessions waiting for an answer stay visible while the list is closed. */}
 				{waiting > 0 && <span className="lh-waiting-badge" aria-hidden="true" data-testid="sessions-waiting-badge">{waiting}</span>}
+				{waiting > 0 && <span id="lh-waiting-description" className="sr-only">{waiting === 1 ? "1 session is waiting for your answer" : `${waiting} sessions are waiting for your answer`}</span>}
 			</Button>
 			</Hint>
 		</span>

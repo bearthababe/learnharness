@@ -295,6 +295,10 @@ export function CoverageRing({ chatId, refreshKey = 0 }: { chatId: string; refre
 	// Vanishes entirely when the graph is off, or before the first honest
 	// read (no fake zeros — the doctrine).
 	if (graph === null || !graph.enabled || coverage === null) return null;
+	// The header shows the ring only while extraction actually runs here: at
+	// rest a partial ring reads as a stuck spinner. The exact numbers and the
+	// Extract action stay in the session's ⋯ menu.
+	if (!coverage.running && !runHere && !open) return null;
 
 	const fill = ringFill(coverage.uncoveredTokens, graph.chunkTokens);
 	return (

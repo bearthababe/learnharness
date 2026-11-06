@@ -119,7 +119,7 @@ describe("AgentSection (thin SSR)", () => {
 			assert.ok(html.includes(`data-testid="slot-model-${slot}"`), `${slot} model trigger`);
 			assert.ok(html.includes(`data-testid="slot-thinking-${slot}"`), `${slot} thinking trigger`);
 			// the roster hint rides every row
-			assert.ok(html.includes("The main model for your sessions") || slot !== "strong", "strong roster");
+			assert.ok(html.includes("Teaches you and checks what you already know") || slot !== "strong", "strong roster (plain-language role)");
 		}
 		// Fix wave: no Default anywhere — an unpicked slot reads "—"
 		// (the owner's no-factory-fallback language), and no menu

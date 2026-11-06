@@ -370,7 +370,7 @@ export function ChainTableBody({
 						aria-sort={sort.col === "props" ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
 						className="flex w-14 shrink-0 items-center justify-end gap-1 text-right transition-colors hover:text-foreground"
 					>
-						Props {dirIcon("props")}
+						Ideas {dirIcon("props")}
 					</button>
 					<button
 						type="button"
@@ -444,8 +444,8 @@ export function ChainTableBody({
 								</button>
 								{onOrganizationChange && group.birth && group.kind !== null
 									? <EditableSourceName name={group.label ?? ""} muted={empty} onSave={(name) => onOrganizationChange({ action: "rename-source", id: group.birth!, name })} />
-									: <span className={`min-w-0 flex-1 truncate text-sm font-medium${empty ? " text-muted-foreground/60" : ""}`}>{group.label ?? <span className="text-muted-foreground/60">unlabeled</span>}</span>}
-								{group.kind === "notes" && <span className="text-[11px] uppercase tracking-widest text-muted-foreground/60">notes</span>}
+									: <span className={`min-w-0 flex-1 truncate text-sm font-medium${empty ? " text-muted-foreground/60" : ""}`}>{group.label ?? <span className="text-muted-foreground/60">Ungrouped ideas</span>}</span>}
+								{group.kind === "notes" && <span className="lh-source-chip text-[11px] text-muted-foreground/80">Notes</span>}
 								<span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
 									{group.nodeIds.length}
 								</span>

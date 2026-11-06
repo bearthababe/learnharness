@@ -2532,3 +2532,129 @@ html[data-focus-source="keyboard"] [data-attachment-composer] :is(textarea, [con
 .lh-setup button.h-7 > span:first-child, .lh-settings-content button.h-7 > span:first-child {
 	text-align: left;
 }
+
+/* Graph search results float over the graph instead of pushing the
+   toolbar; home's resume strip steps aside while search or a node card
+   is open. */
+.lh-graph-search {
+	position: relative;
+	z-index: 30;
+}
+.lh-graph-results {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 40;
+	width: max(100%, 20rem);
+	max-width: calc(100vw - 24px);
+	margin-top: 0;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+}
+body:has(.lh-graph-results, [data-testid="graph-node-card"]) .lh-resume {
+	display: none;
+}
+@media (max-width: 767px) {
+	.lh-graph-results {
+		left: 0;
+		width: auto;
+	}
+}
+
+/* Chains on phones: names get the room (they wrap), the date column steps
+   aside, and the ideas count stays. */
+@media (max-width: 767px) {
+	[data-testid="chain-table"] .w-20.shrink-0 {
+		display: none;
+	}
+	[data-testid="chain-table"] [data-chain-nav-row] .truncate {
+		overflow: visible;
+		white-space: normal;
+		text-overflow: clip;
+		overflow-wrap: anywhere;
+	}
+	[data-testid="chain-table"] .w-14.shrink-0 {
+		width: 3rem;
+	}
+}
+.lh-source-chip {
+	padding: 1px 7px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+}
+
+/* Tablet type scale: a touch larger everywhere it's read at arm's length. */
+@media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
+	.lh-column .lh-prose, .lh-column [data-testid="user-message"] {
+		font-size: calc(var(--lh-prose-size) + 1px);
+	}
+	.lh-session-title {
+		font-size: 20px;
+	}
+	.lh-header-chip, .lh-header-write, [data-testid="phase-chip"] {
+		font-size: 14.5px;
+	}
+	.lh-topbar .lh-closed-toggle,
+	.lh-topbar .lh-closed-toggle button,
+	.lh-home-navigation .lh-closed-toggle,
+	.lh-home-navigation .lh-closed-toggle button {
+		width: 44px;
+		height: 44px;
+	}
+	.lh-stats-bar {
+		font-size: 14px;
+	}
+	.lh-question-text {
+		font-size: 18px;
+	}
+	.lh-option {
+		font-size: 16.5px;
+		min-height: 50px;
+	}
+	.lh-resume-row {
+		mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+	}
+}
+
+/* Laptop chrome: slightly larger labels and composer chips. */
+@media (min-width: 1024px) {
+	.lh-header-chip, .lh-header-write {
+		height: 34px;
+		font-size: 14px;
+	}
+	[data-testid="phase-chip"] {
+		font-size: 13.5px;
+	}
+	[data-testid="stats-model"], [data-testid="stats-thinking"],
+	.lh-stats-bar [data-testid="stats-summary"],
+	.lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"] {
+		height: 32px;
+		font-size: 13.5px;
+	}
+	.lh-session-meta {
+		font-size: 13px;
+	}
+	.lh-session-name {
+		font-size: 15px;
+	}
+}
+
+/* Phones: the fade above the dock is a hint, not a curtain; the dock sits
+   closer to the screen edge, most of all beside the notebook. */
+@media (max-width: 767px) {
+	.lh-dock-fade {
+		height: 28px;
+	}
+	.lh-dock-block {
+		padding-bottom: 8px;
+	}
+	.session-panes[data-notebook-open="true"] .lh-dock-fade {
+		height: 12px;
+	}
+	.session-panes[data-notebook-open="true"] .lh-compact-stats {
+		padding-top: 2px;
+	}
+}

@@ -76,7 +76,8 @@ import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, PenLineIc
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
-import { SessionMessageNavigation } from "@/components/session-navigation";
+import { SessionMessageNavigation, scrollSessionTarget } from "@/components/session-navigation";
+import { friendlyProviderError } from "@/components/friendly-error";
 import { PracticeDock } from "@/components/practice-dock";
 import { ActiveProblemContext, ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
@@ -298,6 +299,34 @@ export function Chat({
 	useSessionInputViewport(workspaceRef, notebookVisible);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
 	useMobileChatFocus(workspaceRef, scrollContextRef, !notebookVisible);
+	// After answering on a short screen, keep the result in view: the new
+	// answered card settles near the top and the reply streams in below it
+	// (the scroll-down disc offers the rest) instead of pushing it away.
+	const pinAnswerRef = useRef(0);
+	useEffect(() => {
+		if (!pinAnswerRef.current) return;
+		if (Date.now() - pinAnswerRef.current > 15_000) { pinAnswerRef.current = 0; return; }
+		const scroller = scrollContextRef.current?.scrollRef.current;
+		const scope = workspaceRef.current;
+		if (!scroller || !scope) return;
+		if (scroller.clientHeight >= 640) { pinAnswerRef.current = 0; return; }
+		if (!scroller.querySelector('[data-testid="answered-card"]')) return;
+		pinAnswerRef.current = 0;
+		// The optimistic card can be re-rendered as the record lands: look it
+		// up when scrolling, and only once it has real geometry.
+		let tries = 0;
+		const pin = () => {
+			const cards = scroller.querySelectorAll<HTMLElement>('[data-testid="answered-card"]');
+			const card = cards[cards.length - 1];
+			const box = card?.getBoundingClientRect();
+			if (!card || !card.isConnected || !box || box.height === 0) {
+				if (++tries < 10) setTimeout(pin, 80);
+				return;
+			}
+			scrollSessionTarget(card.parentElement ?? card, scope, scrollContextRef.current);
+		};
+		setTimeout(pin, 120);
+	}, [messages]);
 	// The stick-to-bottom scroller re-pins when its CONTENT resizes, not when
 	// the viewport itself shrinks (the notebook or writing pane opening, a
 	// split loading). Keep a reader who was at the end at the end.
@@ -1878,7 +1907,7 @@ export function Chat({
 							{openingError && <p role="alert" className="text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
 							{error && (
 								<div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
-									<span>Something went wrong: {error.message}</span>
+									<span>{friendlyProviderError(error.message) ?? `Something went wrong: ${error.message}`}</span>
 									{retryable && (
 										<Button variant="outline" size="xs" data-testid="retry-failed-turn" onClick={retryFailedTurn}>
 											Retry
@@ -1998,6 +2027,7 @@ export function Chat({
 					onSubmitAnswer={async (output, toolCallId, fields, reviewed) => {
 						const pending = pendingRef.current;
 						if (!pending || pending.toolCallId !== toolCallId) return false;
+						pinAnswerRef.current = Date.now();
 						// THE ANSWER IS THE QUESTION CALL'S TOOL RESULT (fork 1, owner
 						// 2026-09-26): one input event, one turn — the hook appends
 						// the optimistic graded result (the AnsweredCard shows at
@@ -2630,8 +2660,8 @@ function DockOverlay({
 
 	return (
 		<div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }}>
-			<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
-			<div ref={blockRef} className="relative bg-background pb-5">
+			<div className="lh-dock-fade h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
+			<div ref={blockRef} className="lh-dock-block relative bg-background pb-5">
 				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
 					{!notebook.getSnapshot().view && <div data-tutor-draft-loading="" role={notebook.getSnapshot().error ? "alert" : "status"} className="px-3 py-2 text-xs text-muted-foreground">

@@ -168,7 +168,7 @@ export function MinimalHome({
 								className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
 							>
 								<ListTreeIcon className="size-3" />
-								Chains
+								Ideas
 							</button>
 						</Hint>
 					</div>
