@@ -3,25 +3,33 @@
 The primary surface is the learner web UI. The added verification surface is a
 Cucumber CLI, with real handlers, tool execution and JSON storage behind a
 scripted faux provider. Existing tests remain in place. No product tool is
-patched for these checks; only the copied fixture's chat route injects the model
-and a restricted probe/plan tool registry. Its automatic handoff callback does
+patched for these checks; only the copied fixture's chat route injects the model,
+a restricted probe/plan tool registry for teaching sessions and the real
+practice registry for practice and drill sessions. Its automatic handoff callback does
 nothing: successful `probe_done` results are checked, automatic wake is not.
 
 ## Exact drives
 
-1. `npm run verify:learning -- list` lists the seven stable story IDs, dependencies,
-   expectations and separate availability/verification states.
-2. `npm run test:learning` checks report aggregation, resolution, selection,
-   refusal and controlled cap boundaries against the approved spec.
+1. `npm run verify:learning -- validate` must report a valid catalog; then
+   `npm run verify:learning -- report` shows every story's availability,
+   verification readiness and owner decisions separately. `list` prints JSON.
+2. `npm run test:learning` checks report aggregation, catalog/inventory
+   validation, resolution, selection, refusal and controlled cap boundaries.
 3. `CHROMIUM_PATH=/usr/bin/chromium npm run verify:learning -- run` dry-runs
-   Cucumber resolution then executes LJ-START, LJ-PROGRESS and LJ-RETURN through
-   an owned application, mobile-viewport Chromium, real handlers and saved files.
-   No live connection is contacted. Compare before/after records and screenshots,
-   successful tool results, distinct attempts and unchanged history after reopen.
-4. `npm run verify:learning -- select LJ-REVIEW` must exit nonzero: missing
-   verification cannot open a feature implementation gate. Unknown IDs and
-   `select LJ-TUTOR` must also refuse. `select LJ-RETURN` resolves and executes
-   its dependency scenarios; undefined, pending or failing checks cannot pass.
+   Cucumber resolution then executes every executable story through an owned
+   application, mobile-viewport Chromium, real handlers and saved files:
+   LJ-START, LJ-PROGRESS, LJ-RETURN and LJ-PLAN-REVISE in `reference.feature`;
+   LJ-PRACTICE, LJ-DRILL and LJ-PRACTICE-RESUME in `practice.feature`. No live
+   connection is contacted. Compare before/after records and screenshots,
+   successful tool results, distinct attempts, unchanged history after reopen,
+   the revised plan popup, the hidden-then-revealed practice solution, the
+   recorded `solvedWithHints` outcome and help rung, and the drill identity.
+4. `npm run verify:learning -- select LJ-REVIEW` (or any other
+   missing-verification story) must exit nonzero: missing verification cannot
+   open a feature implementation gate. Unknown IDs and blocked stories such as
+   `select LJ-TUTOR` must also refuse. `select LJ-PRACTICE-RESUME` resolves and
+   executes its dependency scenarios; undefined, pending or failing checks
+   cannot pass.
 5. `npm run verify:learning -- run --live` must exit nonzero with status blocked,
    zero model requests and no credential access. The subject/key and calibration
    are not approved, and no permission-enforced live adapter is implemented.
@@ -38,7 +46,11 @@ screenshots and stored synthetic history remain. Never stop unrelated listeners.
 
 The workflow slice is goal → successful probe result → validated plan → scripted
 teaching → uncertain response → scripted feedback → retry → close/reopen → message
-continuation. This is not proof of subject accuracy, appropriate feedback, real
+continuation → plan revision. The practice slice is pose → hidden solution →
+wrong attempt → scripted feedback with the problem still open → corrected attempt
+→ helped-success conclusion, plus the same for a drill and a reopened open
+problem. Scripted outcomes prove recording and display, not that a hint was the
+smallest useful one or that the verdict was right. This is not proof of subject accuracy, appropriate feedback, real
 assessment ownership, adaptation to evidence, or cross-process durability.
 Availability unknown is not missing capability. Missing automation does not prove
 a product gap. Missing, failed, blocked, not-run, incomplete and uncertain outcomes
