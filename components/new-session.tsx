@@ -241,6 +241,9 @@ export function DraftShell({
 	);
 }
 
+/** The new-session draft's unsent text, kept on this device between visits. */
+const DRAFT_KEY = "lh:new-session-draft";
+
 export function NewSession({ initialConfigured, mode = "teach" }: { initialConfigured: boolean; mode?: "teach" | "practice" | "drill" }) {
 	const router = useRouter();
 	const [text, setText] = useState("");
@@ -252,7 +255,15 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 	const applyText = (v: string) => {
 		textRef.current = v;
 		setText(v);
+		// The unsent draft survives leaving this page on this device.
+		try { if (v) localStorage.setItem(DRAFT_KEY, v); else localStorage.removeItem(DRAFT_KEY); } catch { /* storage blocked */ }
 	};
+	useEffect(() => {
+		try {
+			const saved = localStorage.getItem(DRAFT_KEY);
+			if (saved && !textRef.current) { textRef.current = saved; setText(saved); }
+		} catch { /* storage blocked */ }
+	}, []);
 	const [busy, setBusy] = useState(false);
 	const startingRef = useRef(false);
 	const starterRef = useRef(new SessionStarter());
@@ -320,7 +331,10 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 		void startDraftSession(draft, fetch, mode === "teach" ? undefined : mode, mode !== "teach" ? picksRef.current : undefined,
 			starterRef.current, JSON.stringify(catalog?.slots.strong))
 			.then((target) => {
-				if (target) router.push(target);
+				if (target) {
+					try { localStorage.removeItem(DRAFT_KEY); } catch { /* storage blocked */ }
+					router.push(target);
+				}
 				else { startingRef.current = false; setBusy(false); }
 			})
 			.catch(() => {

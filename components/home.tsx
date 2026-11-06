@@ -24,6 +24,9 @@ import type { TurnUsage } from "@/src/core";
  * under the header and the new-session dock, both of which float over it
  * with no gradient scrims. Sessions live in the toggleable sidebar.
  */
+/** Home's unsent start text, kept on this device between visits. */
+export const START_DRAFT_KEY = "lh:home-start-draft";
+
 export function Home({
 	initialConfigured,
 	rendering = true,
@@ -41,6 +44,17 @@ export function Home({
 	 * dictation flush lands via setState, invisible to a closure that
 	 * waited through `await finish()`. Kept current at every write. */
 	const topicRef = useRef("");
+	// The unsent start text survives leaving home (another session, Back,
+	// a reload) on this device; a started session consumes it.
+	useEffect(() => {
+		try {
+			const saved = localStorage.getItem(START_DRAFT_KEY);
+			if (saved && !topicRef.current) { topicRef.current = saved; setTopic(saved); }
+		} catch { /* storage blocked */ }
+	}, []);
+	useEffect(() => {
+		try { if (topic) localStorage.setItem(START_DRAFT_KEY, topic); else localStorage.removeItem(START_DRAFT_KEY); } catch { /* storage blocked */ }
+	}, [topic]);
 	// First-run gate (model-slots wave, owner 2026-09-20): chats cannot
 	// start until the user has picked all three slots — no defaults for
 	// 33 providers. The dock shows the CTA while unconfigured; submitting
@@ -150,6 +164,7 @@ export function Home({
 				...(mode === "drill" ? { practiceMode: "drill" } : {}),
 				...(practiceProps.length > 0 ? { graphContext: { propositions: practiceProps } } : {}),
 			}, fetch, JSON.stringify(catalog?.slots.strong));
+			try { localStorage.removeItem(START_DRAFT_KEY); } catch { /* storage blocked */ }
 			router.push(target);
 		} catch {
 			startingRef.current = false;

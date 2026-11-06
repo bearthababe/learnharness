@@ -606,24 +606,57 @@ export function Chat({
 	 * read the latest text without a parent render per input event. Explicit
 	 * resets still bump a revision so the local field can sync. */
 	const textRef = useRef("");
+	/* THE DEVICE DRAFT (whole-app redesign): without a notebook context the
+	 * ordinary composer text lived only in memory, so leaving the session
+	 * (another session, Back, a reload) silently discarded unsent work. The
+	 * text now also rides this device's storage per session and returns on
+	 * remount; a notebook context's server draft stays authoritative. */
+	const localDraftKey = `lh:composer-draft:${chatId}`;
+	const persistLocalDraft = useCallback((v: string) => {
+		try {
+			if (v) localStorage.setItem(localDraftKey, v);
+			else localStorage.removeItem(localDraftKey);
+		} catch { /* storage blocked: memory-only, as before */ }
+	}, [localDraftKey]);
+	const restoredLocalDraftRef = useRef(false);
+	useLayoutEffect(() => {
+		let saved: string | null = null;
+		try { saved = localStorage.getItem(localDraftKey); } catch { /* storage blocked */ }
+		if (saved && !textRef.current) {
+			textRef.current = saved;
+			restoredLocalDraftRef.current = true;
+			setComposerDraftRevision((revision) => revision + 1);
+		}
+	}, [localDraftKey]);
 	const applyText = useCallback((v: string) => {
 		textRef.current = v;
+		persistLocalDraft(v);
 		setComposerDraftRevision((revision) => revision + 1);
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
-	}, [notebook.session]);
+	}, [notebook.session, persistLocalDraft]);
 	const recordComposerText = useCallback((v: string) => {
 		textRef.current = v;
+		persistLocalDraft(v);
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
-	}, [notebook.session]);
+	}, [notebook.session, persistLocalDraft]);
 	useLayoutEffect(() => {
 		if (!notebook.view?.contextId) return;
+		// A locally restored draft the notebook has never seen is handed to
+		// it rather than wiped by its empty record.
+		if (!ordinaryDraft && restoredLocalDraftRef.current && textRef.current) {
+			restoredLocalDraftRef.current = false;
+			notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
+			return;
+		}
+		restoredLocalDraftRef.current = false;
 		const part = ordinaryDraft?.parts.at(-1);
 		const value = part?.kind === "text" ? part.text : "";
 		if (textRef.current !== value) {
 			textRef.current = value;
+			persistLocalDraft(value);
 			setComposerDraftRevision((revision) => revision + 1);
 		}
-	}, [ordinaryDraft, notebook.view?.contextId]);
+	}, [ordinaryDraft, notebook.view?.contextId, notebook.session, persistLocalDraft]);
 	const focusDictationDestination = useNotebookDestination(workspaceRef, notebook.session, notebookVisible);
 	// Saved slot completeness is live, but the session's selected route
 	// comes from its own ordinary model control, never today's Strong pin.

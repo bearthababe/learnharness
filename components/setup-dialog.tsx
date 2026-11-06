@@ -487,8 +487,35 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 				) : (
 					<div className="flex flex-col gap-4 overflow-y-auto px-6 py-5" data-testid="setup-stage-pickers">
 						<p className="text-[13.5px] leading-relaxed text-muted-foreground">
-							Pick the model for each tier. All three are required before chats can start.
+							Pick the model for each tier. All three are required before chats can start — the quickest start is one capable model for every tier.
 						</p>
+						{picked.strong && SLOT_ORDER.some((slot) => slot !== "strong" && !(picked[slot]?.id === picked.strong!.id && picked[slot]?.provider === picked.strong!.provider)) && (() => {
+							const strong = picked.strong!;
+							const meta = catalog?.models.find((m) => m.id === strong.id && m.provider === strong.provider);
+							const seesImages = !!meta && (meta.input.includes("image") || meta.provider === CUSTOM_PROVIDER.id);
+							return (
+								<button
+									type="button"
+									data-testid="setup-use-strong-everywhere"
+									onClick={() => {
+										setPicked((prev) => {
+											const next = { ...prev, cheap: strong };
+											editedSlots.current.add("cheap");
+											if (seesImages) { next.vision = strong; editedSlots.current.add("vision"); }
+											return next;
+										});
+										setLevels((prev) => ({ ...prev, cheap: prev.strong, ...(seesImages ? { vision: prev.strong } : {}) }));
+									}}
+									className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border px-3.5 py-2.5 text-left text-[13.5px] transition-colors hover:bg-accent/50"
+								>
+									<span>
+										<span className="block font-semibold text-foreground">Use {prettyModel(strong.id)} for {seesImages ? "every tier" : "the Cheap tier too"}</span>
+										<span className="block text-[12.5px] text-muted-foreground">{seesImages ? "Simplest setup; you can pick cheaper helpers later in Settings." : "This model can't read images, so Vision still needs its own pick."}</span>
+									</span>
+									<span className="shrink-0 rounded-full bg-primary px-3 py-1 text-[12.5px] font-semibold text-primary-foreground">Apply</span>
+								</button>
+							);
+						})()}
 						{SLOT_ORDER.map((slot) => {
 							const entry = picked[slot];
 							const level = levels[slot];
