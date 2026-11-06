@@ -7,7 +7,7 @@ import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import { forgetHandwritingOnDevice } from "@/components/handwriting/device";
 import type { ChatDeleteMode } from "@/src/core";
-import { BookOpenIcon, DumbbellIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon } from "lucide-react";
+import { BookOpenIcon, DumbbellIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -897,18 +897,33 @@ function SessionsSidebar() {
 									onCancel={() => setRenamingId(null)}
 								/>
 							) : (
-								<SessionRow
-									key={c.id}
-									chat={c}
-									active={pathname === `/chat/${c.id}`}
-									kbdSelected={i === kbdIndex}
-									onOpen={() => {
-										setKbdIndex(null);
-										closePhone();
-										router.push(`/chat/${c.id}`);
-									}}
-									onContextMenu={(e) => openContext(e, c)}
-								/>
+								<div key={c.id} className="lh-session-item" data-menu-open={ctxChatId === c.id || undefined}>
+									<SessionRow
+										chat={c}
+										active={pathname === `/chat/${c.id}`}
+										kbdSelected={i === kbdIndex}
+										onOpen={() => {
+											setKbdIndex(null);
+											closePhone();
+											router.push(`/chat/${c.id}`);
+										}}
+										onContextMenu={(e) => openContext(e, c)}
+									/>
+									<button
+										type="button"
+										className="lh-session-more"
+										data-testid="session-more"
+										aria-label={`Actions for ${c.title}`}
+										aria-haspopup="menu"
+										aria-expanded={ctxChatId === c.id}
+										onClick={(e) => {
+											if (ctxChatId === c.id) setCtxChatId(null);
+											else openContext(e, c);
+										}}
+									>
+										<MoreHorizontalIcon aria-hidden />
+									</button>
+								</div>
 							),
 						)
 					)}

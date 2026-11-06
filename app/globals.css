@@ -846,7 +846,7 @@ body {
    session-name-serif toggle overrides this var at runtime, so the
    .font-title utility must read it through var(), not carry a baked copy. */
 @theme {
-	--font-title: "lh-cmu", serif;
+	--font-title: var(--font-prose);
 }
 
 /* Card enter (owner round, 2026-10-05): the transcript cards' one-shot
@@ -1808,4 +1808,178 @@ body {
 @media (max-width: 767px) {
 	.lh-setup-cta { min-height: 44px; }
 	.lh-graph-empty-title { font-size: 22px; }
+}
+
+/* Session actions: a visible ⋯ on every row (always on touch, on hover or
+   focus with a pointer), opening the same menu as right-click. */
+.lh-session-item {
+	position: relative;
+}
+.lh-session-more {
+	position: absolute;
+	top: 50%;
+	right: 6px;
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 8px;
+	color: var(--muted-foreground);
+	opacity: 0;
+	transform: translateY(-50%);
+	transition: opacity .15s, background-color .15s;
+}
+.lh-session-more svg {
+	width: 17px;
+	height: 17px;
+}
+.lh-session-item:hover .lh-session-more,
+.lh-session-item:focus-within .lh-session-more,
+.lh-session-item[data-menu-open] .lh-session-more {
+	opacity: 1;
+}
+.lh-session-more:hover, .lh-session-item[data-menu-open] .lh-session-more {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-session-item:hover .lh-session-row, .lh-session-item[data-menu-open] .lh-session-row {
+	padding-right: 40px;
+}
+@media (pointer: coarse), (max-width: 767px) {
+	.lh-session-more {
+		opacity: 1;
+		width: 44px;
+		height: 44px;
+		right: 2px;
+	}
+	.lh-session-row {
+		padding-right: 46px !important;
+	}
+}
+
+/* The phone question reveal says what it does. */
+.lh-phone-reveal-label {
+	font-size: 14.5px;
+	font-weight: 600;
+}
+@media (max-width: 767px) {
+	.lh-compact-row > .lh-phone-reveal {
+		gap: 2px;
+		width: auto !important;
+		padding: 0 10px 0 14px;
+		border-radius: 999px;
+	}
+}
+
+/* A disabled paperclip (browser builds attach only in the desktop app)
+   explains itself by hover on wide screens; touch screens never see the
+   reason, so they don't get the dead control either. */
+@media (pointer: coarse), (max-width: 767px) {
+	form:is([data-testid="composer"], [data-attachment-composer]) > div:has(> [data-testid="attach-files"][aria-disabled="true"]) {
+		display: none;
+	}
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]):has([data-testid="attach-files"][aria-disabled="true"]) {
+		grid-template-columns: minmax(0, 1fr) auto;
+		padding-left: 6px;
+	}
+	/* Chains: touch-sized expanders and checkboxes. */
+	[data-testid="chain-table"] button:has(> svg.size-3),
+	[data-testid="chain-table"] button:has(> svg.size-3\.5) {
+		min-width: 36px;
+		min-height: 36px;
+	}
+	[data-testid="chain-table"] input[type="checkbox"] {
+		width: 20px;
+		height: 20px;
+	}
+}
+
+/* Graph search lists its matches; a pick centres the node and opens its card. */
+.lh-graph-results {
+	max-height: min(320px, 50dvh);
+	margin-top: 4px;
+	padding: 4px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	border-top: 1px solid var(--border);
+	font-family: var(--font-prose);
+}
+.lh-graph-results button {
+	display: block;
+	width: 100%;
+	padding: 7px 8px;
+	border-radius: 8px;
+	text-align: left;
+	transition: background-color .15s;
+}
+.lh-graph-results button:hover, .lh-graph-results button:focus-visible {
+	background: var(--accent);
+}
+.lh-graph-result-name {
+	display: block;
+	font-size: 13.5px;
+	font-weight: 550;
+	color: var(--foreground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lh-graph-result-statement {
+	display: -webkit-box;
+	margin-top: 1px;
+	overflow: hidden;
+	font-size: 12.5px;
+	line-height: 1.35;
+	color: var(--muted-foreground);
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+}
+.lh-node-card {
+	padding-right: 44px;
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+	font-family: var(--font-prose);
+}
+.lh-node-card-name {
+	font-size: 15.5px;
+	font-weight: 650;
+}
+.lh-node-card-statement {
+	font-size: 14px;
+	line-height: 1.5;
+}
+.lh-node-card-close {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	display: grid;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 10px;
+	color: var(--muted-foreground);
+}
+.lh-node-card-close:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-node-card-close svg {
+	width: 16px;
+	height: 16px;
+}
+@media (max-width: 767px) {
+	.lh-graph-results button {
+		min-height: 44px;
+		padding: 9px 10px;
+	}
+	.lh-graph-result-name { font-size: 15px; }
+	.lh-graph-result-statement { font-size: 13.5px; }
+	.lh-node-card-close { width: 44px; height: 44px; top: 2px; right: 2px; }
+}
+
+/* Keyboard hints mean nothing to a finger. */
+@media (pointer: coarse) {
+	.lh-question-submit > span[aria-hidden] {
+		visibility: hidden;
+	}
 }

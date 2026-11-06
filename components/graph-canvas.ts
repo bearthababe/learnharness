@@ -867,6 +867,21 @@ export class GraphCanvasRenderer {
 		this.markDirty();
 	}
 
+	/** Center the camera on one node, zooming in enough for its label to
+	 *  read, and return its container position (the details card's anchor).
+	 *  Applied through the zoom behavior like every camera move. Null when
+	 *  the node is unknown or the canvas has no size yet. */
+	focusNode(id: string): { x: number; y: number } | null {
+		const node = this.data?.nodes.find((n) => n.id === id);
+		if (!node || this.viewW <= 0 || this.viewH <= 0) return null;
+		const k = Math.max(this.transform.k, this.kFit * 2.5);
+		select(this.canvas).call(
+			this.zoomBehavior.transform,
+			zoomIdentity.translate(this.viewW / 2 - node.x * k, this.viewH / 2 - node.y * k).scale(k),
+		);
+		return { x: this.viewW / 2, y: this.viewH / 2 };
+	}
+
 	/** Frame the whole graph (padding included). Keeps the camera on later
 	 *  setData calls — call fit() only for an explicit re-frame (the
 	 *  first-ever open; afterwards the caller-persisted camera wins). */

@@ -66,7 +66,7 @@
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
 import Link from "next/link";
-import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon } from "lucide-react";
+import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon, XIcon } from "lucide-react";
 import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
 import { planCostLabel } from "@/components/usage-format";
 import { GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
@@ -844,6 +844,8 @@ export function GraphChromeRow({
 	query,
 	onQuery,
 	noMatch,
+	results = [],
+	onPickResult,
 	importing,
 	searchInputRef,
 	onImportFiles,
@@ -857,6 +859,10 @@ export function GraphChromeRow({
 	/** The search panel's "No matching nodes." note (computed by the
 	 *  wrapper — it owns visibleIds + the snapshot). */
 	noMatch: boolean;
+	/** Matching nodes listed under the search (empty = no list). */
+	results?: { id: string; name: string; statement: string }[];
+	/** Open one result: center it and show its details card. */
+	onPickResult?: (id: string) => void;
 	importing: boolean;
 	searchInputRef: React.RefObject<HTMLInputElement | null>;
 	onImportFiles: (files: FileList | null) => void;
@@ -893,6 +899,18 @@ export function GraphChromeRow({
 					</Hint>
 					{noMatch && (
 						<div className="px-1.5 pt-1 text-[11px] text-muted-foreground">No matching nodes.</div>
+					)}
+					{results.length > 0 && (
+						<ul className="lh-graph-results" role="listbox" aria-label="Matching nodes" data-testid="graph-search-results">
+							{results.map((r) => (
+								<li key={r.id} role="option" aria-selected={false}>
+									<button type="button" data-testid="graph-search-result" onClick={() => onPickResult?.(r.id)}>
+										<span className="lh-graph-result-name">{r.name}</span>
+										{r.statement && <span className="lh-graph-result-statement">{r.statement}</span>}
+									</button>
+								</li>
+							))}
+						</ul>
 					)}
 				</div>
 			)}
@@ -1034,6 +1052,29 @@ export function GraphView({
 			}
 		return set;
 	}, [snapshot, query]);
+
+	// The search's result list: the best few matches, names first. It opens
+	// on every edit and closes once a result is picked.
+	const [resultsOpen, setResultsOpen] = useState(false);
+	useEffect(() => { setResultsOpen(query.trim() !== ""); }, [query]);
+	const searchResults = useMemo(() => {
+		const q = query.trim().toLowerCase();
+		if (!snapshot || !q) return [];
+		const rank = (n: GraphNode) => (n.name.toLowerCase().startsWith(q) ? 0 : n.name.toLowerCase().includes(q) ? 1 : 2);
+		return snapshot.nodes
+			.filter((n) => visibleIds.has(n.id))
+			.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+			.slice(0, 8)
+			.map((n) => ({ id: n.id, name: n.name, statement: n.statement }));
+	}, [snapshot, query, visibleIds]);
+	const pickResult = useCallback((id: string) => {
+		const snap = snapshotRef.current;
+		const node = snap?.nodes.find((n) => n.id === id);
+		const anchor = rendererRef.current?.focusNode(id);
+		setResultsOpen(false);
+		if (!snap || !node || !anchor) return;
+		setSelected({ node, sourceIds: snap.nodeSessions[node.id] ?? [], anchor });
+	}, []);
 
 	// Fetch the derived graph. Re-runs when a background pipeline run
 	// finishes (refreshTick) — its merges just landed in the ledger.
@@ -1583,6 +1624,8 @@ export function GraphView({
 					query={query}
 					onQuery={setQuery}
 					noMatch={snapshot !== null && visibleIds.size === 0 && query.trim() !== ""}
+					results={resultsOpen ? searchResults : []}
+					onPickResult={pickResult}
 					importing={importing}
 					searchInputRef={searchInputRef}
 					onImportFiles={onImportFiles}
@@ -1623,10 +1666,14 @@ export function GraphView({
 					// lh-no-drag: the card is placed anywhere on the canvas —
 					// when it lands in the top strip it must stay interactive
 					// over home.tsx's drag surface (2026-09-17).
-					className="lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-xl border bg-card p-4 text-left shadow-lg"
+					data-testid="graph-node-card"
+					className="lh-node-card lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-xl border bg-card p-4 text-left shadow-lg"
 				>
-					<div className="text-sm font-medium leading-snug">{selected.node.name}</div>
-					<div className="mt-1 text-xs leading-relaxed text-muted-foreground">{selected.node.statement}</div>
+					<button type="button" className="lh-node-card-close" aria-label="Close details" data-testid="graph-node-card-close" onClick={() => setSelected(null)}>
+						<XIcon aria-hidden />
+					</button>
+					<div className="lh-node-card-name text-sm font-medium leading-snug">{selected.node.name}</div>
+					<div className="lh-node-card-statement mt-1 text-xs leading-relaxed text-muted-foreground">{selected.node.statement}</div>
 					{selected.sourceIds.length > 0 ? (
 						<div className="mt-3 flex flex-col gap-1">
 							<div className="text-xs text-muted-foreground">Sessions</div>

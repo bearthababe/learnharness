@@ -19,16 +19,23 @@ import { useEffect } from "react";
  */
 export function useFieldCycle(fields: () => readonly HTMLElement[]) {
 	useEffect(() => {
-		const onCycle = () => {
+		const onCycle = (event: Event) => {
 			if (document.querySelector('[data-session-destination="notebook"]')) return;
 			const list = fields().filter((el) => el.isConnected);
 			if (list.length === 0) return;
 			const active = document.activeElement;
 			const idx = active ? list.findIndex((el) => el === active || el.contains(active)) : -1;
 			if (idx < 0) {
+				// Navigate in only from nowhere; a focused control keeps the
+				// browser's own Tab order.
+				if (active && active !== document.body && active !== document.documentElement) return;
+				event.preventDefault();
 				list[0]!.focus();
 				return;
 			}
+			// A lone field has nowhere to cycle: Tab moves on to its controls.
+			if (list.length < 2) return;
+			event.preventDefault();
 			list[(idx + 1) % list.length]!.focus();
 		};
 		window.addEventListener("lh:kbd-cycle-fields", onCycle);

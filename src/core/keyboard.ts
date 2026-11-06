@@ -58,7 +58,7 @@ export const KEYBOARD_ACTIONS: readonly KeyActionDef[] = [
 	{ id: "toggle-dictation", label: "Toggle dictation", scope: "global", binding: "mod+d" },
 	{ id: "open-settings", label: "Open settings", scope: "global", binding: "mod+," },
 	{ id: "open-model-picker", label: "Model selector", scope: "global", binding: "mod+k" },
-	{ id: "cycle-thinking", label: "Cycle thinking level", scope: "global", binding: "shift+tab" },
+	{ id: "cycle-thinking", label: "Cycle thinking level", scope: "global", binding: "mod+." },
 	{ id: "toggle-sidebar", label: "Toggle sessions sidebar", scope: "global", binding: "mod+b" },
 	{ id: "sessions-search", label: "Search sessions", scope: "global", binding: "mod+shift+f" },
 	// (The Alt+↑/↓/↵ session cycle was RETIRED, owner 2026-10-10: barely
@@ -173,6 +173,7 @@ function modifiedKey(e: KeyboardEvent): string {
 	// Inspect the reported character: lowercasing can expand it (İ → i̇).
 	if (e.key.length !== 1 || e.key <= "\x7f" || !(e.metaKey || e.ctrlKey || e.altKey)) return key;
 	if (e.code === "Comma") return ",";
+	if (e.code === "Period") return ".";
 	const letter = /^Key([A-Z])$/.exec(e.code);
 	return letter?.[1] ? letter[1].toLowerCase() : key;
 }
