@@ -1150,6 +1150,10 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	   header's Model button opens them as a card above the composer. */
 	.lh-session-controls { display: inline-flex; }
 	.lh-dock-block .lh-stats-bar { display: none; }
+	/* A tablet that has switched the equation notebook on keeps its toggle
+	   in reach: a slim row holding only that toggle. */
+	.lh-dock-block[data-tablet-controls="closed"] .lh-stats-bar:has([data-notebook-view-control]) { display: flex; justify-content: flex-start; padding-top: 4px; }
+	.lh-dock-block[data-tablet-controls="closed"] .lh-stats-bar:has([data-notebook-view-control]) > :not(:first-child) { display: none; }
 	.lh-dock-block[data-tablet-controls="open"] .lh-stats-bar {
 		display: flex; position: absolute; z-index: 30; bottom: calc(100% + 10px); right: max(24px, calc((100% - 580px) / 2 + 24px));
 		gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 18px;
