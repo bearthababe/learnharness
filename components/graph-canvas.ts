@@ -861,6 +861,20 @@ export class GraphCanvasRenderer {
 		if (changed) this.markDirty();
 	}
 
+	/** A node's current position in canvas pixels (null when unknown) — the
+	 *  search results anchor the detail card to the picked node. */
+	screenPositionOf(nodeId: string): Pt | null {
+		const n = this.nodeById.get(nodeId);
+		if (!n) return null;
+		const { x: tx, y: ty, k } = this.transform;
+		return { x: n.x * k + tx, y: n.y * k + ty };
+	}
+
+	/** Glow one node as if hovered (search result hover), or clear it. */
+	highlight(nodeId: string | null): void {
+		this.setHover(nodeId);
+	}
+
 	setVisible(visible: ReadonlySet<string> | null): void {
 		this.visible = visible;
 		this.geoVersion++; // member visibility changes hulls + paths

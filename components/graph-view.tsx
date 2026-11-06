@@ -394,7 +394,7 @@ function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 	return (
 		<div className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
 			<div className="mb-2 flex items-baseline justify-between">
-				<span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+				<span className="text-[11.5px] font-semibold text-muted-foreground">
 					Graph pipeline costs
 				</span>
 				<span className="text-foreground tabular-nums">
@@ -473,7 +473,7 @@ function GraphSettingsControl({
 				type="button"
 				aria-expanded={open}
 				onClick={() => setOpen((o) => !o)}
-				className={`flex size-9 items-center justify-center rounded-xl border bg-card/85 shadow-lg backdrop-blur transition-colors hover:bg-accent ${
+				className={`flex size-9 items-center justify-center rounded-full border border-border/70 bg-card/90 shadow-lg backdrop-blur transition-colors hover:bg-accent ${
 					open ? "text-foreground" : "text-muted-foreground hover:text-foreground"
 				}`}
 				aria-label="Graph display settings"
@@ -558,7 +558,7 @@ function GraphSettingsControl({
 						    the whole build (splat/blur/readback/blit), not just
 						    the paint. */}
 						<div className="mt-1.5 flex flex-col gap-1.5 border-t pt-1.5">
-							<span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+							<span className="text-[11.5px] font-semibold text-muted-foreground">
 								Regions
 							</span>
 							<label className="flex cursor-pointer items-center justify-between text-[11px] text-muted-foreground">
@@ -679,7 +679,7 @@ function GraphSettingsControl({
 						    Order (user 2026-09-17): general forces first; depth
 						    anchor + its gray-out-able controls last. */}
 						<div className="mt-1.5 flex flex-col gap-1.5 border-t pt-1.5">
-							<span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+							<span className="text-[11.5px] font-semibold text-muted-foreground">
 								Physics
 							</span>
 							<SettingSlider
@@ -850,10 +850,18 @@ export function GraphChromeRow({
 	settings,
 	changeSettings,
 	onOpenChains,
+	results = [],
+	onPickResult,
+	onHoverResult,
 }: {
 	isEmpty: boolean;
 	query: string;
 	onQuery: (v: string) => void;
+	/** Matching nodes for the typed query (whole-app redesign): a pickable
+	 *  list, so search finds a node instead of only dimming the rest. */
+	results?: readonly Pick<GraphNode, "id" | "name" | "statement">[];
+	onPickResult?: (nodeId: string) => void;
+	onHoverResult?: (nodeId: string | null) => void;
 	/** The search panel's "No matching nodes." note (computed by the
 	 *  wrapper — it owns visibleIds + the snapshot). */
 	noMatch: boolean;
@@ -867,10 +875,12 @@ export function GraphChromeRow({
 	onOpenChains: () => void;
 }) {
 	const { phone } = useSidebar();
+	const [resultsOpen, setResultsOpen] = useState(false);
+	const shownResults = query.trim() && resultsOpen ? results.slice(0, 8) : [];
 	return (
 		<>
 			{!isEmpty && (
-				<div className="lh-graph-search graph-chrome-fade-in w-56 min-w-0 shrink rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
+				<div className="lh-graph-search graph-chrome-fade-in w-64 min-w-0 shrink rounded-[18px] border border-border/70 bg-card/90 p-0.5 shadow-lg backdrop-blur">
 					<Hint
 						// ⌘F focuses node search (surface-scoped registry action).
 						label="Search nodes"
@@ -883,30 +893,56 @@ export function GraphChromeRow({
 						<input
 							ref={searchInputRef}
 							value={query}
-							onChange={(e) => onQuery(e.target.value)}
+							onChange={(e) => { onQuery(e.target.value); setResultsOpen(true); }}
+							onFocus={() => setResultsOpen(true)}
+							onBlur={() => setTimeout(() => setResultsOpen(false), 150)}
+							onKeyDown={(e) => {
+								if (e.key === "Escape") { setResultsOpen(false); return; }
+								if (e.key === "Enter" && results[0]) { e.preventDefault(); setResultsOpen(false); onPickResult?.(results[0].id); }
+							}}
 							placeholder="Search nodes…"
 							aria-label="Search nodes"
 							spellCheck={false}
-							className="h-7 w-full rounded-lg border bg-background pl-8 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
+							className="h-8 w-full rounded-full border-0 bg-transparent pl-8 pr-3 text-[13.5px] outline-none placeholder:text-muted-foreground"
 						/>
 					</div>
 					</Hint>
 					{noMatch && (
-						<div className="px-1.5 pt-1 text-[11px] text-muted-foreground">No matching nodes.</div>
+						<div className="px-3 pb-1.5 pt-1 text-[12.5px] text-muted-foreground">No matching nodes.</div>
+					)}
+					{shownResults.length > 0 && (
+						<ul data-testid="graph-search-results" role="listbox" aria-label="Matching nodes" className="lh-graph-results mt-1 max-h-72 overflow-y-auto border-t border-border/70 p-1">
+							{shownResults.map((node) => (
+								<li key={node.id} role="none">
+									<button type="button" role="option" aria-selected={false}
+										onMouseDown={(e) => e.preventDefault()}
+										onMouseEnter={() => onHoverResult?.(node.id)}
+										onMouseLeave={() => onHoverResult?.(null)}
+										onClick={() => { setResultsOpen(false); onHoverResult?.(null); onPickResult?.(node.id); }}
+										className="block w-full rounded-xl px-3 py-2 text-left transition-colors hover:bg-accent">
+										<span className="block truncate text-[13.5px] font-medium text-foreground">{node.name}</span>
+										<span className="block truncate text-[12px] text-muted-foreground">{node.statement}</span>
+									</button>
+								</li>
+							))}
+							{results.length > shownResults.length && (
+								<li role="none" className="px-3 py-1.5 text-[12px] text-(--lh-faint)">{results.length - shownResults.length} more match — keep typing to narrow</li>
+							)}
+						</ul>
 					)}
 				</div>
 			)}
 			{/* The chain table (chains overlay, owner plan 2026-09-29). Own
 			    container (36px band), between the search and Import. */}
-				<div className="lh-graph-chains graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
+				<div className="lh-graph-chains graph-chrome-fade-in shrink-0 rounded-full border border-border/70 bg-card/90 p-0.5 shadow-lg backdrop-blur">
 					<Hint label="Every reasoning chain" side="bottom" disabled={phone}>
 						<button
 							type="button"
 							onClick={onOpenChains}
 							data-testid="open-chain-table"
-							className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
+							className="flex h-8 items-center gap-1.5 rounded-full px-3 text-[13.5px] font-medium text-foreground/85 transition-colors hover:bg-accent hover:text-foreground"
 						>
-							<ListTreeIcon className="size-3" />
+							<ListTreeIcon className="size-3.5 text-muted-foreground" />
 							Chains
 						</button>
 					</Hint>
@@ -1022,6 +1058,18 @@ export function GraphView({
 	// changes (its camera is never reset by either); `posRef` carries the
 	// frozen layout out of the layout effect.
 	const rendererRef = useRef<GraphCanvasRenderer | null>(null);
+	// A picked search result opens the node's card at its position (or the
+	// canvas center when the node sits off-screen).
+	const pickSearchResult = useCallback((nodeId: string) => {
+		const snap = snapshotRef.current;
+		const node = snap?.nodes.find((n) => n.id === nodeId);
+		const container = containerRef.current;
+		if (!snap || !node || !container) return;
+		const w = container.clientWidth, h = container.clientHeight;
+		let anchor = rendererRef.current?.screenPositionOf(nodeId) ?? null;
+		if (!anchor || anchor.x < 0 || anchor.y < 0 || anchor.x > w || anchor.y > h) anchor = { x: w / 2, y: h / 3 };
+		setSelected({ node, sourceIds: snap.nodeSessions[node.id] ?? [], anchor });
+	}, []);
 	const posRef = useRef<Map<string, { x: number; y: number }> | null>(null);
 
 	// The id set that survives the current search — consumed by the
@@ -1033,6 +1081,17 @@ export function GraphView({
 				if (isNodeVisible(node, query)) set.add(node.id);
 			}
 		return set;
+	}, [snapshot, query]);
+	// The pickable result list: name matches first, then statement matches.
+	const searchResults = useMemo(() => {
+		const q = query.trim().toLowerCase();
+		if (!snapshot || !q) return [];
+		const byName: GraphNode[] = [], byStatement: GraphNode[] = [];
+		for (const node of snapshot.nodes) {
+			if (node.name.toLowerCase().includes(q)) byName.push(node);
+			else if (node.statement.toLowerCase().includes(q)) byStatement.push(node);
+		}
+		return [...byName, ...byStatement];
 	}, [snapshot, query]);
 
 	// Fetch the derived graph. Re-runs when a background pipeline run
@@ -1472,12 +1531,14 @@ export function GraphView({
 			{isEmpty ? (
 				// The empty graph keeps the first action clear without zero-valued statistics.
 				<div className="flex h-full w-full items-center justify-center px-4">
-					<div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
-						<WaypointsIcon className="size-10 opacity-40" strokeWidth={1.25} />
-						<div className="text-lg font-medium text-foreground">Knowledge graph</div>
-						<div className="max-w-sm text-sm">
+					<div className="-mt-24 flex flex-col items-center gap-4 text-center text-muted-foreground">
+						<span className="flex size-14 items-center justify-center rounded-2xl bg-card text-muted-foreground">
+							<WaypointsIcon className="size-7" strokeWidth={1.5} />
+						</span>
+						<div className="font-title text-[26px] leading-tight tracking-tight text-foreground">Knowledge graph</div>
+						<div className="max-w-sm text-[15px] leading-relaxed">
 							<p>Start a session to begin learning.</p>
-							<p className="mt-1 text-xs">Attach your material with the paperclip or drag and drop.</p>
+							<p className="mt-1 text-[13.5px] text-(--lh-faint)">Attach your material with the paperclip or drag and drop.</p>
 						</div>
 					</div>
 				</div>
@@ -1589,6 +1650,9 @@ export function GraphView({
 					settings={settings}
 					changeSettings={changeSettings}
 					onOpenChains={() => setChainsOpen(true)}
+					results={searchResults}
+					onPickResult={pickSearchResult}
+					onHoverResult={(id) => rendererRef.current?.highlight(id)}
 				/>
 			</div>
 
@@ -1623,13 +1687,14 @@ export function GraphView({
 					// lh-no-drag: the card is placed anywhere on the canvas —
 					// when it lands in the top strip it must stay interactive
 					// over home.tsx's drag surface (2026-09-17).
-					className="lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-xl border bg-card p-4 text-left shadow-lg"
+					data-testid="graph-node-card"
+					className="lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-2xl border bg-popover p-4 text-left shadow-2xl"
 				>
-					<div className="text-sm font-medium leading-snug">{selected.node.name}</div>
-					<div className="mt-1 text-xs leading-relaxed text-muted-foreground">{selected.node.statement}</div>
+					<div className="text-[15px] font-semibold leading-snug">{selected.node.name}</div>
+					<div className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">{selected.node.statement}</div>
 					{selected.sourceIds.length > 0 ? (
-						<div className="mt-3 flex flex-col gap-1">
-							<div className="text-xs text-muted-foreground">Sessions</div>
+						<div className="mt-3 flex flex-col gap-1 border-t border-border/70 pt-3">
+							<div className="text-[12.5px] font-semibold text-muted-foreground">Learned in</div>
 							{selected.sourceIds.map((sourceId) => {
 								// An imported-notes file: a STATIC entry — the path,
 								// plain text, never a link (no session to open).
@@ -1649,7 +1714,7 @@ export function GraphView({
 										<Link
 											href={propositionSessionHref(selected.node, sourceId)}
 											scroll={false}
-											className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent"
+											className="-mx-2 min-w-0 flex-1 truncate rounded-lg px-2 py-1.5 text-[14px] text-foreground transition-colors hover:bg-accent"
 										>
 											{snapshot?.sessions[sourceId] ?? sourceId}
 										</Link>
@@ -1658,7 +1723,7 @@ export function GraphView({
 							})}
 						</div>
 					) : (
-						<div className="mt-3 text-xs text-muted-foreground">No sessions recorded.</div>
+						<div className="mt-3 text-[12.5px] text-muted-foreground">No sessions recorded.</div>
 					)}
 				</div>
 			)}

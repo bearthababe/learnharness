@@ -8,7 +8,7 @@ import { MalformedQuestion } from "@/components/malformed-question";
 import { dictationCheckpoint, finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
 import { CompactLearningInput } from "@/components/compact-learning-input";
-import { CornerDownLeftIcon } from "lucide-react";
+import { ArrowUpIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
 import { useHandwritingEditor } from "./handwriting/submission";
@@ -240,14 +240,14 @@ export function QuestionDockBar({
 				onClick={onExpand}
 				className="lh-question-reveal dock-variant flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40"
 			>
-				<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-(--lh-accent-soft) text-(--lh-accent)">
 					<PlayIcon className="size-3.5" />
 				</span>
 				<span className="min-w-0 flex-1">
-					<span className="block text-sm font-medium">Check your understanding</span>
-					<span className="block truncate text-xs text-muted-foreground">{teaserText(question)}</span>
+					<span className="block text-[14.5px] font-semibold">Check your understanding</span>
+					<span className="block truncate text-[13px] text-muted-foreground">{teaserText(question)}</span>
 				</span>
-				<span className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary">
+				<span className="flex shrink-0 items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-[13px] font-semibold text-primary-foreground">
 					Open <ChevronRightIcon className="size-3.5" />
 				</span>
 			</button>
@@ -260,13 +260,13 @@ export function QuestionDockBar({
 			onClick={onExpand}
 			className="dock-variant flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent/40"
 		>
-			<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+			<span className="shrink-0 text-[12.5px] font-semibold text-muted-foreground">
 				{label ??
 							toolLabel ??
 							(toolName === "quiz" ? "Check" : toolName === "explain" ? "Explain" : "Question")}
 			</span>
 			<span className="min-w-0 flex-1 truncate text-muted-foreground">{teaserText(question)}</span>
-			<span className="flex shrink-0 items-center gap-1 text-xs font-medium">
+			<span className="flex shrink-0 items-center gap-1 text-[13px] font-semibold">
 				Answer <ArrowDownIcon className="size-3.5" />
 			</span>
 		</button>
@@ -625,7 +625,7 @@ function QuestionDockForm({
 			    Capped by the measured column (--dock-max-h; the old fixed 55dvh cut
 			    long questions short — owner round, 2026-10-05). */}
 			<div data-dock-scroll-area="" data-session-find-root="" className="max-h-[var(--dock-max-h,55dvh)] overflow-y-auto px-4 pt-3">
-				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+				<div className="mb-1 text-[12.5px] font-semibold text-muted-foreground">
 					{toolName === "probe"
 						? "Probe"
 						: toolName === "recall"
@@ -639,7 +639,7 @@ function QuestionDockForm({
 											: "Question"}
 					{qd.mode === "multi-select" && " · select all that apply"}
 				</div>
-				<div className="mb-3 font-medium">
+				<div className="lh-question-text mb-3 text-[16px] font-semibold leading-snug">
 					<ToolContentResponse>{qd.question}</ToolContentResponse>
 				</div>
 				{qd.context && (
@@ -661,16 +661,16 @@ function QuestionDockForm({
 									data-kbdrow={i}
 									onClick={() => toggle(i)}
 									className={cn(
-										"flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
-										isSel ? "border-primary bg-accent" : "hover:bg-accent/50",
+										"lh-option flex items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left text-[15px] outline-none transition-colors",
+										isSel ? "border-(--lh-accent) bg-(--lh-accent-soft)" : "border-border/80 hover:bg-accent/50",
 										i === kbdIdx && !isSel && "ring-1 ring-border bg-accent/40",
 									)}
 								>
 									<span
 										className={cn(
-											"mt-0.5 flex size-4 shrink-0 items-center justify-center border",
+											"mt-[3px] flex size-4 shrink-0 items-center justify-center border",
 											qd.mode === "multi-select" ? "rounded-sm" : "rounded-full",
-											isSel ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40",
+											isSel ? "border-(--lh-accent) bg-(--lh-accent) text-background" : "border-muted-foreground/50",
 										)}
 									>
 										{isSel && (
@@ -709,17 +709,17 @@ function QuestionDockForm({
 								className={cn(
 									// Option-row layout + radio circle (owner); the dashed
 									// outline stays — this is the deliberate non-answer.
-									"flex items-start gap-3 rounded-lg border border-dashed px-3 py-2 text-left text-sm outline-none transition-colors",
-									sel.dontKnow ? "border-primary text-foreground" : "text-muted-foreground",
+									"lh-option flex items-start gap-3 rounded-xl border border-dashed px-3.5 py-2.5 text-left text-[15px] outline-none transition-colors",
+									sel.dontKnow ? "border-(--lh-accent) bg-(--lh-accent-soft) text-foreground" : "border-border text-muted-foreground hover:bg-accent/40",
 									kbdIdx === optionCount && !sel.dontKnow && "ring-1 ring-border bg-accent/40",
 								)}
 							>
 								<span
 									className={cn(
-										"mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
+										"mt-[3px] flex size-4 shrink-0 items-center justify-center rounded-full border",
 										sel.dontKnow
-											? "border-primary bg-primary text-primary-foreground"
-											: "border-muted-foreground/40",
+											? "border-(--lh-accent) bg-(--lh-accent) text-background"
+											: "border-muted-foreground/50",
 									)}
 								>
 									{sel.dontKnow && <span className="size-1.5 rounded-full bg-current" />}
@@ -736,18 +736,18 @@ function QuestionDockForm({
 								data-kbdrow={optionCount}
 								onClick={selectOther}
 								className={cn(
-									"flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
-									sel.otherSelected ? "border-primary bg-accent" : "border-dashed hover:bg-accent/50",
+									"lh-option flex items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left text-[15px] outline-none transition-colors",
+									sel.otherSelected ? "border-(--lh-accent) bg-(--lh-accent-soft)" : "border-dashed border-border hover:bg-accent/50",
 									kbdIdx === optionCount && !sel.otherSelected && "ring-1 ring-border bg-accent/40",
 								)}
 							>
 								<span
 									className={cn(
-										"mt-0.5 flex size-4 shrink-0 items-center justify-center border",
+										"mt-[3px] flex size-4 shrink-0 items-center justify-center border",
 										qd.mode === "multi-select" ? "rounded-sm" : "rounded-full",
 										sel.otherSelected
-											? "border-primary bg-primary text-primary-foreground"
-											: "border-muted-foreground/40",
+											? "border-(--lh-accent) bg-(--lh-accent) text-background"
+											: "border-muted-foreground/50",
 									)}
 								>
 									{sel.otherSelected && (
@@ -819,7 +819,7 @@ function QuestionDockForm({
 					<div className="flex items-center gap-3">
 						<span
 							className={cn(
-								"shrink-0 text-xs font-medium uppercase tracking-wide",
+								"shrink-0 text-[12.5px] font-semibold",
 								sel.dontKnow ? "text-muted-foreground/50" : "text-muted-foreground",
 							)}
 						>
@@ -882,7 +882,7 @@ function QuestionDockForm({
 						<span
 							data-testid="confidence-value"
 							className={cn(
-								"w-9 shrink-0 text-right font-mono text-sm tabular-nums",
+								"w-10 shrink-0 text-right text-[14px] font-semibold tabular-nums",
 								sel.dontKnow && "text-muted-foreground/50",
 							)}
 						>
@@ -908,10 +908,10 @@ function QuestionDockForm({
 			>
 				<div
 					data-testid={qd.mode === "text" ? "answer-field" : "thinking-field"}
-					className="lh-question-input rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
+					className="lh-question-input rounded-[12px] border border-border/80 bg-background/60 transition-colors focus-within:border-muted-foreground/60"
 				>
-					<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-						{qd.mode === "text" ? "Your answer" : "YOUR THINKING"}
+					<div className="lh-input-label px-2.5 pt-2 text-[12.5px] font-semibold text-muted-foreground">
+						{qd.mode === "text" ? "Your answer" : "Your thinking"}
 					</div>
 					<CompactLearningInput dictation={dictationClaim ? dictation : undefined}>{qd.mode === "text" ? (
 						<PathInput
@@ -978,7 +978,7 @@ function QuestionDockForm({
 						/>
 					)}</CompactLearningInput>
 					<div className="lh-question-submit flex items-center justify-between gap-2 p-1">
-						<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
+						<span aria-hidden className="pl-1.5 text-[12px] text-(--lh-faint)">
 								{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 						</span>
 						<Button
@@ -986,9 +986,9 @@ function QuestionDockForm({
 							data-testid="question-send"
 							disabled={owned.blocked || (!canSubmit && !isDictationActive()) || compactionRunning}
 							aria-label="Submit answer"
-							className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
+							className="ml-auto h-9 rounded-[8px] px-4 text-[14px] font-semibold"
 						>
-							<span className="lh-wide-submit-label">Submit answer</span><CornerDownLeftIcon className="lh-phone-submit-icon" size={20} />
+							<span className="lh-wide-submit-label">Submit answer</span><ArrowUpIcon className="lh-phone-submit-icon" size={20} strokeWidth={2.25} />
 						</Button>
 					</div>
 				</div>

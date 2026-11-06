@@ -13,8 +13,8 @@ function UsagePanel({ children, anchorRef, onClose, closing, onClosed }: { child
 	if (phone) return <MenuShell anchorRef={anchorRef} testid="stats-detail" preferredSide="up" align="left"
 		closing={closing} onClosed={onClosed}
 		fitVisualViewport matchAnchorWidth onClose={onClose} phoneTriggerTestid="stats-summary"
-		menuClass="rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</MenuShell>;
-	return <div data-testid="stats-detail" className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</div>;
+		menuClass="rounded-2xl border bg-popover p-3.5 text-[13px] shadow-2xl">{children}</MenuShell>;
+	return <div data-testid="stats-detail" className="absolute bottom-full left-1/2 z-40 mb-1.5 w-80 -translate-x-1/2 rounded-2xl border bg-popover p-3.5 text-[13px] shadow-2xl">{children}</div>;
 }
 
 export function formatContextMeasurement(tokens: number | null, limit: number | null): string {
@@ -141,7 +141,7 @@ export function StatsBar({
 			// (so its transparent gradient area never blocks scrolling) — this row
 			// must re-enable events or every control on it is dead (the model-
 			// control wave caught this live: buttons rendered, clicks never landed).
-			className={`lh-stats-bar ${compactInput ? "lh-compact-stats" : ""} pointer-events-auto relative flex items-center justify-between gap-3 px-3 pt-2 text-xs text-muted-foreground`}
+			className={`lh-stats-bar ${compactInput ? "lh-compact-stats" : ""} pointer-events-auto relative flex items-center justify-between gap-2 px-1 pt-2 text-[12.5px] text-muted-foreground`}
 		>
 			{/* The summary button + its popover: the popover anchors to this
 			    wrapper, CENTERED over the button itself (owner, stats round 2)
@@ -165,7 +165,7 @@ export function StatsBar({
 				aria-expanded={open}
 				data-testid="stats-summary"
 				aria-label="Usage"
-				className="flex items-center gap-1.5 tabular-nums transition-colors hover:text-foreground"
+				className="flex h-8 items-center gap-1.5 rounded-full px-2.5 tabular-nums transition-colors hover:bg-card hover:text-foreground"
 			>
 				<span className="lh-phone-usage-label">Usage</span>
 				<span className="lh-usage-numbers contents"><span data-testid="stats-context">
@@ -177,8 +177,8 @@ export function StatsBar({
 			</button>
 				{presence.value && (
 					<UsagePanel anchorRef={statsRef} onClose={() => setOpen(false)} closing={presence.closing} onClosed={presence.onClosed}>
-						<div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-							Session stats
+						<div className="mb-2 text-[13px] font-semibold text-foreground">
+							Session usage
 						</div>
 						<div className="flex flex-col gap-1 text-muted-foreground">
 							<div className="flex justify-between gap-2">
@@ -210,7 +210,7 @@ export function StatsBar({
 						</div>
 						{turns.length > 0 && (
 							<>
-								<div className="mb-1 mt-2.5 border-t pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+								<div className="mb-1.5 mt-3 border-t pt-2.5 text-[13px] font-semibold text-foreground">
 									Turns
 								</div>
 								<ul className="flex max-h-56 flex-col gap-1 overflow-y-auto">

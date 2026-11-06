@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRightIcon, CornerDownLeftIcon } from "lucide-react";
+import { ArrowUpIcon, ChevronRightIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { finishDictation, dictationCheckpoint, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
@@ -141,7 +141,7 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 			</button>
 			) : (
 			<div data-dock-scroll-area="" className="max-h-[var(--dock-max-h,40vh)] overflow-y-auto px-4 pt-3 pb-2">
-				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Problem</div>
+				<div className="mb-1 text-[12.5px] font-semibold text-muted-foreground">Problem</div>
 				<div className="lh-prose text-[15px]">
 					<ToolContentResponse>{input.statement}</ToolContentResponse>
 				</div>
@@ -152,10 +152,10 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 			    Shift+Enter makes a newline — less to decide about. */}
 			<div
 				data-testid="practice-thinking-field"
-				className={cn("lh-question-input m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50", !expanded && "lh-practice-collapsed")}
+				className={cn("lh-question-input m-1.5 rounded-[12px] border border-border/80 bg-background/60 transition-colors focus-within:border-muted-foreground/60", !expanded && "lh-practice-collapsed")}
 			>
-				<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-					YOUR THINKING
+				<div className="lh-input-label px-2.5 pt-2 text-[12.5px] font-semibold text-muted-foreground">
+					Your thinking
 				</div>
 				<CompactLearningInput dictation={dictation}><PathInput
 					aria-label="Your thinking"
@@ -186,10 +186,10 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 				/></CompactLearningInput>
 				{/* The submit row (owner round 4, 2026-10-05): IDENTICAL to the
 				    question dock's — hint left, the SAME Button (h-9, px-3.5),
-				    one p-1 row. Corner radii concentric: shell 16 − m-1.5 (6) =
-				    field 10 − p-1 (4) = button 6. */}
+				    one p-1 row. Corner radii concentric: shell 18 − m-1.5 (6) =
+				    field 12 − p-1 (4) = button 8. */}
 				<div className="lh-question-submit flex items-center justify-between gap-2 p-1">
-					<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
+					<span aria-hidden className="pl-1.5 text-[12px] text-(--lh-faint)">
 						{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 					</span>
 					<Button
@@ -198,9 +198,9 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 						aria-label="Submit thinking"
 						disabled={owned.blocked || (!(owned.enabled ? explanationHasContent(owned.draft?.parts ?? []) : thinking.trim().length > 0) && !isDictationActive() && !hasSharedWriting && !transfer?.hasAttempt()) || compactionRunning}
 						onClick={() => submit()}
-						className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
+						className="ml-auto h-9 rounded-[8px] px-4 text-[14px] font-semibold"
 					>
-						<span className="lh-wide-submit-label">Submit thinking</span><CornerDownLeftIcon className="lh-phone-submit-icon" size={20} />
+						<span className="lh-wide-submit-label">Submit thinking</span><ArrowUpIcon className="lh-phone-submit-icon" size={20} strokeWidth={2.25} />
 					</Button>
 				</div>
 			</div>

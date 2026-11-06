@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronDownIcon } from "lucide-react";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatSettings, ModelCatalogEntry, ModelCatalogResponse, ModelsSettings, UserSettings } from "@/src/core";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
@@ -297,10 +299,10 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				// view's floating top-right buttons (import notes, gear,
 				// coverage) — blurred, fuller opacity, shadowed — so the
 				// graph no longer bleeds through these pills.
-				className="flex items-center gap-1.5 rounded-full border bg-card/85 px-2.5 py-1 shadow-lg backdrop-blur transition-colors hover:border-border hover:bg-muted"
+				className="lh-pill flex h-8 min-w-0 items-center gap-1 rounded-full bg-card/90 px-3 text-[13px] backdrop-blur transition-colors hover:bg-accent"
 			>
 				<span className="text-card-foreground">{effectiveId ? prettyModel(effectiveId) : "—"}</span>
-				<span aria-hidden className="text-xs text-muted-foreground">▾</span>
+				<ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
 			</button>
 			</Hint>
 			<Hint
@@ -325,14 +327,14 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				// view's floating top-right buttons (import notes, gear,
 				// coverage) — blurred, fuller opacity, shadowed — so the
 				// graph no longer bleeds through these pills.
-				className="flex items-center gap-1.5 rounded-full border bg-card/85 px-2.5 py-1 shadow-lg backdrop-blur transition-colors hover:border-border hover:bg-muted"
+				className="lh-pill flex h-8 min-w-0 items-center gap-1 rounded-full bg-card/90 px-3 text-[13px] backdrop-blur transition-colors hover:bg-accent"
 			>
 				{/* Just the level — the button reads like the model button reads
 				   the model name (owner, stats-control round 1). */}
 				<span className="text-card-foreground">
 					{effectiveLevel === undefined ? "—" : (THINKING_LABEL[effectiveLevel] ?? effectiveLevel)}
 				</span>
-				<span aria-hidden className="text-xs text-muted-foreground">▾</span>
+				<ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
 			</button>
 			</Hint>
 
@@ -349,7 +351,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
 					preferredSide="up"
-					menuClass="flex w-[22rem] flex-col rounded-xl border bg-card p-2 text-xs shadow-xl"
+					menuClass="flex w-[22rem] flex-col rounded-2xl border bg-popover p-2 text-[13px] shadow-2xl"
 				>
 					{modelMenu}
 				</MenuShell>
@@ -364,7 +366,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
 					preferredSide="up"
-					menuClass="flex w-44 flex-col gap-0.5 rounded-xl border bg-card p-2 text-xs shadow-xl"
+					menuClass="flex w-48 flex-col gap-0.5 rounded-2xl border bg-popover p-2 text-[13px] shadow-2xl"
 				>
 					<ThinkingMenuList
 						levels={catalog ? levels : []}

@@ -255,13 +255,12 @@ describe("md-blocks — the restored plain blockquote (owner round, 2026-10-07)"
 	});
 });
 
-describe("ThinkingBlock — the document band + ⌘T sync (owner rounds, 2026-10-07)", () => {
-	it("the row is the document band — round four geometry (owner, 2026-10-07)", () => {
+describe("ThinkingBlock — the document card + ⌘T sync", () => {
+	it("the row is the learner-message card (whole-app redesign)", () => {
 		const html = renderToStaticMarkup(<ThinkingBlock text="banded" defaultOpen />);
 		assert.ok(html.includes("bg-card"), "the card-color band");
-		assert.ok(html.includes("border-l-[calc(3ch-14px)]"), "narrow rail — 14px gap inside the 3ch inset");
-		assert.ok(html.includes("py-1") && html.includes("pl-[14px]"), "4px band padding");
-		assert.ok(html.includes("pr-4"), "the text wraps early — air at the band's right edge");
+		assert.ok(html.includes("rounded-2xl"), "rounded card — the learner-message geometry");
+		assert.ok(html.includes("px-4") && html.includes("py-2.5"), "card padding");
 		assert.ok(html.includes("w-full"), "full width — no chat side");
 		assert.match(html, /aria-expanded="true"/);
 		assert.ok(html.includes("banded"), "text visible on arrival");
@@ -270,7 +269,7 @@ describe("ThinkingBlock — the document band + ⌘T sync (owner rounds, 2026-10
 	it("in-card rows take no band — the accent step read too light (owner round five)", () => {
 		const html = renderToStaticMarkup(<ThinkingBlock text="in card" inCard />);
 		assert.ok(!html.includes("bg-accent") && !html.includes("bg-card"), "transparent on the card");
-		assert.ok(html.includes("border-l-[calc(3ch-14px)]"), "rail only, same geometry");
+		assert.ok(html.includes("border-border/70"), "a quiet outline instead of a band");
 	});
 
 	it("⌘T sets every row — explicit sets stomp individual state, late mounts honor the last set", () => {

@@ -38,11 +38,18 @@ export function ProbeDoneCard({ part }: { part: { input?: unknown; output?: unkn
 	// branch below still reads output.error.
 	const assessment = input?.assessment;
 	const strands = assessment && Array.isArray(assessment.strands) ? assessment.strands : null;
+	// A SETTLED call without strands (older records, a summary-only call)
+	// must not read as still in progress: show its plain summary when one
+	// exists, otherwise say there is no detailed assessment.
+	const settled = state === "output-available";
+	const raw = part.input && typeof part.input === "object" ? (part.input as Record<string, unknown>) : {};
+	const nested = raw.assessment && typeof raw.assessment === "object" ? (raw.assessment as Record<string, unknown>) : {};
+	const rawSummary = typeof raw.summary === "string" ? raw.summary : typeof nested.summary === "string" ? nested.summary : null;
 
 	return (
-		<div data-testid="probe-done-card" className="my-3 rounded-xl border bg-card/60 p-3">
-			<div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-				<ClipboardCheckIcon className="size-3.5 text-primary" />
+		<div data-testid="probe-done-card" className="my-3 rounded-2xl border border-border/70 bg-card/60 px-4 py-3.5">
+			<div className="mb-2 flex items-center gap-2 text-[12.5px] font-semibold text-muted-foreground">
+				<ClipboardCheckIcon className="size-3.5 text-(--lh-accent)" />
 				Probe concluded — your assessment
 			</div>
 			{output && !output.ok ? (
@@ -63,8 +70,10 @@ export function ProbeDoneCard({ part }: { part: { input?: unknown; output?: unkn
 						<p className="px-1 text-sm text-muted-foreground">{assessment.summary}</p>
 					)}
 				</div>
+			) : settled ? (
+				<p className="text-[14px] text-muted-foreground">{rawSummary ?? "No detailed assessment was recorded."}</p>
 			) : (
-				<p className="text-sm text-muted-foreground">Writing the assessment…</p>
+				<p className="text-[14px] text-muted-foreground">Writing the assessment…</p>
 			)}
 		</div>
 	);

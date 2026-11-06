@@ -1,4 +1,4 @@
-import { isTurnRunning, listJobs } from "@/src/server";
+import { isTurnRunning, listChats, listJobs, listRecentJobs } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,18 @@ export const dynamic = "force-dynamic";
  * settle logic's idle check.
  */
 export async function GET(req: Request) {
-	const chatId = new URL(req.url).searchParams.get("chatId");
+	const params = new URL(req.url).searchParams;
+	// The sidebar's Background agents history: recent jobs across sessions
+	// that still exist, with the session title for the link.
+	if (params.has("recent")) {
+		const titles = new Map(listChats().map((c) => [c.id, c.title]));
+		const recent = listRecentJobs(24)
+			.filter((job) => job.status !== "running" && titles.has(job.chatId))
+			.slice(0, 6)
+			.map((job) => ({ id: job.id, chatId: job.chatId, chatTitle: titles.get(job.chatId)!, kind: job.kind, status: job.status, error: job.error ?? null, updatedAt: job.updatedAt }));
+		return Response.json({ recent });
+	}
+	const chatId = params.get("chatId");
 	if (!chatId) {
 		return Response.json({ error: "chatId query parameter is required" }, { status: 400 });
 	}

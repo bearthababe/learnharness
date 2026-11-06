@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIcon, BotIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
+import { ActivityIcon, AlertCircleIcon, BotIcon, CheckCircle2Icon, ChevronDownIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CallUsage, JobKind, JobRecord } from "@/src/core";
 import { isModelsRefusal, isProviderKeyRefusal, subscriptionLabel, subscriptionLabels } from "@/src/core";
@@ -288,7 +288,20 @@ const KIND_ICON: Record<JobKind, typeof SearchIcon> = {
 /** Abort states per blob id: pending (fired) / failed (backend absent). */
 type AbortState = "pending" | "failed";
 
-export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
+/** One finished or failed job in the Background agents history. */
+type RecentJob = { id: string; chatId: string; chatTitle: string; kind: JobKind; status: "done" | "error" | string; error: string | null; updatedAt: string };
+const RECENT_LABEL: Record<string, string> = { research: "Research", demo: "Demo", visual: "Figure", pdf: "PDF brief" };
+function recentAgo(iso: string): string {
+	const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+	if (min < 1) return "just now";
+	if (min < 60) return `${min}m ago`;
+	const h = Math.floor(min / 60);
+	if (h < 24) return `${h}h ago`;
+	const d = Math.floor(h / 24);
+	return d < 7 ? `${d}d ago` : new Date(iso).toISOString().slice(0, 10);
+}
+
+export function ActivitySection({ feed: feedProp, onOpenChat }: { feed?: ActivityFeed; onOpenChat?: (chatId: string) => void }) {
 	const ctx = useContext(ActivityContext);
 	const feed = feedProp ?? ctx.feed;
 	const refresh = ctx.refresh;
@@ -296,6 +309,19 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 	const [openBlob, setOpenBlob] = useState<string | null>(null); // detail, inline-expanded
 	const [abortStates, setAbortStates] = useState<Record<string, AbortState>>({});
 	const now = useNow(blobs.length > 0);
+	// The history (whole-app redesign): finished and failed jobs stay
+	// findable app-wide; each row opens its session.
+	const [recent, setRecent] = useState<RecentJob[]>([]);
+	const [recentOpen, setRecentOpen] = useState(false);
+	const loadRecent = useCallback(async () => {
+		try {
+			const res = await fetch("/api/jobs?recent=1", { cache: "no-store" });
+			if (res.ok) setRecent(((await res.json()) as { recent?: RecentJob[] }).recent ?? []);
+		} catch { /* the last snapshot stays */ }
+	}, []);
+	// Reload whenever the running set changes: a job that just settled
+	// moves from the live blobs into this history.
+	useEffect(() => { void loadRecent(); }, [loadRecent, blobs.length]);
 	// Refs for stable abort handlers (no re-created closures per tick).
 	const abortRef = useRef({ blobs, refresh, setAbortStates });
 	abortRef.current = { blobs, refresh, setAbortStates };
@@ -344,16 +370,45 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 	// rows match the session rows' hover. Empty means empty: the header sits
 	// alone (the cost span is population, not decoration).
 	return (
-		<section data-testid="activity-section" className="border-t border-border px-3 pb-3 pt-2">
-			<div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-widest text-muted-foreground/70">
-				<ActivityIcon className="size-3" />
+		<section data-testid="activity-section" className="border-t border-border/70 px-2 pb-1 pt-1.5">
+			<div className="flex min-h-9 items-center gap-2.5 px-2.5 text-[14px] font-medium text-muted-foreground">
+				<ActivityIcon className="size-4" />
 				Background agents
+				{blobs.length === 0 && recent.length === 0 && <span className="ml-auto text-[12.5px] font-normal text-(--lh-faint)">None running</span>}
+				{blobs.length === 0 && recent.length > 0 && (
+					<button type="button" data-testid="activity-recent-toggle" aria-expanded={recentOpen} onClick={() => setRecentOpen((v) => !v)}
+						className="-mr-1 ml-auto flex min-h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-1.5 text-[12.5px] font-normal text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground">
+						{recent.length} recent
+						<ChevronDownIcon className={cn("size-3.5 transition-transform", recentOpen && "rotate-180")} />
+					</button>
+				)}
 				{blobs.length > 0 && (
 					<span className="ml-auto tabular-nums" data-testid="activity-total-cost" title="Total running cost (inferred)">
 						{planCostLabel(totalCost, subscriptionLabels(blobs.map((blob) => blob.model)))}
 				</span>
 				)}
 			</div>
+			{blobs.length === 0 && recentOpen && recent.length > 0 && (
+				<ul data-testid="activity-recent" className="flex max-h-[32dvh] flex-col gap-px overflow-y-auto pb-1">
+					{recent.map((job) => (
+						<li key={job.id}>
+							<button type="button" onClick={() => onOpenChat?.(job.chatId)} data-testid="activity-recent-row"
+								className="flex w-full items-start gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors hover:bg-accent/70">
+								{job.status === "done"
+									? <CheckCircle2Icon aria-label="Finished" className="mt-0.5 size-4 shrink-0 text-(--lh-success)" />
+									: <AlertCircleIcon aria-label="Failed" className="mt-0.5 size-4 shrink-0 text-destructive" />}
+								<span className="min-w-0 flex-1">
+									<span className="block truncate text-[13.5px] text-foreground/90">
+										{RECENT_LABEL[job.kind] ?? job.kind} · {job.status === "done" ? "finished" : "failed"}
+										<span className="text-muted-foreground"> · {recentAgo(job.updatedAt)}</span>
+									</span>
+									<span className="block truncate text-[12px] text-muted-foreground">{job.status !== "done" && job.error ? `${job.error} — ` : ""}{job.chatTitle}</span>
+								</span>
+							</button>
+						</li>
+					))}
+				</ul>
+			)}
 			{blobs.length > 0 && (
 				<div className="flex max-h-[40dvh] flex-col gap-1 overflow-y-auto">
 					{blobs.map((blob) => (

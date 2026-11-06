@@ -160,7 +160,7 @@ export function SetupKeysBody({
 }) {
 	return (
 		<div className="flex flex-col gap-3 px-6 py-5" data-testid="setup-stage-keys">
-			<p className="text-xs text-muted-foreground">
+			<p className="text-[13.5px] leading-relaxed text-muted-foreground">
 				Choose your AI provider and paste its API key. You’ll pick your models next.
 			</p>
 			<div className="flex flex-col gap-2">
@@ -171,7 +171,7 @@ export function SetupKeysBody({
 						data-testid="setup-key-provider"
 						aria-expanded={menuOpen}
 						onClick={onToggleMenu}
-						className="flex h-7 w-full items-center gap-1 rounded-sm border border-border bg-background px-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50"
+						className="flex h-9 w-full items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 font-ui text-[13.5px] text-foreground transition-colors hover:border-muted-foreground/50"
 					>
 						<span className="min-w-0 flex-1 truncate text-left">{provider ? provider.label : "Pick a provider…"}</span>
 						<span aria-hidden className="text-muted-foreground">
@@ -205,14 +205,14 @@ export function SetupKeysBody({
 								data-testid="setup-key-input"
 								disabled={saving}
 								autoFocus
-								className="h-7 min-w-0 flex-1 rounded-sm border border-border bg-background px-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-muted-foreground/50"
+								className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 font-mono text-[13px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-muted-foreground/50"
 							/>
 							<button
 								type="button"
 								onClick={onSave}
 								disabled={saving || !value.trim()}
 								data-testid="setup-key-save"
-								className="shrink-0 rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
+								className="shrink-0 rounded-lg bg-primary px-4 py-2 font-ui text-[13.5px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-accent disabled:text-muted-foreground"
 							>
 								{saving ? "Saving…" : "Save key"}
 							</button>
@@ -225,7 +225,7 @@ export function SetupKeysBody({
 					</p>
 				)}
 			</div>
-			<div className="mt-2 border-t border-border/60 pt-4"><h3 className="mb-3 font-ui text-xs text-muted-foreground">Subscriptions</h3><SubscriptionConnections setup /></div>
+			<div className="mt-2 border-t border-border/60 pt-4"><h3 className="mb-3 font-ui text-[13px] font-semibold text-muted-foreground">Subscriptions</h3><SubscriptionConnections setup /></div>
 		</div>
 	);
 }
@@ -448,7 +448,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 
 	return createPortal(
 		<div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-background/80"
+			className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[2px]"
 			data-testid="setup-backdrop"
 			{...backdropDismiss}
 		>
@@ -457,18 +457,18 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 				aria-modal="true"
 				aria-label="Set up your models"
 				data-testid="setup-dialog"
-				className="settings-dialog-pop flex max-h-[85vh] w-[640px] max-w-[90vw] flex-col overflow-hidden rounded-md border border-border bg-card shadow-xl"
+				className="settings-dialog-pop flex max-h-[88dvh] w-[640px] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-border bg-popover shadow-2xl max-md:h-dvh max-md:max-h-none max-md:w-full max-md:max-w-none max-md:rounded-none max-md:border-0 max-md:pt-[env(safe-area-inset-top)]"
 				onClick={(e) => e.stopPropagation()}
 			>
 				<header className="flex h-15 shrink-0 items-center gap-3 border-b border-border px-5">
-					<h2 className="font-title text-2xl tracking-tight">Set up your models</h2>
+					<h2 className="text-[19px] font-semibold tracking-tight">Set up your models</h2>
 					<Hint label="Close" binding="escape" side="left">
 <button
 						type="button"
 						aria-label="Close setup"
 						data-testid="setup-close"
 						onClick={onClose}
-						className="ml-auto text-muted-foreground transition-colors hover:text-foreground"
+						className="ml-auto flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-md:size-11"
 					>
 						✕
 					</button>
@@ -481,12 +481,12 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 					</p>
 				)}
 				{stage === "loading" ? (
-					!failed && <p data-testid="setup-stage-loading" role="status" className="px-6 py-5 text-xs text-muted-foreground">Loading models…</p>
+					!failed && <p data-testid="setup-stage-loading" role="status" className="px-6 py-5 text-[13px] text-muted-foreground">Loading models…</p>
 				) : stage === "keys" ? (
 					<div className="flex flex-col px-6 py-5">{keysBody}</div>
 				) : (
 					<div className="flex flex-col gap-4 overflow-y-auto px-6 py-5" data-testid="setup-stage-pickers">
-						<p className="text-xs text-muted-foreground">
+						<p className="text-[13.5px] leading-relaxed text-muted-foreground">
 							Pick the model for each tier. All three are required before chats can start.
 						</p>
 						{SLOT_ORDER.map((slot) => {
@@ -502,17 +502,17 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 							return (
 								<div key={slot} data-testid={`setup-slot-${slot}`} className="flex flex-col gap-1.5">
 									<span className="flex items-center gap-1.5">
-										<span className="font-ui text-sm text-foreground">{SLOT_META[slot].label}</span>
+										<span className="font-ui text-[15px] font-semibold text-foreground">{SLOT_META[slot].label}</span>
 										{!catalog?.slots?.[slot]?.model && !picked[slot] && (
 											<span
 												data-testid={`setup-needed-${slot}`}
-												className="rounded-sm border border-border px-1 py-0.5 text-[10px] font-normal tracking-wide text-muted-foreground"
+												className="rounded-full bg-accent px-2 py-0.5 text-[11.5px] font-medium text-muted-foreground"
 											>
 												needed
 											</span>
 										)}
 									</span>
-									<span className="text-xs text-muted-foreground/70">{SLOT_META[slot].roster}</span>
+									<span className="text-[12.5px] text-muted-foreground">{SLOT_META[slot].roster}</span>
 									{slot !== "strong" && <><ChatGPTBackgroundAccess provider={entry?.provider} /><NativeSubscriptionBackgroundAccess provider={entry?.provider} /></>}
 									<div className="flex items-center gap-2">
 										<div className="relative flex-1">
@@ -523,7 +523,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 												data-testid={`setup-trigger-${slot}`}
 												aria-expanded={openMenu?.slot === slot && openMenu.kind === "model"}
 												onClick={() => setOpenMenu(openMenu?.slot === slot && openMenu.kind === "model" ? null : { slot, kind: "model" })}
-												className="flex h-7 min-w-40 w-full items-center gap-1 rounded-sm border border-border bg-background px-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50"
+												className="flex h-9 min-w-40 w-full items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 font-ui text-[13.5px] text-foreground transition-colors hover:border-muted-foreground/50"
 											>
 												<span className="min-w-0 flex-1 truncate">{entry ? prettyModel(entry.id) : "Pick a model…"}</span>
 												<span aria-hidden className="text-muted-foreground">
@@ -581,7 +581,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 												aria-expanded={openMenu?.slot === slot && openMenu.kind === "thinking"}
 												disabled={!entry}
 												onClick={() => setOpenMenu(openMenu?.slot === slot && openMenu.kind === "thinking" ? null : { slot, kind: "thinking" })}
-												className="flex h-7 w-24 items-center gap-1 rounded-sm border border-border bg-background px-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
+												className="flex h-9 w-28 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 font-ui text-[13.5px] text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
 											>
 												<span className="min-w-0 flex-1 truncate text-left">
 													{entry ? (level ? THINKING_LABEL[level] ?? level : "…") : "—"}
@@ -620,7 +620,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 								data-testid="setup-save"
 								disabled={!allPicked || saving}
 								onClick={() => void save()}
-								className="rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
+								className="rounded-lg bg-primary px-4 py-2 font-ui text-[13.5px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-accent disabled:text-muted-foreground"
 							>
 								{saving ? "Saving…" : "Save models"}
 							</button>

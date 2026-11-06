@@ -53,7 +53,7 @@ describe("Composer", () => {
 
 	it("send button radius is 10px = 25% of the 40px button (concentric with the shell)", () => {
 		const html = render();
-		assert.ok(html.includes("rounded-[10px]"), "send radius = shell radius − row padding");
+		assert.ok(html.includes("rounded-[12px]"), "send radius = shell radius (18px) − row padding (6px)");
 		assert.ok(html.includes("size-10"), "40px send button (10px = 25%)");
 	});
 

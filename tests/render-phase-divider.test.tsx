@@ -16,7 +16,7 @@ import { PhaseChip, PhaseDivider, planNodeCount } from "../components/phase-divi
 import { teachStepIndex } from "../src/core/phases.ts";
 
 describe("PhaseChip (header)", () => {
-	it("renders the learner-facing label — no colored dot (phase color retired)", () => {
+	it("renders the learner-facing label with a quiet status dot", () => {
 		for (const [phase, label] of [
 			["probe", "Probing"],
 			["plan", "Planning"],
@@ -26,17 +26,15 @@ describe("PhaseChip (header)", () => {
 			assert.ok(html.includes('data-testid="phase-chip"'));
 			assert.ok(html.includes(`data-phase="${phase}"`));
 			assert.ok(html.includes(label), `${phase} label`);
-			assert.ok(!html.includes("bg-phase-"), `${phase} dot color retired`);
-			assert.ok(!html.includes("rounded-full bg-"), "no dot of any color — label only");
+			assert.ok(!html.includes("bg-phase-"), `${phase} legacy phase palette stays retired`);
 		}
 	});
 
-	it("UN-PILLED (owner, extraction-UX redesign 2026-09-24): a flat tag — no border, no rounding, no padding", () => {
+	it("whole-app redesign (2026-11): a sentence-case status line under the title, never uppercase chrome", () => {
 		const html = renderToStaticMarkup(<PhaseChip phase="plan" />);
-		assert.ok(!html.includes("rounded-full"), "no pill curve");
-		assert.ok(!html.includes("border-border"), "no border chrome");
-		assert.ok(!html.includes("px-2"), "no pill padding");
-		assert.match(html, /class="[^"]*text-xs font-medium uppercase/, "the quiet flat label keeps its type treatment");
+		assert.ok(html.includes("size-1.5 rounded-full"), "status dot");
+		assert.ok(!html.includes("uppercase"), "sentence case");
+		assert.ok(html.includes("pointer-events-none"), "still decoration, not a control");
 	});
 
 	it("NEVER shows a working spinner — the pill's curve suits text, not glyph cells (owner, round 2)", () => {
@@ -47,12 +45,11 @@ describe("PhaseChip (header)", () => {
 });
 
 describe("PhaseDivider (transcript boundary)", () => {
-	it("the plan seam: monochrome dotted rules + node count", () => {
+	it("the plan seam: monochrome hairline rules + node count", () => {
 		const html = renderToStaticMarkup(<PhaseDivider phase="plan" nodeCount={3} />);
 		assert.ok(html.includes('data-testid="phase-divider-plan"'));
 		assert.match(html, /Plan · 3 nodes/);
-		assert.ok(html.includes("border-dotted"), "dotted rule");
-		assert.ok(html.includes("border-border"), "monochrome rule");
+		assert.ok(html.includes("h-px flex-1 bg-border"), "monochrome hairline rule");
 		assert.ok(!html.includes("border-phase-"), "phase-colored rules are retired");
 	});
 

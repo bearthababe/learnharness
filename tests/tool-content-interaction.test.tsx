@@ -45,7 +45,7 @@ test("actual select → submit → saved result → historical Why uses source d
 		assert.equal(persisted.details.explanation, explanation);
 		const saved = structuredClone(persisted.details);
 		await act(async () => root.render(<AnsweredCard answer={persisted.details} input={input} />));
-		const why = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Why")!;
+		const why = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Show explanation")!;
 		await act(async () => why.click());
 		assert.equal(host.querySelectorAll("mtr").length, 4, "question and revealed explanation retain their rows");
 		const paragraphs = host.querySelectorAll('[data-testid="tucked-explanation"] p');

@@ -7,7 +7,7 @@ import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import { forgetHandwritingOnDevice } from "@/components/handwriting/device";
 import type { ChatDeleteMode } from "@/src/core";
-import { DumbbellIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, RotateCwIcon, SearchIcon, SettingsIcon } from "lucide-react";
+import { DumbbellIcon, EllipsisIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, RepeatIcon, RotateCwIcon, SearchIcon, SettingsIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -306,6 +306,7 @@ export function SessionRow({
 	onOpen,
 	kbdSelected = false,
 	onContextMenu,
+	onActions,
 }: {
 	chat: ChatListItem;
 	active: boolean;
@@ -315,8 +316,12 @@ export function SessionRow({
 	kbdSelected?: boolean;
 	/** Right-click opens the context menu (wave 6: Rename / Delete). */
 	onContextMenu?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+	/** The visible "…" affordance for the same menu (whole-app redesign):
+	 *  touch and pointer users reach Rename / Export / Delete without a
+	 *  right-click or long-press. */
+	onActions?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
-	return (
+	const row = (
 		<button
 			type="button"
 			onClick={onOpen}
@@ -324,8 +329,8 @@ export function SessionRow({
 			aria-current={active ? "page" : undefined}
 			data-testid={kbdSelected ? "session-row-kbd" : "session-row"}
 			className={cn(
-				"lh-session-row relative mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent",
-				active && "bg-accent",
+				"lh-session-row relative mb-px flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left transition-colors hover:bg-accent/70",
+				active && "bg-accent hover:bg-accent",
 				kbdSelected && !active && "bg-accent/60 ring-1 ring-border",
 			)}
 		>
@@ -336,18 +341,34 @@ export function SessionRow({
 				    the meta line below stays JetBrains Mono (machine data). One
 				    rule, finally applied to the picker too (owner, typography
 				    round): mono = chrome, Source Sans = human words. */}
-				<span className="lh-session-name block truncate font-prose text-(length:--lh-prose-size)">{chat.title}</span>
-				<span className="lh-session-meta block text-xs text-muted-foreground">{sessionMeta(chat)}</span>
+				<span className={cn("lh-session-name block truncate font-prose text-[15px] leading-5", active ? "text-foreground" : "text-foreground/85")}>{chat.title}</span>
+				<span className="lh-session-meta mt-0.5 block truncate text-[12.5px] leading-4 text-muted-foreground">{sessionMeta(chat)}</span>
 			</span>
 			{/* The dumbbell rides the FAR RIGHT (owner round 6, 2026-10-05) —
 			    was left of the name; right-aligned keeps the titles flush with
 			    the teaching rows and reads cleaner. */}
 			{chat.kind === "practice" && chat.practiceMode === "drill" ? (
-				<span className="shrink-0 text-xs text-muted-foreground/70">Drill</span>
+				<span className="lh-kind-tag shrink-0 rounded-md bg-background/60 px-1.5 py-0.5 text-[11.5px] text-muted-foreground">Drill</span>
 			) : (chat.kind ?? "teach") === "practice" && (
-				<DumbbellIcon className="size-3.5 shrink-0 text-muted-foreground/70" aria-label="Practice session" />
+				<span className="lh-kind-tag shrink-0 rounded-md bg-background/60 px-1.5 py-0.5 text-[11.5px] text-muted-foreground" aria-label="Practice session">Practice</span>
 			)}
 		</button>
+	);
+	if (!onActions) return row;
+	return (
+		<div className="lh-session-item group/row relative">
+			{row}
+			<button
+				type="button"
+				data-testid="session-row-actions"
+				aria-label={`Actions for ${chat.title}`}
+				aria-haspopup="menu"
+				onClick={onActions}
+				className="lh-session-actions absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-lg bg-accent text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/row:opacity-100"
+			>
+				<EllipsisIcon className="size-4" />
+			</button>
+		</div>
 	);
 }
 
@@ -672,7 +693,7 @@ function SessionsSidebar() {
 	// buttons, so the index matches).
 	useEffect(() => {
 		if (kbdIndex === null) return;
-		listRef.current?.querySelectorAll("button")[kbdIndex]?.scrollIntoView({ block: "nearest" });
+		listRef.current?.querySelectorAll('[data-testid^="session-row"]')[kbdIndex]?.scrollIntoView({ block: "nearest" });
 	}, [kbdIndex]);
 
 	useEffect(() => {
@@ -685,7 +706,7 @@ function SessionsSidebar() {
 	return (
 		<aside
 			ref={sidebarRef}
-			className={cn("lh-sessions-panel sidebar-motion shrink-0 overflow-hidden duration-200", open ? "w-72" : "w-0")}
+			className={cn("lh-sessions-panel sidebar-motion shrink-0 overflow-hidden duration-200", open ? "w-68 xl:w-72" : "w-0")}
 			aria-hidden={!open}
 			inert={!open}
 			role={phone && open ? "dialog" : undefined}
@@ -703,12 +724,12 @@ function SessionsSidebar() {
 				}
 			}}
 		>
-			<div className="lh-sessions-content flex h-full w-72 flex-col border-r bg-background">
+			<div className="lh-sessions-content flex h-full w-68 flex-col xl:w-72 border-r border-border bg-[color-mix(in_oklab,var(--background)_92%,black)]">
 				{/* LH wordmark — the owner's header; close toggle sits at the edge.
 				    Merged chrome (2026-09-17): in Electron this band is the
 				    window's drag surface and starts after the traffic lights
 				    (.lh-lights-gutter); in the browser those classes are inert. */}
-				<div className="lh-sessions-header lh-drag lh-lights-gutter flex items-center justify-between px-4 py-3">
+				<div className="lh-sessions-header lh-drag lh-lights-gutter flex h-15 items-center justify-between px-3">
 					{/* The owner's mark (2026-09-17) replaces the "LH" text — still the
 					    home link, still vertically centered by the band's items-center.
 					    The 92px .lh-lights-gutter keeps it clear of the traffic lights
@@ -729,9 +750,10 @@ function SessionsSidebar() {
 							href="/"
 							onClick={closePhone}
 							aria-label="Home"
-							className="lh-no-drag flex size-9 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50"
+							className="lh-no-drag flex h-9 shrink-0 items-center gap-2.5 rounded-lg px-1.5 transition-colors hover:bg-accent/70"
 						>
 							<LhMark className="size-6" />
+							<span className="lh-wordmark text-[15px] font-semibold tracking-tight text-foreground">LearnHarness</span>
 							<span className="lh-phone-home-label hidden">Home</span>
 						</Link>
 					</Hint>
@@ -754,24 +776,24 @@ function SessionsSidebar() {
 				    half/half row): full-width rows read cleaner and give the
 				    labels room; teaching keeps the original draft route,
 				    practice carries its mode. */}
-				<div className="lh-sessions-create mx-3 mb-2 flex flex-col gap-1.5">
+				<div className="lh-sessions-create mx-3 mb-3 grid grid-cols-2 gap-1.5">
 					<button
 						type="button"
 						data-testid="new-session"
 						onClick={() => void newSession()}
-						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+						className="lh-create-primary col-span-2 flex h-10 w-full items-center gap-2 rounded-[10px] bg-primary px-3 text-[14px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
 					>
-						<PlusIcon className="size-3" />
-						Teaching
+						<PlusIcon className="size-4" />
+						New teaching session
 						<span className="sr-only">create a new teaching session</span>
 					</button>
 					<button
 						type="button"
 						data-testid="new-session-practice"
 						onClick={() => { closePhone(); router.push("/chat/new?mode=practice"); }}
-						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+						className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] bg-card px-2 text-[13.5px] font-medium text-foreground/90 transition-colors hover:bg-accent hover:text-foreground"
 					>
-						<DumbbellIcon className="size-3" />
+						<DumbbellIcon className="size-3.5 text-muted-foreground" />
 						Practice
 						<span className="sr-only">create a new practice session</span>
 					</button>
@@ -779,16 +801,16 @@ function SessionsSidebar() {
 						type="button"
 						data-testid="new-session-drill"
 						onClick={() => { closePhone(); router.push("/chat/new?mode=drill"); }}
-						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+						className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] bg-card px-2 text-[13.5px] font-medium text-foreground/90 transition-colors hover:bg-accent hover:text-foreground"
 					>
-						<DumbbellIcon className="size-3" />
+						<RepeatIcon className="size-3.5 text-muted-foreground" />
 						Drill
 						<span className="sr-only">create a new drill</span>
 					</button>
 				</div>
 
 				<div className="lh-sessions-search mx-3 mb-2 flex items-center gap-2">
-					<span className="lh-sessions-search-label text-xs uppercase tracking-widest text-muted-foreground/70">Sessions</span>
+					<span className="lh-sessions-search-label sr-only">Sessions</span>
 					<Hint label="Search sessions" action="sessions-search" side="bottom" disabled={phone}>
 					<span className="relative flex-1">
 						<Input
@@ -840,11 +862,11 @@ function SessionsSidebar() {
 									e.currentTarget.blur();
 								}
 							}}
-							placeholder={phone ? "Search sessions" : "Search…"}
+							placeholder="Search sessions"
 							aria-label="Search sessions"
-							className="h-6 rounded-sm border-border bg-background pl-6 text-xs placeholder:text-muted-foreground/60"
+							className="h-9 rounded-[10px] border-transparent bg-card pl-8 text-[14px] placeholder:text-muted-foreground/70 focus-visible:border-border focus-visible:ring-0"
 						/>
-						<SearchIcon className="pointer-events-none absolute left-1.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/70" />
+						<SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
 					</span>
 					</Hint>
 				</div>
@@ -856,17 +878,18 @@ function SessionsSidebar() {
 				    Practice / All — the real modes first, "All" as the escape
 				    hatch on the right, mirroring the create-buttons above.
 				    Persisted client-side. */}
-				<div className="mx-3 flex items-center gap-0.5 rounded-md border border-border/60 bg-background p-0.5" data-testid="session-kind-filter">
+				<div className="mx-3 flex items-center gap-0.5 rounded-[10px] bg-card p-0.5" data-testid="session-kind-filter" role="group" aria-label="Show sessions">
 					{(["teach", "practice", "all"] as const).map((f) => (
 						<button
 							key={f}
 							type="button"
 							data-testid={`kind-filter-${f}`}
 							onClick={() => setFilter(f)}
+							aria-pressed={kindFilter === f}
 							className={cn(
-								"flex-1 rounded-sm px-2 py-1 text-[11px] uppercase tracking-wider transition-colors",
+								"flex-1 rounded-lg px-2 py-1 text-[13px] font-medium transition-colors",
 								kindFilter === f
-									? "bg-accent text-foreground"
+									? "bg-accent text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.4)]"
 									: "text-muted-foreground hover:text-foreground",
 							)}
 						>
@@ -875,11 +898,11 @@ function SessionsSidebar() {
 					))}
 				</div>
 
-				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 pt-2.5">
 					{shown === null ? (
-						<div className="px-2 py-4 text-xs text-muted-foreground">Loading…</div>
+						<div className="px-3 py-4 text-[13px] text-muted-foreground">Loading…</div>
 					) : shown.length === 0 ? (
-						<div className="px-2 py-4 text-xs text-muted-foreground">
+						<div className="px-3 py-4 text-[13px] text-muted-foreground">
 							{query.trim() ? "No sessions match." : "No sessions yet."}
 						</div>
 					) : (
@@ -903,6 +926,7 @@ function SessionsSidebar() {
 										router.push(`/chat/${c.id}`);
 									}}
 									onContextMenu={(e) => openContext(e, c)}
+									onActions={(e) => openContext(e, c)}
 								/>
 							),
 						)
@@ -914,25 +938,25 @@ function SessionsSidebar() {
 					    populates and grows when processes run. The session list is
 					    flex-1, so this pins to the bottom. Sidebar closed = the
 					    learner opted out (no ambient signal, user decision). */}
-					<ActivitySection />
+					<ActivitySection onOpenChat={(id) => { closePhone(); router.push(`/chat/${id}`); }} />
 
 					{/* Settings entry (settings-app wave): same row language as
 					    New session — quiet, bottom-pinned, opens the centered
 					    dialog (also mod+, in the keyboard registry). */}
-					<div className="lh-sessions-footer px-3 pb-3 pt-1">
+					<div className="lh-sessions-footer border-t border-border/70 px-2 pb-2 pt-1.5">
 						<Hint label="Settings" action="open-settings" side="right" disabled={phone}>
 							<button
 								type="button"
 								onClick={() => openSettings()}
 								data-testid="settings-entry"
-								className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+								className="flex h-9 w-full items-center gap-2.5 rounded-[10px] px-2.5 text-[14px] font-medium text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
 							>
-								<SettingsIcon className="size-3" />
+								<SettingsIcon className="size-4" />
 								Settings
 							</button>
 						</Hint>
 						{process.env.NODE_ENV === "development" && <details className="lh-sessions-tools mt-1 px-2 text-xs text-muted-foreground">
-							<summary className="cursor-pointer py-1.5 uppercase tracking-wider">Tools</summary>
+							<summary className="cursor-pointer py-1.5">Tools</summary>
 							<button type="button" onClick={() => location.reload()} className="flex items-center gap-1.5 rounded-md py-1.5 hover:text-foreground">
 								<RotateCwIcon className="size-3" />
 								Reload preview
@@ -951,7 +975,7 @@ function SessionsSidebar() {
 						anchorRef={ctxAnchorRef}
 						testid="session-context-menu"
 						preferredSide="down"
-						menuClass="flex w-52 flex-col gap-0.5 rounded-xl border bg-card p-2 text-xs shadow-xl"
+						menuClass="flex w-56 flex-col gap-0.5 rounded-xl border bg-popover p-1.5 text-[13.5px] shadow-xl"
 					>
 						{/* The two management actions first, then the extraction block
 						    (owner refinement round, 2026-09-24): Rename/Delete stay at the
@@ -966,7 +990,7 @@ function SessionsSidebar() {
 								setRenamingId(ctxChatId);
 								setCtxChatId(null);
 							}}
-							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
+							className="flex min-h-8 items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
 						>
 							Rename
 						</button>
@@ -988,7 +1012,7 @@ function SessionsSidebar() {
 								a.click();
 								a.remove();
 							}}
-							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
+							className="flex min-h-8 items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
 						>
 							Export as Markdown…
 						</button>
@@ -1000,7 +1024,7 @@ function SessionsSidebar() {
 								if (target) setDeleting(target);
 								setCtxChatId(null);
 							}}
-							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
+							className="flex min-h-8 items-center rounded-lg px-2.5 py-1.5 text-left text-destructive transition-colors hover:bg-destructive/10"
 						>
 							Delete…
 						</button>

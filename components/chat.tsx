@@ -72,7 +72,7 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, RepeatIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -114,7 +114,7 @@ import { currentUserThinkingOpen, setAllUserThinkingOpen } from "@/components/th
  * deliberately narrower (~46rem centered) per the reference. Same ELEMENT,
  * same place — width polish only.
  */
-const COLUMN = "mx-auto w-full max-w-none px-6";
+const COLUMN = "mx-auto w-full max-w-[48rem] px-4 md:px-8";
 const DOCK = "mx-auto w-full max-w-[46rem] px-4";
 // The DOCK container's fixed width (46rem) and the plan marginalia's
 // geometry (owner, plan-placement round): the bare diagram sits in the
@@ -1413,7 +1413,7 @@ export function Chat({
 								spellCheck={false}
 								aria-label="Session title"
 								title="Rename this session"
-								className="lh-no-drag min-w-[8ch] max-w-[70%] shrink-0 bg-transparent font-title text-3xl tracking-tight caret-current outline-none [field-sizing:content]"
+								className="lh-session-title lh-no-drag min-w-[8ch] max-w-[70%] shrink-0 bg-transparent font-title text-[20px] leading-[1.3] tracking-tight caret-current outline-none [field-sizing:content] xl:text-[22px]"
 							/>
 							{/* flex-1 spacer during rename too, so the chips stay at
 							    the right edge; clicks here commit via the header
@@ -1422,6 +1422,7 @@ export function Chat({
 						</>
 					) : (
 					<>
+						<div className="lh-title-block flex min-w-0 shrink flex-col items-start justify-center">
 						<Hint
 							// F2 renames (registry) — surfaced on the hover.
 							label="Rename session"
@@ -1434,11 +1435,25 @@ export function Chat({
 								setTitleDraft(titleText);
 								setRenaming(true);
 							}}
-							className="lh-no-drag -mx-1.5 min-w-4 shrink cursor-text truncate rounded-md px-1.5 text-left font-title text-3xl tracking-tight transition-colors hover:bg-accent"
+							className="lh-session-title lh-no-drag -mx-1.5 min-w-4 max-w-[calc(100%+0.75rem)] cursor-text truncate rounded-lg px-1.5 text-left font-title text-[20px] leading-[1.3] tracking-tight transition-colors hover:bg-accent/70 xl:text-[22px]"
 						>
 							{titleText}
 							</button>
 						</Hint>
+							{kind === "practice" ? (
+								<span
+									data-testid="phase-chip"
+									data-phase="practice"
+									aria-hidden="true"
+									className="lh-phase-chip pointer-events-none flex shrink-0 select-none items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground"
+								>
+									{practiceMode === "drill" ? <RepeatIcon className="size-3" /> : <DumbbellIcon className="size-3" />}
+									{practiceMode === "drill" ? "Drill" : "Practice"}
+								</span>
+							) : (
+								<PhaseChip phase={phases.at(-1) ?? "probe"} />
+							)}
+						</div>
 							{/* flex-1 spacer: keeps the chips at the right edge AND stays a
 							    drag surface (no carve-out) — the freed bar is grippable. */}
 							<div className="min-w-4 flex-1" aria-hidden="true" />
@@ -1457,10 +1472,10 @@ export function Chat({
 								blurAfterPointerClick(e);
 								setPlanOpen(true);
 							}}
-							className="lh-no-drag flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border/80 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+							className="lh-header-plan lh-no-drag flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 						>
-							<WaypointsIcon className="size-3.5 text-primary" aria-hidden />
-							Plan
+							<WaypointsIcon className="size-4" aria-hidden />
+							<span className="max-lg:sr-only">Plan</span>
 						</button>
 </Hint>
 					)}
@@ -1472,22 +1487,7 @@ export function Chat({
 				    practice never extracts, so an ever-filling ring with no
 				    run behind it would lie. */}
 					{kind !== "practice" && <CoverageRing chatId={chatId} refreshKey={coverageTick} />}
-					{/* Practice sessions: no phase arc — a quiet Practice tag
-					    instead of the phase chip. */}
-					{kind === "practice" ? (
-						<span
-							data-testid="phase-chip"
-							data-phase="practice"
-							aria-hidden="true"
-							className="pointer-events-none flex shrink-0 select-none items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
-						>
-							<DumbbellIcon className="size-3" />
-							{practiceMode === "drill" ? "Drill" : "Practice"}
-						</span>
-					) : (
-						<PhaseChip phase={phases.at(-1) ?? "probe"} />
-					)}
-					<Button variant="outline" size="sm" className="shrink-0" onClick={() => handwriting.show(true)} data-testid="open-notebook">Write</Button>
+					<Button variant="secondary" size="sm" className="lh-header-write shrink-0 gap-1.5" onClick={() => handwriting.show(true)} data-testid="open-notebook"><PenLineIcon className="size-4" aria-hidden />Write</Button>
 				</TopBar>
 				{!notebookVisible && notebook.error && <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>}
 
@@ -1551,7 +1551,7 @@ export function Chat({
 													<div
 														key={pi}
 														data-testid="practice-next-line"
-														className="my-4 flex items-center justify-center gap-1.5 font-ui text-xs font-medium uppercase tracking-wide text-muted-foreground"
+														className="my-5 flex items-center justify-center gap-1.5 font-ui text-[13px] font-medium text-muted-foreground"
 													>
 														<ArrowRightIcon className="size-3" />
 														Next problem
@@ -1608,12 +1608,12 @@ export function Chat({
 										    inset (the band is the authorship mark against the agent's
 										    transparent prose). The "You" label stays — one register
 										    with the thinking labels. */
-										className="my-2 w-full border-l-[calc(3ch-14px)] border-muted-foreground/30 bg-card py-1 pl-[14px] pr-4 font-ui text-xs"
+										className="lh-user-message my-2 w-full rounded-2xl bg-card px-4 py-3 font-ui text-xs"
 									>
 												{/* The rail GROUPS (owner round 4, 2026-10-05): the YOU heading
 												    sits INSIDE the rail, same mono-xs register and same 1ch
 												    rail as the thinking rows — one quote geometry. */}
-												<div className="font-medium uppercase tracking-wide text-muted-foreground">You</div>
+												<div className="mb-1 text-[12.5px] font-semibold text-muted-foreground">You</div>
 												<div className="lh-prose whitespace-pre-wrap text-foreground">
 													{m.parts.some((part) => part.type === "data-learner-explanation")
 														? m.parts.filter((part) => part.type === "data-learner-explanation").map((part, index) => <LearnerExplanation key={index} parts={part.data as Explanation} />)
@@ -1675,7 +1675,7 @@ export function Chat({
 													case "step-start":
 														if (teachBoundary)
 															return <PhaseDivider key={`teach-step-${pi}`} phase="teach" />;
-														return pi > 0 ? <Separator key={pi} className="my-3" /> : null;
+														return pi > 0 ? <Separator key={pi} className="lh-step-rule my-4 bg-border/60" /> : null;
 													case "data-plan-block":
 														// The plan in the chat (wave 4): a frozen snapshot
 														// block — rendered as carried, never re-derived.
@@ -1754,16 +1754,16 @@ export function Chat({
 						    the THINKING placeholder by construction (the gate sits
 						    BEFORE beginTurn; the settle kick runs after endTurn). */}
 							{compacting && (
-								<span className="flex items-center gap-2 font-ui text-xs font-medium uppercase tracking-wide text-muted-foreground">
+								<span className="flex items-center gap-2 font-ui text-[13.5px] font-medium text-muted-foreground">
 									<BrailleSpinner label="Compacting context" />
-									<Shimmer duration={1}>COMPACTING CONTEXT…</Shimmer>
+									<Shimmer duration={1}>Compacting context…</Shimmer>
 								</span>
 							)}
 							{(status === "submitted" || turnInFlight) && (
-								<span className="flex items-center gap-2 font-ui text-xs font-medium uppercase tracking-wide text-muted-foreground">
+								<span className="flex items-center gap-2 font-ui text-[13.5px] font-medium text-muted-foreground">
 									<BrailleSpinner label="Thinking" />
 									<Shimmer duration={1}>
-										THINKING…
+										Thinking…
 									</Shimmer>
 								</span>
 							)}
@@ -1848,7 +1848,7 @@ export function Chat({
 										type="button"
 										data-testid="setup-cta"
 										onClick={() => setSetupOpen(true)}
-										className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
+										className="h-8 cursor-pointer rounded-full bg-primary px-3.5 font-ui text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
 									>
 										Set up your models
 									</button>
@@ -2563,7 +2563,7 @@ function DockOverlay({
 							claim={revealPending}
 						/>
 					)}
-					<div ref={shellRef} data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-lg">
+					<div ref={shellRef} data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-[var(--lh-shadow)]">
 						{/* Include descendant margins (notably practice thinking's
 						    bottom margin) in the natural content measurement. */}
 						<div

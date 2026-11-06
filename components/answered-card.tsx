@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDownIcon } from "lucide-react";
 import { ConfidenceRail } from "@/components/confidence-rail";
 import { GlyphMark } from "@/components/ui/glyph-mark";
 import { ThinkingBlock } from "@/components/thinking-block";
@@ -29,7 +30,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 	if (answer.dismissed) {
 		return (
 			<>
-			{hasReading && <ThinkingBlock testId="reading-thinking-block" label="YOUR THINKING" text={answer.readingThinking ?? ""} content={answer.readingThinkingContent} defaultOpen />}
+			{hasReading && <ThinkingBlock testId="reading-thinking-block" label="Your thinking" text={answer.readingThinking ?? ""} content={answer.readingThinkingContent} defaultOpen />}
 			<div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
 				<span className="font-medium">{answer.questionText}</span> — skipped
 			</div>
@@ -59,7 +60,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 		    ThinkingBlock, instead of an inset inside the answer. Same muted
 		    rail as before; the label is now plain "Your thinking". */}
 		{hasReading && (
-			<ThinkingBlock testId="reading-thinking-block" label="YOUR THINKING" text={answer.readingThinking ?? ""} content={answer.readingThinkingContent} defaultOpen />
+			<ThinkingBlock testId="reading-thinking-block" label="Your thinking" text={answer.readingThinking ?? ""} content={answer.readingThinkingContent} defaultOpen />
 		)}
 		{/* [&>*:last-child]:mb-0 (owner round, 2026-10-07): on ask cards the
 		    thinking row is the last child — its my-3 stacked with the card's
@@ -69,7 +70,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 			className="rounded-xl border bg-card p-4 text-card-foreground [&>*:last-child]:mb-0"
 			data-testid="answered-card"
 		>
-			<div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+			<div className="mb-1 flex items-center gap-2 text-[12.5px] font-semibold text-muted-foreground">
 				{/* The tool's OWN name first (owner 2026-10-09): probe-phase
 			    cards label Probe/Recall — the phase boundary visible in the
 			    transcript. No `tool` on old records: kind labels as before. */}
@@ -194,7 +195,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 				    the accent lift read too light); rail only, heights identical. */
 				<ThinkingBlock
 					testId="your-thinking"
-					label="YOUR THINKING"
+					label="Your thinking"
 					text={answer.thinking ?? answer.note ?? ""}
 					content={answer.thinkingContent}
 					inCard
@@ -213,12 +214,14 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 					<button
 						type="button"
 						onClick={() => setWhyOpen((v) => !v)}
-						className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+						aria-expanded={whyOpen}
+						className="-ml-2 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 					>
-						{whyOpen ? "Hide why" : "Why"}
+						{whyOpen ? "Hide explanation" : "Show explanation"}
+						<ChevronDownIcon aria-hidden className={`size-3.5 transition-transform ${whyOpen ? "rotate-180" : ""}`} />
 					</button>
 					{whyOpen && (
-						<div className="mt-1.5 rounded-lg bg-muted py-2 text-sm text-foreground/50">
+						<div className="mt-1.5 rounded-xl bg-background/60 px-3 py-2 text-[14px] text-foreground/70">
 							<span className="font-medium text-muted-foreground">Why: </span>
 							{/* Keep the first paragraph beside the label, not every paragraph:
 							   later paragraphs must retain their recovered document structure. */}

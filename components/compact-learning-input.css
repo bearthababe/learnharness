@@ -83,7 +83,7 @@
 	.lh-compact-stats .lh-phone-usage-label { display: inline; }
 	.lh-compact-stats [data-testid="stats-summary"] { min-height: 44px; min-width: 44px; justify-content: center; }
 	.lh-compact-stats [data-testid="model-control"] { flex: 1; min-width: 0; justify-content: center; gap: 2px; }
-	.lh-compact-stats [data-testid="model-control"] button { min-height: 44px; min-width: 44px; padding-inline: 6px; }
+	.lh-compact-stats [data-testid="model-control"] button { min-height: 44px; min-width: 44px; padding-inline: 8px; background: transparent; font-size: 14px; }
 	.lh-compact-stats [data-testid="stats-model"] { min-width: 0; }
 	.lh-compact-stats [data-testid="stats-model"] span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.lh-compact-stats [data-testid="stats-detail"] {

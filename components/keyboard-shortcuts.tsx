@@ -57,6 +57,21 @@ export function KeyboardShortcuts() {
 	}>({ router, setCheatOpen, openSettings });
 	handlersRef.current = { router, setCheatOpen, openSettings };
 
+	// Keyboard modality (whole-app redesign): focus rings appear only after a
+	// Tab walk starts, and disappear at the next pointer press — pointer focus
+	// never lights an element (globals.css html[data-lh-keyboard]).
+	useEffect(() => {
+		const root = document.documentElement;
+		const onKey = (e: KeyboardEvent) => { if (e.key === "Tab") root.dataset.lhKeyboard = ""; };
+		const onPointer = () => { delete root.dataset.lhKeyboard; };
+		window.addEventListener("keydown", onKey, true);
+		window.addEventListener("pointerdown", onPointer, true);
+		return () => {
+			window.removeEventListener("keydown", onKey, true);
+			window.removeEventListener("pointerdown", onPointer, true);
+		};
+	}, []);
+
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
 			// ── Tab is dead (owner, 2026-09-17): preventDefault even when
@@ -178,7 +193,7 @@ function CheatSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
 					if (actions.length === 0) return null;
 					return (
 						<div key={scope} className="mb-4">
-							<div className="mb-1.5 text-xs uppercase tracking-widest text-muted-foreground/70">
+							<div className="mb-1.5 text-[12.5px] font-semibold text-muted-foreground">
 								{scopeLabels[scope]}
 							</div>
 							<div className="flex flex-col gap-1">

@@ -89,7 +89,13 @@ export function EditableSourceName({ name, onSave, onCancel, initiallyEditing = 
 				if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); void commit(); }
 			}} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }} />
 			: <button type="button" className={`block max-w-full truncate rounded-sm text-left text-sm font-medium leading-5 transition-colors hover:bg-accent${muted ? " text-muted-foreground/60" : ""}`} title="Rename"
-				onClick={() => { cancelled.current = false; setDraft(name); setEditing(true); }}>{name}</button>}
+				onClick={() => {
+					// Touch: one tap is too easy to land while scrolling — renaming
+					// takes a double-tap there (fine pointers keep the single click).
+					if (typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches) return;
+					cancelled.current = false; setDraft(name); setEditing(true);
+				}}
+				onDoubleClick={() => { cancelled.current = false; setDraft(name); setEditing(true); }}>{name}</button>}
 		{failure && <span role="alert" className="block text-xs text-red-400">{failure}</span>}
 	</span>;
 }
@@ -186,7 +192,7 @@ export function SourceFolderTree<T extends TreeSource>({ groups, directory, quer
 						ref={(el) => { if (el) el.indeterminate = entryCheck?.indeterminate ?? (!empty && selectedCount > 0 && selectedCount < members.length); }}
 						onChange={(e) => { if (entryCheck || empty) onToggleFolder(folder.id, e.target.checked); else onToggleNodes(members, e.target.checked); }} />
 					<button type="button" aria-expanded={open} aria-label={`Expand folder ${folder.name}`} data-testid={`folder-toggle-${folder.id}`}
-						onClick={() => onToggleExpanded(folder.id)} className="flex h-5 w-3.5 shrink-0 items-center justify-center text-muted-foreground/70">
+						onClick={() => onToggleExpanded(folder.id)} className="lh-touch-hit flex h-5 w-3.5 shrink-0 items-center justify-center text-muted-foreground/70">
 						<ChevronRightIcon className={`size-3.5 ${open ? "rotate-90" : ""}`} />
 					</button>
 					<button type="button" data-source-icon data-testid={`folder-icon-${folder.id}`} aria-expanded={open} aria-label={`Expand folder ${folder.name}`}

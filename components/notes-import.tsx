@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
-import { WaypointsIcon } from "lucide-react";
+import { FileUpIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { usePhoneLayout } from "./use-phone-viewport";
 import { createNotesImportQueue, EMPTY_IMPORT_QUEUE, notesPath } from "./notes-import-queue";
@@ -100,21 +100,21 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	};
 	const choices = [["Files", filesRef], ["Folder", folderRef]] as const;
 	return (
-		<div className="lh-graph-import relative shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur"
+		<div className="lh-graph-import relative shrink-0 rounded-full border border-border/70 bg-card/90 p-0.5 shadow-lg backdrop-blur"
 			onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
 			onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
 			<input ref={filesRef} type="file" multiple accept=".md,.markdown,.txt,.pdf" className="hidden" onChange={onChange} />
 			<input ref={folderRef} type="file" {...{ webkitdirectory: "" }} className="hidden" onChange={onChange} />
 			<Hint label="Extract files into the graph" side="bottom" disabled={phone}>
 				<button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu" data-testid="import-notes"
-					className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
-					<WaypointsIcon className="size-3" />{importing ? "Extracting…" : "Extract files…"}
+					className="flex h-8 items-center gap-1.5 rounded-full px-3 text-[13.5px] font-medium text-foreground/85 transition-colors hover:bg-accent hover:text-foreground">
+					<FileUpIcon className="size-3.5 text-muted-foreground" />{importing ? "Extracting…" : "Extract files…"}
 				</button>
 			</Hint>
 			{open && (
-				<div role="menu" aria-label="Extract files into the graph" aria-describedby={hintId} className="absolute right-0 top-full z-50 mt-1 w-52 rounded-lg border bg-card p-1 shadow-lg">
-					<div role="none"><p id={hintId} className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">For lessons, attach material to a session instead.</p></div>
-					{choices.map(([label, input]) => <button key={label} type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-accent"
+				<div role="menu" aria-label="Extract files into the graph" aria-describedby={hintId} className="absolute right-0 top-full z-50 mt-2 w-60 rounded-2xl border bg-popover p-1.5 shadow-2xl">
+					<div role="none"><p id={hintId} className="px-2.5 pb-1.5 pt-1 text-[12.5px] leading-relaxed text-muted-foreground">Adds your notes to the knowledge graph. For lessons, attach material to a session instead.</p></div>
+					{choices.map(([label, input]) => <button key={label} type="button" role="menuitem" className="block min-h-9 w-full rounded-lg px-2.5 py-1.5 text-left text-[13.5px] hover:bg-accent"
 						onClick={() => { setOpen(false); input.current?.click(); }}>{label}</button>)}
 				</div>
 			)}
@@ -122,8 +122,25 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	);
 }
 
+/** Provider refusals arrive as "file: 401: {json}" — say what happened and
+ *  what to do instead of showing the raw payload. Other messages pass
+ *  through unchanged. Pure; exported for tests. */
+export function readableImportError(error: string): string {
+	const match = /^(.*?): (\d{3}): (\{.*\})\s*$/s.exec(error);
+	if (!match) return error;
+	const [, file, status, payload] = match;
+	let detail = "";
+	try {
+		const parsed = JSON.parse(payload!) as { message?: unknown; error?: unknown };
+		const message = typeof parsed.message === "string" ? parsed.message : typeof parsed.error === "string" ? parsed.error : "";
+		detail = message ? ` (${message})` : "";
+	} catch { /* keep the status alone */ }
+	const hint = status === "401" || status === "403" ? " Check the provider key in Settings, then try again." : " Try again in a moment.";
+	return `${file}: the model provider refused the extraction — HTTP ${status}${detail}.${hint}`;
+}
+
 export function NotesImportErrors({ errors }: { errors: readonly string[] }) {
-	return <>{errors.map((error, i) => <p key={i} role="alert" className="max-w-full whitespace-pre-wrap break-words text-xs text-red-400">{error}</p>)}</>;
+	return <>{errors.map((error, i) => <p key={i} role="alert" className="max-w-80 whitespace-pre-wrap break-words text-right text-[12.5px] leading-snug text-red-300">{readableImportError(error)}</p>)}</>;
 }
 export function NotesImportNotices({ notices }: { notices: readonly string[] }) {
 	return <>{notices.map((notice, i) => <p key={i} role="status" className="max-w-full whitespace-pre-wrap break-words text-xs text-muted-foreground">{notice}</p>)}</>;

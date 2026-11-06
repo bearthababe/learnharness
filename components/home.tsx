@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CornerDownLeftIcon, DumbbellIcon } from "lucide-react";
+import { ArrowUpIcon } from "lucide-react";
 import { GraphView } from "@/components/graph-view";
 import { MinimalHome } from "@/components/minimal-home";
 import { SetupDialog } from "@/components/setup-dialog";
-import { ComposerActions, NodePickerControl } from "@/components/composer-actions";
+import { ComposerActions, ModeSwitch, NodePickerControl } from "@/components/composer-actions";
 import { useModelSetup, selectedModelUnavailable, openModelPicker, ZeroKeysPill } from "@/components/setup-cta";
 import { DictationBar, joinDictation, useDictation } from "@/components/dictation";
 import { useFieldCycle } from "@/components/field-cycle";
@@ -221,6 +221,9 @@ export function Home({
 					    shows the pick HINT so the affordance is discoverable;
 					    teaching mode with nothing picked renders nothing. */}
 					<ComposerActions
+						leading={
+							<ModeSwitch mode={mode} onChange={setMode} />
+						}
 						picker={(practiceProps.length > 0 || mode === "practice") && (
 							<NodePickerControl
 								count={practiceProps.length}
@@ -236,7 +239,7 @@ export function Home({
 									type="button"
 									data-testid="setup-cta"
 									onClick={() => setSetupOpen(true)}
-									className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
+									className="h-8 cursor-pointer rounded-full bg-primary px-3.5 font-ui text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
 								>
 									Set up your models
 								</button>
@@ -246,7 +249,7 @@ export function Home({
 					{startError && <p role="alert" className="mb-2 text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
 					<form
 						data-attachment-composer=""
-						className="flex items-end gap-1.5 rounded-2xl border bg-card p-1.5 shadow-lg"
+						className="flex items-end gap-1.5 rounded-2xl border bg-card p-1.5 shadow-[var(--lh-shadow)]"
 					onSubmit={(e) => {
 						e.preventDefault();
 						void start();
@@ -277,7 +280,7 @@ export function Home({
 						}}
 						placeholder={mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
 						autoFocus
-						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
+						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground/80"
 					/>
 					<AttachFilesButton editorRef={topicInputRef} />
 					{/* No tooltip on the start square — the ↵ glyph is the
@@ -286,9 +289,9 @@ export function Home({
 						type="submit"
 						aria-label="Start session"
 						disabled={(!topic.trim() && !dictation.active) || busy}
-						className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-40"
+						className="lh-send flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:bg-accent disabled:text-muted-foreground"
 					>
-						<CornerDownLeftIcon className="size-5" />
+						<ArrowUpIcon className="size-5" strokeWidth={2.25} />
 					</button>
 					</form>
 					{/* Same as the chat view's under-composer stats bar (owner) — no
@@ -298,27 +301,6 @@ export function Home({
 					<StatsBar
 						dictationSlot={<DictationBar dictation={dictation} />}
 						turns={[] as TurnUsage[]}
-						leadingSlot={
-							<div className="flex items-center gap-0.5 rounded-md border border-border/60 bg-background p-0.5" data-testid="home-mode-switch">
-								{(["teach", "practice", "drill"] as const).map((m) => (
-									<button
-										key={m}
-										type="button"
-										data-testid={`home-mode-${m}`}
-										onClick={() => setMode(m)}
-										className={
-											"flex items-center gap-1 rounded-sm px-2 py-0.5 text-[11px] uppercase tracking-wider transition-colors " +
-											(mode === m
-												? "bg-accent text-foreground"
-												: "text-muted-foreground hover:text-foreground")
-										}
-									>
-										{m !== "teach" ? <DumbbellIcon aria-hidden="true" className="size-3" /> : null}
-										{m === "teach" ? "Teach" : m === "drill" ? "Drill" : "Practice"}
-									</button>
-								))}
-							</div>
-						}
 					/>
 				</div>
 			</div>

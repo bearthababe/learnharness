@@ -64,7 +64,7 @@ describe("SettingsDialog (the designed surface, SSR)", () => {
 });
 
 describe("the shared settings dropdown trigger", () => {
-	it("Agent, Appearance and dictation use the same compact dark mono trigger", () => {
+	it("Agent, Appearance and dictation use the same compact trigger", () => {
 		const surfaces = [
 			[renderToStaticMarkup(<AgentSection agent={undefined} models={undefined} graph={undefined} onSectionChange={() => {}} onModelsChange={() => {}} />), "slot-model-strong"],
 			[renderToStaticMarkup(<AppearanceSection appearance={undefined} onSectionChange={() => {}} />), "font-trigger"],
@@ -73,10 +73,10 @@ describe("the shared settings dropdown trigger", () => {
 		for (const [html, id] of surfaces) {
 			const tag = tagOf(html, id);
 			const classes = tag.match(/class="([^"]+)"/)![1]!.split(" ");
-			for (const token of ["h-7", "rounded-sm", "border", "border-border", "bg-background", "px-1.5", "font-ui", "text-xs", "hover:border-muted-foreground/50"]) {
+			for (const token of ["h-8", "rounded-lg", "border", "border-border", "bg-background", "px-2.5", "font-ui", "text-[13px]", "hover:border-muted-foreground/50"]) {
 				assert.ok(classes.includes(token), `${id}: ${token}`);
 			}
-			assert.ok(html.includes("▾"), `${id}: shared dropdown indicator`);
+			assert.ok(html.includes("lucide-chevron-down"), `${id}: shared dropdown indicator`);
 		}
 	});
 
@@ -94,7 +94,7 @@ describe("Providers settings-label typography", () => {
 	it("Language uses the standard sans SettingsRow label without changing its mono trigger", () => {
 		const html = renderToStaticMarkup(<DictationLanguageSetting />);
 		assert.ok(html.includes('<span class="block font-prose text-(length:--lh-prose-size)">Language</span>'));
-		assert.ok(tagOf(html, "dictation-language").includes("font-ui text-xs"));
+		assert.ok(tagOf(html, "dictation-language").includes("font-ui text-[13px]"));
 	});
 
 	it("only Providers subscription labels use sans; setup labels retain their compact mono styling", () => {

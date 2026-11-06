@@ -11,7 +11,7 @@ import { SetupDialog } from "@/components/setup-dialog";
 import { useModelSetup, selectedModelUnavailable, openModelPicker, ZeroKeysPill } from "@/components/setup-cta";
 import { StatsBar } from "@/components/stats-bar";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
-import { ComposerActions, NodePickerControl } from "@/components/composer-actions";
+import { ComposerActions, ModeSwitch, NodePickerControl } from "@/components/composer-actions";
 import { OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { SessionStarter } from "@/components/start-session";
 import type { ChatSettings, GraphSnapshot } from "@/src/core";
@@ -80,7 +80,11 @@ export function DraftShell({
 	onOpenPicker,
 	onClearPicks,
 	overlay,
+	onModeChange,
 }: {
+	/** Switch the draft between teaching, practice and drill (the same
+	 *  segmented control as home). Absent = no switch. */
+	onModeChange?: (mode: "teach" | "practice" | "drill") => void;
 	busy: boolean;
 	text: string;
 	onChange: (v: string) => void;
@@ -176,7 +180,15 @@ export function DraftShell({
 											? "Pick nodes from your knowledge graph, describe what you want to practice, or bring your own problem."
 											: "The teacher will open by probing what you already know."
 									}
-								/>
+								>{onModeChange ? <>
+									<div className="max-w-md space-y-2">
+										<h3 className="font-title text-[26px] leading-tight tracking-tight text-foreground">{mode === "drill" ? "New drill" : mode === "practice" ? "New practice session" : "New session"}</h3>
+										<p className="text-[15px] leading-relaxed text-muted-foreground">{mode === "drill" ? "Describe the skill or difficulty you want to work on." : mode === "practice"
+											? "Pick nodes from your knowledge graph, describe what you want to practice, or bring your own problem."
+											: "The teacher will open by probing what you already know."}</p>
+									</div>
+									<div className="pointer-events-auto mt-2"><ModeSwitch mode={mode} onChange={onModeChange} testid="draft-mode-switch" itemTestid="draft-mode" /></div>
+								</> : undefined}</ConversationEmptyState>
 							</ConversationContent>
 						</Conversation>
 						<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
@@ -189,7 +201,7 @@ export function DraftShell({
 									setup={setupCta}
 								/>
 								{startError && <p role="alert" className="pointer-events-auto mb-2 text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
-								<div data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-lg">
+								<div data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-[var(--lh-shadow)]">
 									<Composer
 										busy={busy}
 										value={text}
@@ -330,6 +342,7 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 				picks={picks}
 				onOpenPicker={openPicker}
 				onClearPicks={() => applyPicks([])}
+				onModeChange={(next) => { if (next !== mode) router.replace(next === "teach" ? "/chat/new" : `/chat/new?mode=${next}`); }}
 				overlay={
 					// THE PICKER (owner round 10b): hosted INSIDE the content
 					// column — absolute inset-0 resolves to the column's relative
@@ -364,7 +377,7 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 								type="button"
 								data-testid="setup-cta"
 								onClick={() => setSetupOpen(true)}
-								className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
+								className="h-8 cursor-pointer rounded-full bg-primary px-3.5 font-ui text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
 							>
 								Set up your models
 							</button>

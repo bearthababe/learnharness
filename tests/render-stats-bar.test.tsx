@@ -46,7 +46,7 @@ describe("stats bar", () => {
 		assert.ok(!html.includes("aria-hidden>·"), "no dot between the controls");
 		// the control reads as a button: pill border + dropdown chevron
 		assert.match(html, /data-testid="stats-model"[^>]*rounded-full[^>]*>/);
-		assert.match(html, /▾/);
+		assert.match(html, /lucide-chevron-down/);
 	});
 
 	it("folds context + cost from the turns log (core/prices, no local math)", () => {

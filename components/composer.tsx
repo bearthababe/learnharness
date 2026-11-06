@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { ArrowRightIcon, CornerDownLeftIcon, SquareIcon } from "lucide-react";
+import { ArrowRightIcon, ArrowUpIcon, SquareIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PathInput } from "@/components/path-input";
 import { AttachFilesButton } from "@/components/attach-files-button";
@@ -191,7 +191,7 @@ export function Composer({
 				}}
 				placeholder={placeholder}
 				autoFocus={autoFocus}
-				className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
+				className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground/80"
 			/></CompactLearningInput>
 			<AttachFilesButton editorRef={editorRef} />
 			{/* The button follows the text (owner report 2026-10-03): while
@@ -213,7 +213,7 @@ export function Composer({
 						type="submit"
 						data-testid="next-problem-button"
 						aria-label="Next problem"
-						className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[10px] bg-green-600 px-4 font-ui text-xs font-medium uppercase tracking-wide text-white transition-colors hover:bg-green-500"
+						className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[12px] bg-green-600 px-4 font-ui text-[13.5px] font-semibold text-white transition-colors hover:bg-green-500"
 					>
 						Next problem
 						<ArrowRightIcon className="size-4" />
@@ -224,13 +224,13 @@ export function Composer({
 						aria-label={busy && !canSend ? "Stop" : "Send"}
 						disabled={!busy && !canSend}
 						className={cn(
-							"flex size-10 shrink-0 items-center justify-center rounded-[10px] transition-colors",
+							"lh-send flex size-10 shrink-0 items-center justify-center rounded-[12px] transition-[background-color,opacity] duration-150",
 							busy && !canSend
-								? "bg-secondary text-foreground hover:bg-accent"
-								: "bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40",
+								? "bg-accent text-foreground hover:bg-accent/80"
+								: "bg-primary text-primary-foreground hover:opacity-90 disabled:bg-accent disabled:text-muted-foreground disabled:opacity-100",
 						)}
 					>
-						{busy && !canSend ? <SquareIcon className="size-4" /> : <CornerDownLeftIcon className="size-5" />}
+						{busy && !canSend ? <SquareIcon className="size-3.5 fill-current" /> : <ArrowUpIcon className="size-5" strokeWidth={2.25} />}
 					</button>
 				)}
 		</form>

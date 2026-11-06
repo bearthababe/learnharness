@@ -70,7 +70,7 @@ import { LearnerExplanation } from "./learner-explanation";
 import type { LearnerExplanation as Explanation } from "@/src/core";
 
 export function ThinkingBlock({
-	label = "YOUR THINKING",
+	label = "Your thinking",
 	text,
 	content,
 	testId,
@@ -115,8 +115,8 @@ export function ThinkingBlock({
 				// chevron law); the rail narrows (14px gap), padding 4px, pr-4
 				// keeps the text off the band's right edge. In-card rows take
 				// NO band — the accent lift read too light; rail only.
-				"lh-card-enter my-2 w-full border-l-[calc(3ch-14px)] border-muted-foreground/30 py-1 pl-[14px] pr-4 font-ui text-xs",
-				inCard ? "" : "bg-card",
+				"lh-thinking-row lh-card-enter my-2 w-full font-ui text-xs",
+				inCard ? "rounded-xl border border-border/70 px-3.5 py-2" : "rounded-2xl bg-card px-4 py-2.5",
 			)}
 		>
 			<button
@@ -127,13 +127,13 @@ export function ThinkingBlock({
 					blurAfterPointerClick(e);
 				}}
 				aria-expanded={open}
-				className="flex w-full items-center gap-2 font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+				className="flex w-full items-center gap-1.5 text-[12.5px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
 			>
 				{label}
-				<ChevronDownIcon className={cn("size-4 shrink-0 transition-transform", open ? "rotate-180" : "rotate-0")} />
+				<ChevronDownIcon className={cn("size-3.5 shrink-0 transition-transform", open ? "rotate-180" : "rotate-0")} />
 			</button>
 			{open && (
-				<div className="lh-prose mt-1.5 block whitespace-pre-wrap text-[15px] italic text-foreground/50">{content ? <LearnerExplanation parts={content} /> : <PathText text={text} />}</div>
+				<div className="lh-prose mt-1 block whitespace-pre-wrap text-[15px] italic text-foreground/60">{content ? <LearnerExplanation parts={content} /> : <PathText text={text} />}</div>
 			)}
 		</div>
 	);

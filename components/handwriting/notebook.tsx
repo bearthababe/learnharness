@@ -58,6 +58,16 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const [colour, setColour] = useState<Stroke["colour"]>(HANDWRITING_PEN_COLOURS[0]);
 	const [penScale, setPenScale] = useState<Stroke["penScale"]>(HANDWRITING_PEN_SCALES[1]), [eraserWidth, setEraserWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]), [highlighterWidth, setHighlighterWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]);
 	const [dimPaper, setDimPaper] = useState(true), [toolsOpen, setToolsOpen] = useState(false);
+	// Finger drawing (whole-app redesign): Pencil-first stays the default —
+	// fingers scroll — but phones have no stylus, so a finger touch on the
+	// paper offers the opt-in, remembered on this device.
+	const [fingerDraw, setFingerDrawState] = useState(false), [fingerHint, setFingerHint] = useState(false);
+	const fingerDrawRef = useRef(false);
+	useEffect(() => { try { if (localStorage.getItem("lh:hw-finger-draw") === "1") { fingerDrawRef.current = true; setFingerDrawState(true); } } catch { /* storage blocked */ } }, []);
+	const setFingerDraw = (on: boolean) => {
+		fingerDrawRef.current = on; setFingerDrawState(on); setFingerHint(false);
+		try { localStorage.setItem("lh:hw-finger-draw", on ? "1" : "0"); } catch { /* storage blocked */ }
+	};
 	useMenuEscape(hidden ? null : pagesOpen ? "pages" : optionsOpen ? "options" : toolsOpen ? "tools" : null, () => {
 		const trigger = pagesOpen ? "Pages" : "Notebook options";
 		setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false);
@@ -194,7 +204,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	useEffect(() => {
 		const canvas = canvasRef.current!, controls = controlsRef.current!;
 		const claimCanvas = (event: TouchEvent) => {
-			if (event.cancelable && Array.from(event.touches).some(touch => (touch as Touch & { touchType?: string }).touchType === "stylus")) event.preventDefault();
+			if (event.cancelable && (fingerDrawRef.current || Array.from(event.touches).some(touch => (touch as Touch & { touchType?: string }).touchType === "stylus"))) event.preventDefault();
 		};
 		const claimTool = (event: TouchEvent) => {
 			if (event.cancelable && event.target instanceof Element && event.target.closest("button[data-notebook-pencil-control]") && Array.from(event.changedTouches).some(touch => (touch as Touch & { touchType?: string }).touchType === "stylus")) event.preventDefault();
@@ -209,7 +219,8 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		return { x: Math.max(0, Math.min(WIDTH, (event.clientX - rect.left) * WIDTH / rect.width)), y: Math.max(0, Math.min(HEIGHT, (event.clientY - rect.top) * HEIGHT / rect.height)), pressure: event.pointerType === "pen" && event.pressure > 0 ? event.pressure : 0.5 };
 	}
 	function start(event: ReactPointerEvent<HTMLCanvasElement>) {
-		if (event.pointerType === "touch" || event.button !== 0 || active.current || decoding.current) return;
+		if (event.pointerType === "touch" && !fingerDrawRef.current) { setFingerHint(true); return; }
+		if (event.button !== 0 || active.current || decoding.current) return;
 		const complete = recovery.current?.beginStroke(); if (!complete) return;
 		event.preventDefault(); if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 		const first = point(event.nativeEvent);
@@ -282,18 +293,19 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 			</div>}
 			{toolsOpen && <div id="handwriting-tools" className="hw-toolsPanel" role="group" aria-label="Notebook tools">
 				<div className="hw-toolsHeading"><span>Notebook tools</span><Button variant="ghost" size="icon" aria-label="Close notebook tools" {...handlers("Close tools", () => { setToolsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')?.focus(); })}><XIcon /></Button></div>
-				<p>Write with Pencil; scroll the paper with a finger. Working, Undo and Redo save automatically. A new edit clears Redo. Clear can be undone.</p>
+				<p>{fingerDraw ? "Write with Pencil or a finger. " : "Write with Pencil; scroll the paper with a finger (turn on Draw with finger in Page ⋯ to draw with it instead). "}Working, Undo and Redo save automatically. A new edit clears Redo. Clear can be undone.</p>
 				<button type="button" className="min-h-11 underline" {...handlers("Reload preview", () => location.reload())}>Reload preview</button>
 				<p>Reload keeps your notebook, Undo and Redo, attached snapshots and explanation saved at Attach.</p>
 			</div>}
 			{flattened && <p className="hw-notice">Flattened image · original marks cannot be erased</p>}
+			{fingerHint && !fingerDraw && <div className="hw-notice" role="status" data-testid="notebook-finger-hint">Fingers scroll the page. <button type="button" className="min-h-11 px-2 font-semibold underline" onClick={() => setFingerDraw(true)}>Draw with finger</button><button type="button" className="min-h-11 px-2 text-muted-foreground" aria-label="Dismiss" onClick={() => setFingerHint(false)}>Not now</button></div>}
 			<div className="hw-drawingWorkspace"><div className="hw-paperArea"><div ref={areaRef} className="hw-paperScroll" data-testid="notebook-paper-scroll">
 				<div className={`hw-paperStack ${dimPaper ? "hw-dimPaper" : ""}`} style={{ width: paperSize.width, height: paperSize.height }}>
 					<canvas ref={backgroundRef} width={WIDTH} height={HEIGHT} className="hw-figureBackground" aria-hidden="true" data-testid="notebook-background" />
-					<canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="hw-paper" style={{ cursor: tool === "eraser" ? "cell" : "crosshair" }} aria-label="Handwriting page — use Pencil or mouse; fingers do not draw" data-testid="notebook-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onContextMenu={e => e.preventDefault()} />
+					<canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="hw-paper" style={{ cursor: tool === "eraser" ? "cell" : "crosshair", touchAction: fingerDraw ? "none" : undefined }} aria-label={fingerDraw ? "Handwriting page — draw with Pencil, mouse or finger" : "Handwriting page — use Pencil or mouse; fingers do not draw"} data-testid="notebook-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onContextMenu={e => e.preventDefault()} />
 					<canvas ref={highlightRef} width={WIDTH} height={HEIGHT} className="hw-highlightOverlay" style={{ opacity: HIGHLIGHT_OPACITY }} aria-hidden="true" data-testid="notebook-highlight-overlay" />
 				</div>
-			</div><HandwritingToolbar tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} clear={clear} togglePaper={() => setDimPaper(v => !v)} /></div></div>
+			</div><HandwritingToolbar tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} clear={clear} togglePaper={() => setDimPaper(v => !v)} fingerDraw={fingerDraw} toggleFingerDraw={() => setFingerDraw(!fingerDrawRef.current)} /></div></div>
 			{saved.notice && <div className="hw-notice" role="status">{saved.notice}{saved.notice !== "Opening notebook…" && <button type="button" className="min-h-11 px-3 underline" {...handlers("Retry", () => { void recovery.current?.retry().then(() => refreshStatus.current()); })}>Retry</button>}</div>}
 			{attachmentNotice && <div className="hw-notice" role="status">{attachmentNotice.text}{attachmentNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
 		</aside>

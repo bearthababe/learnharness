@@ -14,6 +14,8 @@ type Props = {
 	disabled: boolean; handlers: ToolHandlers;
 	selectTool: (tool: Tool) => void; selectColour: (colour: string) => void; selectSize: (size: number) => void;
 	undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean; clear: () => void; togglePaper: () => void;
+	/** Finger drawing opt-in (phones have no stylus). Optional for callers. */
+	fingerDraw?: boolean; toggleFingerDraw?: () => void;
 };
 const TOOLS = [{ id: "pen", label: "Pen" }, { id: "highlighter", label: "Highlighter" }, { id: "eraser", label: "Eraser" }] as const;
 function ToolGlyph({ tool, colour, dim }: { tool: Tool; colour: string; dim: boolean }) {
@@ -39,6 +41,7 @@ export function HandwritingToolbar(p: Props) {
 			<button type="button" className="hw-pageTrigger" aria-label="Page options" aria-expanded={pageOpen} disabled={p.disabled} {...p.handlers("Page options", () => setPageOpen(v => !v))}><EllipsisIcon size={20} /><span>Page</span></button>
 			{pageOpen && <div className="hw-pageMenu" role="group" aria-label="Page actions">
 				<button type="button" aria-pressed={p.dimPaper} data-testid="notebook-paper-mode" {...p.handlers("Dim paper", () => { p.togglePaper(); setPageOpen(false); })}>{p.dimPaper ? "Dim paper" : "White paper"}<span>{p.dimPaper ? "On" : "Off"}</span></button>
+				{p.toggleFingerDraw && <button type="button" aria-pressed={!!p.fingerDraw} data-testid="notebook-finger-draw" {...p.handlers("Draw with finger", () => { p.toggleFingerDraw!(); setPageOpen(false); })}>Draw with finger<span>{p.fingerDraw ? "On" : "Off"}</span></button>}
 				<button type="button" aria-label="Clear" {...p.handlers("Clear", () => { p.clear(); setPageOpen(false); })}>Clear page<span>Undoable</span></button>
 			</div>}
 		</div>

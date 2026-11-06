@@ -151,7 +151,7 @@ export function SharedWritingPanel({ chatId, writing, busy }: {
 	const [uploadUrl, setUploadUrl] = useState("");
 	const [copied, setCopied] = useState(false);
 	useEffect(() => { setUploadUrl(`${location.origin}/api/chats/${encodeURIComponent(chatId)}/writing`); }, [chatId]);
-	return <section className="lh-shared-writing mb-2 rounded-lg border border-border bg-card px-3 py-2 text-xs" data-has-writing={writing.pending.length > 0 || !!writing.error} aria-label="Shared writing">
+	return <section className="lh-shared-writing mb-2 rounded-xl border border-border bg-card px-3 py-2 text-[13px]" data-has-writing={writing.pending.length > 0 || !!writing.error} aria-label="Shared writing">
 		{writing.pending.length > 0 && <>
 			<p className="font-medium">{writing.pending.length} shared {writing.pending.length === 1 ? "image" : "images"} · not sent</p>
 			<SharedWritingImages chatId={chatId} writing={writing.pending} />
@@ -159,14 +159,14 @@ export function SharedWritingPanel({ chatId, writing, busy }: {
 		</>}
 		{writing.error && <p role="alert" className="text-destructive">{writing.error} <button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Try again</button></p>}
 		<details className={`lh-concepts-setup ${writing.pending.length ? "mt-2" : ""}`}>
-			<summary className="cursor-pointer text-muted-foreground">Share from Concepts · setup & tools</summary>
+			<summary className="lh-concepts-summary cursor-pointer text-muted-foreground transition-colors hover:text-foreground">Share from Concepts</summary>
 			<ol className="my-2 list-decimal space-y-1 pl-5">
 				<li>Create a Shortcut named <strong>Send to LearnHarness</strong> and enable <strong>Show in Share Sheet</strong>, accepting Images.</li>
 				<li>Add <strong>Get Contents of URL</strong> using this session’s URL. Set <strong>Method: POST</strong>, <strong>Request Body: File</strong>, with <strong>Shortcut Input</strong> as the file.</li>
 				<li>Add <strong>Show Result</strong> with the HTTP response. A successful upload says “Writing received”.</li>
 				<li>In Concepts, export as <strong>PNG</strong>, choose Share, then the shortcut. Return here to review and send.</li>
 			</ol>
-			<label className="block">This session’s upload URL<input readOnly value={uploadUrl} onFocus={(e) => e.currentTarget.select()} className="my-1 w-full rounded border bg-background p-2" /></label>
+			<label className="block">This session’s upload URL<input readOnly value={uploadUrl} onFocus={(e) => e.currentTarget.select()} className="my-1 w-full rounded-lg border bg-background p-2" /></label>
 			<div className="flex flex-wrap gap-4">
 				<button type="button" className="underline" onClick={() => { void navigator.clipboard.writeText(uploadUrl).then(() => setCopied(true)).catch(() => setCopied(false)); }}>{copied ? "Copied" : "Copy upload URL"}</button>
 				<button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Check for writing</button>
