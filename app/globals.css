@@ -1077,6 +1077,6 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 
 /* The Concepts share (an iPad workflow): offered on touch tablets; with a
    mouse it appears only once shared writing is actually waiting. */
-@media (pointer: fine) {
+@media not all and (pointer: coarse) {
 	.lh-shared-writing[data-has-writing="false"] { display: none; }
 }
