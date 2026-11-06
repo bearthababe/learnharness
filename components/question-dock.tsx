@@ -551,7 +551,8 @@ function QuestionDockForm({
 				!!t &&
 				((t.tagName === "INPUT" && (t as HTMLInputElement).type !== "range") ||
 					t.tagName === "TEXTAREA" ||
-					t.isContentEditable);
+					t.isContentEditable ||
+					!!t.closest?.("[data-file-path-input]"));
 			// Alt/Cmd/Ctrl combos are never ours (Alt+arrows cycle sessions
 			// globally — they must not ALSO walk the question rows).
 			const modded = e.altKey || e.metaKey || e.ctrlKey;
@@ -580,6 +581,16 @@ function QuestionDockForm({
 			// Keys from a typing surface keep their meaning (arrows move
 			// the caret, space types).
 			if (typing || modded) return;
+			// Number keys pick a row directly (1 = first option, … the last
+			// number is "I don't know" / Other), like a click on it.
+			if (/^[1-9]$/.test(e.key)) {
+				const idx = Number(e.key) - 1;
+				if (idx >= rowCount) return;
+				e.preventDefault();
+				setKbdIdx(idx);
+				kbdAct(idx);
+				return;
+			}
 			if (e.key === "ArrowDown") {
 				e.preventDefault();
 				const next = Math.min((kbdIdx ?? -1) + 1, rowCount - 1);
@@ -719,7 +730,7 @@ function QuestionDockForm({
 											</span>
 										)}
 									</span>
-									<span>
+									<span className="min-w-0 flex-1">
 										<ToolContentResponse>{opt.label}</ToolContentResponse>
 										{kind !== "quiz" && opt.description && (
 											// Option subtext renders in Source Sans 3 (owner's mockup);
@@ -734,6 +745,8 @@ function QuestionDockForm({
 											</ToolContentResponse>
 										)}
 									</span>
+									{/* Its number key (shown with a keyboard): press it to pick. */}
+									{i < 9 && <kbd aria-hidden className="lh-option-key">{i + 1}</kbd>}
 								</button>
 							);
 						})}
@@ -764,7 +777,8 @@ function QuestionDockForm({
 								>
 									{sel.dontKnow && <span className="size-1.5 rounded-full bg-current" />}
 								</span>
-								<span>I don't know</span>
+								<span className="min-w-0 flex-1">I don't know</span>
+								{optionCount < 9 && <kbd aria-hidden className="lh-option-key">{optionCount + 1}</kbd>}
 							</button>
 						)}
 
@@ -1018,7 +1032,7 @@ function QuestionDockForm({
 						/>
 					)}</CompactLearningInput>
 					<div className="lh-question-submit flex items-center justify-between gap-2 p-1">
-						<span aria-hidden className="pl-1.5 text-[12px] text-(--lh-faint)">
+						<span aria-hidden data-keys-hint={!compactionRunning || undefined} className="lh-submit-hint pl-1.5 text-[12px] text-(--lh-faint)">
 								{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 						</span>
 						<Button

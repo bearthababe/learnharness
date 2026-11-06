@@ -189,7 +189,7 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 				    one p-1 row. Corner radii concentric: shell 18 − m-1.5 (6) =
 				    field 12 − p-1 (4) = button 8. */}
 				<div className="lh-question-submit flex items-center justify-between gap-2 p-1">
-					<span aria-hidden className="pl-1.5 text-[12px] text-(--lh-faint)">
+					<span aria-hidden data-keys-hint={!compactionRunning || undefined} className="lh-submit-hint pl-1.5 text-[12px] text-(--lh-faint)">
 						{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 					</span>
 					<Button

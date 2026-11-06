@@ -466,7 +466,7 @@ export function RenameRow({ chat, onCommit, onCancel }: { chat: ChatListItem; on
 /** The three-way kind filter (practice sessions, owner 2026-10-04):
  *  Teaching / All / Practice — a client-side filter over the same
  *  snapshot, persisted in localStorage, defaulting to All. */
-export type SessionKindFilter = "teach" | "all" | "practice";
+export type SessionKindFilter = "teach" | "all" | "practice" | "drill";
 const KIND_FILTER_KEY = "lh:session-kind-filter";
 
 function SessionsSidebar() {
@@ -490,7 +490,7 @@ function SessionsSidebar() {
 	const [kindFilter, setKindFilter] = useState<SessionKindFilter>("all");
 	useEffect(() => {
 		const stored = window.localStorage.getItem(KIND_FILTER_KEY);
-		if (stored === "teach" || stored === "all" || stored === "practice") setKindFilter(stored);
+		if (stored === "teach" || stored === "all" || stored === "practice" || stored === "drill") setKindFilter(stored);
 	}, []);
 	const setFilter = useCallback((f: SessionKindFilter) => {
 		setKindFilter(f);
@@ -519,7 +519,13 @@ function SessionsSidebar() {
 		const q = query.trim();
 		let list = chats;
 		if (list && kindFilter !== "all") {
-			list = list.filter((c) => (c.kind ?? "teach") === kindFilter);
+			// Practice and Drill are separate filters, as they are separate
+			// ways to start (a drill is a practice session in drill mode).
+			list = list.filter((c) => {
+				const kind = c.kind ?? "teach";
+				const drill = kind === "practice" && c.practiceMode === "drill";
+				return kindFilter === "drill" ? drill : kindFilter === "practice" ? kind === "practice" && !drill : kind === kindFilter;
+			});
 		}
 		if (!list) return list;
 		if (!q) return list;
@@ -921,7 +927,7 @@ function SessionsSidebar() {
 				    hatch on the right, mirroring the create-buttons above.
 				    Persisted client-side. */}
 				<div className="mx-3 flex items-center gap-0.5 rounded-[10px] bg-card p-0.5" data-testid="session-kind-filter" role="group" aria-label="Show sessions">
-					{(["teach", "practice", "all"] as const).map((f) => (
+					{(["teach", "practice", "drill", "all"] as const).map((f) => (
 						<button
 							key={f}
 							type="button"
@@ -935,7 +941,7 @@ function SessionsSidebar() {
 									: "text-muted-foreground hover:text-foreground",
 							)}
 						>
-							{f === "teach" ? "Teaching" : f === "all" ? "All" : "Practice"}
+							{f === "teach" ? "Teaching" : f === "all" ? "All" : f === "drill" ? "Drill" : "Practice"}
 						</button>
 					))}
 				</div>

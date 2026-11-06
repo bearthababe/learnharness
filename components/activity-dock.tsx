@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIcon, AlertCircleIcon, BotIcon, CheckCircle2Icon, ChevronDownIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
+import { ActivityIcon, AlertCircleIcon, BotIcon, CheckCircle2Icon, ChevronDownIcon, CircleSlashIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CallUsage, JobKind, JobRecord } from "@/src/core";
 import { isModelsRefusal, isProviderKeyRefusal, subscriptionLabel, subscriptionLabels } from "@/src/core";
@@ -291,6 +291,11 @@ type AbortState = "pending" | "failed";
 /** One finished or failed job in the Background agents history. */
 type RecentJob = { id: string; chatId: string; chatTitle: string; kind: JobKind; status: "done" | "error" | string; error: string | null; updatedAt: string };
 const RECENT_LABEL: Record<string, string> = { research: "Research", demo: "Demo", visual: "Figure", pdf: "PDF brief" };
+/** A job the learner stopped is cancelled, not failed (the server records it
+ *  as an error with this exact reason). */
+function recentCancelled(job: RecentJob): boolean {
+	return job.status === "error" && job.error === "Aborted by learner";
+}
 function recentAgo(iso: string): string {
 	const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
 	if (min < 1) return "just now";
@@ -407,13 +412,15 @@ export function ActivitySection({ feed: feedProp, onOpenChat }: { feed?: Activit
 								className="flex w-full items-start gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors hover:bg-accent/70">
 								{job.status === "done"
 									? <CheckCircle2Icon aria-label="Finished" className="mt-0.5 size-4 shrink-0 text-(--lh-success)" />
-									: <AlertCircleIcon aria-label="Failed" className="mt-0.5 size-4 shrink-0 text-destructive" />}
+									: recentCancelled(job)
+										? <CircleSlashIcon aria-label="Cancelled" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+										: <AlertCircleIcon aria-label="Failed" className="mt-0.5 size-4 shrink-0 text-destructive" />}
 								<span className="min-w-0 flex-1">
 									<span className="block truncate text-[13.5px] text-foreground/90">
-										{RECENT_LABEL[job.kind] ?? job.kind} · {job.status === "done" ? "finished" : "failed"}
+										{RECENT_LABEL[job.kind] ?? job.kind} · {job.status === "done" ? "finished" : recentCancelled(job) ? "cancelled" : "failed"}
 										<span className="text-muted-foreground"> · {recentAgo(job.updatedAt)}</span>
 									</span>
-									<span className="block truncate text-[12px] text-muted-foreground">{job.status !== "done" && job.error ? `${job.error} — ` : ""}{job.chatTitle}</span>
+									<span className="block truncate text-[12px] text-muted-foreground">{job.status !== "done" && job.error && !recentCancelled(job) ? `${job.error} — ` : ""}{job.chatTitle}</span>
 								</span>
 							</button>
 						</li>

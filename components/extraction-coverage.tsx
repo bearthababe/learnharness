@@ -313,8 +313,11 @@ export function CoverageRing({ chatId, refreshKey = 0 }: { chatId: string; refre
 					className="relative flex size-8 cursor-pointer items-center justify-center rounded-full p-1.5 transition-colors hover:bg-accent"
 				>
 					{/* The donut: track + fill. The whole ring pulses while a run
-					    is in flight (motion = the working-state signal). */}
-					<CoverageRingGlyph fill={fill} running={coverage.running} />
+					    is in flight (motion = the working-state signal). Touch
+					    tablets also name it ("Graph"), so the arc never reads as
+					    a loading spinner without a hover tooltip. */}
+					<span className="lh-coverage-glyph flex size-full items-center justify-center"><CoverageRingGlyph fill={fill} running={coverage.running} /></span>
+					<span className="lh-coverage-label hidden">Graph</span>
 				</button>
 			</Hint>
 			{open && (

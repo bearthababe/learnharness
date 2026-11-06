@@ -1579,7 +1579,10 @@ export function Chat({
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
 					<ConversationContent className="min-h-full gap-0 p-0">
-						<div data-session-find-root="" className={`${COLUMN} flex flex-1 flex-col gap-4 pt-4`}>
+						{/* data-task-pending: with a question or problem waiting in the
+						    dock, a tablet anchors a short transcript just above it, so
+						    the lead-in and the task read as one workspace. */}
+						<div data-session-find-root="" data-task-pending={!!(pending || activeProblem) || undefined} className={`${COLUMN} flex flex-1 flex-col gap-4 pt-4`}>
 							{messages.length === 0 && !busy && (
 								<ConversationEmptyState
 									title="New session"

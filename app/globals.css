@@ -1109,14 +1109,21 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
    at least 44px, answer choices 52px. Portrait at 820px is the reviewed
    size; landscape keeps working. */
 @media (min-width: 768px) and (pointer: coarse) {
-	/* Reading as a page: 19px prose, a 500px (about 70–75 characters) measure,
+	/* Reading as a page: 19px prose, a 560px (about 70 characters) measure,
 	   real margins; the composer card lines up with the text column. */
 	/* The learner's Appearance size is the base (written inline on <html>);
 	   a tablet reads it a step larger, at arm's length (16px → 19px). */
 	:root { --lh-prose-leading: 1.55; }
 	.lh-reading-column :is(.lh-prose, [data-streamdown="table"]) { font-size: calc(var(--lh-prose-size) * 1.1875); }
-	.lh-reading-column { max-width: 564px; padding-inline: 32px; }
-	.lh-dock-column { max-width: 580px; padding-inline: 24px; }
+	.lh-reading-column { max-width: 624px; padding-inline: 32px; }
+	.lh-dock-column { max-width: 640px; padding-inline: 24px; }
+	/* A question or problem waiting in the dock: a short transcript sits just
+	   above it, so the lead-in and the task read as one workspace (long
+	   transcripts scroll as usual). */
+	.lh-reading-column[data-task-pending] { justify-content: flex-end; }
+	/* Answer footers are touch-first: no keyboard hint, a full-size Submit. */
+	.lh-submit-hint[data-keys-hint] { visibility: hidden; }
+	.lh-question-submit :is([data-testid="question-send"], [data-testid="practice-send"]) { height: 44px; padding-inline: 20px; border-radius: 10px; font-size: 15px; }
 
 	/* The composer is one row: the field with its mic inside, attach, send.
 	   Dictation status lives in the field, not in a row of its own. */
@@ -1161,7 +1168,9 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 		gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 18px;
 		background: var(--popover); box-shadow: 0 16px 40px #0007;
 	}
-	.lh-dock-block[data-tablet-controls="open"] .lh-stats-bar { right: max(24px, calc((100% - 580px) / 2 + 24px)); }
+	/* In a lesson the card opens under the header's Model button. */
+	.lh-dock-block[data-tablet-controls="open"] .lh-stats-bar { position: fixed; top: 68px; bottom: auto; right: 16px; }
+	.lh-dock-block[data-tablet-controls="open"] [data-testid="stats-detail"] { top: calc(100% + 8px); bottom: auto; margin-bottom: 0; }
 
 	/* Portrait: the session list slides over the page (320px, the platform
 	   primary-column width), dimming it; choosing a session closes it. */
@@ -1197,15 +1206,44 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 @media (min-width: 768px) and (not (pointer: coarse)) {
 	.lh-reading-column :is(.lh-prose, [data-streamdown="table"]) { font-size: calc(var(--lh-prose-size) * 1.0625); }
 	.lh-reading-column { max-width: 608px; }
-	.lh-dock-column { max-width: 640px; }
+	/* The composer and question cards line up with the text (544px). */
+	.lh-dock-column { max-width: 576px; }
 	.lh-stats-bar { font-size: 13px; }
 }
 @media (max-width: 767px) {
-	/* The practice pause's green button reads "Next →" (the field keeps room). */
-	.lh-next-word { display: none; }
+	/* The practice pause: "Next problem" keeps its words on a full-width row
+	   of its own, so the field above keeps its room. */
+	:root form.lh-compact-row:has([data-testid="next-problem-button"]) { grid-template-columns: minmax(0, 1fr) auto; }
+	:root form.lh-compact-row > [data-testid="next-problem-button"] { grid-column: 1 / -1; order: 3; width: 100%; min-height: 44px; margin-bottom: 0; }
 }
+
+/* ── Phone + equation notebook (whole-app redesign, round 6) ─────────────
+   A live question beside the notebook keeps the question in view: the
+   empty reading field and the "Your thinking" caption step aside and the
+   confidence row tightens. The lesson's Plan / model / thinking / usage
+   stay one tap away behind a header Model button (a card above the dock). */
 @media (max-width: 767px) {
-	/* Settings tabs are one sideways-scrolling row on phones; the edge fade
-	   says more tabs follow. */
-	.lh-settings-nav { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); padding-right: 36px; }
+	.session-panes[data-notebook-open="true"] .lh-reading-input[data-reading-claim="false"]:has([data-file-path-input][data-empty="true"]) { display: none; }
+	.session-panes[data-notebook-open="true"] [data-testid="question-dock"] .lh-input-label { display: none; }
+	.session-panes[data-notebook-open="true"] .lh-question-confidence { padding-block: 4px; }
+	.session-panes[data-notebook-open="true"] .lh-session-controls { display: inline-flex; height: 44px; padding-inline: 10px; }
+	.session-panes[data-notebook-open="true"] .lh-dock-block[data-tablet-controls="open"] .lh-stats-bar {
+		display: flex; position: absolute; z-index: 30; bottom: calc(100% + 8px); left: 12px; right: 12px;
+		padding: 4px 6px; border: 1px solid var(--border); border-radius: 16px; background: var(--popover); box-shadow: 0 16px 40px #0007;
+	}
+	/* Focus is a quiet accent edge, not a heavy white outline. */
+	:root .lh-compact-field:focus-within { border-color: color-mix(in oklab, var(--lh-accent) 70%, transparent); }
+}
+
+@media (min-width: 768px) and (pointer: coarse) {
+	/* The coverage ring is named on touch tablets: [◔ Graph]. */
+	.lh-coverage-ring > button { width: auto; height: 40px; gap: 6px; padding-inline: 10px 12px; border-radius: 10px; }
+	.lh-coverage-ring .lh-coverage-glyph { width: 20px; height: 20px; }
+	.lh-coverage-ring .lh-coverage-label { display: inline; font-size: 14.5px; font-weight: 500; color: var(--muted-foreground); }
+}
+
+/* Answer rows show their number key on keyboard-and-mouse screens. */
+.lh-option-key { display: none; }
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	.lh-option-key { display: inline-flex; align-self: center; align-items: center; justify-content: center; flex-shrink: 0; min-width: 22px; height: 22px; padding-inline: 5px; border: 1px solid var(--border); border-radius: 6px; font: 500 12px/1 var(--font-ui); color: var(--lh-faint); }
 }

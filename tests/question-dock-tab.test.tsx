@@ -44,3 +44,30 @@ test("Tab enters the rows from nowhere, leaves them for the thinking field, then
 		assert.equal(key!.defaultPrevented, false, "Tab from Submit continues through the page");
 	} finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+test("number keys pick a row directly (outside typing fields)", async () => {
+	const input = { question: "Which change doubles the pressure?", options: [{ label: "Halve the area" }, { label: "Double the area" }, { label: "Double the force and the area" }], correctAnswer: "Halve the area", explanation: "Pressure is force over area." };
+	const host = document.createElement("div"); document.body.append(host);
+	const root = createRoot(host);
+	try {
+		await act(async () => root.render(<QuestionDock toolName="quiz" toolCallId="number_keys" input={input} expanded
+			dictationClaim={false} onExpand={() => {}} onSubmit={() => {}} />));
+		const press = (target: EventTarget, key: string) => {
+			const event = new window.Event("keydown", { bubbles: true, cancelable: true });
+			Object.assign(event, { key });
+			target.dispatchEvent(event);
+			return event;
+		};
+		let event: Event;
+		await act(async () => { event = press(document.body, "2"); });
+		assert.equal(event!.defaultPrevented, true);
+		assert.equal(host.querySelector('[data-kbdrow="1"]')?.getAttribute("aria-checked"), "true", "2 picks the second option");
+		await act(async () => { press(document.body, "4"); });
+		assert.equal(host.querySelector('[data-kbdrow="3"]')?.getAttribute("aria-pressed"), "true", "the last number is I don't know");
+		await act(async () => { event = press(document.body, "9"); });
+		assert.equal(event!.defaultPrevented, false, "a number past the rows is left alone");
+		const thinking = host.querySelector<HTMLElement>('[aria-label="Your thinking"]')!;
+		await act(async () => { event = press(thinking, "1"); });
+		assert.equal(event!.defaultPrevented, false, "typing a digit in a field types it");
+	} finally { await act(async () => root.unmount()); host.remove(); }
+});

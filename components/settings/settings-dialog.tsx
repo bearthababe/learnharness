@@ -309,7 +309,7 @@ export function SettingsDialogBody({
 				<nav
 					aria-label="Settings sections"
 					data-testid="settings-nav"
-					className="lh-settings-nav flex w-52 shrink-0 flex-col gap-0.5 border-r border-border p-3 max-md:w-full max-md:flex-row max-md:gap-1.5 max-md:overflow-x-auto max-md:overscroll-x-contain max-md:border-r-0 max-md:border-b max-md:px-4 max-md:py-2.5 max-md:[scrollbar-width:none]"
+					className="lh-settings-nav flex w-52 shrink-0 flex-col gap-0.5 border-r border-border p-3 max-md:w-full max-md:flex-row max-md:flex-wrap max-md:gap-1.5 max-md:border-r-0 max-md:border-b max-md:px-4 max-md:py-2.5"
 				>
 					{SECTIONS.map((s) => (
 						<button
@@ -317,16 +317,12 @@ export function SettingsDialogBody({
 							type="button"
 							data-testid={`settings-nav-${s.id}`}
 							aria-current={active === s.id}
-							className={`min-h-9 rounded-lg px-3 py-1.5 text-left font-ui text-[14.5px] font-medium transition-colors max-md:min-h-10 max-md:shrink-0 max-md:rounded-full max-md:px-4 max-md:text-center max-md:text-[14px] ${
+							className={`min-h-9 rounded-lg px-3 py-1.5 text-left font-ui text-[14.5px] font-medium transition-colors max-md:min-h-10 max-md:rounded-full max-md:px-3.5 max-md:text-center max-md:text-[14px] ${
 								active === s.id
 									? "bg-accent text-foreground"
 									: "text-muted-foreground hover:bg-accent/70 hover:text-foreground"
 							}`}
-							onClick={(event) => {
-								setActive(s.id);
-								// Phones: the tab row scrolls sideways; keep the chosen tab in view.
-								event.currentTarget.scrollIntoView?.({ block: "nearest", inline: "nearest" });
-							}}
+							onClick={() => setActive(s.id)}
 						>
 							{s.label}
 						</button>

@@ -195,7 +195,8 @@ export function DraftShell({
 											? "Pick nodes from your knowledge graph, describe what you want to practice, or bring your own problem."
 											: "The teacher will open by probing what you already know."}</p>
 									</div>
-									<div className="pointer-events-auto mt-2"><ModeSwitch mode={mode} onChange={onModeChange} testid="draft-mode-switch" itemTestid="draft-mode" /></div>
+									{/* Tablets carry the switch in the composer's row (as on home). */}
+									{!tablet && <div className="pointer-events-auto mt-2"><ModeSwitch mode={mode} onChange={onModeChange} testid="draft-mode-switch" itemTestid="draft-mode" /></div>}
 								</> : undefined}</ConversationEmptyState>
 							</ConversationContent>
 						</Conversation>
@@ -207,6 +208,7 @@ export function DraftShell({
 										<NodePickerControl count={picks.length} onOpen={onOpenPicker} onClear={onClearPicks} />
 									)}
 									setup={setupCta}
+									leading={tablet && onModeChange ? <ModeSwitch mode={mode} onChange={onModeChange} testid="draft-mode-switch" itemTestid="draft-mode" /> : undefined}
 									trailing={tablet && <TabletModelButton open={controlsOpen} onToggle={() => setControlsOpen((value) => !value)} />}
 								/>
 								{startError && <p role="alert" className="pointer-events-auto mb-2 text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
