@@ -249,7 +249,7 @@ test("capture recovery preserves the actionable missing-key error after startup 
 	await f.mount();
 	await act(async () => f.dictation.toggle());
 	assert.equal(f.dictation.phase, "idle");
-	assert.match(f.dictation.error!, /Dictation needs a Deepgram key/);
+	assert.match(f.dictation.error!, /add a Deepgram speech key/);
 	assert.deepEqual(reasons, ["interrupted"]);
 	assert.equal(f.state.active, false);
 });

@@ -126,7 +126,24 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 
 /** A raw provider failure ("file: 401: {json}") reads as a sentence with a
  *  next step; anything else is shown as the server worded it. Pure. */
+const SLOT_NAMES: Record<string, string> = { cheap: "Helpers", strong: "Main tutor", vision: "Images & PDFs" };
 export function friendlyImportError(error: string): string {
+	// A configuration code rides on its own line ("code — detail — …"): say
+	// what to do instead of showing the code.
+	const [first = "", codeLine] = error.split("\n");
+	if (codeLine) {
+		const [code, ...details] = codeLine.split(" — ");
+		const said = first.replace(/[.!?]?\s*$/, "");
+		if (code === "models_not_configured") {
+			const slots = (details[0] ?? "").split(", ").filter(Boolean).map((slot) => SLOT_NAMES[slot] ?? slot);
+			return `${said}. Choose ${slots.length ? `models for ${slots.join(", ")}` : "your models"} in Settings → Models, then import again.`;
+		}
+		if (code === "provider_key_missing") {
+			const provider = details.find((d) => !d.includes(",") && !/^[A-Z0-9_]+$/.test(d) && !SLOT_NAMES[d]);
+			return `${said}. Add ${provider ? `your ${provider} key` : "the provider key"} in Settings → Providers, then import again.`;
+		}
+		return first;
+	}
 	const m = /^(.+?): (\d{3}): (\{[\s\S]*\})$/.exec(error);
 	if (!m) return error;
 	let detail = "";
@@ -144,7 +161,7 @@ export function NotesImportErrors({ errors, onOpenSettings, onDismiss }: { error
 	if (errors.length === 0) return null;
 	const lines = errors.map((error, i) => <p key={i} role="alert" className="lh-import-error max-w-full whitespace-pre-wrap break-words text-xs text-red-400">{friendlyImportError(error)}</p>);
 	if (!onOpenSettings && !onDismiss) return <>{lines}</>;
-	const auth = errors.some((error) => /: 40[13]: /.test(error));
+	const auth = errors.some((error) => /: 40[13]: |\n(models_not_configured|provider_key_missing)/.test(error));
 	return (
 		<div className="lh-import-error-panel" data-testid="import-error-panel">
 			<div className="lh-import-error-title">{errors.length === 1 ? "Import didn't finish" : `${errors.length} imports didn't finish`}</div>

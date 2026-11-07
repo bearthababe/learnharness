@@ -45,6 +45,7 @@ import {
 	type SharedWriting,
 } from "@/src/core";
 import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-rail";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
 import type { NotebookSession } from "./notebook-session";
 import { useNotebookQuestionDraft } from "./notebook-question-draft";
 
@@ -420,6 +421,13 @@ function QuestionDockForm({
 			? text.trim().length > 0 || explanationHasContent(owned.draft?.parts ?? []) || hasSharedWriting
 			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0);
 
+	// Phones take the check in two steps (owner ruling 3): pick an answer,
+	// then confidence and "why" appear beneath it. Anything already given
+	// (a draft, attached writing) keeps them open.
+	// Phones show a short "why" prompt so it never truncates.
+	const phone = usePhoneLayout();
+	const followUpOpen = qd.mode === "text" || sel.dontKnow || sel.otherSelected || sel.selected.size > 0 || thinking.trim().length > 0 || hasSharedWriting || !!transfer?.hasAttempt();
+
 	const submit = () => {
 		if (sending.current || compactionRunning || notebook?.getSnapshot().sendBlocked || transfer?.blocked() || (!canSubmit && !isDictationActive())) return;
 		sending.current = true;
@@ -620,7 +628,7 @@ function QuestionDockForm({
 	}, [kbdIdx]);
 
 	return (
-		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-notebook-question={toolCallId} data-notebook-channel={owner.channel}>
+		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-notebook-question={toolCallId} data-notebook-channel={owner.channel} data-follow-up={followUpOpen ? "open" : "waiting"}>
 			{/* Question area — scrolls internally if very tall; the bottom row stays put.
 			    Capped by the measured column (--dock-max-h; the old fixed 55dvh cut
 			    long questions short — owner round, 2026-10-05). */}
@@ -899,8 +907,9 @@ function QuestionDockForm({
 			    send. Select modes get "Your thinking" (Enter makes a newline — it
 			    is for dumping, soon dictated; the button submits); text mode
 			    keeps "Your answer" with Enter-to-submit. */}
+			{!followUpOpen && <p className="lh-question-pick-hint" data-testid="question-pick-hint">Pick an answer — then say how sure you are, and why.</p>}
 			<form
-				className="border-t border-border/60 p-1.5"
+				className="lh-question-form border-t border-border/60 p-1.5"
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit();
@@ -968,7 +977,7 @@ function QuestionDockForm({
 									submit();
 								}
 							}}
-							placeholder="Why this answer? Whatever comes to mind."
+							placeholder={phone ? "Why this answer?" : "Why this answer? Whatever comes to mind."}
 							className={cn(
 								"field-sizing-content lh-input max-h-48 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground/70",
 								// Phase-scaled prominence: teaching invites depth,

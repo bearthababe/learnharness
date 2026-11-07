@@ -406,7 +406,7 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 						const Icon = KIND_ICON[job.kind] ?? BotIcon;
 						return (
 							<li key={job.id}>
-								<Link href={`/chat/${job.chatId}`} className="lh-activity-recent" data-testid="activity-recent" data-status={job.status}>
+								<Link href={`/chat/${job.chatId}`} className="lh-activity-recent" data-testid="activity-recent" data-status={job.status} title={`${KIND_LABEL[job.kind] ?? "Sub-agent"} · ${job.title}${job.status === "error" && job.error ? `\n${job.error}` : ""}`}>
 									<Icon className="size-4 shrink-0" aria-hidden />
 									<span className="min-w-0 flex-1">
 										<span className="lh-activity-recent-title">{KIND_LABEL[job.kind] ?? "Sub-agent"} · {job.title}</span>

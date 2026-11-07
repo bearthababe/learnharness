@@ -689,9 +689,18 @@ function SessionsSidebar() {
 	// drafts die with it, no orphan bubbles), and announce the graph
 	// revision so the graph view refetches (deletion is the one writer
 	// the status poll can't see — no run ever transitions some→none).
+	// A short confirmation after a delete ("Deleted “…”"), then it fades.
+	const [deletedNotice, setDeletedNotice] = useState<string | null>(null);
+	useEffect(() => {
+		if (!deletedNotice) return;
+		const timer = window.setTimeout(() => setDeletedNotice(null), 4000);
+		return () => window.clearTimeout(timer);
+	}, [deletedNotice]);
 	const onDeleted = useCallback(
 		(id: string, _mode: ChatDeleteMode, graphRevision: number) => {
 			forgetHandwritingOnDevice(id);
+			const title = chatsRef.current?.find((c) => c.id === id)?.title;
+			setDeletedNotice(title ? `Deleted “${title}”` : "Session deleted");
 			setDeleting(null);
 			setChats((prev) => (prev ? prev.filter((c) => c.id !== id) : prev));
 			if (pathname === `/chat/${id}`) router.push("/");
@@ -920,6 +929,7 @@ function SessionsSidebar() {
 					))}
 				</div>
 
+				{deletedNotice && <p role="status" data-testid="session-deleted-notice" className="lh-deleted-notice">{deletedNotice}</p>}
 				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 pt-1">
 					{shown === null ? (
 						<div className="px-2 py-4 text-sm text-muted-foreground">Loading…</div>

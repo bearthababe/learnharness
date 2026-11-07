@@ -80,6 +80,7 @@ import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
 import { SessionMessageNavigation } from "@/components/session-navigation";
 import { friendlyProviderError } from "@/components/friendly-error";
+import { clearUnsent, deliveredIn, friendlyNetworkError, readUnsent, stashUnsent } from "@/components/unsent-message";
 import { useDeviceFeature } from "@/components/device-features";
 import { PracticeDock } from "@/components/practice-dock";
 import { ActiveProblemContext, ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
@@ -196,6 +197,15 @@ export function parseProviderKeyRefusal(message: string | undefined): boolean {
  * from an earlier, already-durable text send over today's unsent composer.
  * Retire that fallback synchronously, never when the async Retry settles:
  * a later ordinary send may own a new recovery draft by then. */
+/** Why a message is back in the composer, in plain words. */
+export function unsentNoticeText(kind: "failed" | "restored", error: string | null): string {
+	if (kind === "restored") return "Your last message wasn't sent. It's back in the box — send it when you're ready.";
+	if (error && (parseModelsRefusal(error) || parseProviderKeyRefusal(error))) return "Not sent yet — a model needs setting up first. Your message is back in the box.";
+	if (typeof navigator !== "undefined" && navigator.onLine === false) return "Not sent — you're offline. Your message is back in the box.";
+	if (!error || friendlyNetworkError(error)) return "Not sent — LearnHarness couldn't be reached. Your message is back in the box.";
+	return `Not sent — ${friendlyProviderError(error) ?? "something went wrong"}. Your message is back in the box.`;
+}
+
 export function retryFailedResponse(
 	send: (input: ChatInput) => void,
 	submittedDraft: { current: string | null },
@@ -284,7 +294,7 @@ export function Chat({
 	// (core/view.ts projectView); sends are ONE explicit input event each
 	// ({chatId, input} — the stash indirection died with the SDK), and the
 	// turn stream is the VERBATIM AgentEvent passthrough the server emits.
-	const { messages, nativeMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, resumeStream, setReattachSettled } =
+	const { messages, nativeMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, discardUnsentText, resumeStream, setReattachSettled } =
 		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight });
 	const sharedWriting = useSharedWriting(chatId, nativeMessages);
 	const hasSharedWriting = sharedWriting.pending.length > 0;
@@ -324,7 +334,13 @@ export function Chat({
 			holdAutoFollow: () => scrollContextRef.current?.stopScroll(),
 			before: answeredCardCount(scroller()),
 			pending: () => pendingRef.current?.toolCallId === toolCallId,
-			release: () => { void scrollContextRef.current?.scrollToBottom(); },
+			// Instantly, so the returned question's dock is never left folded
+			// behind a slow animation.
+			release: () => {
+				const view = scroller();
+				if (view) view.scrollTop = view.scrollHeight;
+				void scrollContextRef.current?.scrollToBottom("instant");
+			},
 		});
 	}, []);
 	// The stick-to-bottom scroller re-pins when its CONTENT resizes, not when
@@ -681,6 +697,11 @@ export function Chat({
 	const phases = useMemo(() => phaseTimeline(messages), [messages]);
 
 	const [composerDraftRevision, setComposerDraftRevision] = useState(0);
+	/** A message that was not sent and is back in the composer: "failed"
+	 *  (this send) or "restored" (found after a reload). */
+	const [unsentNotice, setUnsentNotice] = useState<"failed" | "restored" | null>(null);
+	const unsentNoticeRef = useRef(unsentNotice);
+	unsentNoticeRef.current = unsentNotice;
 	/* The composer draft ref is synchronous, so sends and dictation flushes
 	 * read the latest text without a parent render per input event. Explicit
 	 * resets still bump a revision so the local field can sync. */
@@ -706,9 +727,31 @@ export function Chat({
 	}, [notebook.session, rememberLocalDraft]);
 	const recordComposerText = useCallback((v: string) => {
 		textRef.current = v;
+		// Emptying a restored message (its note showing) lets it go; the
+		// composer's own reset during a send never does.
+		if (!v.trim() && unsentNoticeRef.current) { clearUnsent(chatId); setUnsentNotice(null); }
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
 		else rememberLocalDraft(v);
-	}, [notebook.session, rememberLocalDraft]);
+	}, [chatId, notebook.session, rememberLocalDraft]);
+	const unsentRestored = useRef(false);
+	useEffect(() => {
+		if (unsentRestored.current) return;
+		const restore = () => {
+			if (unsentRestored.current) return;
+			unsentRestored.current = true;
+			const unsent = readUnsent(chatId);
+			if (!unsent) return;
+			if (deliveredIn(initialMessages, unsent)) { clearUnsent(chatId); return; }
+			// The draft store may already have put the same words back; say so.
+			if (textRef.current.trim() === unsent.text.trim()) { setUnsentNotice("restored"); return; }
+			if (textRef.current.trim()) return; // newer typing wins; the copy waits
+			applyText(unsent.text);
+			setUnsentNotice("restored");
+		};
+		if (notebook.view) { restore(); return; }
+		const timer = window.setTimeout(restore, 1500);
+		return () => window.clearTimeout(timer);
+	}, [notebook.view]);
 	const localDraftRestored = useRef(false);
 	useEffect(() => {
 		const view = notebook.view;
@@ -939,6 +982,8 @@ export function Chat({
 	// recovers from it. Later compaction requires new input instead.
 	const retryable = (status === "ready" || status === "error") && !busy && !compacting && endsInFailedTurn(nativeMessages);
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
+	const lastErrorRef = useRef<string | null>(null);
+	if (error) lastErrorRef.current = error.message;
 	const sendAllowed = !notebook.sendBlocked && !pending && !activeProblem && !compacting && !((hasSharedWriting || handwritingSubmission.hasAttempt()) && busy);
 
 	/* THE PRACTICE PAUSE (owner round 16): between problems — practice
@@ -1388,6 +1433,14 @@ export function Chat({
 	});
 
 	const finishingSend = useRef(false);
+	// A lost acknowledgement that did land: once the record shows the
+	// message, the copy (and an unchanged restored draft) is retired.
+	useEffect(() => {
+		const unsent = readUnsent(chatId);
+		if (!unsent || !deliveredIn(nativeMessages, unsent)) return;
+		clearUnsent(chatId);
+		if (unsentNotice && textRef.current.trim() === unsent.text.trim()) { applyText(""); setUnsentNotice(null); }
+	}, [chatId, nativeMessages, unsentNotice, applyText]);
 	const onSend = () => {
 		if (finishingSend.current || pending || compacting || !notebook.view || notebook.session.getSnapshot().sendBlocked || handwritingSubmission.blocked()) return;
 		const reviewed = handwritingSubmission.reviewed(), recovery = handwritingSubmission.recoveryAction();
@@ -1426,8 +1479,21 @@ export function Chat({
 			return;
 		}
 		draftRef.current = t; // the refusal flow's preserve-and-replay seam
+		// Kept on this device until the server acknowledges it: a failed send
+		// or a reload never loses the learner's words.
+		stashUnsent(chatId, t);
+		setUnsentNotice(null);
 		applyText("");
-		void send({ type: "text", text: t });
+		void send({ type: "text", text: t }).then((accepted) => {
+			if (accepted) { if (readUnsent(chatId)?.text === t) clearUnsent(chatId); return; }
+			// Not acknowledged (offline, aborted, refused): the text goes back in
+			// the box and its bubble leaves the transcript; the learner re-sends.
+			if (draftRef.current !== t) return; // a refusal flow already took it back
+			draftRef.current = null;
+			discardUnsentText(t);
+			if (!textRef.current.trim()) applyText(t);
+			setUnsentNotice("failed");
+		});
 	};
 
 	/* STEER VS SEND (owner arc 2026-10-03): a send while a turn runs steers
@@ -1905,9 +1971,18 @@ export function Chat({
 								</span>
 							)}
 							{openingError && <p role="alert" className="text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
-							{error && (
+							{unsentNotice && (
+								<div role="status" data-testid="unsent-notice" className="lh-unsent-notice">
+									<span>{unsentNoticeText(unsentNotice, lastErrorRef.current)}</span>
+									<span className="lh-unsent-actions">
+										<Button variant="outline" size="xs" data-testid="unsent-send-again" onClick={() => { clearError(); doSend(); }}>Send again</Button>
+										<Button variant="ghost" size="xs" data-testid="unsent-dismiss" onClick={() => setUnsentNotice(null)}>Dismiss</Button>
+									</span>
+								</div>
+							)}
+							{error && !unsentNotice && (
 								<div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
-									<span>{friendlyProviderError(error.message) ?? `Something went wrong: ${error.message}`}</span>
+									<span>{friendlyProviderError(error.message) ?? friendlyNetworkError(error.message) ?? `Something went wrong: ${error.message}`}</span>
 									{retryable && (
 										<Button variant="outline" size="xs" data-testid="retry-failed-turn" onClick={retryFailedTurn}>
 											Retry
@@ -2042,7 +2117,21 @@ export function Chat({
 						// actually leaves. An offline preflight keeps the draft visible.
 						const images = reviewed ?? sharedWriting.pending, answer = reading && !fields?.submission ? { ...output, readingThinking: reading } : output;
 						if ((images.length || handwritingSubmission.hasAttempt()) && !output.dismissed) return handwritingSubmission.submit({ type: "answer", toolCallId, answer, ...fields, writingIds: images.map(image => image.id) }, images, `question:${toolCallId}`, { readingThinking: readingThinkingRef.current });
-						if (!handwritingSubmission.blocked()) return submitAnswer(pending.tool, toolCallId, answer, pending.key, fields);
+						if (!handwritingSubmission.blocked()) {
+							const result = await submitAnswer(pending.tool, toolCallId, answer, pending.key, fields);
+							// Keyboard users carry on typing: focus returns to the composer
+							// once it is back (never on touch, where it would raise a keyboard).
+							if (pendingRef.current?.toolCallId !== toolCallId && window.matchMedia?.("(pointer: fine)").matches) {
+								let tries = 0;
+								const focus = () => {
+									const editor = composerInputRef.current;
+									if (editor?.isConnected && editor.getClientRects().length) editor.focus({ preventScroll: true });
+									else if (++tries < 12) setTimeout(focus, 150);
+								};
+								setTimeout(focus, 200);
+							}
+							return result;
+						}
 					}}
 				/>
 				</Conversation>

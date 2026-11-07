@@ -52,7 +52,10 @@ describe("GraphChromeRow — the empty-graph ruling (owner, 2026-09-25)", () => 
 	it("empty graph uses the same session-first lead and secondary material guidance as home", () => {
 		const html = renderToStaticMarkup(createElement(ServerEventsProvider, { children: createElement(GraphView, {}) }));
 		assert.ok(html.includes("<p>Start a session to begin learning.</p>"));
-		assert.ok(html.includes("Attach your material with the paperclip or drag and drop.</p>"));
+		// A browser (and the server render) points to Extract files: the
+		// paperclip attaches local files only in the desktop app.
+		assert.ok(html.includes("Bring in your own notes with Extract files… above.</p>"));
+		assert.ok(!html.includes("paperclip"));
 		assert.ok(!html.includes("import notes to build"));
 	});
 

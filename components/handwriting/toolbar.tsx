@@ -17,7 +17,7 @@ type Props = {
 	/** Palette layout: the compact wheel (default) or the vertical arc. */
 	variant?: "wheel" | "arc";
 };
-const TOOLS = [{ id: "pen", label: "Pen" }, { id: "highlighter", label: "Highlighter" }, { id: "eraser", label: "Eraser" }] as const;
+const TOOLS = [{ id: "pen", label: "Pen", short: "Pen" }, { id: "highlighter", label: "Highlighter", short: "Highlight" }, { id: "eraser", label: "Eraser", short: "Eraser" }] as const;
 function ToolGlyph({ tool, colour, dim }: { tool: Tool; colour: string; dim: boolean }) {
 	const tip: CSSProperties = { fill: colour, filter: dim ? "var(--lh-dim-paper-filter)" : undefined };
 	return <svg viewBox="0 0 36 44" className="hw-toolGlyph" aria-hidden="true">
@@ -49,13 +49,30 @@ export function HandwritingToolbar(p: Props) {
 	const [coach, setCoach] = useState(false);
 	useEffect(() => {
 		if (variant !== "wheel") return;
-		let seen = true;
-		try { seen = window.localStorage.getItem(COACH_KEY) === "1"; window.localStorage.setItem(COACH_KEY, "1"); } catch { /* show once per view */ seen = false; }
-		if (seen) return;
-		setCoach(true);
-		const timer = window.setTimeout(() => setCoach(false), 6000);
-		return () => window.clearTimeout(timer);
+		let seen = false;
+		try { seen = window.localStorage.getItem(COACH_KEY) === "1"; } catch { /* show it */ }
+		if (!seen) setCoach(true);
 	}, [variant]);
+	// While shown: it leaves after a few seconds or at the first stroke, and
+	// is then remembered as seen on this device.
+	useEffect(() => {
+		if (!coach) return;
+		const hide = () => { setCoach(false); try { window.localStorage.setItem(COACH_KEY, "1"); } catch { /* this view only */ } };
+		const timer = window.setTimeout(hide, 6000);
+		const firstStroke = (event: PointerEvent) => { if (event.target instanceof Element && event.target.closest('[data-testid="notebook-canvas"], .hw-paperScroll')) hide(); };
+		document.addEventListener("pointerdown", firstStroke, true);
+		return () => { window.clearTimeout(timer); document.removeEventListener("pointerdown", firstStroke, true); };
+	}, [coach]);
+	// The page menu closes on Escape or any press outside it (Pages,
+	// Expand, Attach, the paper).
+	useEffect(() => {
+		if (!pageOpen) return;
+		const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setPageOpen(false); } };
+		const onDown = (event: PointerEvent) => { if (!(event.target instanceof Element && event.target.closest(".hw-pageActions"))) setPageOpen(false); };
+		document.addEventListener("keydown", onKey, true);
+		document.addEventListener("pointerdown", onDown, true);
+		return () => { document.removeEventListener("keydown", onKey, true); document.removeEventListener("pointerdown", onDown, true); };
+	}, [pageOpen]);
 	// Escape closes the tool settings (one layer at a time).
 	useEffect(() => {
 		if (!expanded) return;
@@ -81,12 +98,12 @@ export function HandwritingToolbar(p: Props) {
 		<div className="hw-arc" data-folded={isFolded || undefined} data-coach={coach || undefined}>
 			<svg className="hw-arcTrack" viewBox="0 0 112 260" aria-hidden="true"><path d="M98 22C-7 58-7 193 98 235" /></svg>
 			{TOOLS.map(tool => <button key={tool.id} type="button" className={`hw-toolButton hw-arc_${tool.id}`} aria-label={tool.label} title={tool.label} aria-pressed={p.tool === tool.id} disabled={p.disabled}
-				{...p.handlers(tool.label, () => { setCoach(false); p.selectTool(tool.id); setExpanded(variant === "wheel" ? false : p.tool !== tool.id || !expanded); })}>
+				{...p.handlers(tool.label, () => { if (coach) { setCoach(false); try { window.localStorage.setItem(COACH_KEY, "1"); } catch { /* this view only */ } } p.selectTool(tool.id); setExpanded(variant === "wheel" ? false : p.tool !== tool.id || !expanded); })}>
 				<ToolGlyph tool={tool.id} colour={tool.id === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.colour} dim={p.dimPaper} /><span className="hw-toolName">{tool.label}</span>
 			</button>)}
 			{variant === "wheel" && <button type="button" className="hw-wheelHub" title={hubTitle} aria-label={isFolded ? "Show writing tools" : "Tool settings"} aria-expanded={isFolded ? false : expanded} disabled={p.disabled} {...p.handlers(isFolded ? "Show writing tools" : "Tool settings", () => { if (isFolded) fold(false); else setExpanded(v => !v); })}>
 				<span className="hw-wheelSwatch" style={{ backgroundColor: p.tool === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.tool === "eraser" ? "transparent" : p.colour, filter: p.dimPaper ? "var(--lh-dim-paper-filter)" : undefined }} data-tool={p.tool} />
-				<span className="hw-wheelSize">{label}</span>
+				<span className="hw-wheelSize">{TOOLS.find(t => t.id === p.tool)!.short}</span>
 			</button>}
 			{variant === "wheel" && coach && !folded && <div className="hw-wheelCoach" role="note" data-testid="wheel-coach">
 				<strong>Writing tools</strong>
@@ -95,6 +112,8 @@ export function HandwritingToolbar(p: Props) {
 			<div className="hw-arcUndo"><button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled || !p.canUndo} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} /></button><button type="button" className="hw-iconButton" aria-label="Redo" title="Redo" disabled={p.disabled || !p.canRedo} {...p.handlers("Redo", p.redo)}><Redo2Icon size={19} /></button></div>
 			{expanded && <div className="hw-arcInspector">
 				<div className="hw-inspectorTitle"><span>{label}</span><button type="button" aria-label="Close tool settings" {...p.handlers("Close tool settings", () => setExpanded(false))}><XIcon size={16} /></button></div>
+				{variant === "wheel" && <div role="group" aria-label="Tool" className="hw-toolNames" data-testid="wheel-tool-names">{TOOLS.map(tool => <button key={tool.id} type="button" aria-pressed={p.tool === tool.id} disabled={p.disabled}
+					{...p.handlers(`${tool.label} tool`, () => p.selectTool(tool.id))}>{tool.label}</button>)}</div>}
 				<div role="group" aria-label={`${label} size`} className="hw-sizes">{p.sizes.map((item, index) => <button key={`${p.tool}-${item.name}`} type="button" className="hw-sizeChoice" aria-label={`${item.name} ${p.tool}`} aria-pressed={p.size === item.value} disabled={p.disabled}
 					{...p.handlers(`${item.name} ${p.tool}`, () => { p.selectSize(item.value); setExpanded(false); })}>
 					<span className="hw-sizeMark" style={{ width: p.tool === "pen" ? 20 : 7 + index * 5, height: p.tool === "pen" ? 1.5 + index * 2 : 7 + index * 5 }} /><span>{item.name}</span>

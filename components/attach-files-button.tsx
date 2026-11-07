@@ -42,7 +42,7 @@ export function attachmentPopupPlacement(button: { left: number; right: number }
 const noSubscribe = () => () => {};
 /** The bridge is fixed for the window's life; the server render is always
  *  the browser case, so hydration never mismatches. */
-function useDesktopPaths(): boolean {
+export function useDesktopPaths(): boolean {
 	return useSyncExternalStore(noSubscribe, () => Boolean(window.lh?.getPathForFile), () => false);
 }
 

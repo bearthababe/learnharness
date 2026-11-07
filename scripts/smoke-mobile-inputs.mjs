@@ -431,7 +431,7 @@ try {
 	await page.click(mic);
 	await page.waitForSelector('.lh-compact-error');
 	await page.waitForSelector('[data-testid="composer"] [aria-label="Start dictation"]');
-	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /Dictation needs a Deepgram key.*Settings/);
+	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /add a Deepgram speech key in Settings.*Settings/);
 	await page.click('.lh-compact-error button');
 	await page.waitForSelector('[data-testid="settings-dialog"]');
 	await page.waitForSelector('[data-testid="key-deepgram_api_key-input"]');
@@ -1334,8 +1334,12 @@ try {
 	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-attempt-review"]'));
 	await page.goto(`${origin}/chat/mobile_selection`, { waitUntil: "networkidle2" });
 	await page.click('[data-testid="reading-thinking-field"] [data-testid="teach-check-reveal"]');
-	await page.waitForSelector('[data-testid="thinking-field"] [data-file-path-input]', { visible: true });
+	// Phones take a check in two steps (owner ruling 3): pick first, then
+	// confidence and "why" open beneath the choices.
+	await page.waitForSelector('[data-testid="question-pick-hint"]', { visible: true });
+	assert.equal(await page.$('[data-testid="thinking-field"] [data-file-path-input]').then(e => e?.isVisible()), false, "Before a choice, the why field waits");
 	await page.locator('[role="radio"]').filter(button => button.textContent.includes("Halve the area")).click();
+	await page.waitForSelector('[data-testid="thinking-field"] [data-file-path-input]', { visible: true });
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "The force stays the same.");
 	assert.ok(await page.$('[data-testid="confidence-slider"]'), "Selection questions retain confidence");
 	await page.click('[data-testid="plan-chip"]'); // phones open Plan from the header (the composer row no longer repeats it)

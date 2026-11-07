@@ -980,4 +980,23 @@ export class SessionModel {
 	clearError(): void {
 		this.setError(null);
 	}
+
+	/** A text send that was not acknowledged goes back to the composer: drop
+	 *  its local optimistic bubble (never a canonical record message), and
+	 *  the failure banner with it. Returns whether a bubble was removed. */
+	discardUnsentText(text: string): boolean {
+		const index = this.tail.findLastIndex((message) =>
+			message.role === "user" && typeof message.id === "string" && message.id.startsWith("c_") &&
+			userMessageText(message) === text);
+		if (index < 0) return false;
+		this.mutate(() => { this.tail = this.tail.filter((_, i) => i !== index); });
+		return true;
+	}
+}
+
+function userMessageText(message: LhMessage): string {
+	const content = (message as { content?: unknown }).content;
+	if (typeof content === "string") return content;
+	if (Array.isArray(content)) return content.map((part) => (part && typeof part === "object" && (part as { type?: string }).type === "text" ? String((part as { text?: unknown }).text ?? "") : "")).join("");
+	return "";
 }

@@ -64,6 +64,8 @@
  */
 
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDesktopPaths } from "@/components/attach-files-button";
+import { sourceFileLabel } from "@/src/core";
 import { NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
@@ -963,6 +965,7 @@ export function GraphView({
 	onPracticeSelectionChange?: (nodes: { id: string; name: string; statement: string }[]) => void;
 	onChainSelectClose?: () => void;
 }) {
+	const desktop = useDesktopPaths();
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const cardRef = useRef<HTMLDivElement | null>(null);
@@ -1084,6 +1087,8 @@ export function GraphView({
 	// The chain table overlay (chains-overlay plan, 2026-09-29) —
 	// component-local: a browsing surface, not graph state.
 	const [chainsOpen, setChainsOpen] = useState(false);
+	// "Show ideas" after an import opens the list filtered to that file.
+	const [ideasQuery, setIdeasQuery] = useState<string | undefined>();
 	useEffect(() => {
 		if (chainsOpen) return;
 		const onFind = () => searchInputRef.current?.focus();
@@ -1521,8 +1526,9 @@ export function GraphView({
 						<div className="lh-graph-empty-title">Your knowledge graph</div>
 						<div className="lh-graph-empty-body max-w-sm">
 							<p>Start a session to begin learning.</p>
-							<p className="lh-copy-pointer mt-1.5">Attach your material with the paperclip or drag and drop.</p>
-							<p className="lh-copy-touch mt-1.5">Bring in your own notes with Extract files… above.</p>
+							{desktop
+								? <p className="mt-1.5">Attach your material with the paperclip or drag and drop.</p>
+								: <p className="mt-1.5">Bring in your own notes with Extract files… above.</p>}
 						</div>
 					</div>
 				</div>
@@ -1640,7 +1646,7 @@ export function GraphView({
 			</div>
 
 			<NotesImportErrors errors={notesImport.errors} onOpenSettings={() => openSettings("keys")} onDismiss={dismissNotesImportResults} />
-			<NotesImportDone done={notesImport.done} importing={importing} onShowIdeas={() => { dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
+			<NotesImportDone done={notesImport.done} importing={importing} onShowIdeas={() => { setIdeasQuery(notesImport.done.length ? sourceFileLabel(notesImport.done[0]!.filePath) : undefined); dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
 			<NotesImportNotices notices={notesImport.notices} />
 			{/* Top-right tail (owner, 2026-09-20): the pipeline cost number —
 			    just a number, hover-highlighted, dropdown breakdown — then
@@ -1728,6 +1734,7 @@ export function GraphView({
 			    covers. (DeleteNodeDialog is body-portaled — DOM-irrelevant
 			    here.) */}
 			<ChainTableOverlay
+				initialQuery={ideasQuery}
 				open={chainsOpen}
 				nodes={snapshot?.propositions ?? []}
 				chains={snapshot?.chains ?? []}
@@ -1735,6 +1742,7 @@ export function GraphView({
 				fileSources={snapshot?.fileSources ?? {}}
 				onClose={() => {
 					setChainsOpen(false);
+					setIdeasQuery(undefined);
 					onChainSelectClose?.();
 				}}
 				selectMode={chainSelectOpen}

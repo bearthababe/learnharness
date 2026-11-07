@@ -703,7 +703,10 @@ export function ChainTableOverlay({
 	selectMode,
 	controlledSelection,
 	onSelectionChange,
+	initialQuery,
 }: {
+	/** Opens filtered to this (e.g. the file just imported). */
+	initialQuery?: string;
 	open: boolean;
 	nodes: GraphNode[];
 	chains: GraphChain[];
@@ -715,6 +718,7 @@ export function ChainTableOverlay({
 	onSelectionChange?: (next: ReadonlySet<string>) => void;
 }) {
 	const [query, setQuery] = useState("");
+	useEffect(() => { if (open && initialQuery) setQuery(initialQuery); }, [open, initialQuery]);
 	const [sort, setSort] = useState<ChainSort>({ col: "name", dir: 1 });
 	const [internalSelection, setInternalSelection] = useState<ReadonlySet<string>>(() => new Set());
 	const [expandedClusters, setExpandedClusters] = useState<ReadonlySet<string>>(() => new Set());
