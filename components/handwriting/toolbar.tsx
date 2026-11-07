@@ -51,6 +51,14 @@ function useWheelLegend(active: boolean) {
 			if (seen < LEGEND_SHOWS) { window.localStorage.setItem(LEGEND_KEY, String(seen + 1)); setShown(true); }
 		} catch { setShown(true); }
 	}, [active]);
+	// Never in the way of the pen: the first stroke (or any press outside
+	// the wheel) puts the legend away for this visit.
+	useEffect(() => {
+		if (!shown) return;
+		const away = (event: PointerEvent) => { if (!(event.target instanceof Element && event.target.closest(".hw-wheel"))) setShown(false); };
+		document.addEventListener("pointerdown", away, true);
+		return () => document.removeEventListener("pointerdown", away, true);
+	}, [shown]);
 	const dismiss = () => { setShown(false); try { window.localStorage.setItem(LEGEND_KEY, "99"); } catch { /* storage blocked */ } };
 	return [shown, dismiss] as const;
 }

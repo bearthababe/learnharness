@@ -130,4 +130,9 @@
 .hw-wheelLegendInk { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: var(--foreground); box-shadow: 0 0 0 3px var(--card), 0 0 0 4px var(--tool-edge); margin-inline: 1px; }
 .hw-wheelLegendHint { font-size: 13px; line-height: 1.35; color: var(--muted-foreground); }
 .hw-wheelLegendDone { margin-top: 10px; min-height: 40px; width: 100%; border-radius: 10px; background: var(--accent); font-weight: 600; }
+/* The legend never takes a stroke: ink passes under it (only "Got it" is
+   pressable), and a page narrower than a tablet's leaves it out. */
+.hw-wheel > .hw-wheelLegend { pointer-events: none; }
+.hw-wheel > .hw-wheelLegend .hw-wheelLegendDone { pointer-events: auto; }
+@media (max-width: 767px) { .hw-wheel > .hw-wheelLegend { display: none; } }
 @media (prefers-reduced-motion: reduce) { .hw-wheelTool { transition: none; } }
