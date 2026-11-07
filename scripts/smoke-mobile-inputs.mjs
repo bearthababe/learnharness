@@ -1186,7 +1186,10 @@ try {
 	await fill(answer, "Answer draft.");
 	// Round 13 (owner P7): on phones an open question owns the screen, so the
 	// lesson is not scrolled behind it; "Back to lesson" folds it to its bar.
-	assert.equal(await page.$eval('.lh-dock-overlay', e => e.hasAttribute("data-question-open") && getComputedStyle(e).position === "fixed"), true, "The open question owns the phone screen");
+	assert.equal(await page.$eval('.lh-dock-overlay', e => {
+		const area = e.offsetParent?.getBoundingClientRect(), r = e.getBoundingClientRect();
+		return e.hasAttribute("data-question-open") && getComputedStyle(e).overflowY === "auto" && !!area && Math.abs(r.top - area.top) < 1 && Math.abs(r.height - area.height) < 1;
+	}), true, "The open question owns the lesson area below the page bar");
 	await page.click('[data-testid="question-back"]');
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { visible: true });
 	assert.ok(await page.$eval(answer, e => e.checkVisibility()), "A revealed question keeps its answer input visible when Back to lesson folds the question");
