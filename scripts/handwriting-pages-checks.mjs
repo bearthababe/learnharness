@@ -26,7 +26,7 @@ export async function checkHandwritingPages({ page, origin, draw, ready, dir }) 
 	await page.reload({ waitUntil: "networkidle2" }); await ready();
 	await page.click('[aria-label="Undo"]'); assert.equal((await journal()).events[(await journal()).head].kind, "undo");
 	await page.click('[aria-label="Redo"]');
-	await page.click('[aria-label="Notebook options"]'); await page.click('[data-testid="notebook-options"] button:first-child'); await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]').dataset.pageId !== "page_initial"); await ready();
+	await page.click('[aria-label="More page actions"]'); await page.click('[data-testid="notebook-options"] button:first-child'); await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]').dataset.pageId !== "page_initial"); await ready();
 	const copy = await journal(); assert.notEqual(copy.pageId, "page_initial");
 	await page.click('[aria-label="Pages"]'); await page.waitForSelector('[data-testid="notebook-pages"] img');
 	assert.equal((await page.$$('[data-testid="notebook-pages"] [data-page-id]')).length, 2);
@@ -62,7 +62,7 @@ export async function checkHandwritingPages({ page, origin, draw, ready, dir }) 
 	await page.waitForFunction(old => document.querySelector('[data-testid="handwriting-notebook"]').dataset.pageId !== old, {}, "page_initial"); await ready();
 	const exactCopy = await journal(); assert.equal(exactCopy.head, JSON.parse(snapshot).journal.head); assert.deepEqual(exactCopy.events, JSON.parse(snapshot).journal.events);
 	const b = await attach(); assert.notEqual(b.notebook.pageId, a.notebook.pageId);
-	await page.click('[aria-label="Notebook options"]'); await page.click('[data-testid="notebook-options"] button:first-child');
+	await page.click('[aria-label="More page actions"]'); await page.click('[data-testid="notebook-options"] button:first-child');
 	await page.waitForFunction(old => document.querySelector('[data-testid="handwriting-notebook"]').dataset.pageId !== old, {}, b.notebook.pageId); await ready();
 	const c = await attach(); await draw(750, 500); const d = await attach();
 	assert.deepEqual(new Set((await (await fetch(`${origin}/api/chats/handwriting_pages/writing`)).json()).pending.map(w => w.id)), new Set([a.id, b.id, d.id]));
@@ -84,7 +84,7 @@ export async function checkHandwritingPages({ page, origin, draw, ready, dir }) 
 	// must be no server create, page activation or accepted extra UUID.
 	const beforeAbort = await journal(), countBeforeAbort = (await (await fetch(`${origin}/api/chats/handwriting_pages/handwriting/pages`)).json()).pages.length;
 	await page.evaluate(() => { window.pagesPut = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function(...args) { const result = window.pagesPut.apply(this, args); if (this.transaction.db.name === "lh-handwriting-working" && this.name === "sessions") this.transaction.abort(); return result; }; });
-	await page.click('[aria-label="Notebook options"]'); await page.click('[data-testid="notebook-options"] button:first-child');
+	await page.click('[aria-label="More page actions"]'); await page.click('[data-testid="notebook-options"] button:first-child');
 	await page.waitForFunction(() => document.querySelector('.hw-notice')?.textContent.includes("It is still open"));
 	assert.equal((await journal()).pageId, beforeAbort.pageId);
 	assert.equal((await (await fetch(`${origin}/api/chats/handwriting_pages/handwriting/pages`)).json()).pages.length, countBeforeAbort);
@@ -156,7 +156,7 @@ export async function checkHandwritingImports({ page, origin, draw, ready }) {
 	await page.evaluate(() => { const fetch = window.fetch.bind(window); window.pageFetch = fetch; window.fetch = async (url, init) => { if (init?.method === "POST" && String(url).endsWith("/writing")) { window.heldPageUpload = true; await new Promise(resolve => { window.releasePageUpload = resolve; }); } return fetch(url, init); }; });
 	const uploaded = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/writing") && response.status() === 201);
 	await page.click('[data-testid="notebook-attach"]'); await page.waitForFunction(() => window.heldPageUpload);
-	await page.click('[aria-label="Notebook options"]'); await page.click('[data-testid="notebook-options"] button:first-child');
+	await page.click('[aria-label="More page actions"]'); await page.click('[data-testid="notebook-options"] button:first-child');
 	await page.waitForFunction(id => document.querySelector('[data-testid="handwriting-notebook"]').dataset.pageId !== id, {}, externalId); await ready();
 	const selectedAfterFreeze = await page.$eval('[data-testid="handwriting-notebook"]', e => e.dataset.pageId);
 	await page.evaluate(() => { window.releasePageUpload(); window.fetch = window.pageFetch; });
@@ -167,7 +167,7 @@ export async function checkHandwritingImports({ page, origin, draw, ready }) {
 	console.log("PASS frozen Attach identity and source survive page switch without late page selection or retargeting");
 
 	await page.evaluate(() => { const drawImage = CanvasRenderingContext2D.prototype.drawImage; window.restorePagePainter = () => { CanvasRenderingContext2D.prototype.drawImage = drawImage; }; CanvasRenderingContext2D.prototype.drawImage = function(...args) { if (this.canvas.dataset.testid === "notebook-background") throw new Error("Injected postcommit paint failure"); return drawImage.apply(this, args); }; });
-	await page.click('[aria-label="Notebook options"]'); await page.click('[data-testid="notebook-options"] button:first-child');
+	await page.click('[aria-label="More page actions"]'); await page.click('[data-testid="notebook-options"] button:first-child');
 	await page.waitForFunction(() => [...document.querySelectorAll('.hw-notice')].some(e => e.textContent.includes("Couldn’t")));
 	assert.ok(await page.$$eval('.hw-notice', elements => elements.some(e => e.textContent.includes("Page saved on this device. Couldn’t finish opening it."))), "A failed postcommit paint must report the accepted page honestly");
 	const acceptedAfterPaintFailure = await page.$eval('[data-testid="handwriting-notebook"]', e => e.dataset.pageId);

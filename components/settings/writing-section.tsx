@@ -40,16 +40,18 @@ export function WritingSection() {
 	return (
 		<div className="flex flex-col gap-1">
 			{FEATURES.map((feature) => <WritingFeatureRow key={feature.id} {...feature} device={device} />)}
-			<SettingsRow testid="writing-notebook-layout" label="Equation notebook layout" dimmed={!notebookOn}
+			{/* Rows that only apply where their surface is on (round-10 review:
+			    greyed-out rows read as broken). */}
+			{device === "phone" && notebookOn && <SettingsRow testid="writing-notebook-layout" label="Equation notebook layout"
 				hint="On a phone: beside the lesson, so both stay in view, or full screen, one at a time (the notebook's expand button switches between them).">
 				<Choice label="Equation notebook layout" value={notebookLayout} onChange={setNotebookLayoutPref}
 					options={[["split", "Beside the lesson", "notebook-layout-split"], ["full", "Full screen", "notebook-layout-full"]]} />
-			</SettingsRow>
-			<SettingsRow testid="writing-canvas-palette" label="Drawing tools" dimmed={!canvasOn}
+			</SettingsRow>}
+			{canvasOn && <SettingsRow testid="writing-canvas-palette" label="Drawing tools"
 				hint="How the pen, highlighter and eraser sit on the page: a compact wheel in the upper-right corner, or the taller arc along the right edge.">
 				<Choice label="Drawing tools" value={palette} onChange={setCanvasPalette}
 					options={[["wheel", "Wheel", "canvas-palette-wheel"], ["arc", "Arc", "canvas-palette-arc"]]} />
-			</SettingsRow>
+			</SettingsRow>}
 			<p className="mt-3 text-[13px] leading-snug text-muted-foreground">
 				Turning a surface off only hides it. Your saved pages and working stay in each session and come back when you turn it on again.
 			</p>

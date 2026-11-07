@@ -69,7 +69,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		try { localStorage.setItem("lh:hw-finger-draw", on ? "1" : "0"); } catch { /* storage blocked */ }
 	};
 	useMenuEscape(hidden ? null : pagesOpen ? "pages" : optionsOpen ? "options" : toolsOpen ? "tools" : null, () => {
-		const trigger = pagesOpen ? "Pages" : "Notebook options";
+		const trigger = pagesOpen ? "Pages" : "More page actions";
 		setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false);
 		controlsRef.current?.querySelector<HTMLButtonElement>(`[aria-label="${trigger}"]`)?.focus();
 	});
@@ -284,7 +284,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? "Back to question" : "Full page"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? "Back to question" : "Full page"}</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close page" {...handlers("Close page", () => { if (expanded) prepareViewChange(false); onClose(); })}><XIcon aria-hidden />Close</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" {...handlers("Chat", onClose)} data-testid="open-notebook-chat">Chat</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Notebook options" aria-expanded={optionsOpen} {...handlers("Notebook options", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="More page actions" title="More page actions" aria-expanded={optionsOpen} {...handlers("More page actions", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
 			</header>
 			{optionsOpen && <div className="hw-toolsPanel" data-testid="notebook-options">
 				<Button variant="ghost" disabled={!saved.ready || submission?.preparing} {...handlers("Duplicate", () => { setOptionsOpen(false); void recovery.current?.duplicateWorking(); })}>Duplicate</Button><hr />
@@ -295,7 +295,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				{pages.map((page, index) => <PageRow key={page.id} page={page} index={index} pages={pages} current={pageId} revision={page.id === pageId ? recovery.current?.getSnapshot().working.head : undefined} model={recovery.current!} disabled={!saved.ready || !!submission?.preparing} choose={() => { void recovery.current?.switchPage(page.id).then(opened => { if (opened) { setPagesOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Pages"]')?.focus(); } }); }} />)}
 			</div>}
 			{toolsOpen && <div id="handwriting-tools" className="hw-toolsPanel" role="group" aria-label="Notebook tools">
-				<div className="hw-toolsHeading"><span>Notebook tools</span><Button variant="ghost" size="icon" aria-label="Close notebook tools" {...handlers("Close tools", () => { setToolsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')?.focus(); })}><XIcon /></Button></div>
+				<div className="hw-toolsHeading"><span>Notebook tools</span><Button variant="ghost" size="icon" aria-label="Close notebook tools" {...handlers("Close tools", () => { setToolsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="More page actions"]')?.focus(); })}><XIcon /></Button></div>
 				<p>{fingerDraw ? "Write with Pencil or a finger. " : "Write with Pencil; scroll the paper with a finger (turn on Draw with finger in Page ⋯ to draw with it instead). "}Working, Undo and Redo save automatically. A new edit clears Redo. Clear can be undone.</p>
 				<button type="button" className="min-h-11 underline" {...handlers("Reload preview", () => location.reload())}>Reload preview</button>
 				<p>Reload keeps your notebook, Undo and Redo, attached snapshots and explanation saved at Attach.</p>

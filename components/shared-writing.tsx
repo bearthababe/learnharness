@@ -106,7 +106,7 @@ export function SharedWritingImages({ chatId, writing, small = false, onRemove }
 			{/* Theme presentation only; the private endpoint retains original PNG bytes. */}
 			{/* eslint-disable-next-line @next/next/no-img-element */}
 			<img src={sharedWritingImageUrl(chatId, item.id)} alt={`Handwritten working ${index + 1}`} className={small ? "h-11 max-w-24 object-contain" : "h-24 max-w-48 object-contain"} />
-		</button>{actions && <button type="button" className="min-h-11 px-3" aria-label="Snapshot actions" aria-expanded={menu === item.id} disabled={busy} onClick={() => setMenu(value => value === item.id ? null : item.id)}>⋯</button>}
+		</button>{actions && <button type="button" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-3 text-[18px] leading-none hover:bg-accent" aria-label="Snapshot actions" aria-expanded={menu === item.id} disabled={busy} onClick={() => setMenu(value => value === item.id ? null : item.id)}>⋯</button>}
 		</div>)}
 	</div>{menu && <SnapshotMenu duplicate={() => void run(writing.find(item => item.id === menu)!, true)} open={() => void run(writing.find(item => item.id === menu)!, false)} remove={onRemove ? () => { const id = menu; setMenu(null); onRemove(id); } : undefined} close={() => { const id = menu; setMenu(null); document.querySelector<HTMLButtonElement>(`[data-writing-id="${id}"] [aria-label="Snapshot actions"]`)?.focus(); }} />}
 	{notice && <p role="status" data-testid="snapshot-action-status">{notice}</p>}
@@ -207,10 +207,10 @@ export function SharedWritingPanel({ chatId, writing, busy, compact = false, con
 	useEffect(() => { setUploadUrl(`${location.origin}/api/chats/${encodeURIComponent(chatId)}/writing`); }, [chatId]);
 	return <section className="lh-shared-writing mb-2 rounded-xl border border-border bg-card px-3 py-2 text-[13px]" data-has-writing={writing.pending.length > 0 || writing.leftOut.length > 0 || !!writing.error} aria-label="Shared writing">
 		{writing.pending.length > 0 && (compact ? <div className="flex min-w-0 items-center gap-3">
-			<p className="shrink-0 font-medium">{writing.pending.length} shared {writing.pending.length === 1 ? "image" : "images"} · not sent</p>
+			<p className="shrink-0 font-medium">{pendingLabel(writing.pending)}</p>
 			<SharedWritingImages chatId={chatId} writing={writing.pending} small onRemove={writing.leaveOut} />
 		</div> : <>
-			<p className="font-medium">{writing.pending.length} shared {writing.pending.length === 1 ? "image" : "images"} · not sent</p>
+			<p className="font-medium">{pendingLabel(writing.pending)}</p>
 			<SharedWritingImages chatId={chatId} writing={writing.pending} onRemove={writing.leaveOut} />
 			<p className="text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Review the images, add an explanation below if needed, then send your answer."}</p>
 		</>)}
@@ -236,4 +236,13 @@ export function SharedWritingPanel({ chatId, writing, busy, compact = false, con
 			<p className="mt-2 text-muted-foreground">Reload keeps uploaded images, the saved conversation and your unsent message.</p>
 		</details>}
 	</section>;
+}
+
+/** "1 page attached · not sent" for pages from the drawing canvas; shared
+ *  images (from Concepts) keep their own word. Pure. */
+function pendingLabel(pending: readonly SharedWriting[]): string {
+	const n = pending.length;
+	return pending.every((item) => item.notebook)
+		? `${n} ${n === 1 ? "page" : "pages"} attached · not sent`
+		: `${n} shared ${n === 1 ? "image" : "images"} · not sent`;
 }

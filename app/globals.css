@@ -402,8 +402,7 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	   the title keeps its width, and the row under the composer has room to
 	   name the model. A finger-sized target around a compact label. */
 	.lh-session-header .lh-header-plan { display: none; }
-	.lh-session-header .lh-phone-plan-sub { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding-inline: 2px; font-size: 14px; font-weight: 500; color: color-mix(in oklab, var(--foreground) 80%, transparent); }
-	.lh-session-header .lh-phone-plan-sub::after { content: ""; position: absolute; inset: -10px -8px; }
+	.lh-session-header .lh-phone-plan-sub { display: inline-flex; align-items: center; gap: 4px; height: 44px; margin-block: -10px; padding-inline: 6px; margin-inline: -4px; border-radius: 10px; font-size: 14px; font-weight: 500; color: color-mix(in oklab, var(--foreground) 80%, transparent); }
 
 	/* Pencil plus its word (a lone pencil reads as "rename"), packed
 	   tight so the session title keeps as much width as possible. */
@@ -1418,3 +1417,16 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 /* Phones: Background agents' history stays below the session filters. */
 @media (max-width: 767px) { .lh-recent-popover { max-height: min(22rem, 38dvh); } }
 @media (pointer: coarse) { .lh-choice button { min-height: 44px; padding-inline: 14px; font-size: 14.5px; } }
+
+/* Phone notebook split: the input in use is the bright one — the other
+   dims (still a tap away), so it is clear where words will go. */
+@media (max-width: 767px) {
+	.session-panes[data-notebook-open="true"] :is([data-testid="composer"], .notebook-input-row) { transition: opacity 160ms ease; }
+	.session-panes[data-notebook-open="true"]:has(#notebook-instruction:focus) [data-testid="composer"] { opacity: .5; }
+	.session-panes[data-notebook-open="true"]:has([data-testid="composer"] :focus) .notebook-input-row { opacity: .5; }
+}
+/* Laptops and tablets: the small labels around the lesson read at 13px+. */
+@media (min-width: 768px) {
+	.lh-submit-hint { font-size: 13px; }
+	.lh-phase-chip { font-size: 13.5px; }
+}

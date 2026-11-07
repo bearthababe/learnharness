@@ -115,8 +115,10 @@ export function HandwritingDeliveryNotice({ bridge, activeTarget, pendingWriting
 	 *  from the answer drops its "attached · not sent" line. */
 	pendingPages?: ReadonlySet<string> }) {
 	const model = bridge.model, attempt = model?.attempt;
-	const stillAttached = (pageId: string) => pendingWriting !== 0 && (!pendingPages || pendingPages.has(pageId));
-	const entries = bridge.attachment()?.noticeEntries().filter(({ kind, pageId }) => (kind !== "attached" && kind !== "updated") || stillAttached(pageId)) ?? [];
+	// "Attached · not sent" is the shared-writing panel's line (round 10:
+	// two lines said the same thing); this notice keeps the other states.
+	void pendingWriting; void pendingPages;
+	const entries = bridge.attachment()?.noticeEntries().filter(({ kind }) => kind !== "attached" && kind !== "updated") ?? [];
 	return <div className="text-xs" data-testid="handwriting-delivery">
 		{entries.map(({ pageId, text, refresh }) => <p role="status" key={pageId}>{text}{refresh && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.refreshReview().catch(() => {})}>Refresh review</button>}</p>)}
 		{model?.notice && <p role="status">{model.notice}</p>}

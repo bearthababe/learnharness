@@ -34,6 +34,7 @@ import { MalformedQuestion } from "@/components/malformed-question";
 import { artifactRenderers } from "@/components/artifacts";
 import { WorkSteps, workSegments } from "@/components/work-steps";
 import { COMPOSER_SUGGEST_EVENT } from "@/components/activity-dock";
+import { confirmedUserCount, forgetUnsent, plainSendError, readUnsent, recordKept, rememberUnsent, withoutUnconfirmedSend } from "@/components/unsent-send";
 import { SubagentSteerCard } from "@/components/artifacts/steer-card";
 import { ChatSessionComposer } from "@/components/composer";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
@@ -723,6 +724,9 @@ export function Chat({
 	 *  Auto-continuations (probe answers) never set it — their refusal
 	 *  opens recovery with no replay. */
 	const draftRef = useRef<string | null>(null);
+	const [unsent, setUnsent] = useState<{ reason: string | null } | null>(null);
+	const nativeMessagesRef = useRef(nativeMessages);
+	nativeMessagesRef.current = nativeMessages;
 	const openingDraftRef = useRef<string | null>(null);
 	const [openingError, setOpeningError] = useState(false);
 	const openingMountedRef = useRef(false);
@@ -801,6 +805,37 @@ export function Chat({
 		// connected, repair belongs to the ordinary current-session picker;
 		// otherwise setup derives its exclusive provider/loading stage.
 		const keyRefused = parseProviderKeyRefusal(error.message);
+		// A plain send that failed (round 10: offline, the text was lost):
+		// ask the saved record whether it kept the message. Kept → adopt the
+		// record, never offer it twice. Not kept (or unreachable) → drop the
+		// unconfirmed bubble and give the text back to the composer, which
+		// keeps it across a reload; "Send again" is the learner's choice.
+		const heldSend = readUnsent(chatId);
+		if (!missing && !keyRefused && draftRef.current !== null && heldSend?.text === draftRef.current) {
+			const text = draftRef.current;
+			const reason = plainSendError(error.message);
+			let cancelled = false;
+			void (async () => {
+				let record = null as { messages?: LhMessage[]; turnError?: string } | null;
+				try {
+					const res = await fetch(`/api/chats/${encodeURIComponent(chatId)}`, { cache: "no-store" });
+					if (res.ok) record = (await res.json().catch(() => null)) as typeof record;
+				} catch { /* unreachable: the device copy decides */ }
+				if (cancelled) return;
+				draftRef.current = null;
+				if (Array.isArray(record?.messages) && recordKept(record.messages, heldSend)) {
+					forgetUnsent(chatId);
+					setMessages(record.messages, record.turnError);
+					return; // delivered: any turn error keeps its own banner
+				}
+				setMessages(Array.isArray(record?.messages) ? record.messages : withoutUnconfirmedSend(nativeMessagesRef.current, text), record?.turnError);
+				const typed = textRef.current.trim();
+				applyText(typed && typed !== text.trim() ? `${text}\n\n${typed}` : text);
+				setUnsent({ reason });
+				clearError();
+			})();
+			return () => { cancelled = true; };
+		}
 		if (!missing && !keyRefused) return; // a real error keeps the honest banner
 		// ORDER MATTERS: clearError() flips this effect's own dep (`error`)
 		// and would cancel the in-flight work below — so the banner dismiss,
@@ -828,6 +863,35 @@ export function Chat({
 		// (setMessages/clearError are stable per useChat instance — the
 		//  dep pair [error, chatId] is what the flow actually keys on.)
 	}, [error, chatId]);
+	// On load and on reconnect: a send this device still holds is checked
+	// against the saved record — kept → the held copy goes (and a draft
+	// that is only that text clears, so it is never sent twice); not kept
+	// and the composer empty → the text comes back with the "Not sent" note.
+	const sendStatusRef = useRef(status);
+	sendStatusRef.current = status;
+	useEffect(() => {
+		const check = async () => {
+			const held = readUnsent(chatId);
+			if (!held || sendStatusRef.current === "submitted" || sendStatusRef.current === "streaming") return;
+			try {
+				const res = await fetch(`/api/chats/${encodeURIComponent(chatId)}`, { cache: "no-store" });
+				if (!res.ok) return;
+				const record = (await res.json().catch(() => null)) as { messages?: LhMessage[] } | null;
+				if (!Array.isArray(record?.messages) || readUnsent(chatId)?.text !== held.text) return;
+				if (recordKept(record.messages, held)) {
+					forgetUnsent(chatId);
+					setUnsent(null);
+					if (textRef.current.trim() === held.text.trim()) applyText("");
+				} else {
+					if (!textRef.current.trim()) applyText(held.text);
+					setUnsent({ reason: null });
+				}
+			} catch { /* still offline: try again on reconnect */ }
+		};
+		void check();
+		window.addEventListener("online", check);
+		return () => window.removeEventListener("online", check);
+	}, [chatId]);
 	// Voice dictation (STT wave, 2026-09-17): finals append at the end of
 	// the current text (the page owns the separator, dictate-flush style);
 	// interims ghost in the stats bar's middle slot next to the meter.
@@ -1401,8 +1465,10 @@ export function Chat({
 			return;
 		}
 		draftRef.current = t; // the refusal flow's preserve-and-replay seam
+		rememberUnsent(chatId, { text: t, before: confirmedUserCount(nativeMessages) }); // kept on this device until the server confirms it
+		setUnsent(null);
 		applyText("");
-		void send({ type: "text", text: t });
+		void send({ type: "text", text: t }).then((accepted) => { if (accepted) forgetUnsent(chatId); });
 	};
 
 	/* STEER VS SEND (owner arc 2026-10-03): a send while a turn runs steers
@@ -1732,7 +1798,7 @@ export function Chat({
 												{/* The rail GROUPS (owner round 4, 2026-10-05): the YOU heading
 												    sits INSIDE the rail, same mono-xs register and same 1ch
 												    rail as the thinking rows — one quote geometry. */}
-												<div className="mb-1 text-[12.5px] font-semibold text-muted-foreground">You</div>
+												<div className="mb-1 text-[13px] font-semibold text-muted-foreground">You</div>
 												<div className="lh-prose whitespace-pre-wrap text-foreground">
 													{m.parts.some((part) => part.type === "data-learner-explanation")
 														? m.parts.filter((part) => part.type === "data-learner-explanation").map((part, index) => <LearnerExplanation key={index} parts={part.data as Explanation} />)
@@ -1898,9 +1964,19 @@ export function Chat({
 								</span>
 							)}
 							{openingError && <p role="alert" className="text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
+							{unsent && !error && (
+								<div role="alert" data-testid="unsent-notice" className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
+									<span><strong className="font-semibold">Not sent.</strong> {unsent.reason ?? "The server didn't confirm your message."} Your message is back in the box below.</span>
+									<Button variant="outline" size="xs" data-testid="unsent-send-again" className="min-h-9" onClick={() => doSteerOrSend()}>Send again</Button>
+								</div>
+							)}
 							{error && (
 								<div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
-									<span>Something went wrong: {error.message}</span>
+									{/* A network failure reads as what it is (round 10): not sent,
+									    and the learner's words are still in the box. */}
+									<span>{/^Couldn't reach the server/.test(plainSendError(error.message))
+										? <><strong className="font-semibold">Not sent.</strong> {plainSendError(error.message)}{textRef.current.trim() ? " Your message is still in the box below." : ""}</>
+										: <>Something went wrong: {plainSendError(error.message)}</>}</span>
 									{retryable && (
 										<Button variant="outline" size="xs" data-testid="retry-failed-turn" onClick={retryFailedTurn}>
 											Retry

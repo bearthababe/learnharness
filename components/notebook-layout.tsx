@@ -83,6 +83,9 @@ export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, chi
 		const prior = previous.current.expanded ? "full" : "split";
 		const position = positions.current[mode] ?? positions.current[prior];
 		if (position) { scroll.scrollTop = position.top; scroll.scrollLeft = position.left; }
+		// First open: start at the newest line (round-10 review: it sat
+		// below the fold until you scrolled).
+		else scroll.scrollTop = scroll.scrollHeight;
 		previous.current = { hidden, expanded };
 		const save = () => { if (!element.hidden) positions.current[mode] = { top: scroll.scrollTop, left: scroll.scrollLeft }; };
 		save();

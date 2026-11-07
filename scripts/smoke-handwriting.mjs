@@ -336,7 +336,7 @@ try {
 	}
 	await page.goto(`${origin}/chat/handwriting_teach`, { waitUntil: "networkidle2" }); await ready();
 	assert.equal(await bitmap(), pendingInk);
-	await page.click('[aria-label="Notebook options"]'); await page.click('[data-testid="notebook-tools-toggle"]');
+	await page.click('[aria-label="More page actions"]'); await page.click('[data-testid="notebook-tools-toggle"]');
 	await page.waitForSelector('#handwriting-tools');
 	assert.ok(await page.$eval('#handwriting-tools', e => e.textContent.includes("explanation saved at Attach")));
 	await Promise.all([page.waitForNavigation({ waitUntil: "networkidle2" }), page.click('#handwriting-tools button.underline')]); await ready();
