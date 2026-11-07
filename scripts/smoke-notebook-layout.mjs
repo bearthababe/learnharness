@@ -30,7 +30,8 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	let r = await rects();
 	assert.equal(r.direction, "column"); frame(r);
 	assert.ok(r.slot.y >= r.tutor.bottom);
-	assert.ok(Math.abs(r.tutor.height - (r.workspace.height / 2 - 14)) < 2);
+	// Round 11: stacked, the lesson starts with 58% (the sheet below it).
+	assert.ok(Math.abs(r.tutor.height - (r.workspace.height * .58 - 14)) < 2);
 	assert.equal(await page.$('.notebook-panel select'), null);
 	assert.equal(await page.$('[data-testid="notebook-options"]'), null);
 	assert.equal(await page.$eval('#notebook-instruction', e => getComputedStyle(e).fontSize), '16px', 'Instruction uses the shared readable input type rung');
@@ -46,6 +47,15 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	await page.focus('[aria-label="Resize Tutor and Notebook"]');
 	await page.keyboard.press("ArrowUp");
 	assert.equal(await page.$eval('[role="separator"]', e => e.getAttribute("aria-valuenow")), "55");
+	await page.keyboard.press("Home");
+	assert.equal(await page.$eval('[role="separator"]', e => e.getAttribute("aria-valuenow")), "58");
+	// A tap on the grip swaps the focus: working, then lesson, then working.
+	const grip = (await rects()).divider;
+	for (const share of ["40", "72", "40"]) {
+		await page.mouse.click(grip.x + grip.width / 2, (await rects()).divider.y + 10);
+		await page.waitForFunction(value => document.querySelector('[role="separator"]').getAttribute("aria-valuenow") === value, {}, share);
+	}
+	await page.focus('[aria-label="Resize Tutor and Notebook"]');
 	await page.keyboard.press("Home");
 	const tutor = '[data-testid="composer"] [data-file-path-input]';
 	await page.type(tutor, "My independent Tutor draft.");

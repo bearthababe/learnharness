@@ -36,6 +36,8 @@ import { cn } from "@/lib/utils";
  */
 
 export interface PracticeDockProps {
+	/** The session: its unsent working is kept on this device per problem. */
+	chatId?: string;
 	dictation?: Dictation;
 	hasSharedWriting?: boolean;
 	/** The active problem's tool-call id (submissions target it). */
@@ -58,7 +60,20 @@ export interface PracticeDockProps {
 	compactionRunning?: boolean;
 }
 
-export function PracticeDock({ dictation, problemCallId, input, expanded, onExpand, onSubmit, onEscape, notebook, compactionRunning = false, hasSharedWriting = false }: PracticeDockProps) {
+/** "Your thinking" per problem, kept on this device until it is sent (the
+ *  notebook store owns it instead wherever a notebook context exists). */
+const practiceDraftKey = (chatId: string, problemCallId: string) => `lh:practice-draft:${chatId}:${problemCallId}`;
+function readPracticeDraft(chatId: string, problemCallId: string): string {
+	try { return localStorage.getItem(practiceDraftKey(chatId, problemCallId)) ?? ""; } catch { return ""; }
+}
+function writePracticeDraft(chatId: string, problemCallId: string, text: string): void {
+	try {
+		if (text.trim()) localStorage.setItem(practiceDraftKey(chatId, problemCallId), text);
+		else localStorage.removeItem(practiceDraftKey(chatId, problemCallId));
+	} catch { /* storage blocked: this view keeps it */ }
+}
+
+export function PracticeDock({ chatId, dictation, problemCallId, input, expanded, onExpand, onSubmit, onEscape, notebook, compactionRunning = false, hasSharedWriting = false }: PracticeDockProps) {
 	const owner = { kind: "practice" as const, problemCallId };
 	const owned = useNotebookActivityDraft(notebook, owner);
 	const [thinking, setThinking] = useState("");
@@ -76,7 +91,18 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 	const update = (text: string) => {
 		thinkingRef.current = text; setThinking(text);
 		if (owned.enabled) notebook!.tutor.updateText(owner, text);
+		else if (chatId) writePracticeDraft(chatId, problemCallId, text);
 	};
+	// Back from another session or a reload: the kept working returns, into
+	// an empty box only (a saved notebook draft or newer typing wins).
+	const restoredFor = useRef<string | null>(null);
+	useEffect(() => {
+		if (!chatId || restoredFor.current === problemCallId) return;
+		restoredFor.current = problemCallId;
+		if (owned.enabled || thinkingRef.current.trim()) return;
+		const kept = readPracticeDraft(chatId, problemCallId);
+		if (kept.trim()) { thinkingRef.current = kept; setThinking(kept); }
+	}, [chatId, problemCallId, owned.enabled]);
 	const alive = useRef(true), current = useRef({ problemCallId, compactionRunning, hasSharedWriting }); current.current = { problemCallId, compactionRunning, hasSharedWriting };
 	useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 	if (owned.enabled && owned.draft) thinkingRef.current = owned.text;

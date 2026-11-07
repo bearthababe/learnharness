@@ -914,20 +914,81 @@ export class SessionModel {
 		this.setStatus("ready");
 	}
 
-	/** Submission snapshots outlive the dock, not the session mount. */
+	/** Question drafts (the answer, its "why", the reading notes) outlive
+	 *  the dock and, in the browser, the page: a reload or leaving the
+	 *  session never loses them (iPhone Safari reloads background tabs). */
 	questionDraft(questionKey: string): QuestionDraft | undefined {
+		// Render-time read: never touches storage, so a server-rendered page
+		// hydrates unchanged. The device copy arrives through
+		// restoreStoredQuestionDrafts(), called once the view has mounted.
 		return this.questionDrafts.get(questionKey);
 	}
 
+	/** Bring this session's device-kept drafts into the view (after mount).
+	 *  True when it added any, so the view can re-seed its fields. */
+	restoreStoredQuestionDrafts(): boolean {
+		if (this.questionDraftsLoaded) return false;
+		const before = this.questionDrafts.size;
+		this.loadQuestionDrafts();
+		return this.questionDrafts.size > before;
+	}
+
 	saveQuestionDraft(questionKey: string, draft: Partial<QuestionDraft>): void {
+		if (!this.questionDraftsLoaded) this.loadQuestionDrafts();
 		this.questionDrafts.set(questionKey, { ...this.questionDrafts.get(questionKey), ...draft });
+		this.persistQuestionDrafts();
+	}
+
+	private questionDraftsLoaded = false;
+	private questionDraftStorage(): Storage | null {
+		try { return typeof window !== "undefined" ? window.localStorage : null; } catch { return null; }
+	}
+	private loadQuestionDrafts(): void {
+		this.questionDraftsLoaded = true;
+		const storage = this.questionDraftStorage();
+		if (!storage) return;
+		try {
+			const saved = JSON.parse(storage.getItem(`lh:question-drafts:${this.chatId}`) ?? "null") as Record<string, QuestionDraft & { form?: { selection?: { selected?: number[] } } }> | null;
+			for (const [key, draft] of Object.entries(saved ?? {})) {
+				if (this.questionDrafts.has(key)) continue; // this view's newer draft wins
+				const form = draft.form ? { ...draft.form, selection: { ...draft.form.selection, selected: new Set(draft.form.selection?.selected ?? []) } } as QuestionDraft["form"] : undefined;
+				this.questionDrafts.set(key, { ...draft, form });
+			}
+		} catch { /* unreadable copy: start fresh, never throw */ }
+	}
+	private pruneStoredQuestionDrafts(keep: string | undefined): void {
+		const storage = this.questionDraftStorage();
+		if (!storage) return;
+		try {
+			const name = `lh:question-drafts:${this.chatId}`;
+			const saved = JSON.parse(storage.getItem(name) ?? "null") as Record<string, unknown> | null;
+			if (!saved) return;
+			const kept = Object.fromEntries(Object.entries(saved).filter(([key]) => key === keep));
+			if (Object.keys(kept).length === Object.keys(saved).length) return;
+			if (Object.keys(kept).length) storage.setItem(name, JSON.stringify(kept));
+			else storage.removeItem(name);
+		} catch { /* unreadable copy: leave it */ }
+	}
+	private persistQuestionDrafts(): void {
+		const storage = this.questionDraftStorage();
+		if (!storage) return;
+		try {
+			const entries = [...this.questionDrafts].map(([key, draft]) => [key, draft.form ? { ...draft, form: { ...draft.form, selection: { ...draft.form.selection, selected: [...draft.form.selection.selected] } } } : draft]);
+			if (entries.length) storage.setItem(`lh:question-drafts:${this.chatId}`, JSON.stringify(Object.fromEntries(entries)));
+			else storage.removeItem(`lh:question-drafts:${this.chatId}`);
+		} catch { /* storage blocked or full: this view keeps the draft */ }
 	}
 
 	private forgetResolvedDrafts(record: readonly LhMessage[]): void {
 		const pendingKey = pendingQuestionOf(record)?.key;
+		let forgot = false;
 		for (const key of this.questionDrafts.keys()) {
-			if (key !== pendingKey) this.questionDrafts.delete(key);
+			if (key !== pendingKey) { this.questionDrafts.delete(key); forgot = true; }
 		}
+		if (this.questionDraftsLoaded) { if (forgot) this.persistQuestionDrafts(); }
+		// Not yet restored into the view: prune the device copy directly (an
+		// empty record is "not loaded yet", never "everything resolved").
+		else if (record.length > 0) this.pruneStoredQuestionDrafts(pendingKey);
 		for (const [id, key] of this.unconfirmedAnswers) {
 			if (key !== pendingKey) this.unconfirmedAnswers.delete(id);
 		}

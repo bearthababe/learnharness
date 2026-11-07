@@ -35,7 +35,6 @@ function ToolGlyph({ tool, colour, dim }: { tool: Tool; colour: string; dim: boo
 }
 const FOLD_KEY = "lh:writing-wheel-folded";
 const isFoldedTitle = (variant: string, folded: boolean) => variant === "wheel" && folded;
-const COACH_KEY = "lh:writing-wheel-coached";
 export function HandwritingToolbar(p: Props) {
 	const [expanded, setExpanded] = useState(false), [pageOpen, setPageOpen] = useState(false);
 	const label = TOOLS.find(t => t.id === p.tool)!.label;
@@ -44,25 +43,8 @@ export function HandwritingToolbar(p: Props) {
 	// paper is all page; the hub keeps showing the current ink and unfolds it.
 	const [folded, setFolded] = useState(false);
 	useEffect(() => { try { setFolded(window.localStorage.getItem(FOLD_KEY) === "1"); } catch { /* default open */ } }, []);
-	// First sight of the wheel on this device: each tool's name shows beside
-	// it for a few seconds (and the hub always names the current tool).
-	const [coach, setCoach] = useState(false);
-	useEffect(() => {
-		if (variant !== "wheel") return;
-		let seen = false;
-		try { seen = window.localStorage.getItem(COACH_KEY) === "1"; } catch { /* show it */ }
-		if (!seen) setCoach(true);
-	}, [variant]);
-	// While shown: it leaves after a few seconds or at the first stroke, and
-	// is then remembered as seen on this device.
-	useEffect(() => {
-		if (!coach) return;
-		const hide = () => { setCoach(false); try { window.localStorage.setItem(COACH_KEY, "1"); } catch { /* this view only */ } };
-		const timer = window.setTimeout(hide, 6000);
-		const firstStroke = (event: PointerEvent) => { if (event.target instanceof Element && event.target.closest('[data-testid="notebook-canvas"], .hw-paperScroll')) hide(); };
-		document.addEventListener("pointerdown", firstStroke, true);
-		return () => { window.clearTimeout(timer); document.removeEventListener("pointerdown", firstStroke, true); };
-	}, [coach]);
+	// Every ring control carries its name (round 11), so there is no
+	// first-sight legend over the page and no pop-out name to wait for.
 	// The page menu closes on Escape or any press outside it (Pages,
 	// Expand, Attach, the paper).
 	useEffect(() => {
@@ -73,16 +55,6 @@ export function HandwritingToolbar(p: Props) {
 		document.addEventListener("pointerdown", onDown, true);
 		return () => { document.removeEventListener("keydown", onKey, true); document.removeEventListener("pointerdown", onDown, true); };
 	}, [pageOpen]);
-	// The ring names its tools by touch: choosing one, or pressing and
-	// holding one, shows its name beside the ring for a moment.
-	const [nameHint, setNameHint] = useState<Tool | null>(null);
-	const nameTimer = useRef<number | undefined>(undefined);
-	const showName = (tool: Tool, ms: number) => {
-		setNameHint(tool);
-		window.clearTimeout(nameTimer.current);
-		nameTimer.current = window.setTimeout(() => setNameHint(null), ms);
-	};
-	useEffect(() => () => window.clearTimeout(nameTimer.current), []);
 	// Escape closes the tool settings (one layer at a time).
 	useEffect(() => {
 		if (!expanded) return;
@@ -105,25 +77,18 @@ export function HandwritingToolbar(p: Props) {
 				<button type="button" aria-label="Clear" {...p.handlers("Clear", () => { p.clear(); setPageOpen(false); })}>Clear page<span>Undoable</span></button>
 			</div>}
 		</div>
-		<div className="hw-arc" data-folded={isFolded || undefined} data-coach={coach || undefined}
-			onPointerDownCapture={variant === "wheel" ? (event) => { const tool = (event.target as Element).closest?.("[data-ring-tool]")?.getAttribute("data-ring-tool") as Tool | null; if (tool) showName(tool, 60_000); } : undefined}
-			onPointerUpCapture={variant === "wheel" ? () => { if (nameHint) showName(nameHint, 1800); } : undefined}
-			onPointerCancelCapture={variant === "wheel" ? () => setNameHint(null) : undefined}>
-			{variant === "wheel" && nameHint && !isFolded && <span className={`hw-ringName hw-ringName_${nameHint}`} role="status" data-testid="ring-tool-name">{TOOLS.find(t => t.id === nameHint)!.label}</span>}
+		<div className="hw-arc" data-folded={isFolded || undefined}>
 			<svg className="hw-arcTrack" viewBox="0 0 112 260" aria-hidden="true"><path d="M98 22C-7 58-7 193 98 235" /></svg>
 			{TOOLS.map(tool => <button key={tool.id} type="button" data-ring-tool={tool.id} className={`hw-toolButton hw-arc_${tool.id}`} aria-label={tool.label} title={tool.label} aria-pressed={p.tool === tool.id} disabled={p.disabled}
-				{...p.handlers(tool.label, () => { if (coach) { setCoach(false); try { window.localStorage.setItem(COACH_KEY, "1"); } catch { /* this view only */ } } p.selectTool(tool.id); setExpanded(variant === "wheel" ? false : p.tool !== tool.id || !expanded); })}>
+				{...p.handlers(tool.label, () => { p.selectTool(tool.id); setExpanded(variant === "wheel" ? false : p.tool !== tool.id || !expanded); })}>
 				<ToolGlyph tool={tool.id} colour={tool.id === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.colour} dim={p.dimPaper} /><span className="hw-toolName">{tool.label}</span>
+				{variant === "wheel" && <span className="hw-ringLabel" aria-hidden="true">{tool.short}</span>}
 			</button>)}
 			{variant === "wheel" && <button type="button" className="hw-wheelHub" title={hubTitle} aria-label={isFolded ? "Show writing tools" : "Tool settings"} aria-expanded={isFolded ? false : expanded} disabled={p.disabled} {...p.handlers(isFolded ? "Show writing tools" : "Tool settings", () => { if (isFolded) fold(false); else setExpanded(v => !v); })}>
 				<span className="hw-wheelSwatch" style={{ backgroundColor: p.tool === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.tool === "eraser" ? "transparent" : p.colour, filter: p.dimPaper ? "var(--lh-dim-paper-filter)" : undefined }} data-tool={p.tool} />
 				<span className="hw-wheelSize">{TOOLS.find(t => t.id === p.tool)!.short}</span>
 			</button>}
-			{variant === "wheel" && coach && !folded && <div className="hw-wheelCoach" role="note" data-testid="wheel-coach">
-				<strong>Writing tools</strong>
-				<ul><li><b>Pen</b> top</li><li><b>Highlighter</b> left</li><li><b>Eraser</b> lower left</li><li><b>Undo · Redo</b> right</li><li><b>Centre</b> size and ink</li></ul>
-			</div>}
-			<div className="hw-arcUndo"><button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled || !p.canUndo} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} /></button><button type="button" className="hw-iconButton" aria-label="Redo" title="Redo" disabled={p.disabled || !p.canRedo} {...p.handlers("Redo", p.redo)}><Redo2Icon size={19} /></button></div>
+			<div className="hw-arcUndo"><button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled || !p.canUndo} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} />{variant === "wheel" && <span className="hw-ringLabel" aria-hidden="true">Undo</span>}</button><button type="button" className="hw-iconButton" aria-label="Redo" title="Redo" disabled={p.disabled || !p.canRedo} {...p.handlers("Redo", p.redo)}><Redo2Icon size={19} />{variant === "wheel" && <span className="hw-ringLabel" aria-hidden="true">Redo</span>}</button></div>
 			{expanded && <div className="hw-arcInspector">
 				<div className="hw-inspectorTitle"><span>{label}</span><button type="button" aria-label="Close tool settings" {...p.handlers("Close tool settings", () => setExpanded(false))}><XIcon size={16} /></button></div>
 				{variant === "wheel" && <div role="group" aria-label="Tool" className="hw-toolNames" data-testid="wheel-tool-names">{TOOLS.map(tool => <button key={tool.id} type="button" aria-pressed={p.tool === tool.id} disabled={p.disabled}

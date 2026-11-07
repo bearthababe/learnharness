@@ -227,60 +227,79 @@ body {
 		overscroll-behavior: contain;
 		font-family: var(--font-prose);
 	}
+	/* A sheet header, not a second navigation bar (round 11): the title
+	   on the left, × on the right. Home lives in the row below, as on the
+	   start page. */
 	.lh-sessions-header {
-		display: grid;
-		grid-template-columns: 1fr auto 1fr;
+		display: flex;
+		justify-content: space-between;
 		height: 60px;
-		padding: 8px 12px;
+		padding: 8px 8px 8px 16px;
 	}
-	.lh-sessions-header .lh-wordmark {
+	.lh-sessions-header .lh-wordmark,
+	.lh-sessions-header > a {
 		display: none;
-	}
-	.lh-sessions-header a {
-		justify-self: start;
-		width: auto;
-		min-height: 44px;
-		gap: 8px;
-		padding-inline: 6px;
-		font-size: 16px;
-		color: var(--color-muted-foreground);
-	}
-	.lh-sessions-header a svg {
-		width: 22px;
-		height: 22px;
 	}
 	.lh-sessions-title {
 		display: block;
-		font-size: 18px;
+		font-size: 20px;
 		font-weight: 650;
 		line-height: 1.2;
 		letter-spacing: -.01em;
 	}
-	.lh-phone-home-label, .lh-phone-close-label {
-		display: inline;
-	}
 	.lh-sessions-close {
-		justify-self: end;
-		width: auto;
+		width: 44px;
 		min-width: 44px;
-		padding-inline: 8px;
-		font-size: 16px;
-		font-weight: 600;
-		color: var(--lh-brand-ink);
+		height: 44px;
+		padding: 0;
+		color: var(--muted-foreground);
+	}
+	.lh-sessions-close svg.lh-phone-close-icon {
+		display: block;
+		width: 22px;
+		height: 22px;
 	}
 	.lh-desktop-close-icon {
 		display: none;
 	}
-	.lh-sessions-create-label {
-		margin: 6px 16px 8px;
+	.lh-sessions-create-label:not(.lh-sessions-list-label) {
+		display: none;
 	}
-	.lh-sessions-create {
+	.lh-sessions-content .lh-sessions-create {
+		grid-template-columns: 48px repeat(3, minmax(0, 1fr));
 		gap: 8px;
-		margin: 0 16px 14px;
+		margin: 4px 16px 14px;
 	}
-	.lh-sessions-create button {
+	.lh-sessions-content .lh-sessions-create :is(button, .lh-sessions-home) {
 		min-height: 48px;
 		font-size: 15px;
+	}
+	.lh-sessions-content .lh-sessions-create .lh-sessions-home {
+		display: flex;
+	}
+	/* Search is its own mode: the bar at the top, the filter under it,
+	   the results filling the sheet. */
+	.lh-sessions-content[data-searching] > :is(.lh-sessions-header, .lh-sessions-create-label, .lh-sessions-create, [data-testid="activity-section"], .lh-sessions-footer) {
+		display: none;
+	}
+	.lh-sessions-content[data-searching] {
+		overflow: hidden;
+	}
+	.lh-sessions-content[data-searching] .lh-sessions-search {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-top: 12px;
+	}
+	.lh-sessions-content[data-searching] .lh-sessions-search > span {
+		flex: 1;
+	}
+	.lh-sessions-search-cancel {
+		min-height: 44px;
+		padding: 0 4px;
+		font-size: 16px;
+		font-weight: 600;
+		color: var(--lh-brand-ink);
 	}
 	.lh-sessions-search {
 		margin: 0 16px 10px;
@@ -325,7 +344,7 @@ body {
 		line-height: 18px;
 	}
 	.lh-sessions-content > [data-testid="activity-section"] {
-		padding: 6px 12px 0;
+		padding: 6px 12px max(8px, env(safe-area-inset-bottom));
 	}
 	.lh-activity-header {
 		min-height: 44px;
@@ -337,6 +356,14 @@ body {
 	.lh-sessions-footer .lh-footer-row {
 		min-height: 44px;
 		font-size: 15px;
+	}
+	.lh-activity-bar .lh-settings-entry {
+		width: 44px;
+		min-height: 44px;
+	}
+	.lh-activity-bar .lh-settings-entry svg {
+		width: 20px;
+		height: 20px;
 	}
 	.lh-sessions-tools summary {
 		font-size: 15px;
@@ -942,6 +969,17 @@ body {
 	white-space: nowrap;
 	transition: background-color .15s, border-color .15s;
 }
+/* Home in the create row: phone only (the desktop header has the mark). */
+.lh-sessions-create .lh-sessions-home {
+	display: none;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--card);
+	color: var(--muted-foreground);
+}
+.lh-sessions-create .lh-sessions-home svg { width: 20px; height: 20px; }
 .lh-sessions-create button:hover {
 	background: var(--accent);
 	border-color: color-mix(in oklab, var(--border) 60%, var(--muted-foreground));
@@ -1104,6 +1142,18 @@ body {
 	color: var(--muted-foreground);
 	font-size: 14px;
 	transition: background-color .15s, color .15s;
+}
+/* Background agents and Settings share one row. */
+.lh-activity-bar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+.lh-activity-bar .lh-settings-entry {
+	flex: none;
+	justify-content: center;
+	width: 36px;
+	padding: 0;
 }
 .lh-footer-row:hover {
 	background: var(--accent);
@@ -2118,9 +2168,19 @@ body {
 		border-radius: 50%;
 		background: var(--lh-kind, var(--lh-kind-teach));
 	}
-	.lh-topbar .lh-session-title {
+	.lh-topbar button.lh-session-title {
 		-webkit-user-select: none;
 		user-select: none;
+	}
+	/* Renaming on a phone looks like editing: a field, not the title. */
+	.lh-topbar input.lh-session-title {
+		max-width: 100%;
+		min-width: 0;
+		flex: 1;
+		padding: 4px 8px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--card);
 	}
 
 	/* Chains header: search takes the room; the counts step aside. */
@@ -3295,6 +3355,12 @@ button[role="switch"][aria-checked="true"] > span {
 
 /* Attached pages: a remove (×) on each one, touch-sized, over its corner. */
 .lh-writing-thumb { padding-top: 6px; padding-right: 6px; }
+/* The attached page: the top of the page, large enough to recognise the
+   working (tap opens the whole page). */
+.lh-writing-img { display: block; width: 132px; height: 112px; object-fit: cover; object-position: top center; }
+.lh-writing-actions { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 10px; border-radius: 8px; color: var(--muted-foreground); font-size: 13px; }
+.lh-writing-actions:hover { background: var(--accent); color: var(--foreground); }
+.lh-writing-actions svg { width: 16px; height: 16px; }
 .lh-writing-remove {
 	position: absolute;
 	top: -4px;
@@ -3408,27 +3474,6 @@ button[role="switch"][aria-checked="true"] > span {
 	border-color: var(--tool-edge);
 	background: color-mix(in srgb, var(--card) 80%, var(--foreground) 6%);
 }
-/* First sight: a short legend beside the wheel. */
-.hw-wheelCoach {
-	position: absolute;
-	top: 0;
-	right: 184px;
-	width: 200px;
-	padding: 10px 14px 12px;
-	border: 1px solid var(--tool-edge);
-	border-radius: 16px;
-	background: var(--card);
-	box-shadow: var(--tool-shadow);
-	color: var(--foreground);
-	font-size: 13.5px;
-	line-height: 1.35;
-	pointer-events: none;
-	animation: hw-hint-in .2s ease-out;
-}
-.hw-wheelCoach strong { display: block; margin-bottom: 6px; font-weight: 600; }
-.hw-wheelCoach li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; color: var(--muted-foreground); }
-.hw-wheelCoach li b { color: var(--foreground); font-weight: 500; }
-.hw-notebook[data-tools-side="left"] .hw-wheelCoach { right: auto; left: 184px; }
 /* The fold action: one clear line under the size and ink choices. */
 .hw-foldWheel {
 	justify-content: flex-start;
@@ -3663,6 +3708,8 @@ button[role="switch"][aria-checked="true"] > span {
 		font-size: 13.5px;
 		color: var(--muted-foreground);
 	}
+	/* Folded to its bar (Hide or scrolling up): no hint band under it. */
+	.lh-question-collapsed [data-testid="question-dock"][data-follow-up] .lh-question-pick-hint { display: none; }
 	[data-testid="question-dock"][data-follow-up="open"] :is(.lh-question-confidence, .lh-question-form) {
 		animation: lh-follow-up-in .22s ease-out;
 	}
@@ -3685,27 +3732,39 @@ button[role="switch"][aria-checked="true"] > span {
 .lh-attempt-summary { margin-top: 2px; color: var(--foreground); overflow-wrap: anywhere; }
 .lh-attempt-help { margin-top: 4px; color: var(--muted-foreground); font-size: 12.5px; }
 
-/* The ring's tool name: a pill beside the tool just chosen or held. */
-.hw-ringName {
-	position: absolute;
-	right: calc(100% + 8px);
-	z-index: 3;
-	padding: 5px 12px;
-	border: 1px solid var(--tool-edge);
-	border-radius: 999px;
-	background: var(--card);
-	box-shadow: var(--tool-shadow);
-	color: var(--foreground);
-	font-size: 14px;
+/* Every ring control names itself: tools and Undo/Redo carry a short
+   label under their icon, so nothing has to be learned by position. */
+.hw-ringLabel {
+	display: block;
+	font-family: var(--font-prose);
+	font-size: 11px;
 	font-weight: 500;
+	line-height: 1;
+	color: var(--muted-foreground);
 	white-space: nowrap;
 	pointer-events: none;
-	animation: hw-hint-in .15s ease-out;
 }
-.hw-ringName_pen { top: 12px; }
-.hw-ringName_highlighter { top: 52px; }
-.hw-ringName_eraser { top: 117px; }
-.hw-notebook[data-tools-side="left"] .hw-ringName { right: auto; left: calc(100% + 8px); }
+.hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton {
+	gap: 2px;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton .hw-toolGlyph {
+	width: 20px;
+	height: 24px;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton[aria-pressed="true"] .hw-ringLabel {
+	color: var(--foreground);
+	font-weight: 650;
+}
+.hw-overlay[data-variant="wheel"] .hw-arcUndo > .hw-iconButton {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 3px;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] .hw-ringLabel {
+	display: none;
+}
 
 /* Touch: the session filters are full touch targets. */
 @media (pointer: coarse) {
@@ -3725,4 +3784,180 @@ button[role="switch"][aria-checked="true"] > span {
 
 @media (max-width: 767px) {
 	[data-testid="question-dock"][data-follow-up="waiting"] .lh-question-pick-hint[data-confidence] { min-height: 107px; }
+}
+
+/* Calm status lines (offline, kept, syncing): not error red. */
+.lh-quiet-status { font-size: 13px; color: var(--muted-foreground); }
+
+/* The notebook opener: a named chip at the row's start (it matters more
+   than the session settings beside it). */
+.lh-notebook-toggle {
+	gap: 6px;
+	height: 40px;
+	min-width: 44px;
+	padding: 0 12px 0 10px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--card);
+	color: var(--foreground);
+	font-size: 13.5px;
+	font-weight: 500;
+}
+.lh-notebook-toggle[aria-expanded="true"] { border-color: color-mix(in oklab, var(--primary) 60%, var(--border)); background: color-mix(in oklab, var(--primary) 14%, var(--card)); }
+@media (hover: hover) { .lh-notebook-toggle:hover { background: var(--accent); } }
+@media (pointer: coarse) { .lh-notebook-toggle { height: 44px; } }
+/* Model, thinking and Usage read as controls (one quiet outline each,
+   the same shape), still compact. */
+[data-testid="model-control"],
+.lh-stats-bar [data-testid="stats-summary"] {
+	border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+	border-radius: 999px;
+}
+.lh-stats-bar [data-testid="stats-summary"] { padding-inline: 12px; }
+
+/* "Show question": same size and place, quieter — an outline, not a fill,
+   so the reading stays the main thing until the learner is ready. */
+.lh-phone-reveal {
+	border: 1px solid color-mix(in oklab, var(--primary) 55%, var(--border));
+	background: color-mix(in oklab, var(--primary) 8%, var(--card));
+	color: color-mix(in oklab, var(--primary) 70%, var(--foreground));
+}
+@media (hover: hover) { .lh-phone-reveal:hover { background: color-mix(in oklab, var(--primary) 16%, var(--card)); } }
+
+/* The dictation key hint is a setup prompt, not an error. */
+.lh-compact-error[data-setup] { color: var(--muted-foreground) !important; }
+/* The confidence slider: a full touch target around its thin track. */
+@media (pointer: coarse) {
+	[data-testid="confidence-slider"] { min-height: 44px; margin-block: -14px; cursor: pointer; }
+}
+
+/* Laptops: secondary text at a readable size (it was 11–12px). */
+@media (min-width: 1024px) {
+	.lh-session-meta { font-size: 13px; }
+	.lh-stats-bar { font-size: 13.5px; }
+	[data-testid="stats-model"], [data-testid="stats-thinking"] { font-size: 13.5px; }
+	.lh-steps-summary { font-size: 14px; }
+	.lh-activity-header { font-size: 14px; }
+	.lh-activity-recent-meta { font-size: 13px; }
+	.lh-sessions-create-label { font-size: 13px; }
+	[data-testid="thinking-field"] .lh-input-label, .lh-eyebrow { font-size: 12.5px; }
+}
+/* Portrait tablets: the controls under the composer and status lines are
+   readable at arm's length. */
+@media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
+	[data-testid="stats-model"], [data-testid="stats-thinking"] { font-size: 15px; height: 44px !important; }
+	.lh-stats-bar [data-testid="stats-summary"] { font-size: 15px; min-height: 44px; }
+	.lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"] { font-size: 15px; height: 44px; }
+	.lh-quiet-status, .lh-steps-summary, .lh-session-meta { font-size: 14.5px; }
+	.lh-shared-writing { font-size: 14px; }
+}
+
+/* A question's keyboard model, beside it (laptops; touch never shows it). */
+.lh-kbd-hint { display: none; }
+@media (pointer: fine) and (min-width: 1024px) {
+	.lh-kbd-hint {
+		display: block;
+		padding: 2px 16px 8px;
+		font-size: 12.5px;
+		color: var(--muted-foreground);
+	}
+	.lh-kbd-hint kbd {
+		display: inline-block;
+		min-width: 1.4em;
+		margin: 0 1px;
+		padding: 0 4px;
+		border: 1px solid var(--border);
+		border-radius: 4px;
+		font: 11.5px/1.5 var(--font-sans);
+		text-align: center;
+	}
+}
+
+/* Phones: every settings control sits on the right of its row, even when
+   the row wraps; short inputs (the chunk budget) stay beside their label. */
+@media (max-width: 767px) {
+	.lh-settings-row > :not(.lh-settings-row-label):last-child { margin-left: auto; }
+	[data-testid="graph-row-chunk-tokens"] input { width: 7.5rem; text-align: right; }
+	[data-testid="graph-row-chunk-tokens"] { flex-wrap: nowrap; }
+}
+
+/* Phones: the home header keeps search, Ideas, Extract files and the gear;
+   the graph costs live in the gear's panel instead of floating below. */
+@media (max-width: 767px) {
+	.lh-graph-cost-pill { display: none; }
+}
+.lh-graph-costs-in-settings { padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+
+/* Phones, question open: the reading notes fold to one line (the step
+   stays); tap to unfold, tap again to fold. Wider screens keep the box. */
+.lh-reading-fold { display: none; }
+@media (max-width: 767px) {
+	.lh-reading-input[data-reading-claim="false"] > .lh-reading-fold {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		min-height: 44px;
+		padding: 0 8px;
+		text-align: left;
+	}
+	.lh-reading-input[data-reading-claim="false"] > div:not(.lh-compact-row):first-of-type { display: none; }
+	.lh-reading-input[data-folded="true"] > :not(.lh-reading-fold) { display: none !important; }
+	.lh-reading-fold-label { flex: none; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-foreground); }
+	.lh-reading-fold-preview { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--muted-foreground); }
+	.lh-reading-fold-chevron { width: 16px; height: 16px; flex: none; color: var(--muted-foreground); transition: transform .15s ease; }
+	.lh-reading-fold[aria-expanded="true"] .lh-reading-fold-chevron { transform: rotate(90deg); }
+	.lh-reading-input[data-reading-claim="false"] { border-color: var(--border); background: color-mix(in oklab, var(--card) 60%, transparent); padding: 2px 4px; }
+}
+
+/* Several not-sent messages: compact one-line rows under one header. */
+.lh-unsent-head { font-weight: 500; }
+.lh-unsent-notice[data-several] .lh-unsent-row[data-unsent-quoted] { flex-wrap: nowrap; padding-top: 6px; }
+.lh-unsent-notice[data-several] .lh-unsent-quote {
+	flex: 1 1 auto;
+	min-width: 0;
+	-webkit-line-clamp: 1;
+	cursor: pointer;
+}
+.lh-unsent-notice[data-several] .lh-unsent-quote[data-expanded] { -webkit-line-clamp: unset; white-space: pre-wrap; }
+.lh-unsent-notice[data-several] .lh-unsent-actions { flex-wrap: nowrap; }
+.lh-unsent-notice[data-several] .lh-unsent-actions button { padding-inline: 8px; }
+.lh-unsent-notice[data-several] .lh-unsent-row + .lh-unsent-row { border-top: 0; }
+/* After an answer, the reply is being brought into view: no ↓ disc over it. */
+html[data-answer-follow] .lh-jump-down { display: none; }
+
+/* A job row says where it leads. */
+.lh-activity-open { display: inline-flex; flex: none; align-items: center; gap: 2px; align-self: center; font-size: 12.5px; color: var(--muted-foreground); }
+
+/* The mode row holds the session type and, beside it, the ideas picker:
+   choosing Practice never moves the screen. */
+.lh-mode-row { gap: 8px; align-items: center; flex-wrap: nowrap; }
+.lh-mode-row [data-testid="practice-props-chip"] { min-height: 36px; white-space: nowrap; }
+@media (max-width: 767px) {
+	.lh-pick-word { display: none; }
+	.lh-mode-row [data-testid="practice-props-chip"] { min-height: 44px; padding-inline: 10px; }
+	.lh-mode-home-label { display: none; }
+}
+.lh-mode-switch > [data-kind="home"] { color: var(--muted-foreground); }
+
+/* Phones: an open question can fold back to its bar while the lesson is
+   re-read; what was typed or picked stays. */
+.lh-question-hide { display: none; }
+@media (max-width: 767px) {
+	.lh-question-hide {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		gap: 2px;
+		min-height: 44px;
+		margin: -12px -10px -12px 8px;
+		padding: 0 10px;
+		border-radius: 999px;
+		color: var(--muted-foreground);
+		font-size: 13.5px;
+		font-weight: 500;
+		letter-spacing: 0;
+		text-transform: none;
+	}
+	.lh-question-hide svg { width: 16px; height: 16px; }
 }

@@ -5,6 +5,7 @@ import { WaypointsIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { usePhoneLayout } from "./use-phone-viewport";
 import { createNotesImportQueue, EMPTY_IMPORT_QUEUE, notesPath, type ImportDone } from "./notes-import-queue";
+import { useOneMenu } from "./one-menu";
 
 export { MAX_IMPORT_BYTES } from "@/lib/notes-import-limits.ts";
 export { notesPath } from "./notes-import-queue";
@@ -95,6 +96,7 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	const filesRef = useRef<HTMLInputElement>(null);
 	const folderRef = useRef<HTMLInputElement>(null);
 	const [open, setOpen] = useState(false);
+	useOneMenu("extract-files", open, () => setOpen(false));
 	const hintId = useId();
 	const onChange = (event: ChangeEvent<HTMLInputElement>) => {
 		onImportFiles(event.target.files);

@@ -14,6 +14,7 @@ import { notifySettingsSaved, useSettingsSaved } from "@/components/settings-sig
 import { useModelCatalog } from "@/components/model-catalog";
 export { useModelCatalog } from "@/components/model-catalog";
 import { defaultOrderLevel, populateLevel, THINKING_LABEL } from "@/components/thinking-default";
+import { useOneMenu } from "@/components/one-menu";
 
 /** provider:id → known contextWindow over the cached catalog, mirroring
  * the server's catalogContextLimits join. CLI aliases have no global
@@ -47,6 +48,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	// means no session record is known yet, not permission to inherit Strong.
 	const [session, setSession] = useState<{ settings?: ChatSettings }>();
 	const [open, setOpen] = useState<"model" | "thinking" | null>(null);
+	useOneMenu(`model-control:${open ?? ""}`, open !== null, () => setOpen(null));
 	const presence = usePhoneMenuPresence(open, phone);
 	const [error, setError] = useState<string | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -99,6 +101,9 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			} : undefined
 		: strong;
 	const effectiveId = override?.model?.id;
+	// First run (A16): settings are read and no model is set anywhere — say
+	// so in words. While a session record is still loading it stays "—".
+	const nothingChosen = models !== undefined && !strong?.model && (!chatId || (session !== undefined && !session.settings?.model));
 	const effectiveProvider = override?.model?.provider;
 	useEffect(() => {
 		onModelChange?.(effectiveProvider && effectiveId ? `${effectiveProvider}:${effectiveId}` : undefined);
@@ -299,7 +304,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				// graph no longer bleeds through these pills.
 				className="flex items-center gap-1.5 rounded-full border bg-card/85 px-2.5 py-1 shadow-lg backdrop-blur transition-colors hover:border-border hover:bg-muted"
 			>
-				<span className="text-card-foreground">{effectiveId ? prettyModel(effectiveId) : "—"}</span>
+				<span className="text-card-foreground">{effectiveId ? prettyModel(effectiveId) : nothingChosen ? "Choose a model" : "—"}</span>
 				<span aria-hidden className="text-xs text-muted-foreground">▾</span>
 			</button>
 			</Hint>
@@ -330,7 +335,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				{/* Just the level — the button reads like the model button reads
 				   the model name (owner, stats-control round 1). */}
 				<span className="text-card-foreground">
-					{effectiveLevel === undefined ? "—" : (THINKING_LABEL[effectiveLevel] ?? effectiveLevel)}
+					{effectiveLevel === undefined ? (nothingChosen ? "Reasoning" : "—") : (THINKING_LABEL[effectiveLevel] ?? effectiveLevel)}
 				</span>
 				<span aria-hidden className="text-xs text-muted-foreground">▾</span>
 			</button>

@@ -18,7 +18,9 @@ import type { AttachmentReview } from "./attachment";
 import { HandwritingSubmissionContext } from "./submission";
 import { dictationCheckpoint, finishDictation } from "../dictation";
 import { useMenuEscape } from "../menu-escape";
+import { useOneMenu } from "../one-menu";
 import { paint, HIGHLIGHT_OPACITY, freezeHandwritingRaster } from "./render";
+import { ConceptsSetup } from "../shared-writing";
 
 const { width: WIDTH, height: HEIGHT } = HANDWRITING_PAGE;
 const PEN_COLOURS = ["Black", "Blue", "Red", "Green"].map((name, i) => ({ name, value: HANDWRITING_PEN_COLOURS[i]! }));
@@ -47,6 +49,15 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const strokes = useRef<Stroke[]>([]), active = useRef<{ pointerId: number; stroke: Stroke; complete: (stroke: Stroke) => void } | null>(null);
 	const recovery = useRef<HandwritingPages | null>(null);
 	const attachmentNotice = submission?.attachment()?.notice(normalizeHandwriting(recovery.current?.getSnapshot().working ?? { version: 1, operations: [] }).pageId);
+	// The confirmation folds away once seen (round 11); failures stay.
+	const confirmation = attachmentNotice && (attachmentNotice.kind === "attached" || attachmentNotice.kind === "updated" || attachmentNotice.kind === "unchanged") ? `${attachmentNotice.kind}:${attachmentNotice.text}` : "";
+	const [seenConfirmation, setSeenConfirmation] = useState("");
+	useEffect(() => {
+		if (!confirmation) { setSeenConfirmation(""); return; }
+		const timer = window.setTimeout(() => setSeenConfirmation(confirmation), 4000);
+		return () => window.clearTimeout(timer);
+	}, [confirmation]);
+	const shownNotice = confirmation && seenConfirmation === confirmation ? undefined : attachmentNotice;
 	const [saved, setSaved] = useState<Pick<PagesState, "ready" | "notice">>({ ready: false, notice: "Opening notebook…" });
 	const [pageId, setPageId] = useState("page_initial"), [pages, setPages] = useState<PageSummary[]>([]), [pagesOpen, setPagesOpen] = useState(false), [optionsOpen, setOptionsOpen] = useState(false);
 	const palette = useWritingPalette();
@@ -80,12 +91,15 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	useEffect(() => () => window.clearTimeout(fingerTimer.current), []);
 	const [colour, setColour] = useState<Stroke["colour"]>(HANDWRITING_PEN_COLOURS[0]);
 	const [penScale, setPenScale] = useState<Stroke["penScale"]>(HANDWRITING_PEN_SCALES[1]), [eraserWidth, setEraserWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]), [highlighterWidth, setHighlighterWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]);
-	const [dimPaper, setDimPaper] = useState(true), [toolsOpen, setToolsOpen] = useState(false);
-	useMenuEscape(hidden ? null : pagesOpen ? "pages" : optionsOpen ? "options" : toolsOpen ? "tools" : null, () => {
+	const [dimPaper, setDimPaper] = useState(true), [toolsOpen, setToolsOpen] = useState(false), [conceptsOpen, setConceptsOpen] = useState(false);
+	useMenuEscape(hidden ? null : pagesOpen ? "pages" : optionsOpen ? "options" : toolsOpen ? "tools" : conceptsOpen ? "concepts" : null, () => {
 		const trigger = pagesOpen ? "Pages" : "Notebook options";
-		setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false);
+		setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false);
 		controlsRef.current?.querySelector<HTMLButtonElement>(`[aria-label="${trigger}"]`)?.focus();
 	});
+	// One menu open at a time, app-wide (round 11): a notebook panel closes
+	// when Settings, a model menu or Extract files opens, and vice versa.
+	useOneMenu("handwriting-panel", !hidden && (pagesOpen || optionsOpen || toolsOpen || conceptsOpen), () => { setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); });
 	const [paperSize, setPaperSize] = useState({ width: 1, height: 1 });
 	const viewRef = useRef({ expanded, paperSize }); viewRef.current = { expanded, paperSize };
 	const paperPositions = useRef<{ split: number; full?: number }>({ split: 0 }), restorePaperPosition = useRef<number | null>(null);
@@ -290,16 +304,21 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 			style={{ position: "absolute", inset: 16, margin: 0, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 			<header className="hw-notebookHeader"><h2>Writing</h2>
 				<Button variant="ghost" size="sm" className="hw-headerAction" disabled={!saved.ready || submission?.preparing} {...handlers("Attach snapshot", () => { void attachSnapshot(); })} data-testid="notebook-attach"><PaperclipIcon aria-hidden />Attach page</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Pages" aria-expanded={pagesOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Pages", () => { setPagesOpen(value => !value); setOptionsOpen(false); setToolsOpen(false); void recovery.current?.refreshPages().catch(() => {}); })}><FilesIcon aria-hidden />Pages</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Pages" aria-expanded={pagesOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Pages", () => { setPagesOpen(value => !value); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); void recovery.current?.refreshPages().catch(() => {}); })}><FilesIcon aria-hidden />Pages</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? "Back to question" : "Expand notebook"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? "Back to question" : "Expand"}</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close notebook" {...handlers("Close writing", () => { if (expanded) prepareViewChange(false); onClose(); })}><XIcon aria-hidden />Close</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" {...handlers("Chat", onClose)} data-testid="open-notebook-chat">Chat</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Notebook options" aria-expanded={optionsOpen} {...handlers("Notebook options", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Notebook options" aria-expanded={optionsOpen} {...handlers("Notebook options", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); setConceptsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
 			</header>
 			{optionsOpen && <div className="hw-toolsPanel" data-testid="notebook-options">
 				<Button variant="ghost" disabled={!saved.ready || submission?.preparing} {...handlers("Duplicate", () => { setOptionsOpen(false); void recovery.current?.duplicateWorking(); })}>Duplicate</Button><hr />
 				<Button variant="ghost" {...handlers("Tools side", () => { setOptionsOpen(false); toggleToolsSide(); })} data-testid="notebook-tools-side">{toolsLeft ? "Tools on the right" : "Tools on the left (left-handed)"}</Button><hr />
-				<Button variant="ghost" {...handlers("Tools and help", () => { setOptionsOpen(false); setToolsOpen(true); })} data-testid="notebook-tools-toggle">Tools and help</Button>
+				<Button variant="ghost" {...handlers("Tools and help", () => { setOptionsOpen(false); setToolsOpen(true); })} data-testid="notebook-tools-toggle">Tools and help</Button><hr />
+				<Button variant="ghost" {...handlers("Concepts setup", () => { setOptionsOpen(false); setConceptsOpen(true); })} data-testid="notebook-concepts-toggle">Send pages from the Concepts app</Button>
+			</div>}
+			{conceptsOpen && <div className="hw-toolsPanel hw-conceptsPanel" role="group" aria-label="Send pages from the Concepts app">
+				<div className="hw-toolsHeading"><span>Send pages from the Concepts app</span><Button variant="ghost" size="icon" aria-label="Close Concepts setup" {...handlers("Close Concepts setup", () => { setConceptsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')?.focus(); })}><XIcon /></Button></div>
+				<ConceptsSetup chatId={chatId} onCheck={() => void review().catch(() => {})} />
 			</div>}
 			{pagesOpen && <div className="hw-toolsPanel hw-pagesPanel" data-testid="notebook-pages">
 				<div className="hw-toolsHeading"><h3>Pages</h3><Button variant="ghost" aria-label="Close pages" {...handlers("Close pages", () => { setPagesOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Pages"]')?.focus(); })}><XIcon /></Button></div>
@@ -320,7 +339,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				</div>
 			</div>{fingerHint && <p className="hw-fingerHint" role="status" data-testid="finger-hint">Write with your pen · fingers scroll the page</p>}<HandwritingToolbar variant={palette} tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} clear={clear} togglePaper={() => setDimPaper(v => !v)} /></div></div>
 			{saved.notice && <div className="hw-notice" role="status">{saved.notice}{saved.notice !== "Opening notebook…" && <button type="button" className="min-h-11 px-3 underline" {...handlers("Retry", () => { void recovery.current?.retry().then(() => refreshStatus.current()); })}>Retry</button>}</div>}
-			{attachmentNotice && <div className="hw-notice" role="status">{attachmentNotice.text}{attachmentNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
+			{shownNotice && <div className="hw-notice" role="status">{shownNotice.text}{shownNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
 		</aside>
 	</div>;
 }

@@ -7,6 +7,7 @@ import { ModelControl, catalogLimits, useModelCatalog } from "@/components/model
 import { MenuShell } from "@/components/menu-shell";
 import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { useOneMenu } from "@/components/one-menu";
 
 function UsagePanel({ children, anchorRef, onClose, closing, onClosed }: { children: ReactNode; anchorRef: RefObject<HTMLDivElement | null>; onClose: () => void; closing: boolean; onClosed: () => void }) {
 	const phone = usePhoneLayout();
@@ -85,6 +86,7 @@ export function StatsBar({
 	phonePlan?: ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
+	useOneMenu("usage", open, () => setOpen(false));
 	const phone = usePhoneLayout();
 	const presence = usePhoneMenuPresence(open ? "usage" : null, phone);
 	const [selectedModel, setSelectedModel] = useState<string | undefined>();
@@ -195,7 +197,7 @@ export function StatsBar({
 							)}
 							<div className="flex justify-between gap-2">
 								<span>{subscription ? "Usage" : "Total cost"}</span>
-								<span className="tabular-nums text-card-foreground">{costLabel}</span>
+								<span className="tabular-nums text-card-foreground">{costLabel === "—" ? "Not reported by this provider" : costLabel}</span>
 							</div>
 							{cacheHitRate !== null && (
 								<div data-testid="stats-cache-hit-rate" className="flex justify-between gap-2">

@@ -54,6 +54,9 @@ export function ReadingThinkingField({
 	targetKey?: string;
 }) {
 	const [draft, setDraft] = useState(value);
+	// Phones fold the notes while the question is open (owner B12): the
+	// step stays, the box steps back; one tap unfolds it to re-read or add.
+	const [unfolded, setUnfolded] = useState(false);
 	useLayoutEffect(() => { setDraft(value); }, [revision, value]);
 	const owner = { kind: "question" as const, toolCallId, channel: "reading-thinking" as const };
 	const owned = useNotebookActivityDraft(notebook, owner);
@@ -90,8 +93,14 @@ export function ReadingThinkingField({
 			data-notebook-channel="reading-thinking"
 			data-reading-claim={claim}
 			data-testid="reading-thinking-field"
+			data-folded={!claim && !unfolded ? "true" : undefined}
 			className="lh-reading-input pointer-events-auto mb-2 rounded-2xl border bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50"
 		>
+			{!claim && <button type="button" className="lh-reading-fold" aria-expanded={unfolded} data-testid="reading-thinking-fold" onClick={() => setUnfolded((open) => !open)}>
+				<span className="lh-reading-fold-label">Thinking while reading</span>
+				<span className="lh-reading-fold-preview">{text.trim() ? text.trim() : "Add a thought"}</span>
+				<ChevronRightIcon aria-hidden className="lh-reading-fold-chevron" />
+			</button>}
 			<div className="pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 				Thinking while reading
 			</div>
@@ -140,7 +149,7 @@ export function ReadingThinkingField({
 				placeholder="Whatever comes to mind as you read."
 				className="field-sizing-content lh-input max-h-40 w-full resize-none bg-transparent py-0.5 outline-none placeholder:text-muted-foreground/70"
 			/></CompactLearningInput>
-			{claim && onOpen && <button type="button" className="lh-phone-reveal bg-primary text-primary-foreground" aria-label="Show question" data-testid="teach-check-reveal" onClick={onOpen}><span className="lh-phone-reveal-label" aria-hidden="true">Show question</span><ChevronRightIcon size={18} /></button>}
+			{claim && onOpen && <button type="button" className="lh-phone-reveal" aria-label="Show question" data-testid="teach-check-reveal" onClick={onOpen}><span className="lh-phone-reveal-label" aria-hidden="true">Show question</span><ChevronRightIcon size={18} /></button>}
 			</div>
 		</div>
 	);

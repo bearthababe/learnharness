@@ -164,6 +164,21 @@ export const ChatActionsContext = createContext<{
  *  so the machine-readable {code, missing} shape survives to here. Real
  *  errors (any other text) read as null and keep the honest banner.
  *  Exported pure for tests. */
+
+/** iOS raises the keyboard only for a focus made inside the tap itself, and
+ *  the rename field mounts a moment later. A stand-in field takes the focus
+ *  during the tap; the real field takes it over when it mounts (round 11:
+ *  tapping the session title on a phone renames it). */
+function holdKeyboardForRename() {
+	if (typeof window === "undefined" || !window.matchMedia?.("(pointer: coarse)").matches) return;
+	const stand = document.createElement("input");
+	stand.setAttribute("aria-hidden", "true");
+	stand.tabIndex = -1;
+	stand.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;pointer-events:none";
+	document.body.appendChild(stand);
+	stand.focus({ preventScroll: true });
+	setTimeout(() => stand.remove(), 1000);
+}
 export function parseModelsRefusal(message: string | undefined): ModelSlotName[] | null {
 	if (!message) return null;
 	try {
@@ -299,7 +314,7 @@ export function Chat({
 	// (core/view.ts projectView); sends are ONE explicit input event each
 	// ({chatId, input} — the stash indirection died with the SDK), and the
 	// turn stream is the VERBATIM AgentEvent passthrough the server emits.
-	const { messages, nativeMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, discardUnsentText, discardUnsentThinking, resumeStream, setReattachSettled } =
+	const { messages, nativeMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, restoreStoredQuestionDrafts, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, discardUnsentText, discardUnsentThinking, resumeStream, setReattachSettled } =
 		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight });
 	const sharedWriting = useSharedWriting(chatId, nativeMessages);
 	const hasSharedWriting = sharedWriting.pending.length > 0;
@@ -686,14 +701,26 @@ export function Chat({
 		window.addEventListener(kbdEventForChat("toggle-user-thinking"), onToggle);
 		return () => window.removeEventListener(kbdEventForChat("toggle-user-thinking"), onToggle);
 	}, []);
+	// Reading notes are kept as they are typed (device copy via the session
+	// model), so leaving the session or a reload never loses them.
+	const pendingKeyRef = useRef<string | null>(null);
 	const applyReadingThinking = useCallback((v: string) => {
 		readingThinkingRef.current = v;
-	}, []);
+		if (pendingKeyRef.current) saveQuestionDraft(pendingKeyRef.current, { readingThinking: v });
+	}, [saveQuestionDraft]);
 	const clearReadingThinking = useCallback(() => {
 		readingThinkingRef.current = "";
 		setReadingThinkingSeed((previous) => ({ ...previous, value: "", revision: previous.revision + 1 }));
 	}, []);
 	const pendingQuestionId = pending?.key ?? null;
+	pendingKeyRef.current = pendingQuestionId;
+	// Device-kept question drafts (B1) join after hydration, never in the
+	// server-matching first render; the epoch remounts the question form
+	// once so it picks the restored answer up.
+	const [storedDraftEpoch, setStoredDraftEpoch] = useState(0);
+	useLayoutEffect(() => {
+		if (restoreStoredQuestionDrafts()) setStoredDraftEpoch((epoch) => epoch + 1);
+	}, [restoreStoredQuestionDrafts]);
 	useLayoutEffect(() => {
 		// Different calls never share a draft; a failed submission of THIS
 		// call restores the reading channel alongside the form's snapshot.
@@ -704,7 +731,7 @@ export function Chat({
 				? previous
 				: { questionId: pendingQuestionId, value, revision: previous.revision + 1 },
 		);
-	}, [pendingQuestionId, questionDraft]);
+	}, [pendingQuestionId, questionDraft, storedDraftEpoch]);
 
 	// The phase at every message (one linear fold): the transcript draws a
 	// color-coded dotted divider at each boundary; the header chip reads the
@@ -717,6 +744,7 @@ export function Chat({
 	 *  in the composer, if any. A newer draft is never mistaken for one. */
 	const [unsentShown, setUnsentShown] = useState<(UnsentEntry & { kind: "failed" | "restored" })[]>([]);
 	const [boxEntryId, setBoxEntryId] = useState<string | null>(null);
+	const quotedUnsent = unsentShown.filter((entry) => entry.id !== boxEntryId).length;
 	const boxEntryRef = useRef(boxEntryId);
 	boxEntryRef.current = boxEntryId;
 	/* The composer draft ref is synchronous, so sends and dictation flushes
@@ -1024,6 +1052,14 @@ export function Chat({
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
 	const lastErrorRef = useRef<string | null>(null);
 	if (error) lastErrorRef.current = error.message;
+	// A connection error clears itself when the connection is back (not-sent
+	// messages keep their own note and Send again).
+	useEffect(() => {
+		if (!error || !friendlyNetworkError(error.message)) return;
+		const onOnline = () => clearError();
+		window.addEventListener("online", onOnline);
+		return () => window.removeEventListener("online", onOnline);
+	}, [error, clearError]);
 	const sendAllowed = !notebook.sendBlocked && !pending && !activeProblem && !compacting && !((hasSharedWriting || handwritingSubmission.hasAttempt()) && busy);
 
 	/* THE PRACTICE PAUSE (owner round 16): between problems — practice
@@ -1598,7 +1634,19 @@ export function Chat({
 				try {
 					if (reviewed.length) await handwritingSubmission.submit({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission, writingIds: reviewed.map(image => image.id) }, reviewed, "composer");
 					else if (busy) await steer(input.text, input);
-					else await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission });
+					else {
+						// The same honest recovery as plain sends: a device copy until
+						// acknowledged; not acknowledged → "Not sent", still in the box.
+						const id = newUnsentId(), words = input.text.trim();
+						if (words) putUnsent(chatId, { id, text: words, at: Date.now() });
+						const accepted = await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission });
+						if (accepted) { if (words) removeUnsent(chatId, id); }
+						else if (words) {
+							boxEntryRef.current = id;
+							setBoxEntryId(id);
+							setUnsentShown((shown) => [...shown.filter((entry) => entry.id !== id), { id, text: words, at: Date.now(), kind: "failed" }]);
+						}
+					}
 				}
 				finally { await notebook.session.tutor.reconcile(input.submission.id); }
 			}).catch(() => {});
@@ -1708,7 +1756,9 @@ export function Chat({
 						>
 <button
 							type="button"
-														onClick={() => {
+							data-testid="session-title"
+							onClick={() => {
+								holdKeyboardForRename();
 								setTitleDraft(titleText);
 								setRenaming(true);
 							}}
@@ -1773,7 +1823,9 @@ export function Chat({
 					)}
 					{writingOn && <Button variant="outline" size="sm" className="lh-header-write shrink-0" onClick={() => handwriting.show(true)} data-testid="open-notebook" aria-label="Write"><PenLineIcon aria-hidden /><span className="lh-header-write-label">Write</span></Button>}
 				</TopBar>
-				{!notebookVisible && notebook.error && <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>}
+				{!notebookVisible && notebook.error && (friendlyNetworkError(notebook.error)
+					? <p role="status" className="lh-quiet-status px-3 py-1">Offline — your notebook working is kept and syncs when you're back.</p>
+					: <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>)}
 
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
 				<div ref={sessionFindScopeRef} data-input-owner="tutor" className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -2053,19 +2105,22 @@ export function Chat({
 							)}
 							{openingError && <p role="alert" className="text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
 							{unsentShown.length > 0 && (
-								<div role="status" data-testid="unsent-notice" className="lh-unsent-notice">
+								<div role="status" data-testid="unsent-notice" className="lh-unsent-notice" data-several={quotedUnsent > 1 || undefined}>
+									{/* Several failed messages: one header, one compact line each
+									    (tap a line to read it all); none is ever dropped. */}
+									{quotedUnsent > 1 && <span className="lh-unsent-head">{`${quotedUnsent} messages not sent — ${unsentReason(lastErrorRef.current)}.`}</span>}
 									{unsentShown.map((entry) => entry.id === boxEntryId ? (
 										<div key={entry.id} className="lh-unsent-row" data-unsent-in-box="">
 											<span>{unsentNoticeText(entry.kind, lastErrorRef.current, true)}</span>
 											<span className="lh-unsent-actions">
-												<Button variant="outline" size="xs" data-testid="unsent-send-again" onClick={() => { clearError(); doSend(); }}>Send again</Button>
+												<Button variant="outline" size="xs" data-testid="unsent-send-again" onClick={() => { clearError(); void doSteerOrSend(); }}>Send again</Button>
 												<Button variant="ghost" size="xs" data-testid="unsent-dismiss" onClick={() => setUnsentShown((shown) => shown.filter((item) => item.id !== entry.id))}>Dismiss</Button>
 											</span>
 										</div>
 									) : (
 										<div key={entry.id} className="lh-unsent-row" data-unsent-quoted="">
-											<span>{unsentNoticeText(entry.kind, lastErrorRef.current, false)}</span>
-											<blockquote className="lh-unsent-quote" data-testid="unsent-quote">{entry.text}</blockquote>
+											{quotedUnsent === 1 && <span>{unsentNoticeText(entry.kind, lastErrorRef.current, false)}</span>}
+											<blockquote className="lh-unsent-quote" data-testid="unsent-quote" tabIndex={0} title={entry.text} onClick={(event) => event.currentTarget.toggleAttribute("data-expanded")}>{entry.text}</blockquote>
 											<span className="lh-unsent-actions">
 												<Button variant="outline" size="xs" data-testid="unsent-send-again" onClick={() => sendUnsentAgain(entry)}>Send again</Button>
 												<Button variant="ghost" size="xs" data-testid="unsent-edit" onClick={() => editUnsent(entry)}>Edit</Button>
@@ -2119,6 +2174,7 @@ export function Chat({
 					hasSharedWriting={hasSharedWriting || handwritingSubmission.hasAttempt()}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.key)?.form : undefined}
+					questionDraftEpoch={storedDraftEpoch}
 					onSaveQuestionDraft={(form) => { if (pending) saveQuestionDraft(pending.key, { form }); }}
 					practice={activeProblem}
 					compactionRunning={compacting || (hasSharedWriting && busy)}
@@ -2138,13 +2194,13 @@ export function Chat({
 					pricing={pricing}
 					notebookToggle={<>{notebookOn && <span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
 						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
-						className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+						className="lh-notebook-toggle pointer-events-auto inline-flex shrink-0 items-center justify-center text-muted-foreground"
 						onClick={() => {
 							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
 							if (notebookVisible && workspaceRef.current) {
 								void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
 							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
-						}}><NotebookPenIcon className="size-4" /></button>
+						}}><NotebookPenIcon className="size-4" aria-hidden /><span className="lh-notebook-toggle-label" aria-hidden>Notebook</span></button>
 						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="text-muted-foreground"><PaperclipIcon className="size-3" aria-hidden="true" /></span>}
 					</span>}</>}
 					onReserve={setDockReserve}
@@ -2175,8 +2231,10 @@ export function Chat({
 					}
 					composer={
 						<div>
-						{tutorDraftState.error && <p role="alert" className="px-3 text-xs text-destructive">Unsent draft: {tutorDraftState.error}</p>}
-						{tutorDraftState.saving && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
+						{tutorDraftState.error && (friendlyNetworkError(tutorDraftState.error)
+							? <p role="status" className="lh-quiet-status px-3">Draft kept on this device — it syncs when you're back online.</p>
+							: <p role="alert" className="px-3 text-xs text-destructive">Your draft couldn't be saved yet: {tutorDraftState.error}</p>)}
+						{tutorDraftState.saving && !tutorDraftState.error && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
 						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}
 						<ChatSessionComposer
 							dictation={tutorDictation}
@@ -2420,6 +2478,7 @@ function DockOverlay({
 	hasSharedWriting,
 	pending,
 	initialQuestionDraft,
+	questionDraftEpoch,
 	onSaveQuestionDraft,
 	practice,
 	compactionRunning,
@@ -2454,6 +2513,8 @@ function DockOverlay({
 	hasSharedWriting?: boolean;
 	pending: ReturnType<typeof pendingQuestionOf>;
 	initialQuestionDraft?: QuestionFormDraft;
+	/** Bumps when device-kept drafts are restored after mount (B1). */
+	questionDraftEpoch?: number;
 	onSaveQuestionDraft: (draft: QuestionFormDraft) => void;
 	/** Compaction running for this chat (round 14) — the docks' submit
 	 *  affordance gate (the server's registry is the real one). */
@@ -2505,7 +2566,7 @@ function DockOverlay({
 	 *  home and /chat/new carry, above the composer while slots are unset. */
 	setupCta?: React.ReactNode;
 }) {
-	const { isAtBottom, scrollToBottom, scrollRef } = useStickToBottomContext();
+	const { isAtBottom, scrollToBottom, scrollRef, stopScroll } = useStickToBottomContext();
 	const wideQuestion = fullQuestionWidth && (!!pending || !!practice);
 	// Render-fresh bottom state (flicker round): the arrival block below reads
 	// it DURING RENDER — the same value the after-paint effect used to read a
@@ -2583,6 +2644,27 @@ function DockOverlay({
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const bodyRef = useRef<HTMLDivElement>(null);
 	const shellRef = useRef<HTMLDivElement>(null);
+	// "Hide" on an open question (round 11): fold it to its bar and bring
+	// the lesson down to sit just above it, so re-reading needs no scroll.
+	// The learner's picks and words stay; scrolling back to the end, or the
+	// bar, opens it again.
+	const collapseQuestion = () => {
+		expandIntentRef.current = false;
+		setExpanded(false);
+		const settle = () => {
+			const view = scrollRef.current, block = blockRef.current;
+			const spacer = view?.querySelector<HTMLElement>('[data-testid="dock-spacer"]');
+			if (!view || !block || !spacer) return;
+			const gap = block.getBoundingClientRect().top - 12 - spacer.getBoundingClientRect().top;
+			if (gap <= 0) return;
+			stopScroll();
+			view.scrollTop = Math.max(0, view.scrollTop - gap);
+		};
+		window.setTimeout(() => {
+			const morph = shellRef.current?.getAnimations() ?? [];
+			void Promise.all(morph.map((a) => a.finished.catch(() => undefined))).then(() => requestAnimationFrame(settle));
+		}, 0);
+	};
 	const contentRef = useRef<HTMLDivElement>(null);
 	const mode = pending
 		? `question:${pending.key}`
@@ -2636,7 +2718,10 @@ function DockOverlay({
 	const offer = useCallback((blockH: number) => {
 		// The fade's drawn height (phones draw a shorter one), so the tail
 		// reserves exactly what covers the content and no blank band more.
-		const fadeH = fadeRef.current?.offsetHeight || GRADIENT_H;
+		// A hidden fade (the tablet writing split hides it) covers nothing,
+		// so it reserves nothing — no blank band above the composer.
+		const fade = fadeRef.current;
+		const fadeH = !fade ? GRADIENT_H : typeof fade.getClientRects !== "function" ? fade.offsetHeight || GRADIENT_H : fade.getClientRects().length > 0 ? fade.offsetHeight : 0;
 		const next = blockH + fadeH;
 		if (next <= reserveRef.current + 0.5 && pendingRef.current) return;
 		// Stamp growth at the source, including child-only field resizes, so
@@ -2921,6 +3006,7 @@ function DockOverlay({
 									expanded={expanded}
 									reveal={revealPending}
 									phase={phase}
+									onCollapse={revealPending ? undefined : collapseQuestion}
 									onExpand={revealPending ? () => {
 										// Keep the reading field's dictation claim until its final
 										// words arrive, just like Enter in Thinking while reading.
@@ -2930,6 +3016,7 @@ function DockOverlay({
 									} : expandAndReveal}
 									onSubmit={onSubmitAnswer}
 									initialDraft={initialQuestionDraft}
+									draftEpoch={questionDraftEpoch}
 									onSaveDraft={onSaveQuestionDraft}
 									onEscape={dictationCancel}
 									dictationClaim={!revealPending}
@@ -2937,6 +3024,7 @@ function DockOverlay({
 								/>
 							) : practice ? (
 								<PracticeDock
+									chatId={chatId}
 									notebook={notebook}
 									dictation={dictation}
 									hasSharedWriting={hasSharedWriting}

@@ -46,3 +46,18 @@ it("all unsafe/mismatched paths are refused before the pipeline or organizationa
 	}
 	assert.equal(calls, 0); assert.deepEqual(stores.sourceOrganizationStore.read(), before);
 });
+
+it("a refused import (no models set up) leaves no source placement or new empty folder behind", async () => {
+	const { ModelsNotConfiguredError } = await import("../src/core/settings.ts");
+	const before = stores.sourceOrganizationStore.read();
+	const kept = before.folders.find((f) => f.importPath === "Course");
+	extraction.importNotes = async () => { throw new ModelsNotConfiguredError(["cheap"]); };
+	const paths = ["Course/Week 3/new.md", "Fresh/Sub/notes.md"];
+	const response = await POST(request(["new.md", "notes.md"], paths));
+	const { results } = await response.json();
+	assert.ok(results.every((r: { code?: string }) => r.code === "models_not_configured"));
+	const after = stores.sourceOrganizationStore.read();
+	assert.deepEqual(after.placements, before.placements, "no placement for a source that was never written");
+	assert.deepEqual(after.folders.map((f) => f.importPath), before.folders.map((f) => f.importPath), "the folders this import created are gone again");
+	assert.ok(kept && after.folders.some((f) => f.id === kept.id), "an existing folder stays");
+});

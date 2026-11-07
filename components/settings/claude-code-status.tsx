@@ -99,7 +99,7 @@ export function ClaudeCodeInstallationStatus() {
 	}, [enabled, refresh]);
 
 	return <div className="space-y-2" data-testid="claude-code-installation">
-		<div className="flex items-center gap-3">
+		<div className="lh-settings-row flex items-center justify-between gap-3">
 			<span className="font-prose text-(length:--lh-prose-size) text-foreground">Claude Code</span>
 			<Toggle label="Claude Code" checked={enabled} disabled={!loaded || saving} onChange={(next) => void save(next)} />
 		</div>

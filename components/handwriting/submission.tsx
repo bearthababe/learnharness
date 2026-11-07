@@ -129,7 +129,9 @@ function describeDraft(editor: EditorSnapshot): string {
 export function HandwritingDeliveryNotice({ bridge, activeTarget }: { bridge: Bridge; activeTarget?: string }) {
 	const model = bridge.model, attempt = model?.attempt;
 	return <div className="text-xs" data-testid="handwriting-delivery">
-		{bridge.attachment()?.noticeEntries().map(({ pageId, text, refresh }) => <p role="status" key={pageId}>{text}{refresh && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.refreshReview().catch(() => {})}>Refresh review</button>}</p>)}
+		{/* "Attached · not sent" is the tray's own heading; only notices the
+		    tray doesn't say (failures, refresh) repeat here (round 11). */}
+		{bridge.attachment()?.noticeEntries().filter(({ kind }) => kind !== "attached" && kind !== "updated").map(({ pageId, text, refresh }) => <p role="status" key={pageId}>{text}{refresh && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.refreshReview().catch(() => {})}>Refresh review</button>}</p>)}
 		{model?.notice && <p role="status">{model.notice}</p>}
 		{attempt && <div data-testid="handwriting-attempt-review" className="lh-attempt-review">
 			<p className="lh-attempt-label">Not confirmed yet</p>

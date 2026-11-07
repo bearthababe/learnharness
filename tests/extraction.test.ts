@@ -2519,6 +2519,13 @@ describe("notes import completion and retry reliability", () => {
 		await assert.rejects(createExtractionPipeline({ chatStore, graphStore: ledgers, extractor: submitModel("submit_findings", NOTES_FINDINGS), auditor: submitModel("submit_review", NOTES_VERDICT), providerKeyMissing: () => providerKeyMissing("openai", ["cheap"]) }).importNotes(input), ProviderKeyMissingError);
 	});
 
+	it("a refused import writes no source record (round 11: no empty source in Ideas)", async () => {
+		const ledgers = memoryLedgers();
+		await assert.rejects(createExtractionPipeline({ chatStore, graphStore: ledgers }).importNotes(input), ModelsNotConfiguredError);
+		await assert.rejects(createExtractionPipeline({ chatStore, graphStore: ledgers, extractor: submitModel("submit_findings", NOTES_FINDINGS), auditor: submitModel("submit_review", NOTES_VERDICT), providerKeyMissing: () => providerKeyMissing("openai", ["cheap"]) }).importNotes(input), ProviderKeyMissingError);
+		assert.deepEqual(ledgers.readSources(), []);
+	});
+
 	it("isolates an ordinary failed chunk, reports partial, and keeps earlier/later merges and usage", async () => {
 		const ledgers = memoryLedgers();
 		let calls = 0;

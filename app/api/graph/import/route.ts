@@ -138,22 +138,28 @@ export async function POST(request: Request) {
 		return Response.json({ results: [], error: "Import contains an unsafe or mismatched relative path" }, { status: 400 });
 	}
 	const results: ImportResult[] = [];
+	// Registrations a config refusal must undo once every worker is done.
+	const refusedSources: string[] = [];
+	const createdFolders: string[] = [];
 	const queue = files.map((file, requestIndex) => ({ file, requestIndex, filePath: paths[requestIndex]! }));
 	const workers = Array.from({ length: Math.min(3, files.length) }, async () => {
 		for (;;) {
 			const next = queue.shift();
 			if (!next) return;
 			const { file, requestIndex, filePath } = next;
+			let registration: { sourceId: string; createdFolderIds: string[] } | undefined;
 			try {
 				const notes = await readNotesFile(file);
 				if (notes.kind === "refused") {
 					results.push({ filePath, requestIndex, outcome: "failed", ok: false, error: notes.error });
 					continue;
 				}
-				sourceDirectory.registerImport(filePath);
+				registration = sourceDirectory.registerImport(filePath);
+				createdFolders.push(...(registration?.createdFolderIds ?? []));
 				const stats = await extraction.importNotes({ filePath, text: notes.text });
 				results.push({ filePath, requestIndex, outcome: "completed", ok: true, stats, ...(notes.notice ? { notice: notes.notice } : {}) });
 			} catch (err) {
+				if ((err instanceof ModelsNotConfiguredError || err instanceof ProviderKeyMissingError) && registration) refusedSources.push(registration.sourceId);
 				if (err instanceof ModelsNotConfiguredError) {
 					results.push({ filePath, ok: false, requestIndex, outcome: "failed", error: err.envelope.error,
 						code: "models_not_configured", missing: err.envelope.missing });
@@ -170,5 +176,9 @@ export async function POST(request: Request) {
 		}
 	});
 	await Promise.all(workers);
+	if (refusedSources.length > 0) {
+		sourceDirectory.forgetImports(refusedSources, createdFolders);
+		emit("sources-changed", {});
+	}
 	return Response.json({ results });
 }

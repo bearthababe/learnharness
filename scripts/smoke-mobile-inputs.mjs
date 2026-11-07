@@ -606,171 +606,27 @@ try {
 				baseline, above, opacity: Number(css.opacity), fontSize: css.fontSize };
 		};
 	});
-	const assertContour = samples => {
-		const full = samples.reduce((a, b) => a.height > b.height ? a : b);
-		assert.ok(full.baseline.every(inset => inset > 1), "Resting rounded baseline is shorter than the card width");
-		for (const sample of samples) {
-			// Hit testing snaps transformed coordinates to pixels. Near a circle's
-			// tangent that can move the reported intersection a few horizontal px.
-			assert.ok(sample.baseline.every((inset, i) => inset > 8 && Math.abs(inset - full.baseline[i]) <= 4), "Bottom contour retains resting corners through early/late frames");
-			assert.equal(sample.above, false, "Unrevealed card area cannot receive input");
-		}
-	};
-	const captureCardExit = () => page.evaluate(() => {
-		const animate = Element.prototype.animate, effects = [];
-		const clock = Object.getOwnPropertyDescriptor(Animation.prototype, "startTime");
-		window.__lhExitStarts = null;
-		Element.prototype.animate = function (...args) {
-			const animation = animate.apply(this, args);
-			if (this.matches('[data-lh-menu][data-closing="true"], [data-testid="phone-menu-backdrop"]')) {
-				const effect = { animation, start: null };
-				effects.push(effect);
-				// Pause at the real shared start, before a remote round trip or a
-				// settings read can outlast the 400ms interval under inspection.
-				Object.defineProperty(animation, "startTime", {
-					configurable: true,
-					get() { return clock.get.call(animation); },
-					set(value) {
-						clock.set.call(animation, value);
-						effect.start = value;
-						animation.pause();
-						delete animation.startTime;
-						if (effects.length === 2 && effects.every(e => e.start !== null)) window.__lhExitStarts = effects.map(e => e.start);
-					},
-				});
-				if (effects.length === 2) Element.prototype.animate = animate;
-			}
-			return animation;
-		};
-	});
+	// Round 11 (owner): phone cards open and close at once, like Settings and
+	// Extract files — no fall-out motion. The functional checks stay: the
+	// card opens and fits, the opener and outside taps close it without
+	// reopening or reaching what lies beneath, Escape closes, focus returns.
+	const captureCardExit = async () => {};
 	const assertCardExit = async (trigger, card) => {
-		await page.waitForFunction(() => !!window.__lhExitStarts);
-		await page.waitForSelector(`[data-testid="${card}"][data-closing="true"]`);
-		const exit = await page.evaluate(({ trigger, card }) => {
-			const menu = document.querySelector(`[data-testid="${card}"]`), backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-			const animation = menu.getAnimations()[0], blur = backdrop.getAnimations()[0];
-			const starts = window.__lhExitStarts, timings = [animation.effect.getTiming(), blur.effect.getTiming()];
-			animation.pause(); blur.pause();
-			const samples = [0, 1, 4, 8, 16, 32, 100, 200, 300, 368, 384, 392, 396, 399, 400].map(time => {
-				animation.currentTime = time; blur.currentTime = time;
-				return { time, ...window.__lhPhoneFrameSample(menu),
-					blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]), shellHeight: document.querySelector('.lh-app-shell').getBoundingClientRect().height };
-			});
-			animation.currentTime = 200; blur.currentTime = 200;
-			return { starts, timings, samples, buttonTop: document.querySelector(`[data-testid="${trigger}"]`).getBoundingClientRect().top,
-				locked: document.querySelector('.lh-app-shell').inert, cardInert: menu.inert };
-		}, { trigger, card });
-		assert.ok(exit.starts[0] !== null);
-		assert.equal(exit.starts[0], exit.starts[1], "Exit card and blur share a start time");
-		for (const timing of exit.timings) { assert.equal(timing.duration, 400); assert.equal(timing.easing, "linear"); }
-		const start = exit.samples[0], end = exit.samples.at(-1);
-		assertContour(exit.samples);
-		assert.ok(end.height <= 2, `Card collapses to its fixed bottom edge: ${JSON.stringify({ card, ...exit })}`);
-		for (const sample of exit.samples) {
-			const progress = sample.time / 400;
-			assert.ok(Math.abs(sample.height - (start.height + (end.height - start.height) * progress)) <= 1, "Closing height follows elapsed time linearly");
-			assert.ok(Math.abs(sample.blur - 4 * (1 - progress)) < .001, "Closing blur shares linear progress");
-			assert.equal(sample.opacity, 1, "No separate line-fade phase");
-		}
-		assert.ok(exit.samples.every(s => Math.abs(s.bottom - start.bottom) <= 1 && s.bottom <= exit.buttonTop - 3), "Bottom edge stays above the button for the whole close");
-		assert.ok(exit.samples.every(s => s.width === start.width && s.fontSize === start.fontSize), "Card width and text size stay constant");
-		assert.equal(start.blur, 4); assert.equal(end.blur, 0);
-		assert.ok(exit.locked && exit.cardInert, "Lesson and departing options cannot receive input");
-		assert.ok(exit.samples.every(sample => sample.shellHeight === start.shellHeight), "Lesson remains stationary through exit");
-		await page.keyboard.press("Escape");
-		await page.locator('[data-testid="phone-menu-trigger"]').click();
-		assert.ok(await page.$(`[data-testid="${card}"]`), "Repeated Escape neither removes nor restarts the paused exit");
-		assert.equal(await page.$eval(`[data-testid="${card}"]`, e => e.getAnimations()[0].currentTime), 200, "Repeated opener tap does not restart exit");
-		await page.$eval(`[data-testid="${card}"]`, menu => {
-			menu.getAnimations().forEach(animation => animation.finish());
-			document.querySelector('[data-testid="phone-menu-backdrop"]').getAnimations().forEach(animation => animation.finish());
-		});
-		await page.waitForSelector(`[data-testid="${card}"]`, { hidden: true });
-		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Lesson unlocks only after exit completes");
+		await page.waitForSelector(`[data-testid="${card}"]`, { hidden: true, timeout: 3000 });
+		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "The backdrop leaves with the card");
+		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "The lesson unlocks as soon as the card closes");
+		assert.ok(await page.$(`[data-testid="${trigger}"]`), "The opener stays in place");
 	};
 	for (const [trigger, card, otherTrigger] of [
 		["stats-model", "model-menu", "stats-thinking"],
 		["stats-thinking", "thinking-menu", "stats-model"],
 		["stats-summary", "stats-detail", "stats-model"],
 	]) {
-		await page.evaluate(() => {
-			const animate = Element.prototype.animate;
-			window.__lhRestoreAnimate = () => { Element.prototype.animate = animate; };
-			Element.prototype.animate = function (...args) {
-				const animation = animate.apply(this, args);
-				if (this.matches("[data-lh-menu]")) {
-					// Reproduce a stale timeline tick after expensive layout. Starting
-					// from that old tick would skip the entire 400ms entrance.
-					if (!window.__lhDelayedFrameChecked) {
-						const until = performance.now() + 650;
-						while (performance.now() < until) { /* controlled main-thread stall */ }
-						window.__lhDelayedFrameChecked = true;
-					}
-					window.__lhCreatedAt = performance.now();
-					window.__lhCardEntrance = animation;
-				}
-				if (this.matches('[data-testid="phone-menu-backdrop"]')) {
-					window.__lhBlurEntrance = animation;
-					// Capture in the browser after the shared start frame, rather than
-					// racing a remote poll against a shorter, already-finished effect.
-					requestAnimationFrame(() => {
-						// Also delay execution within the frame: its supplied timestamp
-						// can now be stale even though it is a newly requested frame.
-						if (!window.__lhDelayedCallbackChecked) {
-							const until = performance.now() + 450;
-							while (performance.now() < until) { /* controlled callback delay */ }
-							window.__lhDelayedCallbackChecked = true;
-						}
-						window.__lhBeforeStartCallback = performance.now();
-						requestAnimationFrame(() => {
-							const card = window.__lhCardEntrance, blur = window.__lhBlurEntrance;
-							window.__lhEntranceStarts = [card.startTime, blur.startTime];
-							card.pause(); blur.pause();
-						});
-					});
-				}
-				return animation;
-			};
-		});
 		await page.locator(`[data-testid="${trigger}"]`).click();
-		await page.waitForFunction(() => !!window.__lhEntranceStarts);
-		const entrance = await page.evaluate(({ trigger, card }) => {
-			const animation = window.__lhCardEntrance, blur = window.__lhBlurEntrance;
-			const menu = document.querySelector(`[data-testid="${card}"]`);
-			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-			const button = document.querySelector(`[data-testid="${trigger}"]`);
-			const startTimes = window.__lhEntranceStarts;
-			animation.pause(); blur.pause();
-			const samples = [0, 1, 4, 8, 16, 32, 100, 200, 300, 368, 384, 392, 396, 399, 400].map(time => {
-				animation.currentTime = time; blur.currentTime = time;
-				return { time, ...window.__lhPhoneFrameSample(menu),
-					blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]) };
-			});
-			const timings = [animation.effect.getTiming(), blur.effect.getTiming()];
-			animation.finish(); blur.finish(); window.__lhRestoreAnimate(); delete window.__lhCardEntrance; delete window.__lhBlurEntrance; delete window.__lhEntranceStarts;
-			return { samples, timings, startTimes, createdAt: window.__lhCreatedAt, callbackAt: window.__lhBeforeStartCallback, buttonTop: button.getBoundingClientRect().top };
-		}, { trigger, card });
-		assert.ok(entrance.startTimes[0] !== null);
-		assert.ok(entrance.startTimes[0] >= entrance.createdAt - 20, "Fresh shared start does not backdate through a blocked frame");
-		assert.ok(entrance.startTimes[0] >= entrance.callbackAt - 1, "Shared start excludes delay within the frame callback");
-		assert.equal(entrance.startTimes[0], entrance.startTimes[1], "Card and blur share the same animation start");
-		for (const timing of entrance.timings) {
-			assert.equal(timing.duration, 400);
-			assert.equal(timing.easing, "linear");
-		}
-		const start = entrance.samples[0], end = entrance.samples.at(-1);
-		assertContour(entrance.samples);
-		assert.ok(start.height <= 2, "Card begins at its bottom edge");
-		for (const sample of entrance.samples) {
-			const progress = sample.time / 400;
-			assert.ok(Math.abs(sample.height - (start.height + (end.height - start.height) * progress)) <= 1, "Opening height follows elapsed time linearly");
-			assert.ok(Math.abs(sample.blur - 4 * progress) < .001, "Opening blur shares linear progress");
-			assert.equal(sample.opacity, 1, "Expansion starts immediately without a line-reveal phase");
-		}
-		assert.ok(entrance.samples.every(s => Math.abs(s.bottom - end.bottom) <= 1 && s.bottom <= entrance.buttonTop - 3), "Bottom edge never moves or crosses the opener");
-		assert.ok(entrance.samples.every(s => s.width === end.width && s.fontSize === end.fontSize), "Growing card keeps full width and normal-sized text");
-		assert.equal(entrance.samples[0].blur, 0, "Background starts clear");
-		assert.equal(end.blur, 4, "Background settles at lighter blur");
+		await page.waitForSelector(`[data-testid="${card}"]`, { visible: true });
+		assert.equal(await page.$eval(`[data-testid="${card}"]`, e => e.getAnimations().length), 0, "The card opens at once, without a fall-out animation");
+		assert.equal(await page.$eval('[data-testid="phone-menu-backdrop"]', e => e.getAnimations().length), 0, "The backdrop appears at once too");
+		await fitPanel(`[data-testid="${card}"]`);
 		await assertCardBackdrop();
 		const foreground = await page.evaluate(trigger => {
 			const original = document.querySelector(`[data-testid="${trigger}"]`), button = document.querySelector('[data-testid="phone-menu-trigger"]');
@@ -803,37 +659,11 @@ try {
 		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Outside tap cannot activate another card underneath");
 	}
 	await cardTouch.detach();
-	// Closing during early or later expansion stays continuous.
-	for (const time of [1, 20, 100]) {
-		await page.locator('[data-testid="stats-model"]').click();
-		await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]')?.getAnimations()[0]?.startTime != null);
-		const partial = await page.$eval('[data-testid="model-menu"]', (menu, time) => {
-			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-			for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = time; }
-			return { ...window.__lhPhoneFrameSample(menu), blur: getComputedStyle(backdrop).backdropFilter };
-		}, time);
-		await captureCardExit();
-		await page.keyboard.press("Escape");
-		await page.waitForFunction(() => !!window.__lhExitStarts);
-		assert.ok(await page.$('[data-testid="model-menu"][data-closing="true"]'), "Quick close remains mounted while captured");
-		const exitStart = await page.$eval('[data-testid="model-menu"]', menu => {
-			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-			for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = 0; }
-			return { ...window.__lhPhoneFrameSample(menu), blur: getComputedStyle(backdrop).backdropFilter };
-		});
-		assert.ok(Math.abs(partial.top - exitStart.top) <= 1, "Quick close starts from the current expansion height");
-		assert.deepEqual(exitStart.baseline, partial.baseline, "Quick close preserves the rounded baseline");
-		assert.equal(exitStart.opacity, partial.opacity, "Quick close retains full opacity");
-		assert.equal(exitStart.blur, partial.blur, "Quick close starts from the current blur");
-		await page.evaluate(() => {
-			Object.defineProperty(visualViewport, "height", { configurable: true, get: () => innerHeight - 100 });
-			visualViewport.dispatchEvent(new Event("resize"));
-		});
-		await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
-		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Viewport interruption releases both exit effects");
-		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Interrupted exit releases the lesson lock");
-		await page.evaluate(() => { delete visualViewport.height; visualViewport.dispatchEvent(new Event("resize")); });
-	}
+	// Escape closes an open card at once and returns the lesson.
+	await page.locator('[data-testid="stats-model"]').click();
+	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
+	await page.keyboard.press("Escape");
+	await assertCardExit("stats-model", "model-menu");
 	await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
 	await page.locator('[data-testid="stats-model"]').click();
 	assert.equal(await page.$eval('[data-testid="model-menu"]', e => e.getAnimations().length), 0, "Reduced motion skips card entrance");

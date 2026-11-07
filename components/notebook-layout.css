@@ -1,7 +1,7 @@
 /* Presentation counterpart of handwriting/notebook.css at 329677b. Keep these
  * shell classes independent of equation content for later shared extraction. */
 .session-workspace { container: equation-notebook / inline-size; }
-.session-panes { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; --notebook-context-share: var(--notebook-share-column, 50%); }
+.session-panes { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; --notebook-context-share: var(--notebook-share-column, 58%); }
 .session-tutor { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .session-panes[data-notebook-open="true"] > .session-tutor { flex: 0 0 calc(var(--notebook-context-share) - 14px); }
 .notebook-slot { display: flex; flex-direction: column; }
@@ -115,7 +115,9 @@ html[data-session-input-locked], html[data-session-input-locked] body { overflow
 }
 @media (prefers-reduced-motion: reduce) { .notebook-working-line[data-changed] { animation: none; box-shadow: inset 3px 0 0 var(--primary); } }
 /* What Apply will change, when a line or term is picked. */
-.notebook-scope { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 4px 4px 8px; font-size: var(--text-sm); color: var(--muted-foreground); }
-.notebook-scope button { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; }
-.notebook-scope button:is(:hover, :focus-visible) { background: var(--accent); color: var(--foreground); }
-.notebook-scope svg { width: 15px; height: 15px; }
+/* The picked line or term, in the header where the title was. */
+.notebook-frame-header .notebook-scope { display: inline-flex; align-items: center; gap: 2px; min-width: 0; margin-right: auto; padding-left: 12px; border-radius: 999px; background: var(--accent); color: var(--foreground); font-size: var(--text-sm); white-space: nowrap; }
+.notebook-frame-header .notebook-scope > span { overflow: hidden; text-overflow: ellipsis; }
+.notebook-frame-header .notebook-scope button { width: 36px; height: 36px; border-radius: 999px; }
+.notebook-frame-header .notebook-scope svg { width: 15px; height: 15px; }
+.notebook-numbers-hint { margin-top: 14px; color: var(--muted-foreground); font-size: 13px; line-height: 1.4; }

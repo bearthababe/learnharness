@@ -51,9 +51,12 @@ export function followAnsweredCard({ scroller, holdAutoFollow, before, pending, 
 		next.addEventListener("touchstart", stopOnUser, { passive: true });
 		if (typeof window !== "undefined") window.addEventListener("keydown", stopOnKey, true);
 	}
+	// While following, the jump-to-latest disc stays out of the reply's way.
+	if (typeof document !== "undefined") document.documentElement.dataset.answerFollow = "";
 	function stop() {
 		if (done) return;
 		done = true;
+		if (typeof document !== "undefined") delete document.documentElement.dataset.answerFollow;
 		clearInterval(interval);
 		resize?.disconnect();
 		element?.removeEventListener("wheel", stopOnUser);

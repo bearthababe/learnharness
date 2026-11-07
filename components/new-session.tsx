@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { BookOpenIcon, DumbbellIcon, TargetIcon } from "lucide-react";
+import { BookOpenIcon, DumbbellIcon, HomeIcon, TargetIcon } from "lucide-react";
 import { Conversation, ConversationContent, ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { Composer } from "@/components/composer";
 import { DictationBar, joinDictation, useDictation } from "@/components/dictation";
@@ -189,6 +189,12 @@ export function DraftShell({
 							<div className={DOCK}>
 								<div className="lh-mode-row pointer-events-auto">
 									<nav className="lh-segmented lh-mode-switch" aria-label="Session type" data-testid="new-session-mode-switch">
+											{/* Home leads back to the graph: this page is where a new
+											    session starts, and the row says so (owner B17). */}
+											<Link href="/" data-kind="home" data-testid="new-session-home" aria-label="Home">
+												<HomeIcon aria-hidden="true" />
+												<span className="lh-mode-home-label">Home</span>
+											</Link>
 											{(["teach", "practice", "drill"] as const).map((m) => (
 												<Link
 													key={m}
@@ -203,13 +209,11 @@ export function DraftShell({
 												</Link>
 											))}
 										</nav>
+									{/* Beside the mode, never below it: choosing Practice must not
+									    move the screen (owner B9). */}
+									{(picks.length > 0 || mode !== "teach") && <NodePickerControl count={picks.length} onOpen={onOpenPicker} onClear={onClearPicks} />}
 								</div>
-								<ComposerActions
-									picker={(picks.length > 0 || mode !== "teach") && (
-										<NodePickerControl count={picks.length} onOpen={onOpenPicker} onClear={onClearPicks} />
-									)}
-									setup={setupCta}
-								/>
+								<ComposerActions setup={setupCta} />
 								{startError && <p role="alert" className="pointer-events-auto mb-2 text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
 								<div data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-lg">
 									<Composer

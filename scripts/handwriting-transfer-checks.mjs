@@ -92,7 +92,7 @@ export async function checkHandwritingTransfers({ page, origin, transferFaults }
 	await open(); await draw(); const a = await attach(), frozenA = await source(rejectId, a);
 	const raw = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=", "base64");
 	const external = await (await fetch(`${origin}/api/chats/${rejectId}/writing`, { method: "POST", body: raw })).json();
-	await page.waitForFunction(() => document.querySelector('.lh-shared-writing')?.textContent.includes("2 shared images"));
+	await page.waitForFunction(() => document.querySelector('.lh-shared-writing')?.textContent.includes("2 pages attached"));
 	transferFaults.handle = request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/chat") { void request.respond({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "Scripted pre-write refusal", inputDisposition: "not_accepted" }) }); return true; } return false; };
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-delivery"]')?.textContent.includes("You can edit it and submit again"));

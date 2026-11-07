@@ -7,7 +7,7 @@ import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import { forgetHandwritingOnDevice } from "@/components/handwriting/device";
 import type { ChatDeleteMode } from "@/src/core";
-import { BookOpenIcon, DumbbellIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon } from "lucide-react";
+import { BookOpenIcon, DumbbellIcon, HomeIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon, XIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -468,6 +468,14 @@ function SessionsSidebar() {
 		publishWaitingCount((chats ?? []).filter((c) => c.pendingQuestion || ((c.kind ?? "teach") === "practice" && c.pendingProblem)).length);
 	}, [chats]);
 	const [query, setQuery] = useState("");
+	// Phone search is its own mode (round 11): the search bar pins to the
+	// top, the filter sits under it and the results get the whole sheet;
+	// the create row, background agents and Settings step aside. Entered by
+	// focusing the search; left by Cancel, Escape, opening a session or
+	// closing the sheet — never by blur, so tapping a result can't shift
+	// the layout under the finger.
+	const [searchMode, setSearchMode] = useState(false);
+	useEffect(() => { if (!open || !phone) setSearchMode(false); }, [open, phone]);
 	const [kindFilter, setKindFilter] = useState<SessionKindFilter>("all");
 	useEffect(() => {
 		const stored = window.localStorage.getItem(KIND_FILTER_KEY);
@@ -759,7 +767,7 @@ function SessionsSidebar() {
 				}
 			}}
 		>
-			<div className="lh-sessions-content flex h-full w-72 flex-col border-r">
+			<div className="lh-sessions-content flex h-full w-72 flex-col border-r" data-searching={searchMode || undefined}>
 				{/* LH wordmark — the owner's header; close toggle sits at the edge.
 				    Merged chrome (2026-09-17): in Electron this band is the
 				    window's drag surface and starts after the traffic lights
@@ -802,7 +810,7 @@ function SessionsSidebar() {
 							className="lh-sessions-close lh-no-drag"
 						>
 							<PanelLeftCloseIcon className="lh-desktop-close-icon size-4" />
-							<span className="lh-phone-close-label hidden">Close</span>
+							<XIcon className="lh-phone-close-icon hidden" aria-hidden />
 						</Button>
 					</Hint>
 				</div>
@@ -813,6 +821,12 @@ function SessionsSidebar() {
 				    practice carries its mode. */}
 				<div className="lh-sessions-create-label">New session</div>
 				<div className="lh-sessions-create">
+					{/* Phone (round 11): the row matches the start page's bar —
+					    Home first (the graph), then the three session types —
+					    so the sheet's header no longer needs its own Home. */}
+					<Link href="/" onClick={closePhone} className="lh-sessions-home" data-kind="home" data-testid="sessions-home" aria-label="Home">
+						<HomeIcon aria-hidden />
+					</Link>
 					<button
 						type="button"
 						data-testid="new-session"
@@ -869,10 +883,12 @@ function SessionsSidebar() {
 							// keyboard wave): blur back to normal, and claim the
 							// key so the window Esc chain (dictation / abort)
 							// doesn't also fire.
+							onFocus={() => { if (phone) setSearchMode(true); }}
 							onKeyDown={(e) => {
 								if (e.key === "Escape") {
 									e.stopPropagation();
 									e.currentTarget.blur();
+									setSearchMode(false);
 									return;
 								}
 								// Modified keys belong to the surface (⇧↵ etc.).
@@ -893,6 +909,7 @@ function SessionsSidebar() {
 									if (!target) return;
 									e.preventDefault();
 									closePhone();
+									setSearchMode(false);
 									router.push(`/chat/${target.id}`);
 									setKbdIndex(null);
 									e.currentTarget.blur();
@@ -905,6 +922,16 @@ function SessionsSidebar() {
 						<SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 					</span>
 					</Hint>
+					{searchMode && (
+						<button
+							type="button"
+							className="lh-sessions-search-cancel"
+							data-testid="session-search-cancel"
+							onClick={() => { setQuery(""); setKbdIndex(null); setSearchMode(false); }}
+						>
+							Cancel
+						</button>
+					)}
 				</div>
 
 				{/* The three-way filter, HEADING THE LIST (owner round 8b,
@@ -954,6 +981,7 @@ function SessionsSidebar() {
 										kbdSelected={i === kbdIndex}
 										onOpen={() => {
 											setKbdIndex(null);
+											setSearchMode(false);
 											closePhone();
 											router.push(`/chat/${c.id}`);
 										}}
@@ -981,35 +1009,35 @@ function SessionsSidebar() {
 
 					{/* Background agents (owner, sidebar round): the section is
 					    ALWAYS here — empty means empty (the header sits alone); it
-					    populates and grows when processes run. The session list is
-					    flex-1, so this pins to the bottom. Sidebar closed = the
-					    learner opted out (no ambient signal, user decision). */}
-					<ActivitySection />
+					    populates and grows when processes run. Settings shares its
+					    row (round 11): both are secondary, so the sessions get the
+					    room. Settings is also mod+, in the keyboard registry. */}
+					<ActivitySection
+						trailing={
+							<Hint label="Settings" action="open-settings" side="right" disabled={phone}>
+								<button
+									type="button"
+									onClick={() => openSettings()}
+									data-testid="settings-entry"
+									aria-label="Settings"
+									className="lh-footer-row lh-settings-entry"
+								>
+									<SettingsIcon className="size-4" />
+								</button>
+							</Hint>
+						}
+					/>
 
-					{/* Settings entry (settings-app wave): same row language as
-					    New session — quiet, bottom-pinned, opens the centered
-					    dialog (also mod+, in the keyboard registry). */}
-					<div className="lh-sessions-footer">
-						<Hint label="Settings" action="open-settings" side="right" disabled={phone}>
-							<button
-								type="button"
-								onClick={() => openSettings()}
-								data-testid="settings-entry"
-								className="lh-footer-row"
-							>
-								<SettingsIcon className="size-4" />
-								Settings
-							</button>
-						</Hint>
-						{process.env.NODE_ENV === "development" && <details className="lh-sessions-tools mt-1 px-2 text-xs text-muted-foreground">
+					{process.env.NODE_ENV === "development" && <div className="lh-sessions-footer">
+						<details className="lh-sessions-tools mt-1 px-2 text-xs text-muted-foreground">
 							<summary className="cursor-pointer py-1.5 uppercase tracking-wider">Tools</summary>
 							<button type="button" onClick={() => location.reload()} className="flex items-center gap-1.5 rounded-md py-1.5 hover:text-foreground">
 								<RotateCwIcon className="size-3" />
 								Reload preview
 							</button>
 							<p className="pb-1 text-[11px]">Reload keeps saved conversations and uploads. Unsent text and prototype ink reset.</p>
-						</details>}
-					</div>
+						</details>
+					</div>}
 				</div>
 
 				{/* The context menu (wave 6 + the extraction-UX redesign): the

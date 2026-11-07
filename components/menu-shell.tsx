@@ -45,6 +45,10 @@ const CAP_VH = 0.6; // 60vh — the graph pattern's cap
 const MIN_USABLE = 96; // floor: a shorter cap is an unusable sliver; the
 // cap then overflows the edge instead of crushing the menu
 const PHONE_DURATION = 400;
+/** Phone cards open and close at once, like the Settings and Extract files
+ *  menus (owner, round 11: the "fall-out" motion is gone). The motion code
+ *  stays behind this switch, so it can be restored deliberately. */
+const PHONE_MOTION = false;
 const PHONE_EASING = "linear";
 
 /** Grow about the bottom anchor without compressing the rounded corners. Give
@@ -293,7 +297,7 @@ export function MenuShell({
 	}, [placed, focusSearch]);
 
 	useLayoutEffect(() => {
-		if (!fitVisualViewport || !placed || !phoneTriggerTestid || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		if (!PHONE_MOTION || !fitVisualViewport || !placed || !phoneTriggerTestid || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 		const menu = menuRef.current;
 		const content = motionContentRef.current;
 		const backdrop = phoneBackdropRef.current;
@@ -313,7 +317,7 @@ export function MenuShell({
 	useLayoutEffect(() => {
 		if (!closing || !onClosed) return;
 		const menu = menuRef.current, content = motionContentRef.current, backdrop = phoneBackdropRef.current;
-		if (!fitVisualViewport || !placed || !menu || !content || !backdrop || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+		if (!PHONE_MOTION || !fitVisualViewport || !placed || !menu || !content || !backdrop || matchMedia("(prefers-reduced-motion: reduce)").matches) {
 			onClosed();
 			return;
 		}

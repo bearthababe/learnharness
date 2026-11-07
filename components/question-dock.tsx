@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
+import { ArrowDownIcon, ChevronDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PathInput } from "@/components/path-input";
 import { MalformedQuestion } from "@/components/malformed-question";
@@ -88,9 +88,15 @@ export interface QuestionDockProps {
 	 */
 	reveal?: boolean;
 	onExpand: () => void;
+	/** Fold the open question back to its bar so the lesson can be re-read
+	 *  (round 11, phones); everything typed or picked stays. */
+	onCollapse?: () => void;
 	onSubmit: (output: QuestionAnswerData, toolCallId: string, fields?: Pick<NotebookInputFields, "submission">, reviewed?: SharedWriting[]) => unknown;
 	/** Restore only this call's unconfirmed submission after recovery. */
 	initialDraft?: QuestionFormDraft;
+	/** Changes once when a device-kept draft is restored after mount: the
+	 *  form remounts to take it (round 11, B1). */
+	draftEpoch?: number;
 	onSaveDraft?: (draft: QuestionFormDraft) => void;
 	/** Escape in a question field stops dictation (STT wave) — threaded
 	 *  from the page that owns the dictation hook. */
@@ -125,8 +131,10 @@ export function QuestionDock({
 	expanded,
 	reveal = false,
 	onExpand,
+	onCollapse,
 	onSubmit,
 	initialDraft,
+	draftEpoch = 0,
 	onSaveDraft,
 	onEscape,
 	phase = "probe",
@@ -173,7 +181,7 @@ export function QuestionDock({
 			)}
 			<div className={expanded ? "dock-variant" : `${reveal ? "" : "lh-question-collapsed "}invisible h-0 overflow-hidden`}>
 				<QuestionDockForm
-					key={toolCallId}
+					key={`${toolCallId}:${draftEpoch}`}
 					notebook={notebook}
 					readingThinking={readingThinking}
 					onRestoreReadingThinking={onRestoreReadingThinking}
@@ -184,6 +192,7 @@ export function QuestionDock({
 					input={parsed}
 					phase={phase}
 					active={expanded}
+					onCollapse={onCollapse}
 					onSubmit={onSubmit}
 					initialDraft={initialDraft}
 					onSaveDraft={onSaveDraft}
@@ -286,6 +295,7 @@ function QuestionDockForm({
 	input,
 	phase = "probe",
 	active,
+	onCollapse,
 	onSubmit,
 	initialDraft,
 	onSaveDraft,
@@ -424,6 +434,15 @@ function QuestionDockForm({
 	// Phones take the check in two steps (owner ruling 3): pick an answer,
 	// then confidence and "why" appear beneath it. Anything already given
 	// (a draft, attached writing) keeps them open.
+	// Keep the answer as it is typed (not only at submit): leaving the
+	// session or a reload brings it back (the session model persists it).
+	const saveDraftRef = useRef(onSaveDraft); saveDraftRef.current = onSaveDraft;
+	const draftTouched = useRef(false);
+	useEffect(() => {
+		if (!draftTouched.current) { draftTouched.current = true; return; } // the restored draft, unchanged
+		const timer = window.setTimeout(() => saveDraftRef.current?.({ selection: { ...sel, selected: new Set(sel.selected) }, thinking, other, text, confidenceIndex: confIdx }), 250);
+		return () => window.clearTimeout(timer);
+	}, [sel, thinking, other, text, confIdx]);
 	// Phones show a short "why" prompt so it never truncates.
 	const phone = usePhoneLayout();
 	const followUpOpen = qd.mode === "text" || sel.dontKnow || sel.otherSelected || sel.selected.size > 0 || thinking.trim().length > 0 || hasSharedWriting || !!transfer?.hasAttempt();
@@ -633,7 +652,8 @@ function QuestionDockForm({
 			    Capped by the measured column (--dock-max-h; the old fixed 55dvh cut
 			    long questions short — owner round, 2026-10-05). */}
 			<div data-dock-scroll-area="" data-session-find-root="" className="max-h-[var(--dock-max-h,55dvh)] overflow-y-auto px-4 pt-3">
-				<div className="lh-eyebrow mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+				<div className="lh-eyebrow mb-1 flex items-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+					<span className="min-w-0 flex-1">
 					{toolName === "probe"
 						? "Probe"
 						: toolName === "recall"
@@ -646,6 +666,8 @@ function QuestionDockForm({
 										? "Explain"
 											: "Question"}
 					{qd.mode === "multi-select" && " · select all that apply"}
+					</span>
+					{onCollapse && <button type="button" className="lh-question-hide" data-testid="question-hide" onClick={onCollapse}>Hide<ChevronDownIcon aria-hidden /></button>}
 				</div>
 				<div className="lh-question-text mb-3 font-medium">
 					<ToolContentResponse>{qd.question}</ToolContentResponse>
@@ -822,6 +844,10 @@ function QuestionDockForm({
 				app-wide). Clicking and dragging are native. "I don't know"
 				GRAYS it out — the layout holds, no value is sent, the IDK
 				signal stands alone. */}
+			{/* Keyboard users see the model at a glance (laptops only). */}
+			{qd.mode !== "text" && <p className="lh-kbd-hint" aria-hidden="true" data-testid="question-kbd-hint">
+				<kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Space</kbd> pick{kind === "quiz" ? <> · <kbd>←</kbd><kbd>→</kbd> confidence</> : null} · <kbd>Tab</kbd> your thinking · <kbd>Enter</kbd> submit
+			</p>}
 			{kind === "quiz" && (
 				<div className="lh-question-confidence border-t border-border/60 px-4 py-2.5">
 					<div className="flex items-center gap-3">

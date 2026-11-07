@@ -39,7 +39,7 @@ export function NodePickerControl({ count, onOpen, onClear }: {
 				}
 			>
 				<DumbbellIcon aria-hidden="true" className="size-3.5 text-muted-foreground" />
-				{count > 0 ? `${count} ${count === 1 ? "node" : "nodes"} selected` : "Pick nodes"}
+				{count > 0 ? <>{count}<span className="lh-pick-word">{` ${count === 1 ? "idea" : "ideas"} picked`}</span></> : <><span className="lh-pick-word">Pick </span>ideas</>}
 			</button>
 			{count > 0 && (
 				<button

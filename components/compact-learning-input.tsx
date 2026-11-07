@@ -85,7 +85,7 @@ export function CompactLearningInput({ children, dictation, enabled = true }: {
 	}, [active]);
 	const recover = useDictationRecovery(dictation, remember);
 	return <>
-		{enabled && dictation?.error && <div role="alert" className="lh-compact-error">
+		{enabled && dictation?.error && <div role={dictation.error === DICTATION_KEYLESS ? "status" : "alert"} className="lh-compact-error" data-setup={dictation.error === DICTATION_KEYLESS || undefined}>
 			<span>{dictation.error}</span>
 			<button type="button" onClick={recover}>{dictation.error === DICTATION_KEYLESS ? "Settings" : "Retry"}</button>
 		</div>}

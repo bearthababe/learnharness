@@ -240,15 +240,17 @@ export function Home({
 									</button>
 								))}
 							</div>
-					</div>
-					<ComposerActions
-						picker={(practiceProps.length > 0 || mode === "practice") && (
+						{/* Beside the mode, never below it: choosing Practice must not
+						    move the screen (owner B9). */}
+						{(practiceProps.length > 0 || mode === "practice") && (
 							<NodePickerControl
 								count={practiceProps.length}
 								onOpen={() => setChainSelectOpen(true)}
 								onClear={() => setPracticeProps([])}
 							/>
 						)}
+					</div>
+					<ComposerActions
 						setup={zeroKeys ? (
 							<ZeroKeysPill inline onOpen={() => setSetupOpen(true)} />
 						) : (

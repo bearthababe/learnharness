@@ -39,17 +39,18 @@ describe("composer action row", () => {
 			assert.equal(row.children.length, 2);
 			assert.equal(chip.parentElement, row.firstElementChild);
 			assert.equal(row.lastElementChild!.tagName, "BUTTON");
-			assert.equal(chip.textContent, "Pick nodes");
+			assert.equal(chip.textContent, "Pick ideas");
 			assert.equal(document.querySelector('[data-testid="practice-props-clear"]'), null);
 		});
 
-		it(`${label}: the practice draft uses that same row and order`, () => {
+		it(`${label}: the practice draft puts the picker beside the mode, setup below (round 11: no layout shift)`, () => {
 			const document = documentFor(<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="practice" setupCta={setup} />);
+			const chip = document.querySelector('[data-testid="practice-props-chip"]')!;
+			assert.ok(chip.closest(".lh-mode-row"), "the picker sits in the mode row");
 			const rows = document.querySelectorAll('[data-testid="composer-actions"]');
 			assert.equal(rows.length, 1);
-			assert.ok(rows[0]!.classList.contains("justify-start"));
-			assert.ok(rows[0]!.firstElementChild!.querySelector('[data-testid="practice-props-chip"]'));
-			assert.equal(rows[0]!.lastElementChild!.tagName, "BUTTON");
+			assert.ok(rows[0]!.classList.contains("justify-center"), "setup alone, centred");
+			assert.equal(rows[0]!.querySelector('[data-testid="practice-props-chip"]'), null);
 		});
 	}
 
@@ -63,7 +64,7 @@ describe("composer action row", () => {
 			const document = documentFor(<ComposerActions picker={<NodePickerControl count={count} />} setup={modelSetup} />);
 			const chip = document.querySelector('[data-testid="practice-props-chip"]')!;
 			const clear = document.querySelector('[data-testid="practice-props-clear"]')!;
-			assert.equal(chip.textContent, `${count} ${count === 1 ? "node" : "nodes"} selected`);
+			assert.equal(chip.textContent, `${count} ${count === 1 ? "idea" : "ideas"} picked`);
 			assert.equal(chip.parentElement, clear.parentElement);
 			assert.equal(chip.parentElement!.parentElement!.getAttribute("data-testid"), "composer-actions");
 			assert.ok(!chip.parentElement!.classList.contains("flex-wrap"), "count and Clear never wrap apart");
@@ -80,7 +81,7 @@ describe("composer action row", () => {
 
 	it("the practice shell preserves a selected node in teaching mode", () => {
 		const document = documentFor(<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="teach" picks={[{id:"n_1",name:"Parity",statement:"Odd + odd = even."}]} />);
-		assert.equal(document.querySelector('[data-testid="practice-props-chip"]')!.textContent, "1 node selected");
+		assert.equal(document.querySelector('[data-testid="practice-props-chip"]')!.textContent, "1 idea picked");
 		assert.ok(document.querySelector('[data-testid="practice-props-clear"]'));
 	});
 });

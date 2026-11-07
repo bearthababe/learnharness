@@ -11,6 +11,7 @@ import type { NotebookViewControls } from "./notebook-layout";
 import { MenuShell } from "./menu-shell";
 import { NotebookDraftReview } from "./learner-explanation";
 import { notebookActivityDrafts } from "./notebook-activity-draft";
+import { useOneMenu } from "./one-menu";
 
 export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string }) {
 	const { view, draftText, saving, editing, inputLocked, error, cursorLineId, expressionSelection } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
@@ -19,6 +20,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 	const attached = notebookActivityDrafts(drafts.drafts, activity);
 	const hasWorking = attached.some(draft => draft.parts.some(part => part.kind === "working"));
 	const [menu, setMenu] = useState<"options" | "model" | "history" | "usage" | "review" | null>(null);
+	useOneMenu("notebook-options", menu !== null, () => setMenu(null));
 	// After an instruction lands, the lines it added or changed glow briefly
 	// (never on first load), so the learner sees what moved.
 	const previousLines = useRef<Map<string, string> | null>(null);
@@ -63,8 +65,18 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 		if (!draftText.trim()) return;
 		void session.dispatch({ type: "apply", cursorLineId }).catch(() => {});
 	};
+	// The picked line or term shows in the header (round 11), where the
+	// title was: no extra row between the working and the instruction.
+	const scopedLine = cursorLineId && view?.lines.some(line => line.id === cursorLineId) ? view.lines.findIndex(line => line.id === cursorLineId) + 1 : null;
+	const scopeText = scopedLine === null || !view ? null : expressionSelection
+		? `Term ${expressionSelection.number} · line ${view.lines.findIndex(line => line.id === expressionSelection.lineId) + 1}`
+		: `Line ${scopedLine}`;
 	return <section aria-label="Notebook" data-input-owner="notebook" className="notebook-panel flex min-h-0 min-w-0 flex-col border-border bg-background">
-		<header className="notebook-frame-header" data-notebook-view-control=""><h2>Notebook</h2>
+		<header className="notebook-frame-header" data-notebook-view-control=""><h2 className={scopeText ? "sr-only" : undefined}>Notebook</h2>
+			{scopeText && <p className="notebook-scope" data-testid="notebook-scope">
+				<span><span className="sr-only">Apply changes to </span>{scopeText}</span>
+				<button type="button" aria-label="Clear selection" onClick={() => session.clearSelection()}><XIcon /></button>
+			</p>}
 			<button type="button" aria-label="Undo" title="Undo" disabled={applyWaiting || !!view?.pending || !view?.canUndo} onClick={() => command("undo")}><Undo2Icon /></button>
 			{viewControls && <button type="button" aria-label={viewControls.expanded ? "Back to split" : "Expand notebook"} title={viewControls.expanded ? "Back to split" : "Expand notebook"} onClick={viewControls.toggleExpanded}>
 				{viewControls.expanded ? <Minimize2Icon /> : <Maximize2Icon />}
@@ -119,14 +131,9 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 			{viewControls && <button type="button" aria-label="Hide notebook" title="Hide notebook" data-testid="notebook-close" onClick={viewControls.close}><XIcon /></button>}
 		</header>
 		<form className="notebook-instruction-form" onSubmit={(event) => { event.preventDefault(); apply(); }}>
-			{/* Say what Apply will change when a line or term is picked. */}
-			{cursorLineId && view?.lines.some(line => line.id === cursorLineId) && <p className="notebook-scope" data-testid="notebook-scope">
-				<span>{expressionSelection ? `Applies to term ${expressionSelection.number} on line ${view.lines.findIndex(line => line.id === expressionSelection.lineId) + 1}` : `Applies at line ${view.lines.findIndex(line => line.id === cursorLineId) + 1}`}</span>
-				<button type="button" aria-label="Clear selection" onClick={() => session.clearSelection()}><XIcon /></button>
-			</p>}
 			<div className="notebook-input-row">
 			<CompactLearningInput dictation={!dictation?.active || speech.destination === "notebook" ? dictation : undefined}>
-			<textarea id="notebook-instruction" aria-label="Notebook instruction" placeholder="Notebook instruction" value={draftText} rows={1}
+			<textarea id="notebook-instruction" aria-label="Notebook instruction" placeholder={scopeText ? (expressionSelection ? "Instruction for this term" : "Instruction for this line") : "Notebook instruction"} value={draftText} rows={1}
 				className="lh-input w-full resize-none bg-transparent text-base"
 				onChange={(event) => { void session.dispatch({ type: "draft", text: event.target.value }).catch(() => {}); }}
 				onKeyDown={(event) => {
@@ -147,6 +154,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 		<div data-notebook-scroll="" className="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
 			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} expressionSelection={expressionSelection} onSelect={session.selectLine} onSelectExpression={session.selectExpression} changedIds={changed} />
 			{view?.lines.length === 0 && <p className="text-sm text-muted-foreground">Your working appears here.</p>}
+			{!!view?.lines.length && <p className="notebook-numbers-hint">The small numbers mark each term. Tap a term or a line number to aim your next instruction there.</p>}
 		</div>
 	</section>;
 }

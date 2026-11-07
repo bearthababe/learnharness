@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ActivityIcon, BotIcon, ChevronDownIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
+import { ActivityIcon, BotIcon, ChevronDownIcon, ChevronRightIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CallUsage, JobKind, JobRecord } from "@/src/core";
 import { isModelsRefusal, isProviderKeyRefusal, subscriptionLabel, subscriptionLabels } from "@/src/core";
@@ -327,7 +327,9 @@ function settledAgo(iso: string, now = Date.now()): string {
 	return d < 7 ? `${d}d ago` : iso.slice(0, 10);
 }
 
-export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
+/** `trailing` shares the header row (the sidebar puts Settings there: one
+ *  quiet footer row instead of two, so the sessions get the room). */
+export function ActivitySection({ feed: feedProp, trailing }: { feed?: ActivityFeed; trailing?: ReactNode }) {
 	const ctx = useContext(ActivityContext);
 	const feed = feedProp ?? ctx.feed;
 	const recent = feed.recent ?? [];
@@ -386,18 +388,19 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 	// alone (the cost span is population, not decoration).
 	return (
 		<section data-testid="activity-section" className="lh-activity-section border-t border-border px-3 pb-2 pt-2">
+			<div className="lh-activity-bar">
 			<button
 				type="button"
-				className="lh-activity-header flex w-full items-center gap-2 px-2 py-1 text-left text-sm text-muted-foreground"
+				className="lh-activity-header flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm text-muted-foreground"
 				aria-expanded={recent.length > 0 ? historyOpen : undefined}
 				data-testid="activity-history-toggle"
 				onClick={() => { if (recent.length > 0) setHistoryOpen((v) => !v); }}
 			>
-				<ActivityIcon className="size-4" />
-				Background agents
+				<ActivityIcon className="size-4 shrink-0" />
+				<span className="truncate">Background agents</span>
 				{blobs.length === 0 && (
-					<span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground/80">
-						{recent.length > 0 ? `Idle · ${recent.length} recent` : "Idle"}
+					<span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground/80">
+						{recent.length > 0 ? `${recent.length} recent` : "Idle"}
 						{recent.length > 0 && <ChevronDownIcon className={cn("size-3.5 transition-transform", historyOpen && "rotate-180")} aria-hidden />}
 					</span>
 				)}
@@ -407,6 +410,8 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 				</span>
 				)}
 			</button>
+			{trailing}
+			</div>
 			{historyOpen && recent.length > 0 && (
 				<ul className="lh-activity-history" data-testid="activity-history" aria-label="Recent background jobs">
 					{recent.map((job) => {
@@ -422,6 +427,7 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 											<span className="lh-activity-recent-when">· {settledAgo(job.updatedAt)}</span>
 										</span>
 									</span>
+									<span className="lh-activity-open" aria-hidden="true">Open<ChevronRightIcon className="size-3.5" /></span>
 								</Link>
 							</li>
 						);

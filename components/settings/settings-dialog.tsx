@@ -56,6 +56,8 @@ import { ChatGPTUIProvider } from "./chatgpt-connection.tsx";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { ActivityIcon, BrainIcon, ChevronLeftIcon, ChevronRightIcon, KeyRoundIcon, KeyboardIcon, PaletteIcon, SlidersHorizontalIcon } from "lucide-react";
 import { NativeSubscriptionUIProvider } from "./subscription-connections.tsx";
+import { useOneMenu } from "@/components/one-menu";
+import { useDialogFocus } from "@/components/dialog-focus";
 
 /** Owner (2026-09-20): hints earn their place — mechanics-explaining
  *  prose is out; only the keyboard note stays (storage location is a
@@ -116,6 +118,7 @@ export function SettingsDialogProvider({
 		setShow(true);
 	}, []);
 	useEffect(() => window.lh?.onOpenSettings?.((section) => open(section)), [open]);
+	useOneMenu("settings", show, () => setShow(false));
 	return (
 		<ChatGPTUIProvider><NativeSubscriptionUIProvider><DialogContext.Provider value={{ open }}>
 			{children}
@@ -302,8 +305,11 @@ export function SettingsDialogBody({
 		[onAppearanceChange],
 	);
 
+	const dialogRef = useRef<HTMLDivElement>(null);
+	useDialogFocus(dialogRef);
 	return (
 		<div
+			ref={dialogRef}
 			role="dialog"
 			aria-modal="true"
 			aria-label="Settings"
@@ -355,7 +361,7 @@ export function SettingsDialogBody({
 					hidden={phone && !phoneList}
 					className="lh-settings-nav flex w-52 shrink-0 flex-col gap-0.5 border-r border-border p-2"
 				>
-					{SECTIONS.map((s) => {
+					{SECTIONS.filter((s) => !(phone && s.id === "keyboard")).map((s) => {
 						const Icon = SECTION_ICON[s.id];
 						return (
 							<button

@@ -18,12 +18,18 @@ export function useNotebookLayout(open: boolean) {
 }
 
 const SPLIT_KEY = "lh:notebook-split";
-const DEFAULT_SHARES = { row: 60, column: 50 };
+// Stacked (phones): the lesson and its composer start with most of the
+// height, and the sheet can be pulled from a peek to most of the screen
+// (round 11). Side by side keeps its original bounds.
+const DEFAULT_SHARES = { row: 60, column: 58 };
+const BOUNDS = { row: [30, 65], column: [25, 78] } as const;
+/** A tap on the stacked grip swaps between these two tutor shares. */
+const FOCUS_SHARES = { lesson: 72, working: 40 } as const;
 function storedShares(): { row: number; column: number } {
 	try {
 		const value = JSON.parse(window.localStorage.getItem(SPLIT_KEY) ?? "null") as { row?: unknown; column?: unknown } | null;
-		const pick = (n: unknown, fallback: number) => typeof n === "number" && n >= 30 && n <= 65 ? n : fallback;
-		return { row: pick(value?.row, DEFAULT_SHARES.row), column: pick(value?.column, DEFAULT_SHARES.column) };
+		const pick = (n: unknown, direction: "row" | "column") => typeof n === "number" && n >= BOUNDS[direction][0] && n <= BOUNDS[direction][1] ? n : DEFAULT_SHARES[direction];
+		return { row: pick(value?.row, "row"), column: pick(value?.column, "column") };
 	} catch { return { ...DEFAULT_SHARES }; }
 }
 
@@ -34,13 +40,14 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 	const divider = useRef<HTMLDivElement>(null);
 	const shares = useRef<{ row: number; column: number } | null>(null);
 	const drag = useRef<number | null>(null);
-	const [state, setState] = useState({ wide: false, share: 50 });
+	const press = useRef<{ x: number; y: number; at: number; moved: boolean } | null>(null);
+	const [state, setState] = useState({ wide: false, share: DEFAULT_SHARES.column });
 	function resize(element: HTMLElement, next?: number) {
 		const layout = element.parentElement!;
 		const wide = getComputedStyle(layout).flexDirection === "row";
 		const direction = wide ? "row" : "column";
 		shares.current ??= storedShares();
-		const share = Math.max(30, Math.min(65, next ?? shares.current[direction]));
+		const share = Math.max(BOUNDS[direction][0], Math.min(BOUNDS[direction][1], next ?? shares.current[direction]));
 		if (next !== undefined && Math.round(share) !== Math.round(shares.current[direction])) {
 			try { window.localStorage.setItem(SPLIT_KEY, JSON.stringify({ ...shares.current, [direction]: Math.round(share) })); } catch { /* this view only */ }
 		}
@@ -56,24 +63,38 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 	}, []);
 	function move(event: PointerEvent<HTMLDivElement>) {
 		if (drag.current !== event.pointerId) return;
+		const start = press.current;
+		if (start && !start.moved) {
+			if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < 6) return;
+			start.moved = true;
+		}
 		const layout = event.currentTarget.parentElement!, rect = layout.getBoundingClientRect();
 		const wide = getComputedStyle(layout).flexDirection === "row";
 		resize(event.currentTarget, 100 * (wide ? (event.clientX - rect.left) / rect.width : (event.clientY - rect.top) / rect.height));
 	}
 	return <div ref={divider} hidden={hidden} className="notebook-split-divider" role="separator" tabIndex={0}
 		aria-label="Resize Tutor and Notebook" aria-orientation={state.wide ? "vertical" : "horizontal"}
-		aria-valuemin={30} aria-valuemax={65} aria-valuenow={state.share} aria-valuetext={`${state.share}% Tutor`}
+		title={state.wide ? undefined : "Drag to resize · tap to switch between lesson and working"}
+		aria-valuemin={BOUNDS[state.wide ? "row" : "column"][0]} aria-valuemax={BOUNDS[state.wide ? "row" : "column"][1]} aria-valuenow={state.share} aria-valuetext={`${state.share}% Tutor`}
 		onPointerDown={event => {
 			if (event.button !== 0) return;
 			event.preventDefault();
 			if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 			drag.current = event.pointerId; event.currentTarget.setPointerCapture(event.pointerId);
+			press.current = { x: event.clientX, y: event.clientY, at: Date.now(), moved: false };
 		}}
-		onPointerMove={move} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onLostPointerCapture={() => { drag.current = null; }}
+		onPointerMove={move} onPointerUp={event => {
+			const start = press.current;
+			drag.current = null; press.current = null;
+			// A tap (no drag) on the stacked grip swaps the focus: lesson ↔ working.
+			if (start && !start.moved && Date.now() - start.at < 500 && !state.wide) {
+				resize(event.currentTarget, state.share >= (FOCUS_SHARES.lesson + FOCUS_SHARES.working) / 2 ? FOCUS_SHARES.working : FOCUS_SHARES.lesson);
+			}
+		}} onPointerCancel={() => { drag.current = null; }} onLostPointerCapture={() => { drag.current = null; }}
 		onKeyDown={event => {
 			if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home"].includes(event.key)) return;
 			event.preventDefault(); event.stopPropagation();
-			resize(event.currentTarget, event.key === "Home" ? state.wide ? 60 : 50 : state.share + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -5 : 5));
+			resize(event.currentTarget, event.key === "Home" ? DEFAULT_SHARES[state.wide ? "row" : "column"] : state.share + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -5 : 5));
 		}}><span aria-hidden="true" /></div>;
 }
 

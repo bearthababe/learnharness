@@ -63,7 +63,7 @@
  * camera never moves.
  */
 
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDesktopPaths } from "@/components/attach-files-button";
 import { sourceFileLabel } from "@/src/core";
 import { NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
@@ -81,6 +81,7 @@ import { DeleteNodeDialog } from "@/components/delete-node-dialog.tsx";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { Hint } from "@/components/ui/hint";
 import { useSidebar } from "@/components/sidebar";
+import { useOneMenu } from "@/components/one-menu";
 import {
 	ARROW_LENGTH_LADDER,
 	CHARGE_RANGE,
@@ -349,6 +350,7 @@ export function GraphCostControl({ costs }: { costs: GraphCostSummary }) {
 	// wraps button + panel, so the toggle itself keeps working.
 	const rootRef = useRef<HTMLDivElement>(null);
 	usePopoverDismiss(rootRef, open, () => setOpen(false));
+	useOneMenu(`graph-popover:${useId()}`, open, () => setOpen(false));
 	return (
 		<div ref={rootRef} className="relative">
 			<Hint
@@ -454,7 +456,9 @@ function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 function GraphSettingsControl({
 	settings,
 	changeSettings,
+	costs,
 }: {
+	costs?: GraphCostSummary | null;
 	settings: GraphRenderSettings;
 	changeSettings: (update: (cur: RenderSettings) => RenderSettings) => void;
 }) {
@@ -463,6 +467,7 @@ function GraphSettingsControl({
 	// the root wraps button + panel, so the toggle itself keeps working.
 	const rootRef = useRef<HTMLDivElement>(null);
 	usePopoverDismiss(rootRef, open, () => setOpen(false));
+	useOneMenu(`graph-popover:${useId()}`, open, () => setOpen(false));
 	const regionTuning = settings.regions;
 	const physicsTuning = settings.physics;
 	return (
@@ -498,6 +503,7 @@ function GraphSettingsControl({
 				// distance from the panel's right border.
 				<div className="absolute right-0 top-full mt-2 flex max-h-[60vh] w-72 flex-col rounded-xl border bg-card/85 p-2.5 shadow-lg backdrop-blur">
 					<div className="flex flex-col gap-2 overflow-y-auto pr-2.5">
+							{costs && costs.runs.length > 0 && <div className="lh-graph-costs-in-settings" data-testid="graph-costs-in-settings"><div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Graph costs · {graphUsageLabel(costs)}</div><GraphCostPanel costs={costs} /></div>}
 							{/* Size/zoom/region sliders: LADDER-mapped 0-100, step 10 (11
 							    stops, every DEFAULT dead-center at 50, every value a nice
 							    number — src/core/render-settings.ts). Physics keeps the
@@ -855,7 +861,10 @@ export function GraphChromeRow({
 	settings,
 	changeSettings,
 	onOpenChains,
+	costs,
 }: {
+	/** Phones list the graph costs inside the gear's panel (not floating). */
+	costs?: GraphCostSummary | null;
 	isEmpty: boolean;
 	query: string;
 	onQuery: (v: string) => void;
@@ -942,7 +951,7 @@ export function GraphChromeRow({
 				// is a plain shrink-0 flex child — the panel itself positions
 				// within GraphSettingsControl's own relative root, unaffected.
 				<div className="lh-graph-settings graph-chrome-fade-in shrink-0">
-					<GraphSettingsControl settings={settings} changeSettings={changeSettings} />
+					<GraphSettingsControl settings={settings} changeSettings={changeSettings} costs={phone ? costs : null} />
 				</div>
 			)}
 		</>
@@ -1642,6 +1651,7 @@ export function GraphView({
 					settings={settings}
 					changeSettings={changeSettings}
 					onOpenChains={() => setChainsOpen(true)}
+					costs={costs}
 				/>
 			</div>
 
@@ -1654,7 +1664,7 @@ export function GraphView({
 			    row so narrow windows can never push it over the composer
 			    the way the old bottom-left stack did; the whole top-right
 			    cluster is one column, right-aligned. */}
-			{costs && costs.runs.length > 0 && <GraphCostControl costs={costs} />}
+			{costs && costs.runs.length > 0 && <div className="lh-graph-cost-pill"><GraphCostControl costs={costs} /></div>}
 			{pipelineRuns.map((run) => (
 				<div
 					key={run.id}

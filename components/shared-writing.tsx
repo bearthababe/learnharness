@@ -6,7 +6,7 @@ import { useServerEvent, useServerResync } from "@/components/server-events";
 import { HandwritingPagesContext } from "./handwriting/pages-context";
 import type { OpenChoice, SnapshotWriting } from "./handwriting/pages";
 import { useMenuEscape } from "./menu-escape";
-import { XIcon } from "lucide-react";
+import { MoreHorizontalIcon, XIcon } from "lucide-react";
 
 export function useSharedWriting(chatId: string, messages: readonly LhMessage[]) {
 	const submittedKey = messages.flatMap((m) => m.sharedWriting?.map((w) => w.id) ?? []).join(",");
@@ -59,12 +59,12 @@ export function SharedWritingImages({ chatId, writing, onRemove }: { chatId: str
 		try { const result = await actions.openSnapshot(item, duplicate); setNotice(result.kind === "failed" ? result.notice : null); if (result.kind === "choice") setOpened({ item, label: "Handwritten working", decision: true }); }
 		finally { setBusy(false); }
 	}
-	return <><div className="flex max-h-32 gap-2 overflow-auto overscroll-contain py-2" data-testid="shared-writing-images">
+	return <><div className="flex max-h-40 gap-2 overflow-auto overscroll-contain py-2" data-testid="shared-writing-images">
 		{writing.map((item, index) => <div key={item.id} className="flex shrink-0 items-end gap-1" data-writing-id={item.id}><span className="lh-writing-thumb relative inline-block">{onRemove && <button type="button" className="lh-writing-remove" aria-label={`Remove handwritten working ${index + 1} from this message`} title="Remove from this message" data-testid="writing-remove" disabled={busy} onClick={() => { setMenu(null); onRemove(item.id); }}><XIcon aria-hidden /></button>}<button type="button" onClick={() => { setMenu(null); setOpened({ item, label: `Handwritten working ${index + 1}` }); }} className="rounded border bg-white p-1" style={{ filter: "var(--lh-writing-image-filter)" }} aria-label={`Open handwritten working ${index + 1}`}>
 			{/* Theme presentation only; the private endpoint retains original PNG bytes. */}
 			{/* eslint-disable-next-line @next/next/no-img-element */}
-			<img src={sharedWritingImageUrl(chatId, item.id)} alt={`Handwritten working ${index + 1}`} className="h-24 max-w-48 object-contain" />
-		</button></span>{actions && <button type="button" className="min-h-11 px-3" aria-label="Snapshot actions" aria-expanded={menu === item.id} disabled={busy} onClick={() => setMenu(value => value === item.id ? null : item.id)}>⋯</button>}
+			<img src={sharedWritingImageUrl(chatId, item.id)} alt={`Handwritten working ${index + 1}`} className="lh-writing-img" />
+		</button></span>{actions && <button type="button" className="lh-writing-actions" aria-label="Snapshot actions" aria-expanded={menu === item.id} disabled={busy} onClick={() => setMenu(value => value === item.id ? null : item.id)}><MoreHorizontalIcon aria-hidden /><span aria-hidden="true">Actions</span></button>}
 		</div>)}
 	</div>{menu && <SnapshotMenu duplicate={() => void run(writing.find(item => item.id === menu)!, true)} open={() => void run(writing.find(item => item.id === menu)!, false)} close={() => { const id = menu; setMenu(null); document.querySelector<HTMLButtonElement>(`[data-writing-id="${id}"] [aria-label="Snapshot actions"]`)?.focus(); }} />}
 	{notice && <p role="status" data-testid="snapshot-action-status">{notice}</p>}
@@ -153,8 +153,6 @@ export function SharedWritingPanel({ chatId, writing: all, busy, hideIds }: {
 }) {
 	const hidden = new Set(hideIds ?? []);
 	const writing = hidden.size ? { ...all, pending: all.pending.filter((item) => !hidden.has(item.id)) } : all;
-	const [uploadUrl, setUploadUrl] = useState("");
-	const [copied, setCopied] = useState(false);
 	const [removeError, setRemoveError] = useState<string | null>(null);
 	// Removing only takes the snapshot out of this message: the page stays
 	// in the notebook and can be attached again.
@@ -167,30 +165,42 @@ export function SharedWritingPanel({ chatId, writing: all, busy, hideIds }: {
 			.catch((error: unknown) => setRemoveError(error instanceof Error ? error.message : "Couldn’t remove it. Try again."))
 			.finally(() => void writing.refresh().catch(() => {}));
 	};
-	useEffect(() => { setUploadUrl(`${location.origin}/api/chats/${encodeURIComponent(chatId)}/writing`); }, [chatId]);
-	return <section className="lh-shared-writing mb-2 rounded-lg border border-border bg-card px-3 py-2 text-xs" data-has-writing={writing.pending.length > 0 || !!writing.error} aria-label="Shared writing">
+	// Nothing waiting and nothing wrong: no row at all (round 11). The
+	// Concepts app setup lives in the notebook's ⋯ menu.
+	if (writing.pending.length === 0 && !writing.error) return null;
+	return <section className="lh-shared-writing mb-2 rounded-lg border border-border bg-card px-3 py-2 text-xs" data-has-writing={writing.pending.length > 0 || (!!writing.error && !/failed to fetch|networkerror|load failed/i.test(writing.error))} aria-label="Shared writing">
 		{writing.pending.length > 0 && <>
-			<p className="font-medium">{writing.pending.length} shared {writing.pending.length === 1 ? "image" : "images"} · not sent</p>
+			<p className="font-medium">{writing.pending.length} {writing.pending.length === 1 ? "page" : "pages"} attached · not sent</p>
 			<SharedWritingImages chatId={chatId} writing={writing.pending} onRemove={busy ? undefined : remove} />
-			<p className="text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Review the images, add an explanation below if needed, then send your answer. × takes a page out of this message; it stays in your notebook."}</p>
+			<p className="text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Goes with your next message. × takes it out; it stays in your notebook."}</p>
 			{removeError && <p role="alert" className="text-destructive">{removeError}</p>}
 		</>}
-		{writing.error && <p role="alert" className="text-destructive">{writing.error} <button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Try again</button></p>}
-		<details className={`lh-concepts-setup ${writing.pending.length ? "mt-2" : ""}`}>
-			<summary className="cursor-pointer text-muted-foreground">Send pages from the Concepts app · setup</summary>
-			<ol className="my-2 list-decimal space-y-1 pl-5">
-				<li>Create a Shortcut named <strong>Send to LearnHarness</strong> and enable <strong>Show in Share Sheet</strong>, accepting Images.</li>
-				<li>Add <strong>Get Contents of URL</strong> using this session’s URL. Set <strong>Method: POST</strong>, <strong>Request Body: File</strong>, with <strong>Shortcut Input</strong> as the file.</li>
-				<li>Add <strong>Show Result</strong> with the HTTP response. A successful upload says “Writing received”.</li>
-				<li>In Concepts, export as <strong>PNG</strong>, choose Share, then the shortcut. Return here to review and send.</li>
-			</ol>
-			<label className="block">This session’s upload URL<input readOnly value={uploadUrl} onFocus={(e) => e.currentTarget.select()} className="my-1 w-full rounded border bg-background p-2" /></label>
-			<div className="flex flex-wrap gap-4">
-				<button type="button" className="underline" onClick={() => { void navigator.clipboard.writeText(uploadUrl).then(() => setCopied(true)).catch(() => setCopied(false)); }}>{copied ? "Copied" : "Copy upload URL"}</button>
-				<button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Check for writing</button>
-				<button type="button" className="underline" onClick={() => location.reload()}>Reload preview</button>
-			</div>
-			<p className="mt-2 text-muted-foreground">Reload keeps uploaded images and saved conversation. Unsent typed text resets.</p>
-		</details>
+		{writing.error && (/failed to fetch|networkerror|load failed/i.test(writing.error)
+			? <p role="status" className="lh-quiet-status">Offline — your pages are kept. <button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Check again</button></p>
+			: <p role="alert" className="text-destructive">{writing.error} <button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Try again</button></p>)}
 	</section>;
+}
+
+/** How to send pages from the Concepts app (an iPad Shortcut that posts
+ *  PNG exports to this session). Opened from the notebook's ⋯ menu; its
+ *  controls exist only while it is shown. */
+export function ConceptsSetup({ chatId, onCheck }: { chatId: string; onCheck: () => void }) {
+	const [uploadUrl, setUploadUrl] = useState("");
+	const [copied, setCopied] = useState(false);
+	useEffect(() => { setUploadUrl(`${location.origin}/api/chats/${encodeURIComponent(chatId)}/writing`); }, [chatId]);
+	return <div className="lh-concepts-setup" data-testid="concepts-setup">
+		<ol className="my-2 list-decimal space-y-1 pl-5">
+			<li>Create a Shortcut named <strong>Send to LearnHarness</strong> and enable <strong>Show in Share Sheet</strong>, accepting Images.</li>
+			<li>Add <strong>Get Contents of URL</strong> using this session’s URL. Set <strong>Method: POST</strong>, <strong>Request Body: File</strong>, with <strong>Shortcut Input</strong> as the file.</li>
+			<li>Add <strong>Show Result</strong> with the HTTP response. A successful upload says “Writing received”.</li>
+			<li>In Concepts, export as <strong>PNG</strong>, choose Share, then the shortcut. Return here to review and send.</li>
+		</ol>
+		<label className="block">This session’s upload URL<input readOnly aria-label="This session’s upload URL" value={uploadUrl} onFocus={(e) => e.currentTarget.select()} className="my-1 w-full rounded border bg-background p-2" /></label>
+		<div className="flex flex-wrap gap-4">
+			<button type="button" className="min-h-11 underline" onClick={() => { void navigator.clipboard.writeText(uploadUrl).then(() => setCopied(true)).catch(() => setCopied(false)); }}>{copied ? "Copied" : "Copy upload URL"}</button>
+			<button type="button" className="min-h-11 underline" onClick={onCheck}>Check for writing</button>
+			<button type="button" className="min-h-11 underline" onClick={() => location.reload()}>Reload preview</button>
+		</div>
+		<p className="mt-2 text-muted-foreground">Reload keeps uploaded images and saved conversation. Unsent typed text resets.</p>
+	</div>;
 }

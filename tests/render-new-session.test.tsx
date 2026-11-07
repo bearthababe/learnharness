@@ -48,7 +48,7 @@ describe("startDraftSession — the create-on-send contract", () => {
 		assert.match(html, /New drill/);
 		assert.match(html, /What do you want to drill\?/);
 		assert.match(html, /Describe the skill or difficulty you want to work on\./);
-		assert.match(html, />Pick nodes<\/button>/);
+		assert.match(html, /<span class="lh-pick-word">Pick <\/span>ideas<\/button>/, "the picker sits in the mode row, named after Ideas");
 	});
 	it("drill graph picks accompany the learner's unchanged opening words", async () => {
 		const { f, calls } = fakeFetch("c_drill_picks");
@@ -60,7 +60,7 @@ describe("startDraftSession — the create-on-send contract", () => {
 		});
 		assert.equal(readOpeningPrompt("c_drill_picks"), "Help with volume ratios");
 		const html = renderToStaticMarkup(<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="drill" picks={picks} />);
-		assert.match(html, /1 node selected/);
+		assert.match(html, /1<span class="lh-pick-word"> idea picked<\/span>/);
 	});
 	it("creates the session titled with the first message and returns a short path", async () => {
 		const { f, calls } = fakeFetch("c_new");
@@ -210,7 +210,7 @@ describe("the practice draft (?mode=practice, 2026-10-04)", () => {
 				mode="practice"
 			/>,
 		);
-		assert.match(html, />Pick nodes<\/button>/);
+		assert.match(html, /<span class="lh-pick-word">Pick <\/span>ideas<\/button>/, "the picker sits in the mode row, named after Ideas");
 		// picked: count + Clear, the home register verbatim
 		const picked = renderToStaticMarkup(
 			<DraftShell
@@ -222,7 +222,7 @@ describe("the practice draft (?mode=practice, 2026-10-04)", () => {
 				picks={[{ id: "n_1", name: "Parity", statement: "Odd + odd = even." }]}
 			/>,
 		);
-		assert.match(picked, /1 node selected/);
+		assert.match(picked, /1<span class="lh-pick-word"> idea picked<\/span>/);
 		assert.match(picked, /Clear/);
 		// teach mode with nothing picked renders nothing (home's law)
 		const teach = renderToStaticMarkup(
