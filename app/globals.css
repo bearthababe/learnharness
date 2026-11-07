@@ -1231,8 +1231,6 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 		display: flex; position: absolute; z-index: 30; bottom: calc(100% + 8px); left: 12px; right: 12px;
 		padding: 4px 6px; border: 1px solid var(--border); border-radius: 16px; background: var(--popover); box-shadow: 0 16px 40px #0007;
 	}
-	/* Focus is a quiet accent edge, not a heavy white outline. */
-	:root .lh-compact-field:focus-within { border-color: color-mix(in oklab, var(--lh-accent) 70%, transparent); }
 }
 
 @media (min-width: 768px) and (pointer: coarse) {
