@@ -377,7 +377,9 @@ export function MarkdownTable(props: ComponentProps<"table"> & ExtraProps) {
 	const { children, node, ...rest } = props;
 	const ref = useRef<HTMLTableElement>(null);
 	return (
-		<div className="group/md relative my-4" data-testid="md-table">
+		// Sized to the table (never wider than the column), so the copy corner
+		// sits on the table's own corner — it is always visible on touch.
+		<div className="group/md relative my-4 w-fit max-w-full" data-testid="md-table">
 			<CopyCorner
 				// Contained in the table's top-right corner (owner note, 2026-09-19:
 				// the old -top-3 lifted only half the 24px button above the 12px
