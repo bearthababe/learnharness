@@ -44,6 +44,9 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	const phone = usePhoneLayout();
 	const { catalog, refresh } = useModelCatalog();
 	const [models, setModels] = useState<ModelsSettings | undefined>();
+	// The settings record has been read (a first run has no models key at
+	// all, so `models` alone cannot say "read, and nothing chosen").
+	const [settingsRead, setSettingsRead] = useState(false);
 	// A successful read with no settings is a legacy session; undefined
 	// means no session record is known yet, not permission to inherit Strong.
 	const [session, setSession] = useState<{ settings?: ChatSettings }>();
@@ -71,7 +74,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 		}
 		fetch("/api/settings")
 			.then((r) => r.json() as Promise<{ settings: { models?: ModelsSettings } | null }>)
-			.then((body) => setModels(body.settings?.models ?? undefined))
+			.then((body) => { setModels(body.settings?.models ?? undefined); setSettingsRead(true); })
 			.catch(() => {
 				/* the record fetch failing leaves the control read-only
 				   ("—" triggers, closed menus) — same posture as a
@@ -103,7 +106,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	const effectiveId = override?.model?.id;
 	// First run (A16): settings are read and no model is set anywhere — say
 	// so in words. While a session record is still loading it stays "—".
-	const nothingChosen = models !== undefined && !strong?.model && (!chatId || (session !== undefined && !session.settings?.model));
+	const nothingChosen = settingsRead && !strong?.model && (!chatId || (session !== undefined && !session.settings?.model));
 	const effectiveProvider = override?.model?.provider;
 	useEffect(() => {
 		onModelChange?.(effectiveProvider && effectiveId ? `${effectiveProvider}:${effectiveId}` : undefined);
