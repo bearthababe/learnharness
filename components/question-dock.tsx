@@ -1,7 +1,7 @@
 "use client";
 
 import { tabbedOffEnd } from "@/components/tab-wrap";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PathInput } from "@/components/path-input";
@@ -640,6 +640,13 @@ function QuestionDockForm({
 	// A select question with nothing chosen and nothing written yet: phones
 	// show the options first and bring in confidence + thinking after.
 	const awaitingChoice = qd.mode !== "text" && sel.selected.size === 0 && !sel.dontKnow && !sel.otherSelected && !thinking.trim();
+	// Where the waiting follow-up starts (the note over it lines up there).
+	useLayoutEffect(() => {
+		const root = rootRef.current;
+		if (!root || !awaitingChoice) return;
+		const first = root.querySelector<HTMLElement>(".lh-question-confidence") ?? root.querySelector<HTMLElement>(".lh-question-form");
+		if (first) root.style.setProperty("--lh-followup-top", `${first.offsetTop}px`);
+	});
 
 	// More-below cue (whole-app redesign): on short screens the options can
 	// continue under the confidence row; a fade at the scroll edge says so.
@@ -967,7 +974,13 @@ function QuestionDockForm({
 			{/* Phones: until an answer is picked, confidence and "Your thinking"
 			    wait as a follow-up step, so the question and every option get
 			    the room first (owner amendment 2). */}
-			{qd.mode !== "text" && <p aria-hidden className="lh-choice-hint">Pick an answer — then say how sure you are and why.</p>}
+			{/* The follow-up keeps its place while it waits (round-8 review: the
+			    card grew under the finger on the pick), so nothing moves when
+			    it arrives: the note covers the space it will fill. */}
+			{qd.mode !== "text" && <div aria-hidden className="lh-choice-hint">
+				<span className="lh-choice-step">2</span>
+				<span><span className="lh-choice-title">Then say how sure you are, and why</span><span className="lh-choice-sub">Pick an answer above first.</span></span>
+			</div>}
 			<form
 				className="lh-question-form border-t border-border/60 p-1.5"
 				onSubmit={(e) => {

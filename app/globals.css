@@ -395,10 +395,15 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 		font-size: 18px;
 		line-height: 1.3;
 	}
-	.lh-session-header .lh-header-plan,
 	.lh-session-header .lh-coverage-ring {
 		display: none;
 	}
+	/* Plan is a word in the header (as on tablet and laptop), so the row
+	   under the composer has room to name the model. With the notebook
+	   open it moves into the controls card. */
+	.lh-session-header .lh-phone-plan-header { display: inline-flex; height: 44px; padding-inline: 10px; font-size: 15px; }
+	.lh-session-header .lh-phone-plan-header svg { display: none; }
+	.session-panes[data-notebook-open="true"] .lh-session-header .lh-phone-plan-header { display: none; }
 	/* Pencil plus its word (a lone pencil reads as "rename"), packed
 	   tight so the session title keeps as much width as possible. */
 	.lh-header-write {
@@ -695,12 +700,14 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
    no edge doubles. (md-blocks supplies the wrapper + the copy corner.) */
 [data-streamdown="table"] {
 	border: 1px solid var(--border);
-	/* Tables HUG their contents (owner, callout round 2026-10-07): no more
-	   full-width stretch with dead space. max-content sizes to the cells
-	   (width:auto would still stretch — the classic table trap). No
-	   max-width cap: a max-width would squish-wrap wide tables instead of
-	   letting the md-blocks overflow-x scroller carry them. */
-	width: max-content;
+	/* Tables HUG their contents (owner, callout round 2026-10-07): no
+	   full-width stretch with dead space. fit-content sizes to the cells up
+	   to the column, then long cells wrap (whole-app redesign, round 8: a
+	   max-content table of sentences ran to 2,300px+ behind a sideways
+	   scroll). Only a table whose words alone are wider than the column
+	   still scrolls, with a fade at its cut edge. */
+	width: fit-content;
+	max-width: 100%;
 	/* Tables run at the SESSION prose size (owner note, 2026-09-19: they
 	   visibly lagged the 16px chat text at streamdown's 12.5px text-sm).
 	   Unlayered CSS beats the cells' own utility-layer text-sm, and the
@@ -709,7 +716,12 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 }
 [data-streamdown="table"] :where(th, td) {
 	font-size: inherit;
+	vertical-align: top;
+	overflow-wrap: break-word;
 }
+/* Sentences in a cell keep a readable measure. */
+[data-testid="md-table"][data-prose] [data-streamdown="table-cell"] { min-width: 9em; }
+[data-testid="md-table"][data-cut] .lh-table-scroll { mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); }
 /* Column separators: a hairline left rule on every cell but the first in
    its row (owner ask, 2026-09-19) — border-collapse merges it with the row
    rules and the outer border, no doubled lines anywhere. */
@@ -1251,15 +1263,29 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
    "Your thinking" arrive once an answer is picked (owner amendment 2). */
 .lh-choice-hint { display: none; }
 @media (max-width: 767px) {
-	[data-testid="question-dock"][data-awaiting-choice] :is(.lh-question-confidence, .lh-question-form) { display: none; }
-	[data-testid="question-dock"][data-awaiting-choice] .lh-choice-hint { display: block; padding: 8px 16px 12px; border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent); font-size: 13px; color: var(--muted-foreground); }
+	/* The follow-up keeps its space while it waits, so the options never
+	   move under the finger when it arrives; a step-2 note covers it. */
+	[data-testid="question-dock"][data-awaiting-choice] { position: relative; }
+	[data-testid="question-dock"][data-awaiting-choice] :is(.lh-question-confidence, .lh-question-form) { visibility: hidden; }
+	[data-testid="question-dock"][data-awaiting-choice] .lh-choice-hint {
+		position: absolute; inset: var(--lh-followup-top, auto) 0 0 0; display: flex; align-items: center; gap: 12px;
+		padding: 10px 18px; border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+		background: color-mix(in oklab, var(--foreground) 3%, transparent); color: var(--muted-foreground);
+	}
+	.lh-choice-step { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 26px; height: 26px; border: 1px dashed color-mix(in oklab, var(--foreground) 35%, transparent); border-radius: 50%; font: 600 13px/1 var(--font-ui); }
+	.lh-choice-title { display: block; font-size: 14.5px; font-weight: 600; color: color-mix(in oklab, var(--foreground) 72%, transparent); }
+	.lh-choice-sub { display: block; margin-top: 2px; font-size: 13.5px; }
+	/* A compact follow-up, so the reserved space leaves every option in
+	   view: the field's own placeholder asks "Why this answer?". */
+	[data-testid="question-dock"] [data-testid="thinking-field"] .lh-input-label { display: none; }
+	[data-testid="question-dock"] .lh-question-confidence { padding-block: 6px; }
 }
 
 /* Phones: the lesson's control row (Plan, model, thinking, Usage) reads at
    the same size as the rest of the chrome. */
 @media (max-width: 767px) {
 	.lh-compact-stats { font-size: 14px; }
-	.lh-compact-stats :is(.lh-phone-plan, [data-testid="stats-summary"]) { color: color-mix(in oklab, var(--foreground) 78%, transparent); font-size: 14.5px; }
+	.lh-compact-stats :is(.lh-row-plan, [data-testid="stats-summary"]) { color: color-mix(in oklab, var(--foreground) 78%, transparent); font-size: 14.5px; }
 	.lh-compact-stats [data-testid="model-control"] button { font-size: 14.5px; }
 }
 
@@ -1272,8 +1298,11 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.lh-graph-cost { min-width: 44px; min-height: 44px; padding-inline: 10px; font-size: 13.5px; }
 	.lh-copy-corner { position: relative; width: 36px; height: 36px; }
 	.lh-copy-corner::after { content: ""; position: absolute; inset: -4px; }
-	:is([data-testid="md-table"], [data-testid="md-code"]) .lh-copy-corner { opacity: .8; }
-	[data-testid="md-table"] > .lh-table-copy { position: static; display: flex; justify-content: flex-end; margin-bottom: 2px; }
+	[data-testid="md-code"] .lh-copy-corner { opacity: .8; }
+	/* A table's copy is a small tab on its frame's top-right corner. */
+	[data-testid="md-table"] > .lh-table-copy { position: static; display: flex; justify-content: flex-end; margin-bottom: -1px; }
+	[data-testid="md-table"] > .lh-table-copy .lh-copy-corner { width: 44px; height: 30px; border: 1px solid var(--border); border-bottom: 0; border-radius: 8px 8px 0 0; background: var(--background); opacity: 1; }
+	[data-testid="md-table"] > .lh-table-copy .lh-copy-corner::after { inset: -6px -2px -4px; }
 }
 
 /* Keyboard-and-mouse screens name the coverage pie too: [◔ Graph], beside
@@ -1282,4 +1311,45 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.lh-coverage-ring > button { width: auto; height: 34px; gap: 6px; padding-inline: 8px 10px; border-radius: 8px; }
 	.lh-coverage-ring .lh-coverage-glyph { width: 18px; height: 18px; }
 	.lh-coverage-ring .lh-coverage-label { display: inline; font-size: 14px; color: var(--muted-foreground); }
+}
+
+/* Phones: a table of sentences becomes one card per row, each value under
+   its column's heading — no sideways reading at 343px. */
+@media (max-width: 767px) {
+	[data-testid="md-table"][data-prose] { width: 100%; }
+	[data-testid="md-table"][data-prose] .lh-table-scroll { overflow: visible; mask-image: none; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table"] { display: block; width: 100%; border: 0; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-header"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+	[data-testid="md-table"][data-prose] :is([data-streamdown="table-body"], [data-streamdown="table-row"], [data-streamdown="table-cell"]) { display: block; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-body"] [data-streamdown="table-row"] { margin-bottom: 10px; padding: 2px 14px; border: 1px solid var(--border); border-radius: 12px; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-body"] [data-streamdown="table-row"]:first-child { border-top-right-radius: 0; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-cell"] { min-width: 0; padding: 10px 0; border-left: 0; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-cell"] + [data-streamdown="table-cell"] { border-top: 1px solid var(--border); }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-cell"]::before { content: attr(data-label); display: block; margin-bottom: 3px; font: 600 13px/1.3 var(--font-ui); color: var(--muted-foreground); }
+}
+
+/* Wider screens: a table may run into the right margin beside the text
+   column (its left edge stays on the text), so wide tables need less
+   sideways scrolling. */
+@media (min-width: 1100px) and (not (pointer: coarse)) {
+	.lh-reading-column [data-testid="md-table"] { --lh-table-breakout: clamp(0px, (100vw - 1056px) / 2, 200px); max-width: calc(100% + var(--lh-table-breakout)); margin-right: calc(-1 * var(--lh-table-breakout)); }
+	.lh-reading-column .is-assistant .lh-message-content:has([data-testid="md-table"]) { overflow: visible; }
+}
+@media (min-width: 768px) and (pointer: coarse) {
+	.lh-reading-column [data-testid="md-table"] { --lh-table-breakout: clamp(0px, (100vw - 624px) / 2 - 28px, 96px); max-width: calc(100% + var(--lh-table-breakout)); margin-right: calc(-1 * var(--lh-table-breakout)); }
+	.lh-reading-column .is-assistant .lh-message-content:has([data-testid="md-table"]) { overflow: visible; }
+}
+
+/* Tablets and laptops: secondary text reads at 13px and up (round-8
+   review: fold rows, session dates and the Concepts link sat at 11–12px). */
+@media (min-width: 768px) {
+	.lh-fold-toggle, .lh-concepts-summary { font-size: 13.5px; }
+	.lh-session-meta, .lh-kind-tag, [data-testid="activity-recent-toggle"] { font-size: 13px; }
+}
+/* Laptops: a calmer composer footer — usage on the left; Dictate (its
+   label only), model and thinking grouped on the right. */
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	.lh-stats-bar { font-size: 13.5px; }
+	.lh-dictation-slot { justify-content: flex-end; }
+	.lh-dictation-slot [data-testid="dictation-toggle"] { width: auto; }
 }

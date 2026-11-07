@@ -122,4 +122,12 @@
 .hw-wheelInk { display: block; width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1px #ffffff30; }
 .hw-wheelLabel { font-size: 12px; font-weight: 600; line-height: 1; }
 .hw-wheelInspector { right: 192px; top: 0; }
+.hw-wheelLabel[data-preview] { color: var(--foreground); }
+.hw-wheelLegend { position: absolute; right: 196px; top: 4px; width: 214px; padding: 12px 14px; border: 1px solid var(--tool-edge); border-radius: 16px; background: var(--tool-surface); box-shadow: var(--tool-shadow); color: var(--foreground); font-size: 14px; }
+.hw-wheelLegend ul { display: grid; gap: 7px; margin: 8px 0 10px; }
+.hw-wheelLegend .hw-toolGlyph { width: 18px; height: 22px; color: var(--muted-foreground); }
+.hw-wheelLegendTitle { font-size: 13px; font-weight: 600; color: var(--muted-foreground); }
+.hw-wheelLegendInk { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: var(--foreground); box-shadow: 0 0 0 3px var(--card), 0 0 0 4px var(--tool-edge); margin-inline: 1px; }
+.hw-wheelLegendHint { font-size: 13px; line-height: 1.35; color: var(--muted-foreground); }
+.hw-wheelLegendDone { margin-top: 10px; min-height: 40px; width: 100%; border-radius: 10px; background: var(--accent); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .hw-wheelTool { transition: none; } }

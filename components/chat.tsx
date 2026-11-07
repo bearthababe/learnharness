@@ -33,6 +33,7 @@ import { AnsweredCard } from "@/components/answered-card";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { artifactRenderers } from "@/components/artifacts";
 import { WorkSteps, workSegments } from "@/components/work-steps";
+import { COMPOSER_SUGGEST_EVENT } from "@/components/activity-dock";
 import { SubagentSteerCard } from "@/components/artifacts/steer-card";
 import { ChatSessionComposer } from "@/components/composer";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
@@ -662,6 +663,16 @@ export function Chat({
 		setComposerDraftRevision((revision) => revision + 1);
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
 	}, [notebook.session, persistLocalDraft]);
+	// "Ask the tutor again" from a failed background job: fills the composer
+	// only when it is empty (a draft is never replaced; nothing is sent).
+	useEffect(() => {
+		const onSuggest = (event: Event) => {
+			const detail = (event as CustomEvent<{ chatId: string; text: string }>).detail;
+			if (detail?.chatId === chatId && !textRef.current.trim()) applyText(detail.text);
+		};
+		window.addEventListener(COMPOSER_SUGGEST_EVENT, onSuggest);
+		return () => window.removeEventListener(COMPOSER_SUGGEST_EVENT, onSuggest);
+	}, [chatId, applyText]);
 	const recordComposerText = useCallback((v: string) => {
 		textRef.current = v;
 		persistLocalDraft(v);
@@ -1552,7 +1563,7 @@ export function Chat({
 								blurAfterPointerClick(e);
 								setPlanOpen(true);
 							}}
-							className="lh-header-plan lh-no-drag flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+							className="lh-header-plan lh-phone-plan lh-phone-plan-header lh-no-drag flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 						>
 							<WaypointsIcon className="size-4" aria-hidden />
 							Plan
@@ -1897,7 +1908,7 @@ export function Chat({
 					notebook={notebook.session}
 					controlsOpen={controlsOpen}
 					fullQuestionWidth={canvasOpen}
-					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} compact={canvasOpen && !phoneLayout} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} pendingWriting={sharedWriting.pending.length} /></>}
+					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} compact={canvasOpen && !phoneLayout} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} pendingWriting={sharedWriting.pending.length} pendingPages={new Set(sharedWriting.pending.flatMap((w) => (w.notebook ? [w.notebook.pageId] : [])))} /></>}
 					hasSharedWriting={hasSharedWriting || handwritingSubmission.hasAttempt()}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.key)?.form : undefined}
@@ -1984,7 +1995,10 @@ export function Chat({
 							// applies.
 							nextProblem={nextReady}
 							onNext={sendNext}
-							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : undefined}
+							// Beside the phone's equation notebook the two fields say whose
+							// they are: this one talks to the tutor, the notebook's edits
+							// your working (round-8 review).
+							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : notebookVisible && phoneLayout ? "Message the tutor…" : undefined}
 						/>
 						</div>
 					}
@@ -2741,7 +2755,7 @@ function DockOverlay({
 						pricing={pricing}
 						dictationSlot={notebook.getSnapshot().view ? dictationSlot : undefined}
 						compactInput
-						phonePlan={plan ? <button type="button" className="lh-phone-plan" onClick={onOpenPlan}>Plan</button> : undefined}
+						phonePlan={plan ? <button type="button" className="lh-row-plan" onClick={onOpenPlan}>Plan</button> : undefined}
 						chatId={chatId}
 						onModelChange={onModelChange}
 					/>

@@ -1,6 +1,6 @@
 .lh-compact-field { display: contents; }
 .lh-practice-collapsed { display: none; }
-.lh-compact-speech, .lh-compact-error, .lh-phone-plan, .lh-phone-usage-label, .lh-phone-reveal, .lh-phone-submit-icon { display: none; }
+.lh-compact-speech, .lh-compact-error, .lh-phone-plan:not(.lh-phone-plan-header), .lh-row-plan, .lh-phone-usage-label, .lh-phone-reveal, .lh-phone-submit-icon { display: none; }
 
 @media (max-width: 767px) {
 	.lh-reading-input { padding: 6px; }
@@ -77,23 +77,20 @@
 	.lh-compact-error button { min-height: 44px; min-width: 44px; text-decoration: underline; }
 	.lh-compact-stats .lh-dictation-slot { display: none; }
 	.lh-compact-stats { flex-wrap: nowrap; gap: 6px; padding-inline: 6px; padding-top: 2px; }
-	.lh-compact-stats .lh-phone-plan { display: block; min-width: 44px; min-height: 44px; }
+	/* Plan sits in the phone's session header; the row keeps it only inside
+	   the controls card (notebook open). */
+	[data-tablet-controls="open"] .lh-compact-stats .lh-row-plan { display: block; min-width: 44px; min-height: 44px; }
 	.lh-compact-stats .lh-usage { position: static; order: 3; flex-shrink: 0; }
 	.lh-compact-stats .lh-usage-numbers { display: none; }
 	.lh-compact-stats .lh-phone-usage-label { display: inline; }
 	.lh-compact-stats [data-testid="stats-summary"] { min-height: 44px; min-width: 44px; justify-content: center; }
-	.lh-compact-stats [data-testid="model-control"] { flex: 1; min-width: 0; justify-content: flex-end; gap: 2px; }
-	.lh-compact-stats [data-testid="model-control"] button { min-height: 44px; min-width: 44px; padding-inline: 8px; background: transparent; font-size: 14px; }
+	.lh-compact-stats [data-testid="model-control"] { flex: 1; min-width: 0; justify-content: flex-end; gap: 0; }
+	.lh-compact-stats [data-testid="model-control"] button { min-height: 44px; min-width: 44px; padding-inline: 7px; background: transparent; font-size: 14px; }
 	.lh-compact-stats [data-testid="stats-model"] { min-width: 0; }
 	.lh-compact-stats [data-testid="stats-model"] .lh-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	/* The row under the composer: the model is a mark with a chevron, so
-	   notebook, Plan, model, thinking and Usage sit side by side uncut. */
-	.lh-compact-stats [data-testid="stats-model"] { gap: 3px; padding-inline: 10px 8px; }
-	.lh-compact-stats [data-testid="stats-model"] .lh-model-glyph { display: block; }
-	.lh-compact-stats [data-testid="stats-model"] .lh-model-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-	/* The open controls card has room: the name is back beside the mark. */
-	[data-tablet-controls="open"] .lh-compact-stats [data-testid="stats-model"] .lh-model-name { position: static; width: auto; height: auto; clip-path: none; }
-	[data-tablet-controls="open"] .lh-compact-stats [data-testid="stats-model"] .lh-model-glyph { display: none; }
+	/* The row under the composer names the model (round 8): with Plan in
+	   the header, notebook, model, thinking and Usage fit side by side. */
+	.lh-compact-stats [data-testid="stats-model"] { gap: 3px; padding-inline: 8px 6px; }
 	.lh-compact-stats [data-testid="stats-detail"] {
 		--tw-translate-x: 0;
 		left: 0; right: 0; transform: none; translate: none; width: 100%;

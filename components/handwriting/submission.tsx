@@ -107,12 +107,16 @@ export function useHandwritingEditor(targetKey: string, read: () => EditorSnapsh
 	return bridge;
 }
 
-export function HandwritingDeliveryNotice({ bridge, activeTarget, pendingWriting }: { bridge: Bridge; activeTarget?: string;
+export function HandwritingDeliveryNotice({ bridge, activeTarget, pendingWriting, pendingPages }: { bridge: Bridge; activeTarget?: string;
 	/** How many shared images still wait to be sent; with none, an
 	 *  "attached · not sent" line is stale (the page went with the answer). */
-	pendingWriting?: number }) {
+	pendingWriting?: number;
+	/** The pages still attached to the next answer; a page sent or removed
+	 *  from the answer drops its "attached · not sent" line. */
+	pendingPages?: ReadonlySet<string> }) {
 	const model = bridge.model, attempt = model?.attempt;
-	const entries = bridge.attachment()?.noticeEntries().filter(({ kind }) => pendingWriting !== 0 || (kind !== "attached" && kind !== "updated")) ?? [];
+	const stillAttached = (pageId: string) => pendingWriting !== 0 && (!pendingPages || pendingPages.has(pageId));
+	const entries = bridge.attachment()?.noticeEntries().filter(({ kind, pageId }) => (kind !== "attached" && kind !== "updated") || stillAttached(pageId)) ?? [];
 	return <div className="text-xs" data-testid="handwriting-delivery">
 		{entries.map(({ pageId, text, refresh }) => <p role="status" key={pageId}>{text}{refresh && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.refreshReview().catch(() => {})}>Refresh review</button>}</p>)}
 		{model?.notice && <p role="status">{model.notice}</p>}

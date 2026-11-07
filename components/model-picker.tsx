@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDownIcon, SparklesIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatSettings, ModelCatalogEntry, ModelCatalogResponse, ModelsSettings, UserSettings } from "@/src/core";
@@ -52,6 +52,8 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	const presence = usePhoneMenuPresence(open, phone);
 	const [error, setError] = useState<string | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
+	const pendingConfirm = useRef<{ kind: "model" | "thinking"; value: string } | null>(null);
+	const [confirmed, setConfirmed] = useState<"model" | "thinking" | null>(null);
 
 	// The record read — BOTH mount and the cross-surface signal land
 	// here (fix wave: another surface's models write re-reads into the
@@ -246,6 +248,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			const idx = effectiveLevel === undefined ? -1 : levels.indexOf(effectiveLevel);
 			const next = levels[(idx + 1) % levels.length];
 			if (next === undefined) return;
+			pendingConfirm.current = { kind: "thinking", value: next };
 			apply(effectiveProvider ?? "", effectiveId ?? "", next);
 		};
 		window.addEventListener("lh:kbd-cycle-thinking", onCycleThinking);
@@ -256,6 +259,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	// thinking level only when the new model supports it — otherwise
 	// drop it (a carry-over would 400 at the server's catalog gate).
 	const pickModel = (m: ModelCatalogEntry) => {
+		pendingConfirm.current = { kind: "model", value: m.id };
 		// Auto-populate (chunk 2, owner: "populate everywhere"): a fresh pick
 		// ALWAYS writes a level — the STORED one rides as-is (the write clamps
 		// server-side when the new model doesn't support it; the signal
@@ -276,6 +280,24 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 		setError(null);
 		if (kind === "model") refresh();
 	};
+
+	// A pick shows that it landed (round-8 review: on a phone a model change
+	// gave no visible confirmation): once the stored choice reads back, the
+	// button's chevron becomes a tick for two seconds and a status line is
+	// announced.
+	useEffect(() => {
+		const pending = pendingConfirm.current;
+		if (!pending) return;
+		const landed = pending.kind === "model" ? effectiveId === pending.value : effectiveLevel === pending.value;
+		if (!landed) return;
+		pendingConfirm.current = null;
+		setConfirmed(pending.kind);
+	});
+	useEffect(() => {
+		if (!confirmed) return;
+		const timer = setTimeout(() => setConfirmed(null), 2000);
+		return () => clearTimeout(timer);
+	}, [confirmed]);
 
 	const modelMenu = <>
 		{error && <div className="mb-1.5 text-destructive">{error}</div>}
@@ -300,11 +322,10 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				// graph no longer bleeds through these pills.
 				className="lh-pill flex h-8 min-w-0 items-center gap-1 rounded-full bg-card/90 px-3 text-[13px] backdrop-blur transition-colors hover:bg-accent"
 			>
-				{/* Phones show only the model mark and its chevron (owner's
-				    composer reference): the name lives in the menu and the label. */}
 				<span className="lh-model-name text-card-foreground">{effectiveId ? prettyModel(effectiveId) : "—"}</span>
-				<SparklesIcon aria-hidden className="lh-model-glyph hidden size-[18px] shrink-0 text-card-foreground" />
-				<ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+				{confirmed === "model"
+					? <CheckIcon aria-hidden data-testid="model-confirmed" className="size-3.5 shrink-0 text-(--lh-success)" />
+					: <ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />}
 			</button>
 			</Hint>
 			<Hint
@@ -336,10 +357,15 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				<span className="text-card-foreground">
 					{effectiveLevel === undefined ? "—" : (THINKING_LABEL[effectiveLevel] ?? effectiveLevel)}
 				</span>
-				<ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+				{confirmed === "thinking"
+					? <CheckIcon aria-hidden className="size-3.5 shrink-0 text-(--lh-success)" />
+					: <ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />}
 			</button>
 			</Hint>
 
+			<span className="sr-only" role="status">
+				{confirmed === "model" && effectiveId ? `Model changed to ${prettyModel(effectiveId)}` : confirmed === "thinking" && effectiveLevel ? `Thinking set to ${THINKING_LABEL[effectiveLevel] ?? effectiveLevel}` : ""}
+			</span>
 			{/* The shared dropdown body (extracted 2026-09-20): the agent
 			    settings' slot selects and the setup dialog use the exact same
 			    one. */}
@@ -373,7 +399,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 					<ThinkingMenuList
 						levels={catalog ? levels : []}
 						effectiveLevel={effectiveLevel}
-						onPick={(level) => apply(effectiveProvider ?? "", effectiveId ?? "", level as ThinkingLevel)}
+						onPick={(level) => { pendingConfirm.current = { kind: "thinking", value: level }; apply(effectiveProvider ?? "", effectiveId ?? "", level as ThinkingLevel); }}
 						empty={catalog ? (effectiveId ? `${prettyModel(effectiveId)} has no thinking levels.` : "Pick a model first.") : "Loading…"}
 						footer="Levels this model actually supports"
 					/>

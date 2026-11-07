@@ -289,26 +289,48 @@ const KIND_ICON: Record<JobKind, typeof SearchIcon> = {
 type AbortState = "pending" | "failed";
 
 /** One finished or failed job in the Background agents history. */
-/** A failed job's reason, in full: two lines by default, the rest one tap
- *  away (long provider messages used to be cut off mid-sentence). */
-function RecentFailure({ message }: { message: string }) {
+/** The composer's own draft key (chat.tsx) and its suggestion event: a
+ *  suggestion fills an EMPTY composer only — a draft is never replaced, and
+ *  nothing is sent until the learner sends it. */
+export const COMPOSER_SUGGEST_EVENT = "lh:composer-suggest";
+function suggestToComposer(chatId: string, text: string) {
+	window.dispatchEvent(new CustomEvent(COMPOSER_SUGGEST_EVENT, { detail: { chatId, text } }));
+	try { const key = `lh:composer-draft:${chatId}`; if (!window.localStorage.getItem(key)) window.localStorage.setItem(key, text); }
+	catch { /* storage blocked: the open session still received the event */ }
+}
+
+/** A failed job's reason, in full (two lines by default, the rest one tap
+ *  away), and what to do next (round-8 review): open the session it belongs
+ *  to, or open it with a request to try again ready in the composer. */
+function RecentFailure({ message, label, chatId, onOpenChat }: { message: string; label: string; chatId: string; onOpenChat?: (chatId: string) => void }) {
 	const [open, setOpen] = useState(false);
 	const long = message.length > 110 || message.includes("\n");
+	const reason = message.split("\n")[0]!.replace(/\.$/, "").slice(0, 160);
+	const action = "min-h-9 rounded-lg px-2.5 text-[13px] font-medium text-foreground/90 transition-colors hover:bg-accent";
 	return (
-		<div data-testid="activity-recent-failure" className="pb-1.5 pl-9 pr-2.5 text-[12px] leading-snug text-destructive/90">
-			<p className={cn("whitespace-pre-wrap break-words", !open && "line-clamp-2")}>{message}</p>
-			{long && (
-				<button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}
-					className="mt-0.5 min-h-7 text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
-					{open ? "Show less" : "Show the whole message"}
+		<div data-testid="activity-recent-failure" className="pb-2 pl-9 pr-2.5 text-[13px] leading-snug">
+			<p className={cn("whitespace-pre-wrap break-words text-destructive/90", !open && "line-clamp-2")}>{message}</p>
+			<div className="-ml-2.5 mt-1 flex flex-wrap items-center gap-x-1">
+				<button type="button" data-testid="activity-failure-ask" className={action}
+					onClick={() => { suggestToComposer(chatId, `The ${label} didn't finish (${reason}). Could you try it again?`); onOpenChat?.(chatId); }}>
+					Ask the tutor again
 				</button>
-			)}
+				<button type="button" data-testid="activity-failure-open" className={action} onClick={() => onOpenChat?.(chatId)}>Open session</button>
+				{long && (
+					<button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}
+						className="min-h-9 px-2 text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+						{open ? "Show less" : "Whole message"}
+					</button>
+				)}
+			</div>
 		</div>
 	);
 }
 
 type RecentJob = { id: string; chatId: string; chatTitle: string; kind: JobKind; status: "done" | "error" | string; error: string | null; updatedAt: string };
 const RECENT_LABEL: Record<string, string> = { research: "Research", demo: "Demo", visual: "Figure", pdf: "PDF brief" };
+/** The same jobs mid-sentence ("The PDF brief didn't finish…"). */
+const RECENT_NOUN: Record<string, string> = { research: "research", demo: "demo", visual: "figure", pdf: "PDF brief" };
 /** A job the learner stopped is cancelled, not failed (the server records it
  *  as an error with this exact reason). */
 function recentCancelled(job: RecentJob): boolean {
@@ -438,10 +460,10 @@ export function ActivitySection({ feed: feedProp, onOpenChat }: { feed?: Activit
 										{RECENT_LABEL[job.kind] ?? job.kind} · {job.status === "done" ? "finished" : recentCancelled(job) ? "cancelled" : "failed"}
 										<span className="text-muted-foreground"> · {recentAgo(job.updatedAt)}</span>
 									</span>
-									<span className="block truncate text-[12px] text-muted-foreground">{job.chatTitle}</span>
+									<span className="block line-clamp-2 break-words text-[13px] text-muted-foreground">{job.chatTitle}</span>
 								</span>
 							</button>
-							{job.status !== "done" && job.error && !recentCancelled(job) && <RecentFailure message={job.error} />}
+							{job.status !== "done" && job.error && !recentCancelled(job) && <RecentFailure message={job.error} label={RECENT_NOUN[job.kind] ?? job.kind} chatId={job.chatId} onOpenChat={onOpenChat} />}
 						</li>
 					))}
 				</ul>

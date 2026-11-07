@@ -27,7 +27,7 @@
  * EXPAND icon (opens the session overlay) when a chat page is mounted.
  */
 
-import { cloneElement, isValidElement, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { CheckIcon, CopyIcon, MaximizeIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -370,27 +370,68 @@ export function MarkdownBlockquote(props: ComponentProps<"blockquote"> & ExtraPr
 
 /** A plain PROSE table: no wrapper box, no button rows — just the table
  *  (streamdown's inner cells keep their padding/typography; the hairline
- *  rules live in globals.css on the data-streamdown attributes) inside a
- *  horizontal-scroller for wide ones, with the corner copy. The copy
- *  serializes the REAL DOM table (the library's own extractor → Markdown). */
+ *  rules live in globals.css on the data-streamdown attributes), with the
+ *  corner copy. The copy serializes the REAL DOM table (the library's own
+ *  extractor → Markdown).
+ *
+ *  Readable at every width (whole-app redesign, round 8): the table fits
+ *  the column and long cells wrap; only a table too wide even then scrolls
+ *  sideways (with a fade at the cut edge). On phones a table of sentences
+ *  (any cell of 48+ characters) stacks into one card per row, each value
+ *  under its column's heading. */
 export function MarkdownTable(props: ComponentProps<"table"> & ExtraProps) {
 	const { children, node, ...rest } = props;
 	const ref = useRef<HTMLTableElement>(null);
+	const scrollRef = useRef<HTMLDivElement>(null);
+	const [prose, setProse] = useState(false);
+	const [cut, setCut] = useState(false);
+	// Label each body cell with its column heading (the stacked view's
+	// captions) and note whether the table carries sentences. Runs after
+	// every render: streamed tables grow a row at a time.
+	useLayoutEffect(() => {
+		const table = ref.current;
+		if (!table) return;
+		const heads = [...table.querySelectorAll("thead th")].map((th) => th.textContent?.trim() ?? "");
+		let longest = 0;
+		for (const row of table.querySelectorAll("tbody tr")) {
+			[...row.children].forEach((cell, index) => {
+				const label = heads[index] ?? "";
+				if (cell.getAttribute("data-label") !== label) cell.setAttribute("data-label", label);
+				longest = Math.max(longest, cell.textContent?.length ?? 0);
+			});
+		}
+		const next = heads.length >= 2 && longest >= 48;
+		setProse((was) => (was === next ? was : next));
+	});
+	// A table wider than its column even after wrapping: fade the cut edge
+	// so the sideways scroll is visible.
+	useEffect(() => {
+		const box = scrollRef.current;
+		if (!box || typeof ResizeObserver === "undefined") return;
+		const update = () => setCut(box.scrollWidth - box.clientWidth > 2 && box.scrollLeft + box.clientWidth < box.scrollWidth - 2);
+		const observer = new ResizeObserver(update);
+		observer.observe(box);
+		if (ref.current) observer.observe(ref.current);
+		box.addEventListener("scroll", update, { passive: true });
+		update();
+		return () => { observer.disconnect(); box.removeEventListener("scroll", update); };
+	}, []);
 	return (
 		// Sized to the table (never wider than the column), so the copy corner
 		// sits on the table's own corner — it is always visible on touch.
-		<div className="group/md relative my-4 w-fit max-w-full" data-testid="md-table">
+		<div className="group/md relative my-4 w-fit max-w-full" data-testid="md-table" data-prose={prose || undefined} data-cut={cut || undefined}>
 			<CopyCorner
 				// Contained in the table's top-right corner (owner note, 2026-09-19:
 				// the old -top-3 lifted only half the 24px button above the 12px
 				// offset, so it straddled the top outline). 4px inset, z above the
 				// cells it hovers over; the scroll container stays under it (the
-				// corner is fixed to the wrapper, not the scrolling table).
+				// corner is fixed to the wrapper, not the scrolling table). Touch
+				// screens attach it to the table's frame as a small tab.
 				className="lh-table-copy absolute top-1 right-1 z-10"
 				label="Copy table"
 				getText={() => (ref.current ? tableDataToMarkdown(extractTableDataFromElement(ref.current)) : "")}
 			/>
-			<div className="overflow-x-auto">
+			<div ref={scrollRef} className="lh-table-scroll overflow-x-auto">
 				<table
 					ref={ref}
 					// No text-sm here — the table text runs at the session prose size

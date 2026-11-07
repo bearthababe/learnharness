@@ -2,7 +2,7 @@
 
 // Corner arc selectively carried forward from c663dcecd22a. Drawing values and
 // the shared Pencil release-inside activation path belong to the notebook.
-import { useState, type ButtonHTMLAttributes, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { EllipsisIcon, Undo2Icon, Redo2Icon, XIcon } from "lucide-react";
 import { HANDWRITING_HIGHLIGHT_COLOUR } from "@/src/core";
 import { useCanvasPalette } from "@/components/device-features";
@@ -34,9 +34,48 @@ function ToolGlyph({ tool, colour, dim }: { tool: Tool; colour: string; dim: boo
 		</>}
 	</svg>;
 }
+/* The wheel names its tools (round-8 review: only the active tool was
+   labelled). For the first few times the page opens, a small legend sits
+   beside the wheel until "Got it"; and pressing or hovering (Pencil hover)
+   any ring button shows its name in the centre. */
+const LEGEND_KEY = "lh:hint:wheel-legend";
+const LEGEND_SHOWS = 3;
+function useWheelLegend(active: boolean) {
+	const [shown, setShown] = useState(false);
+	const counted = useRef(false);
+	useEffect(() => {
+		if (!active || counted.current) return;
+		counted.current = true;
+		try {
+			const seen = Number(window.localStorage.getItem(LEGEND_KEY) ?? "0") || 0;
+			if (seen < LEGEND_SHOWS) { window.localStorage.setItem(LEGEND_KEY, String(seen + 1)); setShown(true); }
+		} catch { setShown(true); }
+	}, [active]);
+	const dismiss = () => { setShown(false); try { window.localStorage.setItem(LEGEND_KEY, "99"); } catch { /* storage blocked */ } };
+	return [shown, dismiss] as const;
+}
+function WheelLegend({ colour, dim, onDismiss }: { colour: string; dim: boolean; onDismiss: () => void }) {
+	const row = "flex items-center gap-2.5";
+	return <div className="hw-wheelLegend" data-testid="wheel-legend">
+		<p className="hw-wheelLegendTitle">Your tools</p>
+		<ul>
+			{TOOLS.map(tool => <li key={tool.id} className={row}><ToolGlyph tool={tool.id} colour={tool.id === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : colour} dim={dim} />{tool.label}</li>)}
+			<li className={row}><Undo2Icon size={17} aria-hidden /><span>Undo</span><Redo2Icon size={17} aria-hidden className="ml-1" /><span>Redo</span></li>
+			<li className={row}><span className="hw-wheelLegendInk" aria-hidden />Centre: size and colour</li>
+		</ul>
+		<p className="hw-wheelLegendHint">Press and hold a tool to see its name.</p>
+		<button type="button" className="hw-wheelLegendDone" onClick={onDismiss}>Got it</button>
+	</div>;
+}
 export function HandwritingToolbar(p: Props) {
 	const [expanded, setExpanded] = useState(false), [pageOpen, setPageOpen] = useState(false);
 	const palette = useCanvasPalette();
+	const [legend, dismissLegend] = useWheelLegend(palette === "wheel");
+	const [preview, setPreview] = useState<string | null>(null);
+	const previewFrom = (event: ReactPointerEvent) => {
+		const name = (event.target as Element | null)?.closest?.("[data-wheel-name]")?.getAttribute("data-wheel-name");
+		if (name) setPreview(name);
+	};
 	const label = TOOLS.find(t => t.id === p.tool)!.label;
 	const activeInk = p.tool === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.tool === "eraser" ? "var(--muted-foreground)" : p.colour;
 	const pickTool = (tool: Tool) => { p.selectTool(tool); setExpanded(p.tool !== tool || !expanded); };
@@ -60,8 +99,8 @@ export function HandwritingToolbar(p: Props) {
 			{...p.handlers(`${item.name} pen`, () => { p.selectColour(item.value); setExpanded(false); })}><span style={{ backgroundColor: item.value, filter: p.dimPaper ? "var(--lh-dim-paper-filter)" : undefined }} /></button>)}</div></>}
 		<p>Tap the active tool to adjust.</p>
 	</div>;
-	const undo = <button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled || !p.canUndo} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} /></button>;
-	const redo = <button type="button" className="hw-iconButton" aria-label="Redo" title="Redo" disabled={p.disabled || !p.canRedo} {...p.handlers("Redo", p.redo)}><Redo2Icon size={19} /></button>;
+	const undo = <button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" data-wheel-name="Undo" disabled={p.disabled || !p.canUndo} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} /></button>;
+	const redo = <button type="button" className="hw-iconButton" aria-label="Redo" title="Redo" data-wheel-name="Redo" disabled={p.disabled || !p.canRedo} {...p.handlers("Redo", p.redo)}><Redo2Icon size={19} /></button>;
 	if (palette === "wheel") {
 		// The tool wheel (owner amendment 2; after the Concepts wheel): one
 		// compact disc docked in the paper's upper-right corner — the three
@@ -69,9 +108,10 @@ export function HandwritingToolbar(p: Props) {
 		// in the middle (tap it, or the active tool, for size and colour).
 		return <div className="hw-overlay" role="toolbar" aria-label="Writing tools" data-testid="notebook-toolbar" data-variant="wheel">
 			{pageActions}
-			<div className="hw-wheel">
+			<div className="hw-wheel" onPointerDownCapture={previewFrom} onPointerOver={previewFrom}
+				onPointerUpCapture={() => setPreview(null)} onPointerCancelCapture={() => setPreview(null)} onPointerLeave={() => setPreview(null)}>
 				<div className="hw-wheelRing" aria-hidden="true" />
-				{TOOLS.map(tool => <button key={tool.id} type="button" className={`hw-wheelTool hw-wheel_${tool.id}`} aria-label={tool.label} title={tool.label} aria-pressed={p.tool === tool.id} disabled={p.disabled}
+				{TOOLS.map(tool => <button key={tool.id} type="button" className={`hw-wheelTool hw-wheel_${tool.id}`} aria-label={tool.label} title={tool.label} data-wheel-name={tool.label} aria-pressed={p.tool === tool.id} disabled={p.disabled}
 					{...p.handlers(tool.label, () => pickTool(tool.id))}>
 					<ToolGlyph tool={tool.id} colour={tool.id === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.colour} dim={p.dimPaper} />
 				</button>)}
@@ -79,9 +119,10 @@ export function HandwritingToolbar(p: Props) {
 				<div className="hw-wheelRedo">{redo}</div>
 				<button type="button" className="hw-wheelCenter" aria-label="Tool size and colour" aria-expanded={expanded} disabled={p.disabled} {...p.handlers("Tool size and colour", () => setExpanded(v => !v))}>
 					<span className="hw-wheelInk" style={{ background: activeInk, filter: p.dimPaper && p.tool === "pen" ? "var(--lh-dim-paper-filter)" : undefined }} />
-					<span className="hw-wheelLabel">{label}</span>
+					<span className="hw-wheelLabel" data-preview={preview ? "" : undefined}>{preview ?? label}</span>
 				</button>
 				{inspector}
+				{legend && !expanded && <WheelLegend colour={p.colour} dim={p.dimPaper} onDismiss={dismissLegend} />}
 			</div>
 		</div>;
 	}
