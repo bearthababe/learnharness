@@ -182,6 +182,10 @@ function sameDetails(a: unknown, b: unknown): boolean {
 export interface SessionState {
 	messages: LhViewMessage[];
 	nativeMessages: LhMessage[];
+	/** The server-read record alone (no optimistic tail): the only proof
+	 *  that a message was delivered. Notebook submissions give their
+	 *  optimistic bubble the submission id, so ids cannot tell them apart. */
+	recordMessages: LhMessage[];
 	/** Server-read history only; optimistic bubbles are not delivery proof. */
 	hasConfirmedConversation: boolean;
 	/** Completed conversation usage; null after compaction or before first usage. */
@@ -306,6 +310,7 @@ export class SessionModel {
 		return {
 			messages: projectView(messages, live),
 			nativeMessages: messages,
+			recordMessages: this.base,
 			hasConfirmedConversation: this.base.some(m => m.role === "user" || m.role === "assistant"),
 			contextTokens: measuredContextTokens(messages, this.incompleteUsageIds),
 			status: this.statusValue,

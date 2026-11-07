@@ -314,7 +314,7 @@ export function Chat({
 	// (core/view.ts projectView); sends are ONE explicit input event each
 	// ({chatId, input} — the stash indirection died with the SDK), and the
 	// turn stream is the VERBATIM AgentEvent passthrough the server emits.
-	const { messages, nativeMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, restoreStoredQuestionDrafts, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, discardUnsentText, discardUnsentThinking, resumeStream, setReattachSettled } =
+	const { messages, nativeMessages, recordMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, restoreStoredQuestionDrafts, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, discardUnsentText, discardUnsentThinking, resumeStream, setReattachSettled } =
 		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight });
 	const sharedWriting = useSharedWriting(chatId, nativeMessages);
 	const hasSharedWriting = sharedWriting.pending.length > 0;
@@ -1512,7 +1512,7 @@ export function Chat({
 	// A lost acknowledgement that did land: once the record shows the
 	// message, the copy (and an unchanged restored draft) is retired.
 	useEffect(() => {
-		const delivered = listUnsent(chatId).filter((entry) => deliveredIn(nativeMessages, entry));
+		const delivered = listUnsent(chatId).filter((entry) => deliveredIn(recordMessages, entry));
 		if (!delivered.length) return;
 		const ids = new Set(delivered.map((entry) => entry.id));
 		for (const entry of delivered) removeUnsent(chatId, entry.id);
@@ -1524,7 +1524,7 @@ export function Chat({
 			setBoxEntryId(null);
 			if (textRef.current.trim() === entry.text.trim()) applyText("");
 		}
-	}, [chatId, nativeMessages, applyText]);
+	}, [chatId, recordMessages, applyText]);
 	const onSend = () => {
 		if (finishingSend.current || pending || compacting || !notebook.view || notebook.session.getSnapshot().sendBlocked || handwritingSubmission.blocked()) return;
 		const reviewed = handwritingSubmission.reviewed(), recovery = handwritingSubmission.recoveryAction();
@@ -1629,6 +1629,7 @@ export function Chat({
 		if (notebook.session.getSnapshot().view?.contextId && (!hasSharedWriting || explanationHasContent(notebook.session.tutor.draft({ kind: "ordinary" })?.parts ?? []))) {
 			if (zeroKeys) { setSetupOpen(true); return; }
 			if (selectedModelUnavailable(catalog, selectedModel)) { openModelPicker(); return; }
+			let recorded = false;
 			return notebook.session.tutor.prepareSubmission({ kind: "ordinary" }).then(async (input) => {
 				// Explicit Send is the only authority; switching and autosaves never enter here.
 				try {
@@ -1638,7 +1639,7 @@ export function Chat({
 						// The same honest recovery as plain sends: a device copy until
 						// acknowledged; not acknowledged → "Not sent", still in the box.
 						const id = newUnsentId(), words = input.text.trim();
-						if (words) putUnsent(chatId, { id, text: words, at: Date.now() });
+						if (words) { putUnsent(chatId, { id, text: words, at: Date.now() }); recorded = true; }
 						const accepted = await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission });
 						if (accepted) { if (words) removeUnsent(chatId, id); }
 						else if (words) {
@@ -1649,7 +1650,17 @@ export function Chat({
 					}
 				}
 				finally { await notebook.session.tutor.reconcile(input.submission.id); }
-			}).catch(() => {});
+			}).catch(() => {
+				// Preparing the message failed before it could be sent (offline):
+				// the same honest "Not sent" note, the words still in the box.
+				const words = textRef.current.trim();
+				if (recorded || !words || boxEntryRef.current) return;
+				const id = newUnsentId();
+				putUnsent(chatId, { id, text: words, at: Date.now() });
+				boxEntryRef.current = id;
+				setBoxEntryId(id);
+				setUnsentShown((shown) => [...shown.filter((entry) => entry.id !== id), { id, text: words, at: Date.now(), kind: "failed" }]);
+			});
 		}
 		if (recovery || reviewed.length || handwritingSubmission.hasAttempt()) { if (!busy) doSend(reviewed, recovery); return; }
 		const t = textRef.current.trim();
