@@ -86,6 +86,21 @@ export interface ActivityExtraction {
  *  graph changed underneath me" (a merge landed, a deletion purged) and
  *  refetch clusters/layout. Reads never move it; the DELETE response
  *  returns the same stamp. */
+/** Follows a failed job's retry chain (bounded, cycle-safe): true once any
+ *  retry in it has completed. */
+function retrySucceeded(job: { retriedBy?: string }, byId: Map<string, { status: string; retriedBy?: string }>): boolean {
+	const seen = new Set<string>();
+	let next = job.retriedBy;
+	while (next && !seen.has(next)) {
+		seen.add(next);
+		const retry = byId.get(next);
+		if (!retry) return false;
+		if (retry.status === "done") return true;
+		next = retry.retriedBy;
+	}
+	return false;
+}
+
 export function activityFeed(): {
 	jobs: ActivityJob[];
 	extractions: ActivityExtraction[];
@@ -97,7 +112,9 @@ export function activityFeed(): {
 	const jobs: ActivityJob[] = [];
 	const recent: ActivityRecentJob[] = [];
 	for (const chat of chats) {
-		for (const job of listJobs(chat.id)) {
+		const chatJobs = listJobs(chat.id);
+		const byId = new Map(chatJobs.map((item) => [item.id, item]));
+		for (const job of chatJobs) {
 			if (job.status === "running") {
 				jobs.push({
 					...job,
@@ -106,6 +123,10 @@ export function activityFeed(): {
 					contextLimit: job.usage ? (limits.get(job.usage.model) ?? null) : null,
 				});
 			} else {
+				// Owner P8 (round 13): a failure whose retry finished — directly
+				// or after further retries — is resolved; only the successful
+				// retry's own row remains.
+				if (retrySucceeded(job, byId)) continue;
 				recent.push({
 					id: job.id,
 					kind: job.kind,

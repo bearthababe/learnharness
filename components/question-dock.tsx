@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownIcon, ChevronDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PathInput } from "@/components/path-input";
 import { MalformedQuestion } from "@/components/malformed-question";
@@ -74,6 +74,8 @@ export interface QuestionDockProps {
 	dictation?: Dictation;
 	hasSharedWriting?: boolean;
 	readingThinking?: string;
+	/** The reading note as it is right now (D2): what a snapshot carries. */
+	readingThinkingNow?: () => string;
 	onRestoreReadingThinking?: (text: string) => void;
 	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall";
 	toolCallId: string;
@@ -88,9 +90,6 @@ export interface QuestionDockProps {
 	 */
 	reveal?: boolean;
 	onExpand: () => void;
-	/** Fold the open question back to its bar so the lesson can be re-read
-	 *  (round 11, phones); everything typed or picked stays. */
-	onCollapse?: () => void;
 	onSubmit: (output: QuestionAnswerData, toolCallId: string, fields?: Pick<NotebookInputFields, "submission">, reviewed?: SharedWriting[]) => unknown;
 	/** Restore only this call's unconfirmed submission after recovery. */
 	initialDraft?: QuestionFormDraft;
@@ -125,6 +124,7 @@ export function QuestionDock({
 	notebook,
 	dictation,
 	readingThinking,
+	readingThinkingNow,
 	onRestoreReadingThinking,
 	hasSharedWriting = false,
 	toolName,
@@ -133,7 +133,6 @@ export function QuestionDock({
 	expanded,
 	reveal = false,
 	onExpand,
-	onCollapse,
 	onSubmit,
 	initialDraft,
 	draftEpoch = 0,
@@ -187,6 +186,7 @@ export function QuestionDock({
 					key={`${toolCallId}:${draftEpoch}`}
 					notebook={notebook}
 					readingThinking={readingThinking}
+					readingThinkingNow={readingThinkingNow}
 					onRestoreReadingThinking={onRestoreReadingThinking}
 					dictation={dictation}
 					hasSharedWriting={hasSharedWriting}
@@ -195,7 +195,6 @@ export function QuestionDock({
 					input={parsed}
 					phase={phase}
 					active={expanded}
-					onCollapse={onCollapse}
 					unsentReason={unsentReason}
 					onSubmit={onSubmit}
 					initialDraft={initialDraft}
@@ -292,6 +291,7 @@ function QuestionDockForm({
 	notebook,
 	dictation,
 	readingThinking = "",
+	readingThinkingNow,
 	onRestoreReadingThinking,
 	hasSharedWriting = false,
 	toolName,
@@ -299,7 +299,6 @@ function QuestionDockForm({
 	input,
 	phase = "probe",
 	active,
-	onCollapse,
 	unsentReason,
 	onSubmit,
 	initialDraft,
@@ -392,12 +391,14 @@ function QuestionDockForm({
 	const latest = useRef({ sel, other, confIdx, compactionRunning, dictationClaim }); latest.current = { sel, other, confIdx, compactionRunning, dictationClaim };
 	const alive = useRef(true);
 	useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-	const transfer = useHandwritingEditor(`question:${toolCallId}`, () => ({ selection: { ...latest.current.sel, selected: [...latest.current.sel.selected].sort((a, b) => a - b) }, thinking: thinkingTextRef.current, other: latest.current.other, text: answerTextRef.current, confidenceIndex: latest.current.confIdx, readingThinking }), draft => {
+	const transfer = useHandwritingEditor(`question:${toolCallId}`, () => ({ selection: { ...latest.current.sel, selected: [...latest.current.sel.selected].sort((a, b) => a - b) }, thinking: thinkingTextRef.current, other: latest.current.other, text: answerTextRef.current, confidenceIndex: latest.current.confIdx, readingThinking: readingThinkingNow?.() ?? readingThinking }), draft => {
 		const selection = draft.selection ? { ...draft.selection, selected: new Set(draft.selection.selected) } : emptyDockSelection();
 		thinkingTextRef.current = draft.thinking ?? ""; answerTextRef.current = draft.text ?? "";
 		latest.current = { ...latest.current, sel: selection, other: draft.other ?? "", confIdx: draft.confidenceIndex ?? DEFAULT_CONFIDENCE_INDEX };
 		setSel(selection); setThinking(thinkingTextRef.current); setText(answerTextRef.current); setOther(draft.other ?? ""); setConfIdx(draft.confidenceIndex ?? DEFAULT_CONFIDENCE_INDEX);
-		if (draft.readingThinking !== undefined) onRestoreReadingThinking?.(draft.readingThinking);
+		// D2 (round 13): a snapshot never empties a reading note that has words.
+		const nowReading = readingThinkingNow?.() ?? readingThinking;
+		if (draft.readingThinking !== undefined && (draft.readingThinking.trim() || !nowReading.trim())) onRestoreReadingThinking?.(draft.readingThinking);
 	}, dictationClaim);
 
 	// The PRIMARY dictation input (owner, STT round 1): while a question
@@ -442,12 +443,18 @@ function QuestionDockForm({
 	// Keep the answer as it is typed (not only at submit): leaving the
 	// session or a reload brings it back (the session model persists it).
 	const saveDraftRef = useRef(onSaveDraft); saveDraftRef.current = onSaveDraft;
-	const draftTouched = useRef(false);
-	useEffect(() => {
-		if (!draftTouched.current) { draftTouched.current = true; return; } // the restored draft, unchanged
-		const timer = window.setTimeout(() => saveDraftRef.current?.({ selection: { ...sel, selected: new Set(sel.selected) }, thinking, other, text, confidenceIndex: confIdx }), 250);
-		return () => window.clearTimeout(timer);
-	}, [sel, thinking, other, text, confIdx]);
+	// D1 (round 13): saved in the same commit as the keystroke (no delay), so
+	// a reload straight after typing keeps the newest words. Only a real
+	// change is saved: the form's first state (the restored draft) and any
+	// re-run of this effect with the same content — React re-runs layout
+	// effects when a hidden subtree reappears — never write over the copy.
+	const draftContent = JSON.stringify([[...sel.selected].sort((a, b) => a - b), sel.otherSelected, sel.dontKnow, thinking, other, text, confIdx]);
+	const savedContent = useRef(draftContent);
+	useLayoutEffect(() => {
+		if (draftContent === savedContent.current) return;
+		savedContent.current = draftContent;
+		saveDraftRef.current?.({ selection: { ...sel, selected: new Set(sel.selected) }, thinking, other, text, confidenceIndex: confIdx });
+	}, [draftContent, sel, thinking, other, text, confIdx]);
 	// Phones show a short "why" prompt so it never truncates.
 	const phone = usePhoneLayout();
 	const followUpOpen = qd.mode === "text" || sel.dontKnow || sel.otherSelected || sel.selected.size > 0 || thinking.trim().length > 0 || hasSharedWriting || !!transfer?.hasAttempt();
@@ -701,7 +708,6 @@ function QuestionDockForm({
 											: "Question"}
 					{qd.mode === "multi-select" && " · select all that apply"}
 					</span>
-					{onCollapse && <button type="button" className="lh-question-hide" data-testid="question-hide" onClick={onCollapse}>Hide<ChevronDownIcon aria-hidden /></button>}
 				</div>
 				<div className="lh-question-text mb-3 font-medium">
 					<ToolContentResponse>{qd.question}</ToolContentResponse>

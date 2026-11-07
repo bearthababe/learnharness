@@ -135,7 +135,9 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 			event.preventDefault(); event.stopPropagation();
 			if (hint) seenHint();
 			resize(event.currentTarget, event.key === "Home" ? "default" : state.share + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -5 : 5));
-		}}><span aria-hidden="true" />{hint && <span id="notebook-split-hint" className="notebook-split-hint" data-testid="notebook-grip-hint">Drag to resize · tap to swap</span>}</div>;
+		}}><span aria-hidden="true" />{/* R3 (round 13): the hint sits inside the grip band, either side of the
+		    bar — it covers neither the composer above nor the notebook below. */}
+		{hint && <span id="notebook-split-hint" className="notebook-split-hint" data-testid="notebook-grip-hint"><span>Drag to resize</span><span>Tap to swap</span></span>}</div>;
 }
 
 /** The accepted four-corner frame and expanded overlay, independent of editor

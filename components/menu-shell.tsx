@@ -432,8 +432,13 @@ export function MenuShell({
 				const nextSignature = [height, width, offsetTop, offsetLeft, progress, rect.top, rect.bottom, rect.left, rect.right, menu.scrollHeight].join(",");
 				if (nextSignature === signature) return;
 				signature = nextSignature;
-				const p = computeVisibleMenuPlacement(rect, { width, height, offsetTop, offsetLeft }, menu.scrollHeight, matchAnchorWidth ? rect.width : menu.getBoundingClientRect().width, preferredSide, align, !!input);
-				if (input) {
+				// A card hanging DOWN from a top opener (the phone's More, round 13)
+				// keeps its place under it; its height follows the visible area, so
+				// the keyboard shortens it from below. Search docking is for cards
+				// that rise from the composer.
+				const dockSearch = !!input && preferredSide !== "down";
+				const p = computeVisibleMenuPlacement(rect, { width, height, offsetTop, offsetLeft }, menu.scrollHeight, matchAnchorWidth ? rect.width : menu.getBoundingClientRect().width, preferredSide, align, dockSearch);
+				if (input && dockSearch) {
 					// The frozen lesson's trigger has one resting position. Let the
 					// keyboard push that card up, then reveal its resting position
 					// again, without an early re-anchor or a late second jump.

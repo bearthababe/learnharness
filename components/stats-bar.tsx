@@ -8,15 +8,15 @@ import { MenuShell } from "@/components/menu-shell";
 import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { useOneMenu } from "@/components/one-menu";
-import { KeyboardToggle } from "@/components/keyboard-toggle";
 import { OPEN_USAGE_EVENT, publishPageMenu } from "@/components/page-menu";
 
 function UsagePanel({ children, anchorRef, onClose, closing, onClosed }: { children: ReactNode; anchorRef: RefObject<HTMLDivElement | null>; onClose: () => void; closing: boolean; onClosed: () => void }) {
 	const phone = usePhoneLayout();
-	if (phone) return <MenuShell anchorRef={anchorRef} testid="stats-detail" preferredSide="up" align="left"
+	// Phones (R2): Usage opens from the page menu's More button.
+	if (phone) return <MenuShell anchorTestid="page-menu-button" testid="stats-detail" preferredSide="down" align="right"
 		closing={closing} onClosed={onClosed}
-		fitVisualViewport matchAnchorWidth onClose={onClose} phoneTriggerTestid="page-menu-button"
-		menuClass="rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</MenuShell>;
+		fitVisualViewport onClose={onClose} phoneTriggerTestid="page-menu-button"
+		menuClass="w-[22rem] max-w-[calc(100vw-24px)] rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</MenuShell>;
 	return <div data-testid="stats-detail" className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</div>;
 }
 
@@ -258,8 +258,7 @@ export function StatsBar({
 			{dictationSlot && (
 				<div className="lh-dictation-slot flex min-w-0 flex-1 items-center justify-center">{dictationSlot}</div>
 			)}
-			{/* Beside dictation on touch screens (owner O6). */}
-			{dictationSlot && <KeyboardToggle />}
+
 			{/* The model + thinking control — one controller for the conversation
 			    agents (prober/teacher); the record's `turns` above still folds
 			    the ACTUAL models billed, regardless of what the picker says. */}

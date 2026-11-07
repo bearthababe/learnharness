@@ -4,6 +4,7 @@ import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
 import { HandwritingNotebook } from "@/components/handwriting/notebook";
 import { HandwritingPagesContext } from "@/components/handwriting/pages-context";
 import { PageMenuButton } from "@/components/page-menu";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
 import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
 import type { SharedWriting } from "@/src/core";
@@ -75,7 +76,7 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, TargetIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronLeftIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, TargetIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -693,6 +694,8 @@ export function Chat({
 	 * separate `readingThinking` field. Reset per pending question. */
 	const [readingThinkingSeed, setReadingThinkingSeed] = useState({ questionId: null as string | null, value: "", revision: 0 });
 	const readingThinkingRef = useRef("");
+	const readingNow = useCallback(() => readingThinkingRef.current, []);
+	const phoneLayout = usePhoneLayout();
 
 	// ⌘T (toggle-user-thinking, owner round 2026-10-07): set EVERY user
 	// thinking row to one state — transcript rows default open, so the
@@ -771,8 +774,11 @@ export function Chat({
 	// wherever a context exists.
 	const localDraftKey = `lh:composer-draft:${chatId}`;
 	const rememberLocalDraft = useCallback((v: string) => {
+		// D1 (round 13): kept from the first keystroke, even while the
+		// notebook view is still loading (it may turn out to own the draft;
+		// the restore below then hands this copy over, never losing it).
 		const view = notebook.session.getSnapshot().view;
-		if (!view || view.contextId) return;
+		if (view?.contextId) return;
 		try {
 			if (v.trim()) localStorage.setItem(localDraftKey, v);
 			else localStorage.removeItem(localDraftKey);
@@ -839,10 +845,21 @@ export function Chat({
 		const view = notebook.view;
 		if (localDraftRestored.current || !view) return;
 		localDraftRestored.current = true;
-		if (view.contextId || textRef.current) return;
 		let saved: string | null = null;
 		try { saved = localStorage.getItem(localDraftKey); } catch { /* storage blocked */ }
-		if (!saved) return;
+		if (view.contextId) {
+			// The notebook store owns this session's draft. Words typed before it
+			// loaded (or kept from a reload in that moment) join it — the newer
+			// text is never dropped for an older stored copy.
+			const typed = textRef.current.trim() ? textRef.current : saved ?? "";
+			const ordinary = notebook.session.tutor.getSnapshot().drafts.find((draft) => draft.owner.kind === "ordinary");
+			const last = ordinary?.parts.at(-1);
+			const stored = last?.kind === "text" ? last.text : "";
+			if (typed.trim() && typed !== stored && (textRef.current.trim() || !stored.trim())) notebook.session.tutor.updateText({ kind: "ordinary" }, typed);
+			try { localStorage.removeItem(localDraftKey); } catch { /* storage blocked */ }
+			return;
+		}
+		if (textRef.current || !saved) return;
 		applyText(saved);
 		// Continue a restored draft where it ends: the first focus moves a
 		// caret left at the very start to the end of the text.
@@ -869,10 +886,20 @@ export function Chat({
 		};
 		editor.addEventListener("focus", onFocus);
 	}, [notebook.view, localDraftKey, applyText]);
+	const ordinaryAdopted = useRef(false);
 	useLayoutEffect(() => {
 		if (!notebook.view?.contextId) return;
 		const part = ordinaryDraft?.parts.at(-1);
 		const value = part?.kind === "text" ? part.text : "";
+		// D1: the first time the store's draft arrives, text typed while it was
+		// loading is newer — it goes into the store instead of being replaced.
+		if (!ordinaryAdopted.current) {
+			ordinaryAdopted.current = true;
+			if (textRef.current.trim() && textRef.current !== value) {
+				notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
+				return;
+			}
+		}
 		if (textRef.current !== value) {
 			textRef.current = value;
 			setComposerDraftRevision((revision) => revision + 1);
@@ -1689,6 +1716,19 @@ export function Chat({
 		doSend(reviewed, recovery);
 	};
 	useHandwritingEditor("composer", () => ({ text: textRef.current }), draft => applyText(draft.text ?? ""), !pending && !activeProblemRef.current, handwritingSubmission);
+	// The Notebook toggle: under the composer on tablets and laptops; on
+	// phones it is part of the page toolbar (owner P2, round 13).
+	const notebookToggleEl = <>{notebookOn && <span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
+						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
+						className="lh-notebook-toggle pointer-events-auto inline-flex shrink-0 items-center justify-center text-muted-foreground"
+						onClick={() => {
+							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
+							if (notebookVisible && workspaceRef.current) {
+								void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
+							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
+						}}><NotebookPenIcon className="size-4" aria-hidden /><span className="lh-notebook-toggle-label" aria-hidden>Notebook</span></button>
+						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="text-muted-foreground"><PaperclipIcon className="size-3" aria-hidden="true" /></span>}
+					</span>}</>;
 
 	return (
 		<HandwritingSubmissionContext.Provider value={handwritingSubmission}>
@@ -1807,6 +1847,8 @@ export function Chat({
 					{/* The plan chip (owner, plan-placement round): session-level
 					    structure beside the phase chip — access to the full-DAG popup
 					    at every width; the marginalia is the wide-screen glance view. */}
+					{/* Phones (P2): Notebook joins the toolbar row of the page bar. */}
+					{phoneLayout && notebookToggleEl}
 					<NotebookSpeechDestination session={notebook.session} />
 					{planTree && (
 						<Hint label="Open the full plan" side="bottom">
@@ -2217,6 +2259,7 @@ export function Chat({
 					onOpenPlan={() => setPlanOpen(true)}
 					requiresReveal={requiresReveal}
 					readingThinking={readingThinkingSeed.value}
+					readingThinkingNow={readingNow}
 					readingThinkingRevision={readingThinkingSeed.revision}
 					onReadingThinking={applyReadingThinking}
 					phase={phases.at(-1) ?? "probe"}
@@ -2224,17 +2267,7 @@ export function Chat({
 					contextTokens={contextTokens}
 					cliContextWindow={cliContextWindowOf(nativeMessages)}
 					pricing={pricing}
-					notebookToggle={<>{notebookOn && <span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
-						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
-						className="lh-notebook-toggle pointer-events-auto inline-flex shrink-0 items-center justify-center text-muted-foreground"
-						onClick={() => {
-							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
-							if (notebookVisible && workspaceRef.current) {
-								void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
-							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
-						}}><NotebookPenIcon className="size-4" aria-hidden /><span className="lh-notebook-toggle-label" aria-hidden>Notebook</span></button>
-						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="text-muted-foreground"><PaperclipIcon className="size-3" aria-hidden="true" /></span>}
-					</span>}</>}
+					notebookToggle={phoneLayout ? null : notebookToggleEl}
 					onReserve={setDockReserve}
 					dictationSlot={<DictationBar dictation={dictation} />}
 					dictation={tutorDictation}
@@ -2527,6 +2560,7 @@ function DockOverlay({
 	onSubmitThinking,
 	requiresReveal,
 	readingThinking,
+	readingThinkingNow,
 	readingThinkingRevision,
 	onReadingThinking,
 	phase,
@@ -2579,6 +2613,8 @@ function DockOverlay({
 	/** The reading-thinking draft (owner 2026-10-03) — owned by ChatView so
 	 *  the submit + dismissal seams (outside this overlay) can merge it. */
 	readingThinking: string;
+	/** The live reading note (D2): snapshots carry it, never a stale copy. */
+	readingThinkingNow?: () => string;
 	readingThinkingRevision: number;
 	onReadingThinking: (v: string) => void;
 	/** Session phase at the pending question — scales the thinking field. */
@@ -2997,8 +3033,16 @@ function DockOverlay({
 		prevRef.current = { key: stateKey, height: h };
 	});
 
+	const questionOpen = !!pending && expanded && !revealPending;
 	return (
-		<div className="lh-dock-overlay pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }}>
+		<div className="lh-dock-overlay pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }} data-question-open={questionOpen || undefined}>
+			{/* Phones (owner P7): an open question owns the whole screen — the CSS
+			    keys on data-question-open; "Back to lesson", first on that screen,
+			    folds it to its bar with every pick and word kept. Hidden on wider
+			    screens, where the lesson and the question share the view. */}
+			{questionOpen && <div className="lh-question-back">
+				<button type="button" data-testid="question-back" onClick={collapseQuestion}><ChevronLeftIcon aria-hidden />Back to lesson</button>
+			</div>}
 			<div ref={fadeRef} className="lh-dock-fade h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
 			<div ref={blockRef} className="lh-dock-block relative bg-background pb-5">
 				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>
@@ -3053,6 +3097,7 @@ function DockOverlay({
 								<QuestionDock
 									notebook={notebook}
 									readingThinking={readingThinking}
+									readingThinkingNow={readingThinkingNow}
 									onRestoreReadingThinking={onReadingThinking}
 									dictation={dictation}
 									hasSharedWriting={hasSharedWriting}
@@ -3062,7 +3107,6 @@ function DockOverlay({
 									expanded={expanded}
 									reveal={revealPending}
 									phase={phase}
-									onCollapse={revealPending ? undefined : collapseQuestion}
 									onExpand={revealPending ? () => {
 										// Keep the reading field's dictation claim until its final
 										// words arrive, just like Enter in Thinking while reading.

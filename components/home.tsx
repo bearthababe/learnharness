@@ -28,6 +28,29 @@ import type { TurnUsage } from "@/src/core";
  * under the header and the new-session dock, both of which float over it
  * with no gradient scrims. Sessions live in the toggleable sidebar.
  */
+/** One line per mode (R7): what starting it here does. */
+const MODE_HINT = {
+	teach: "The tutor starts by finding out what you already know.",
+	practice: "Problems on ideas you pick, describe or bring yourself.",
+	drill: "Short, repeated exercises on one skill.",
+} as const;
+
+/** What Home asks the server for (the one place sessions start): the
+ *  learner's words as the title; practice and drill as their own kind;
+ *  picked ideas only when there are some. */
+export function sessionStartRequest(
+	title: string,
+	mode: "teach" | "practice" | "drill",
+	picks: readonly { id: string; name: string; statement: string }[] = [],
+) {
+	return {
+		title,
+		...(mode !== "teach" ? { kind: "practice" as const } : {}),
+		...(mode === "drill" ? { practiceMode: "drill" as const } : {}),
+		...(picks.length > 0 ? { graphContext: { propositions: [...picks] } } : {}),
+	};
+}
+
 export function Home({
 	initialConfigured,
 	rendering = true,
@@ -159,12 +182,7 @@ export function Home({
 			// graph-context marker as message[0] (a separate custom message
 			// before the learner's first user message, propositions + the
 			// chains among them); the prompt stays the learner's own words.
-			const target = await starterRef.current.start({
-				title: t,
-				...(mode !== "teach" ? { kind: "practice" } : {}),
-				...(mode === "drill" ? { practiceMode: "drill" } : {}),
-				...(practiceProps.length > 0 ? { graphContext: { propositions: practiceProps } } : {}),
-			}, fetch, JSON.stringify(catalog?.slots.strong));
+			const target = await starterRef.current.start(sessionStartRequest(t, mode, practiceProps), fetch, JSON.stringify(catalog?.slots.strong));
 			router.push(target);
 		} catch {
 			startingRef.current = false;
@@ -269,6 +287,9 @@ export function Home({
 							/>
 						)}
 					</div>
+					{/* R7 (round 13): what the chosen mode does, in one line — the
+					    same height for every mode, so switching never moves anything. */}
+					<p className="lh-mode-hint" data-testid="mode-hint" data-kind={mode}>{MODE_HINT[mode]}</p>
 					<ComposerActions
 						setup={zeroKeys ? (
 							<ZeroKeysPill inline onOpen={() => setSetupOpen(true)} />
@@ -294,7 +315,7 @@ export function Home({
 						void start();
 					}}
 				>
-					<CompactLearningInput dictation={dictation}><PathInput
+					<CompactLearningInput dictation={dictation} keyboardToggle><PathInput
 						ref={topicInputRef}
 						value={topic}
 						onValueChange={(value) => {

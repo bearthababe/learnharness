@@ -362,13 +362,15 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			{presence.value === "model" && (
 				<MenuShell
 					closing={presence.closing} onClosed={presence.onClosed}
-					anchorRef={containerRef}
+					// Phones (R2, round 13): the card opens from the page menu's
+					// More button it was chosen in, not from the hidden row.
+					{...(phone ? { anchorTestid: "page-menu-button" } : { anchorRef: containerRef })}
 					testid="model-menu"
 					phoneTriggerTestid={phone ? "page-menu-button" : "stats-model"}
 					focusSearch={!phone}
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
-					preferredSide="up"
+					preferredSide={phone ? "down" : "up"}
 					menuClass="lh-model-menu flex w-[24rem] flex-col rounded-xl border bg-card p-2 text-[13.5px] shadow-xl"
 				>
 					{modelMenu}
@@ -378,12 +380,12 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			{presence.value === "thinking" && (
 				<MenuShell
 					closing={presence.closing} onClosed={presence.onClosed}
-					anchorRef={containerRef}
+					{...(phone ? { anchorTestid: "page-menu-button" } : { anchorRef: containerRef })}
 					testid="thinking-menu"
 					phoneTriggerTestid={phone ? "page-menu-button" : "stats-thinking"}
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
-					preferredSide="up"
+					preferredSide={phone ? "down" : "up"}
 					menuClass="flex w-44 flex-col gap-0.5 rounded-xl border bg-card p-2 text-xs shadow-xl"
 				>
 					<ThinkingMenuList

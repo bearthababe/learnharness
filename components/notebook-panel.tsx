@@ -154,7 +154,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 		<div data-notebook-scroll="" className="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
 			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} expressionSelection={expressionSelection} onSelect={session.selectLine} onSelectExpression={session.selectExpression} changedIds={changed} />
 			{view?.lines.length === 0 && <p className="text-sm text-muted-foreground">Your working appears here.</p>}
-			{!!view?.lines.length && <p className="notebook-numbers-hint">The small numbers mark each term. Tap a term or a line number to aim your next instruction there.</p>}
+			{!!view?.lines.length && <p className="notebook-numbers-hint">The small tags number each term. Tap a term or a line number to aim your next instruction there.</p>}
 		</div>
 	</section>;
 }

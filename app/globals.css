@@ -4228,3 +4228,202 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	:root .lh-mode-switch > :is(button, a) { min-height: 44px; font-size: 14.5px; }
 	:root .lh-session-meta { font-size: 13.5px; }
 }
+
+/* ============================================================
+ * ROUND 13
+ * ============================================================ */
+/* P6: search is only search — the field, the filter, the results. The
+   round-12 "New session" label rule must not win over search mode. */
+@media (max-width: 767px) {
+	:root .lh-sessions-content[data-searching] > :is(.lh-sessions-header, .lh-sessions-create-label, .lh-sessions-create, [data-testid="activity-section"], .lh-sessions-footer, .lh-deleted-notice) {
+		display: none;
+	}
+}
+/* P6: iOS zooms into any field under 16px when it gets focus. Every field
+   on a touch screen is at least 16px — in the app, in menus and dialogs
+   portalled outside it. Pinch-zoom stays allowed (no maximum-scale). The
+   session title's field is larger by design (17–20px) and keeps its size. */
+@media (pointer: coarse) {
+	:root :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), textarea, select, [contenteditable="true"], [data-file-path-input]):not(.lh-session-title) {
+		font-size: max(16px, 1em);
+	}
+	/* Fields styled with small type (settings rows, compact menus) are
+	   raised however specific their own rule is. */
+	:root :is(input, textarea, select):is(.text-xs, .text-sm, .text-\[10px\], .text-\[11px\], .text-\[12px\], .text-\[13px\], .text-\[13\.5px\], .text-\[14px\], .text-\[15px\]) {
+		font-size: 16px !important;
+	}
+}
+
+/* P1/P2 (phones): the page bar has two rows — the session name alone on
+   top with the full width, the toolbar below: Sessions, Home, then
+   Notebook, Plan and More. */
+@media (max-width: 767px) {
+	:root .lh-topbar { flex-wrap: wrap; height: auto; min-height: 0; padding: 6px 16px 8px; column-gap: 8px; row-gap: 8px; align-content: flex-start; }
+	:root .lh-topbar > :is(.lh-title-block, input.lh-session-title) { order: -1; flex: 1 0 100%; max-width: 100%; }
+	:root .lh-topbar > .lh-title-block { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: baseline; height: auto; gap: 10px; min-width: 0; margin-inline: 0; padding: 2px 6px 0; }
+	:root .lh-topbar > .lh-title-block > .lh-session-title { flex: 0 1 auto; min-width: 0; }
+	:root .lh-topbar > .lh-title-block > .lh-session-subtitle { flex: none; margin-top: 0; padding-inline: 0; }
+	:root .lh-topbar .lh-notebook-toggle {
+		flex-direction: column; gap: 3px; min-width: 52px; height: 48px; padding: 0 6px;
+		border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--foreground);
+		font-size: 13px; font-weight: 600;
+	}
+	:root .lh-topbar .lh-notebook-toggle svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+	:root .lh-topbar .lh-notebook-toggle[aria-expanded="true"] { border-color: color-mix(in oklab, var(--primary) 45%, var(--border)); background: color-mix(in oklab, var(--primary) 14%, var(--card)); }
+}
+
+/* P3: keyboard on / off is an icon inside the chat box, beside the mic. */
+.lh-compact-keyboard { display: none; }
+:root .lh-keyboard-toggle {
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 44px; height: 44px; flex: none; border: 0; border-radius: 999px;
+	background: transparent; color: var(--muted-foreground);
+}
+:root .lh-keyboard-toggle:hover { background: var(--lh-quiet-bg); color: var(--foreground); }
+:root .lh-keyboard-toggle[data-off] { background: color-mix(in oklab, var(--primary) 18%, transparent); color: var(--foreground); }
+:root .lh-keyboard-toggle svg { width: 20px; height: 20px; }
+@media (pointer: coarse) {
+	:root .lh-compact-keyboard { display: flex; align-items: center; align-self: flex-end; }
+}
+@media (max-width: 767px) {
+	:root .lh-compact-field[data-has-keyboard] > .lh-compact-keyboard { position: absolute; right: 47px; bottom: 3px; }
+	/* While recording, the strip (meter, cancel, stop) is the whole box. */
+	:root .lh-compact-field[data-recording] > .lh-compact-keyboard { visibility: hidden; }
+	:root .lh-compact-field[data-has-keyboard][data-has-mic] > :is(textarea, [data-file-path-input]) { width: calc(100% - 92px); }
+}
+
+/* P5: the mode bar stays put — centred in its own column, the ideas
+   picker in the next, whatever the mode. */
+:root .lh-mode-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; column-gap: 8px; }
+:root .lh-mode-row > .lh-mode-switch { grid-column: 2; }
+:root .lh-mode-row > :not(.lh-mode-switch) { grid-column: 3; justify-self: start; min-width: 0; }
+/* The row is exactly the switch's height in every mode: the ideas picker
+   (and its Clear) can appear without growing it by a pixel. */
+:root .lh-mode-row { height: 34px; }
+:root .lh-mode-row > :not(.lh-mode-switch), :root .lh-mode-row > :not(.lh-mode-switch) :is(button, a) { height: 34px; min-height: 0; max-height: 34px; }
+@media (pointer: coarse) {
+	:root .lh-mode-row { height: 44px; }
+	:root .lh-mode-row > :not(.lh-mode-switch), :root .lh-mode-row > :not(.lh-mode-switch) :is(button, a) { height: 44px; max-height: 44px; }
+}
+@media (max-width: 767px) {
+	:root .lh-mode-row { column-gap: 4px; }
+	:root .lh-mode-row [data-testid="practice-props-chip"] { flex-direction: column; gap: 2px; min-width: 44px; padding: 0 4px; font-size: 13px; }
+	/* Clear stays one tap away: a × badge on the chip's corner (44px target),
+	   inside the picker's own column, so nothing moves when ideas are picked. */
+	:root .lh-mode-row > :not(.lh-mode-switch):has([data-testid="practice-props-clear"]) { position: relative; }
+	:root .lh-mode-row > :not(.lh-mode-switch) button[data-testid="practice-props-clear"] {
+		position: absolute; top: -6px; right: -4px; display: inline-flex; align-items: center; justify-content: center;
+		width: 22px; height: 22px; min-height: 0; max-height: none; padding: 0; border: 1px solid var(--border); border-radius: 999px;
+		background: var(--card); color: var(--foreground); font-size: 0;
+	}
+	:root .lh-mode-row > :not(.lh-mode-switch) button[data-testid="practice-props-clear"]::before { content: "×"; font-size: 15px; line-height: 1; }
+	:root .lh-mode-row > :not(.lh-mode-switch) button[data-testid="practice-props-clear"]::after { content: ""; position: absolute; inset: -11px; }
+}
+/* R7: what the chosen mode does — one line, the same height in every mode. */
+.lh-mode-hint {
+	height: 20px; margin: -2px 0 8px; overflow: hidden; text-align: center; white-space: nowrap; text-overflow: ellipsis;
+	color: var(--muted-foreground); font-size: 13px; line-height: 20px; pointer-events: none;
+}
+
+/* P7 (phones): an open question owns the whole screen; the lesson waits
+   behind "Back to lesson". */
+.lh-question-back { display: none; }
+@media (max-width: 767px) {
+	:root .lh-dock-overlay[data-question-open] {
+		position: fixed; inset: 0; z-index: 45; right: 0 !important;
+		display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
+		background: var(--background); pointer-events: auto;
+		padding-top: env(safe-area-inset-top);
+	}
+	:root .lh-dock-overlay[data-question-open] .lh-dock-fade { display: none; }
+	/* The whole screen scrolls as one page: the dock's in-place height
+	   budget (dock-height.ts) caps nothing here, and the card clips without
+	   becoming a scroller, so "Back to lesson" sticks to the screen's top. */
+	:root .lh-dock-overlay[data-question-open] .lh-dock-block { flex: none; }
+	:root .lh-dock-overlay[data-question-open] :is([data-dock-viewport], [data-dock-scroll-area], [data-attachment-composer]) { max-height: none !important; overflow-y: visible !important; }
+	:root .lh-dock-overlay[data-question-open] [data-attachment-composer] { overflow: clip !important; }
+	:root .lh-dock-overlay[data-question-open] > .lh-question-back {
+		display: flex; position: sticky; top: 0; z-index: 2; flex: none;
+		padding: 6px 8px; margin-bottom: 8px; background: var(--background); border-bottom: 1px solid var(--border);
+	}
+	.lh-question-back button {
+		display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px 0 6px;
+		border-radius: 999px; color: var(--foreground); font-size: 15px; font-weight: 600;
+	}
+	.lh-question-back button:hover { background: var(--lh-quiet-bg); }
+	.lh-question-back svg { width: 20px; height: 20px; }
+}
+
+/* R1 (phones, first run): with no search field the actions take the
+   second row, so they never cover More. */
+@media (max-width: 767px) {
+	:root .lh-home-toolbar-actions[data-empty="true"] { margin-top: 56px; width: 100%; justify-content: flex-start; }
+	:root .lh-home-page-menu { z-index: 30; }
+	/* R8: search results use the screen's width, not the narrow field's. */
+	:root .lh-graph-results { left: -124px; right: -60px; width: auto; max-width: none; }
+}
+
+/* R3: the grip's first-use hint, inside the grip band either side of it. */
+:root .notebook-split-divider > .notebook-split-hint {
+	position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between;
+	width: auto; height: auto; padding: 0 16px; border: 0; border-radius: 0; background: none; box-shadow: none; transform: none;
+	opacity: 1; color: var(--muted-foreground); font: 500 13px/1 var(--font-sans); pointer-events: none;
+}
+
+/* R4: term addresses are tags, never mistaken for the maths. */
+:root .notebook-expression { padding-top: 20px; }
+:root .notebook-expression-number {
+	top: 0; left: 2px; padding: 1px 5px; border-radius: 6px; opacity: 1;
+	background: color-mix(in oklab, var(--foreground) 9%, transparent);
+	color: var(--muted-foreground); font: 600 12px/1.25 var(--font-sans); letter-spacing: .02em;
+}
+@media (pointer: coarse) { :root .notebook-expression-number { font-size: 13px; } }
+
+/* R9: the wheel's settings open under the wheel, against the edge. */
+:root .hw-overlay[data-variant="wheel"] .hw-arcInspector { top: 212px; right: 0; }
+:root .hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arcInspector { top: 212px; left: 0; right: auto; }
+
+/* R10: the sidebar footer is one line (Agents · status, Settings). */
+@media (min-width: 768px) {
+	:root .lh-activity-bar .lh-settings-entry { padding: 0 10px; }
+}
+
+/* P1/P4 consistency: every bar control has one height per device, and
+   Sessions and Home sit in the same place on every screen — the session
+   bar and Home's bar share padding, gaps and the centre line. Phones:
+   48px tab-bar items (above). Tablets: 44px. Laptops: 34px. */
+@media (min-width: 768px) {
+	:root .lh-home-navigation { height: 60px; padding-block: 0; padding-inline: 12px; column-gap: 12px; border-bottom: 1px solid transparent; }
+	:root .lh-home-navigation > div:first-child { column-gap: 12px; }
+	:root .lh-topbar :is(.lh-header-chip, .lh-header-write, .lh-notebook-toggle) { height: 34px; font-size: 14px; }
+	:root .lh-home-toolbar { top: 13px; }
+	/* Ideas and Extract: the outlined pill is the control (no inner frame). */
+	:root .lh-home-toolbar :is(.lh-graph-chains, .lh-graph-import) { padding: 0; border-radius: 999px; }
+	:root .lh-home-toolbar :is(.lh-graph-chains, .lh-graph-import) button { height: 32px; padding-inline: 12px; border-radius: 999px; font-size: 14px; }
+	:root .lh-graph-settings button[aria-label="Graph display settings"] { width: 34px; height: 34px; border-radius: 999px; }
+	/* Search: one field the same height as its neighbours, no frame around it. */
+	:root .lh-home-toolbar .lh-graph-search { padding: 0; border: 0; background: none; box-shadow: none; backdrop-filter: none; }
+	:root .lh-home-toolbar .lh-graph-search input { height: 34px; padding-left: 34px; border-radius: 999px; background: var(--card); font-size: 14px; }
+	:root .lh-home-toolbar .lh-graph-search svg { left: 13px; width: 15px; height: 15px; }
+	:root .lh-home-toolbar .lh-graph-search > div.text-muted-foreground {
+		position: absolute; top: calc(100% + 6px); left: 0; right: 0; padding: 8px 12px;
+		border: 1px solid var(--border); border-radius: 12px; background: var(--popover); font-size: 13px;
+	}
+}
+@media (min-width: 768px) and (pointer: coarse) {
+	:root .lh-topbar :is(.lh-header-chip, .lh-header-write, .lh-notebook-toggle) { height: 44px; font-size: 15px; }
+	:root .lh-home-toolbar { top: 8px; }
+	:root .lh-home-toolbar :is(.lh-graph-chains, .lh-graph-import) button { height: 42px; font-size: 15px; }
+	:root .lh-graph-settings button[aria-label="Graph display settings"] { width: 44px; height: 44px; }
+	:root .lh-home-toolbar .lh-graph-search input { height: 44px; padding-left: 38px; font-size: 16px; }
+	:root .lh-home-toolbar .lh-graph-search svg { left: 15px; width: 16px; height: 16px; }
+}
+@media (max-width: 767px) {
+	/* The flexible gap between Home and the right-hand group may close to
+	   nothing, so the phone toolbar is always one row. */
+	:root .lh-topbar > .flex-1[aria-hidden="true"] { min-width: 0; }
+	/* Home's first row matches the bar items' 48px; its actions share their corners. */
+	:root .lh-graph-search input { height: 48px; }
+	:root .lh-home-toolbar :is(.lh-graph-chains, .lh-graph-import, .lh-graph-chains button, .lh-graph-import button),
+	:root .lh-graph-settings button[aria-label="Graph display settings"] { border-radius: 12px; }
+}

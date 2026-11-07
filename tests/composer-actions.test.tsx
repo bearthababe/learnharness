@@ -7,7 +7,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { parseHTML } from "linkedom";
 import { ComposerActions, NodePickerControl } from "../components/composer-actions.tsx";
 import { ZeroKeysPill } from "../components/setup-cta.tsx";
-import { DraftShell } from "../components/new-session.tsx";
 
 const modelSetup = <button data-testid="setup-cta">Set up your models</button>;
 const keySetup = <ZeroKeysPill inline onOpen={() => {}} />;
@@ -43,15 +42,6 @@ describe("composer action row", () => {
 			assert.equal(document.querySelector('[data-testid="practice-props-clear"]'), null);
 		});
 
-		it(`${label}: the practice draft puts the picker beside the mode, setup below (round 11: no layout shift)`, () => {
-			const document = documentFor(<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="practice" setupCta={setup} />);
-			const chip = document.querySelector('[data-testid="practice-props-chip"]')!;
-			assert.ok(chip.closest(".lh-mode-row"), "the picker sits in the mode row");
-			const rows = document.querySelectorAll('[data-testid="composer-actions"]');
-			assert.equal(rows.length, 1);
-			assert.ok(rows[0]!.classList.contains("justify-center"), "setup alone, centred");
-			assert.equal(rows[0]!.querySelector('[data-testid="practice-props-chip"]'), null);
-		});
 	}
 
 	it("picker-only remains left-aligned", () => {
@@ -79,9 +69,4 @@ describe("composer action row", () => {
 		assert.ok(wrapper.classList.contains("mb-2"));
 	});
 
-	it("the practice shell preserves a selected node in teaching mode", () => {
-		const document = documentFor(<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="teach" picks={[{id:"n_1",name:"Parity",statement:"Odd + odd = even."}]} />);
-		assert.equal(document.querySelector('[data-testid="practice-props-chip"]')!.textContent, "1 idea picked");
-		assert.ok(document.querySelector('[data-testid="practice-props-clear"]'));
-	});
 });

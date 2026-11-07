@@ -63,6 +63,8 @@ export interface HandwritingStore {
 // ─── ChatStore — the session record's home (data/chats) ─────────────────────
 
 export interface ChatStore {
+	/** The learner acted in this session (round 13): stamps the list order. */
+	markLearnerActivity?(id: string): void;
 	/** Compare-and-write only the notebook; retain latest conversation fields. */
 	saveNotebook(id: string, expectedRevision: number, notebook: NotebookRecord): NotebookRecord;
 	/** Atomically accept notebook input/outbox and consume its owned draft. */

@@ -34,6 +34,10 @@ export interface ChatRecord {
 	title: string;
 	createdAt: string;
 	updatedAt: string;
+	/** When the learner last acted here (sent, answered, retried) — the
+	 *  sessions list's order (round 13: background deliveries, such as a
+	 *  retried job's result, never move a session). Absent on older records. */
+	activityAt?: string;
 	messages: LhMessage[];
 	/** Session-local processed pictures; artifact records carry references only. */
 	imageSnapshots?: Record<string, ImageSnapshot>;

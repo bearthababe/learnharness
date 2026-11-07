@@ -194,7 +194,15 @@ export async function handleChatRequest(
 		}
 		throw err;
 	}
-	return handleChatInput(chatId, input, buildAgent);
+	const response = await handleChatInput(chatId, input, buildAgent);
+	// The learner's page sent this and it was taken: the learner acted here,
+	// so the sessions list moves (round 13). A refused request writes
+	// nothing, and the stamp never comes before the input's own write. The
+	// wake pipeline's turns enter through handleChatInput directly.
+	if (response.ok) {
+		try { stores.chatStore.markLearnerActivity?.(chatId); } catch { /* the order only; the turn stands */ }
+	}
+	return response;
 }
 
 /**

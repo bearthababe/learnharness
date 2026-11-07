@@ -5,25 +5,30 @@ import { KeyboardIcon, KeyboardOffIcon } from "lucide-react";
 import { installKeyboardGuard, setKeyboardOff, useKeyboardOff } from "@/components/device-prefs";
 
 /**
- * Hide keyboard (owner O6): beside dictation on touch screens. Pressed, the
- * on-screen keyboard stays closed while the learner dictates, so the
- * composer doesn't take over the screen; pressed again, typing is back.
- * Typing on a hardware keyboard, dictation and drafts are unaffected.
+ * The on-screen keyboard switch (owner O6, placed in round 13 by P3): an
+ * icon inside the chat box, beside the mic, on touch screens. Off, the
+ * keyboard stays closed while the learner dictates, so the composer
+ * doesn't take over the screen; on, typing is back. The state is in the
+ * name ("Keyboard on" / "Keyboard off") and in sight (icon and tint).
+ * Hardware typing, dictation and drafts are unaffected.
  */
 export function KeyboardToggle() {
 	const off = useKeyboardOff();
 	useEffect(() => { installKeyboardGuard(); }, []);
+	const name = off ? "Keyboard off" : "Keyboard on";
 	return (
 		<button
 			type="button"
-			className="lh-keyboard-toggle lh-quiet-control"
+			className="lh-keyboard-toggle"
 			data-testid="keyboard-toggle"
-			aria-pressed={off}
-			title={off ? "The on-screen keyboard stays closed. Tap to type again." : "Keep the on-screen keyboard closed while you dictate"}
+			data-off={off || undefined}
+			aria-label={name}
+			title={off ? "Keyboard off: dictate, or tap to type again" : "Keyboard on: tap to keep it closed while you dictate"}
+			// Keep the field's focus (and selection) when switching.
+			onPointerDown={(event) => event.preventDefault()}
 			onClick={() => setKeyboardOff(!off)}
 		>
 			{off ? <KeyboardOffIcon aria-hidden /> : <KeyboardIcon aria-hidden />}
-			<span>Hide keyboard</span>
 		</button>
 	);
 }

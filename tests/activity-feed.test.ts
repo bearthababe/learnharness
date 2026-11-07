@@ -102,3 +102,28 @@ test("activityFeed: contextLimit is the server's live-catalog join (owner amendm
 		}
 	}
 });
+
+test("activityFeed: a failure leaves the list once a retry in its chain succeeds (owner P8, round 13)", () => {
+	const chat = chatStore.createChat("feed retry chat");
+	const createdJobs: string[] = [];
+	try {
+		const make = (tc: string) => { const job = jobStore.createJob({ kind: "pdf", chatId: chat.id, toolCallId: tc }); createdJobs.push(job.id); return job; };
+		// Chain 1: failed → retry failed → retry done. Chain 2: failed → retry failed.
+		const first = make("tc_first"), second = make("tc_second"), third = make("tc_third");
+		jobStore.updateJob(first.id, { status: "error", error: "ENOENT", retriedBy: second.id });
+		jobStore.updateJob(second.id, { status: "error", error: "timeout", retryOf: first.id, retriedBy: third.id });
+		jobStore.updateJob(third.id, { status: "done", retryOf: second.id });
+		const stuck = make("tc_stuck"), stuckRetry = make("tc_stuck_retry");
+		jobStore.updateJob(stuck.id, { status: "error", error: "ENOENT", retriedBy: stuckRetry.id });
+		jobStore.updateJob(stuckRetry.id, { status: "error", error: "ENOENT", retryOf: stuck.id });
+
+		const ids = new Set(activityFeed().recent.filter((j) => j.chatId === chat.id).map((j) => j.id));
+		assert.ok(ids.has(third.id), "the successful retry stays");
+		assert.ok(!ids.has(first.id) && !ids.has(second.id), "both failures it resolved are gone");
+		assert.ok(ids.has(stuck.id) && ids.has(stuckRetry.id), "an unresolved failure and its failed retry still show");
+	} finally {
+		fs.unlinkSync(`${PATHS.chats}/${chat.id}.json`);
+		const jobsDir = path.join(PATHS.data, "jobs");
+		for (const id of createdJobs) fs.unlinkSync(path.join(jobsDir, `${id}.json`));
+	}
+});

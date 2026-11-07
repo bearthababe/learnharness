@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { ActivitySection, formatElapsed, toBlobs, type ActivityFeed, type FeedExtraction } from "../components/activity-dock.tsx";
+import { ActivitySection, formatElapsed, readableJobError, toBlobs, type ActivityFeed, type FeedExtraction } from "../components/activity-dock.tsx";
 import { formatTokens, formatUsd } from "../components/usage-format.ts";
 import { jobCost } from "../src/server/pricing.ts";
 
@@ -248,5 +248,20 @@ describe("activity section render", () => {
 		);
 		// Pi 1.5.0: two jobs × $0.0003773 rounds to $0.0008 total.
 		assert.match(html, /activity-total-cost[^>]*>\$0\.0008</);
+	});
+});
+
+describe("failed job reasons (owner O2/P8)", () => {
+	it("say what happened and what to do, with no raw codes or paths", () => {
+		const missing = readableJobError("ENOENT: no such file or directory, open '/home/learner/notes/week1.pdf'");
+		assert.match(missing, /Import it again/);
+		assert.doesNotMatch(missing, /ENOENT|\/home|week1/);
+		assert.match(readableJobError("Invalid PDF structure."), /couldn't be read.*retry/i);
+		assert.match(readableJobError("401 Unauthorized: invalid api key"), /Settings → Providers/);
+	});
+	it("an unknown reason is cleaned, never cut short, and points to a next step", () => {
+		const text = readableJobError("Error: EISDIR: illegal operation on a directory C:\\Users\\me\\notes\n    at open (node:fs:1)");
+		assert.doesNotMatch(text, /EISDIR|Users|node:fs/);
+		assert.match(text, /illegal operation on a directory the file\. Retry, or open the session/);
 	});
 });

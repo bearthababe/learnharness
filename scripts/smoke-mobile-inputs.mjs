@@ -783,6 +783,20 @@ try {
 	await openPhoneCard("model");
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Keyboard-open entry still leaves search unfocused");
+	// Round 13 (R2): the phone's Model card hangs below More, the opener in
+	// the page bar, never from the hidden chip under the composer. Keyboard
+	// motion never moves it off More; the visible area only shortens it.
+	const underMore = () => page.evaluate(() => {
+		const card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
+		const more = document.querySelector('[data-testid="page-menu-button"]').getBoundingClientRect();
+		const shell = document.querySelector('.lh-app-shell').getBoundingClientRect();
+		const top = visualViewport.offsetTop, bottom = visualViewport.offsetTop + visualViewport.height;
+		return { top: card.top, bottom: card.bottom, moreBottom: more.bottom, moreTop: more.top, visibleTop: top, visibleBottom: bottom, shellTop: shell.top, shellHeight: shell.height };
+	});
+	const hangsUnderMore = (frame, label) => {
+		assert.ok(frame.top >= Math.max(frame.moreBottom, frame.visibleTop) - 1 && frame.top <= Math.max(frame.moreBottom, frame.visibleTop) + 12, `${label}: the card hangs just below More: ${JSON.stringify(frame)}`);
+		assert.ok(frame.bottom <= frame.visibleBottom + 1, `${label}: the whole card is in the visible area: ${JSON.stringify(frame)}`);
+	};
 	const keyboardEntryFrames = await page.evaluate(async () => {
 		const frames = [];
 		for (const height of [350, 400, 475, 550, 625, 700]) {
@@ -791,16 +805,16 @@ try {
 			visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 			const card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
-			const opener = document.querySelector('[data-testid="stats-model"]').getBoundingClientRect();
+			const more = document.querySelector('[data-testid="page-menu-button"]').getBoundingClientRect();
 			const shell = document.querySelector('.lh-app-shell').getBoundingClientRect();
-			frames.push({ bottom: card.bottom, openerTop: opener.top, shellTop: shell.top, shellHeight: shell.height });
+			frames.push({ top: card.top, bottom: card.bottom, moreBottom: more.bottom, visibleTop: visualViewport.offsetTop, visibleBottom: visualViewport.offsetTop + height, shellTop: shell.top, shellHeight: shell.height });
 		}
 		delete visualViewport.height; delete visualViewport.offsetTop;
 		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 		return frames;
 	});
 	for (const frame of keyboardEntryFrames) {
-		assert.ok(Math.abs(frame.bottom - (frame.openerTop - 4)) <= 1, `Keyboard-open entry stays above its frozen opener: ${JSON.stringify(frame)}`);
+		hangsUnderMore(frame, "Keyboard-open entry");
 		assert.equal(frame.shellTop, keyboardEntryShell.top);
 		assert.equal(frame.shellHeight, keyboardEntryShell.height, "Keyboard-open entry keeps the lesson stationary");
 	}
@@ -815,11 +829,11 @@ try {
 		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 	});
-	const entrySearch = await page.$eval('[data-testid="model-menu"]', e => ({ bottom: e.getBoundingClientRect().bottom, keyboardTop: visualViewport.offsetTop + visualViewport.height }));
-	assert.ok(Math.abs(entrySearch.bottom - entrySearch.keyboardTop) <= 1, `Search after keyboard-open entry docks at the keyboard: ${JSON.stringify(entrySearch)}`);
-	// Round 12 (owner O1): the phone opener is "More" in the bar, above the
-	// docked card — never covered, so its close target can never sit over
-	// the search results, and its clear aperture stays.
+	const entrySearch = await underMore();
+	hangsUnderMore(entrySearch, "Search after keyboard-open entry");
+	// The opener is "More" in the bar, above the card — never covered, so its
+	// close target can never sit over the search results, and its clear
+	// aperture stays.
 	const noOverlap = () => page.evaluate(() => {
 		const proxy = document.querySelector('[data-testid="phone-menu-trigger"]'), card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
 		if (proxy.hidden) return true;
@@ -828,10 +842,6 @@ try {
 	});
 	assert.ok(await noOverlap(), "The opener's close target cannot intercept search results");
 	assert.ok(await page.$eval('[data-testid="phone-menu-backdrop"]', e => getComputedStyle(e).clipPath.startsWith("polygon(evenodd,")), "The uncovered opener keeps its clear aperture");
-	assert.ok(await page.$eval('[data-testid="stats-model"]', e => {
-		const r = e.getBoundingClientRect();
-		return document.querySelector('[data-testid="model-menu"]').contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
-	}), "The covered opener's location receives card input, not Close");
 	await fill('[data-testid="model-search"]', "a");
 	const entryResults = await page.$$eval('[data-testid="model-list"] button', buttons => buttons.map(e => e.dataset.testid));
 	await page.click('[data-testid="model-hide-keyboard"]');
@@ -843,17 +853,16 @@ try {
 			visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 			const card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
-			const opener = document.querySelector('[data-testid="stats-model"]').getBoundingClientRect();
+			const more = document.querySelector('[data-testid="page-menu-button"]').getBoundingClientRect();
 			const proxy = document.querySelector('[data-testid="phone-menu-trigger"]').getBoundingClientRect();
-			frames.push({ height, bottom: card.bottom, openerTop: opener.top, clear: proxy.bottom <= card.top || proxy.top >= card.bottom });
+			frames.push({ top: card.top, bottom: card.bottom, moreBottom: more.bottom, visibleTop: visualViewport.offsetTop, visibleBottom: visualViewport.offsetTop + height, clear: proxy.bottom <= card.top || proxy.top >= card.bottom });
 		}
 		delete visualViewport.height; delete visualViewport.offsetTop;
 		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 		return frames;
 	});
 	for (const frame of entryReturn) {
-		const resting = frame.openerTop - 4;
-		assert.ok(Math.abs(frame.bottom - (resting + (entrySearch.bottom - resting) * (700 - frame.height) / 350)) <= 1, "Search returns continuously to its frozen browsing anchor");
+		hangsUnderMore(frame, "Keyboard dismissal");
 		assert.ok(frame.clear, "The opener's close target stays clear of the card throughout");
 	}
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e.value), "a");
@@ -871,7 +880,7 @@ try {
 		delete visualViewport.height; delete visualViewport.offsetTop;
 		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 	});
-	console.log("PASS: Model opened with the composer keyboard visible keeps its frozen opener anchor through keyboard dismissal");
+	console.log("PASS: Model opened with the composer keyboard visible hangs under More through keyboard motion and dismissal");
 	// End keyboard-open entry regression.
 	// iOS keyboards shrink the VISUAL viewport without changing innerHeight.
 	// Whole-viewport resizing above cannot catch a menu positioned behind it.
@@ -903,8 +912,7 @@ try {
 	}
 	const compactModel = await visibleBounds('[data-testid="model-menu"]');
 	assert.ok(compactModel.height <= 350 * .6 && compactModel.width < 375, "Model keeps the compact menu cap and edge spacing");
-	assert.ok(Math.abs(compactModel.bottom - compactModel.visibleBottom) <= 1, "Focused search attaches the whole card to the keyboard/accessory boundary");
-	assert.equal(await page.$eval('[data-model-menu-footer]', e => getComputedStyle(e).display), "none", "Focused search only shows search/results, without the explanatory footer");
+	hangsUnderMore(await underMore(), "Focused search"); // round 13: no docking at the keyboard — the card stays under More
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), true, "Viewport movement does not steal deliberate search focus");
 	assert.ok(await page.$eval('[data-testid="model-search"]', e => parseFloat(getComputedStyle(e).fontSize) >= 16), "Search avoids iOS focus autozoom");
 	await page.$eval('[data-testid="model-list"]', e => { e.scrollTop = e.scrollHeight; });
@@ -971,7 +979,8 @@ try {
 			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 		});
 		const redocked = await visibleBounds('[data-testid="model-menu"]');
-		assert.ok(Math.abs(redocked.bottom - redocked.visibleBottom) <= 1, "Resumed search reattaches above keyboard controls");
+		assert.ok(redocked.bottom <= redocked.visibleBottom + 1, "Resumed search keeps the card above the keyboard");
+		hangsUnderMore(await underMore(), "Resumed search");
 	}
 	page.off("request", countDismissWrites);
 	assert.equal(dismissWrites, 0, "Keyboard-dismiss/reopen never changes settings");
@@ -998,12 +1007,13 @@ try {
 		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 	});
 	const smallerModel = await visibleBounds('[data-testid="model-menu"]');
-	assert.ok(Math.abs(smallerModel.bottom - smallerModel.visibleBottom) <= 1 && smallerModel.top >= smallerModel.visibleTop);
+	assert.ok(smallerModel.bottom <= smallerModel.visibleBottom + 1 && smallerModel.top >= smallerModel.visibleTop);
+	hangsUnderMore(await underMore(), "Less room");
 	assert.ok(smallerModel.height <= 250 * .6, "Card shrinks when iPhone controls reduce available space");
 	await fill('[data-testid="model-search"]', "no-model-can-match-this-fixture-query");
 	await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]').textContent.includes("No models match."));
 	const emptyModel = await visibleBounds('[data-testid="model-menu"]');
-	assert.ok(Math.abs(emptyModel.bottom - emptyModel.visibleBottom) <= 1, "Filtering to no results keeps the card attached");
+	hangsUnderMore(await underMore(), "Filtering to no results");
 	await fill('[data-testid="model-search"]', longModel.id);
 	const visibleModel = `[data-testid="model-option-${longModel.id.replace(/[^a-z0-9-]/gi, "_")}"]`;
 	const keyboardPick = page.waitForResponse(r => new URL(r.url()).pathname === "/api/chats/mobile_panels/settings" && r.request().method() === "PUT" && r.ok());

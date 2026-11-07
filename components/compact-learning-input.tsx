@@ -2,14 +2,17 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2Icon, MicIcon, SquareIcon, XIcon } from "lucide-react";
+import { KeyboardToggle } from "@/components/keyboard-toggle";
 import { DICTATION_KEYLESS, sampleDictationMeter, useDictationRecovery, type Dictation } from "@/components/dictation";
 import { readPathInput, readPathSelection, restorePathSelection, type TextSelection } from "./path-input-dom";
 
 /** Presentation around the existing, always-mounted editor. Capture, ownership
  * and submission stay with the caller. Wide layouts use display:contents. */
-export function CompactLearningInput({ children, dictation, enabled = true }: {
+export function CompactLearningInput({ children, dictation, enabled = true, keyboardToggle = false }: {
 	children: ReactNode;
 	dictation?: Dictation;
+	/** The chat box's "keyboard on / off" icon beside the mic (owner P3, touch screens). */
+	keyboardToggle?: boolean;
 	enabled?: boolean;
 }) {
 	const field = useRef<HTMLDivElement>(null);
@@ -89,8 +92,11 @@ export function CompactLearningInput({ children, dictation, enabled = true }: {
 			<span>{dictation.error}</span>
 			<button type="button" onClick={recover}>{dictation.error === DICTATION_KEYLESS ? "Settings" : "Retry"}</button>
 		</div>}
-		<div ref={field} className={enabled ? "lh-compact-field" : "contents"} data-recording={active || undefined} data-has-mic={!!dictation || undefined}>
+		<div ref={field} className={enabled ? "lh-compact-field" : "contents"} data-recording={active || undefined} data-has-mic={!!dictation || undefined} data-has-keyboard={(enabled && keyboardToggle && !!dictation) || undefined}>
 			{children}
+			{/* Mounted while dictating too (R5): nothing beside the field moves
+			    when speech starts; a phone's recording strip covers it by CSS. */}
+			{enabled && keyboardToggle && dictation && <div className="lh-compact-keyboard"><KeyboardToggle /></div>}
 			{enabled && dictation && <div className="lh-compact-speech">
 				{active ? <Recording dictation={dictation} /> : <button type="button" aria-label="Start dictation" data-testid="compact-dictation-toggle" onPointerDown={remember} onClick={recover}>
 					<MicIcon size={20} />

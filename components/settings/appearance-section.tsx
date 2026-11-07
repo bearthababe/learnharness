@@ -39,6 +39,7 @@ import {
 } from "@/src/core";
 import { MenuShell } from "@/components/menu-shell";
 import { setRevealStyle, useRevealStyle } from "@/components/device-prefs";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { Hint } from "@/components/ui/hint";
 import { useAppearance } from "./appearance.tsx";
 import { FontMenuList } from "./model-menu";
@@ -342,8 +343,11 @@ export function AppearanceSection({
  *  an option. Kept on this device (it is about this screen). */
 function RevealStyleRow() {
 	const style = useRevealStyle();
+	// R6 (round 13): a phone-only button, so a phone-only setting.
+	const phone = usePhoneLayout();
+	if (!phone) return null;
 	return (
-		<SettingsRow label="Show question button" hint="How strongly the button that opens a check stands out (phones). Stored on this device." testid="row-reveal-style">
+		<SettingsRow label="Show question button" hint="How strongly the button that opens a check stands out. Stored on this phone." testid="row-reveal-style">
 			<div className="lh-segmented" role="group" aria-label="Show question button">
 				{(["quiet", "prominent"] as const).map((option) => (
 					<button key={option} type="button" data-active={style === option} aria-pressed={style === option} data-testid={`reveal-style-${option}`} onClick={() => setRevealStyle(option)}>

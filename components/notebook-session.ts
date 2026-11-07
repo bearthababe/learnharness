@@ -92,6 +92,53 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		const cursorLineId = state.view?.contextId === view.contextId && view.lines.some(line => line.id === state.cursorLineId) ? state.cursorLineId : null;
 		const expressionSelection = cursorLineId && state.expressionSelection && selectedNotebookExpression(view.lines, state.expressionSelection) ? state.expressionSelection : null;
 		publish({ view, cursorLineId, expressionSelection, ...(savedLocalRevision === localRevision ? { draftText: view.draft.text } : {}) });
+		// D1 (round 13): instruction words typed just before a reload are
+		// kept on this device. They win over the server's copy only while the
+		// server still holds a text this device put there (or had before these
+		// edits): words saved from anywhere else are never overwritten.
+		if (!instructionChecked) {
+			instructionChecked = true;
+			const kept = readInstruction();
+			if (kept && kept.text !== view.draft.text && savedLocalRevision === localRevision && kept.possible.includes(view.draft.text)) {
+				instructionCopy = { text: kept.text, possible: [view.draft.text] };
+				void dispatch({ type: "draft", text: kept.text }).catch(() => {});
+			} else if (kept) clearInstruction();
+		}
+	}
+	// The device copy: the newest words, and every text the server may hold
+	// because of this device — its last confirmed text, then any save sent
+	// since whose answer never came (a reload, or a lost connection).
+	const instructionKey = `lh:notebook-instruction:${chatId}`;
+	let instructionChecked = false;
+	let instructionCopy: { text: string; possible: string[] } | null = null;
+	function readInstruction(): { text: string; possible: string[] } | null {
+		try {
+			const raw = storage?.getItem(instructionKey);
+			const kept = raw ? JSON.parse(raw) as { text?: unknown; possible?: unknown } : null;
+			return kept && typeof kept.text === "string" && Array.isArray(kept.possible) ? { text: kept.text, possible: kept.possible.filter((item): item is string => typeof item === "string") } : null;
+		} catch { return null; }
+	}
+	function writeInstruction() {
+		try { if (instructionCopy) storage?.setItem(instructionKey, JSON.stringify(instructionCopy)); } catch { /* the server save still runs */ }
+	}
+	function keepInstruction(text: string) {
+		instructionCopy = { text, possible: instructionCopy?.possible ?? [state.view?.draft.text ?? ""] };
+		writeInstruction();
+	}
+	function sentInstruction(text: string) {
+		if (!instructionCopy) return;
+		instructionCopy.possible.push(text); writeInstruction();
+	}
+	/** A save was confirmed: the server holds exactly what it reported, and
+	 *  no other send is in flight (they run one at a time). */
+	function savedInstruction() {
+		if (!instructionCopy) return;
+		instructionCopy.possible = [state.view?.draft.text ?? ""];
+		writeInstruction();
+	}
+	function clearInstruction() {
+		instructionCopy = null;
+		try { storage?.removeItem(instructionKey); } catch { /* nothing kept */ }
 	}
 	async function post(command: NotebookCommand): Promise<NotebookCommandReceipt> {
 		const response = await fetcher(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
@@ -140,7 +187,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		const prefix = command.type === "apply" && command.speech ? command.speech.prefix : state.draftText;
 		const instruction = command.type === "apply" && command.speech ? [prefix.trimEnd(), command.speech.text].filter(Boolean).join(" ") : prefix;
 		const recoveryEpoch = recoveryPrefixes.length;
-		if (command.type === "draft") { localRevision++; publish({ draftText: command.text }); }
+		if (command.type === "draft") { localRevision++; publish({ draftText: command.text }); keepInstruction(command.text); }
 		const completing = command.type === "apply" && command.speech && command.speech.draftId !== state.view?.draft.id;
 		if (command.type === "apply" && command.speech && !completing) { localRevision++; publish({ draftText: "" }); }
 		const revision = localRevision;
@@ -159,7 +206,7 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 			if (!state.view) throw new Error("Notebook is not loaded");
 			let wire: NotebookCommand;
 			if (command.type === "candidate") wire = { ...command, expectedCandidate: candidate };
-			else if (command.type === "draft") wire = { ...command, text: prepend(recoveryPrefixes.slice(recoveryEpoch), command.text), expectedRevision: state.view.draft.revision };
+			else if (command.type === "draft") { wire = { ...command, text: prepend(recoveryPrefixes.slice(recoveryEpoch), command.text), expectedRevision: state.view.draft.revision }; sentInstruction(wire.text); }
 			else if (command.type === "visibility" || command.type === "tutor-draft" || command.type === "snapshot" || command.type === "discard-tutor-draft" || command.type === "speech-run" || command.type === "discard-speech") wire = command;
 			else {
 				if (!state.view.contextId) throw new Error("Open Notebook before editing");
@@ -176,8 +223,10 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 				if (command.type === "apply") {
 					if (!instruction.trim() && !command.speech) throw new Error("Enter a notebook instruction");
 					if (!command.speech && state.view.draft.text !== prefix) {
+						sentInstruction(prefix);
 						const saved = await post({ type: "draft", text: prefix, expectedRevision: state.view.draft.revision });
 						adopt(saved.view);
+						savedInstruction();
 					}
 					wire = speechRequest?.wire ?? { type: "apply", id: operationId!, candidate, contextId: speechRequest?.contextId ?? state.view.contextId!, draftRevision: state.view.draft.revision, instruction, cursorLineId: command.cursorLineId, expressionSelection: command.expressionSelection, ...(command.speech ? { speech: command.speech } : {}) };
 					if (speechRequest) { speechRequest.wire = wire; stashRequests(); }
@@ -190,6 +239,12 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 			if ("id" in wire && wire.id === uncertain?.id) uncertain = null;
 			if (command.type === "draft" || command.type === "apply") savedLocalRevision = revision;
 			adopt(receipt.view); publish({ error: null });
+			// Saved and nothing newer typed since: the device copy has done its job.
+			// Otherwise the server now holds this save; the newer words stay kept.
+			if (command.type === "draft" || command.type === "apply") {
+				if (savedLocalRevision === localRevision) clearInstruction();
+				else savedInstruction();
+			}
 			return receipt;
 		}).then(receipt => {
 			if (operationId) operationFailure = undefined;

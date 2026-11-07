@@ -45,6 +45,7 @@ function createChat(title: string, kind?: "practice", practiceMode?: "drill"): C
 		title: title.trim() || "Untitled session",
 		createdAt: now,
 		updatedAt: now,
+		activityAt: now,
 		messages: [],
 		// Practice sessions carry the marker; teach stays ABSENT (absence
 		// reads as teach — pre-practice records never migrate).
@@ -82,7 +83,10 @@ function commitNotebookSubmission(id: string, expectedRevision: number, notebook
 	record.notebook = structuredClone({ ...notebook, revision: expectedRevision + 1 });
 	const ids = new Set(record.messages.map((message) => message.id));
 	record.messages.push(...appends.filter((message) => !ids.has(message.id)));
-	if (appends.length) record.updatedAt = new Date().toISOString();
+	if (appends.length) {
+		record.activityAt ??= record.updatedAt; // older records keep their place
+		record.updatedAt = new Date().toISOString();
+	}
 	writeChat(record);
 	emit("notebook-changed", { chatId: id });
 }
@@ -147,7 +151,9 @@ function listChats(): ChatSummary[] {
 				}
 			})
 			.filter((s) => s !== null)
-			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+			// The learner's own activity orders the list; a background delivery
+			// (a job's result arriving) changes updatedAt but not the order.
+			.sort((a, b) => (b.activityAt ?? b.updatedAt).localeCompare(a.activityAt ?? a.updatedAt));
 	} catch {
 		return [];
 	}
@@ -160,6 +166,9 @@ function saveMessages(id: string, messages: LhMessage[]): void {
 	const record = getChat(id);
 	if (!record) throw new Error(`Chat not found: ${id}`);
 	record.messages = messages;
+	// An older record without the learner-activity stamp keeps its place in
+	// the list: its last time until now becomes the stamp before the bump.
+	record.activityAt ??= record.updatedAt;
 	record.updatedAt = new Date().toISOString();
 	writeChat(record);
 }
@@ -253,7 +262,17 @@ function saveTree(id: string, tree: PlanTree): void {
 	writeChat(record);
 }
 
+/** The learner sent, answered or retried here: the list order moves. A
+ *  stamp only — messages and updatedAt are untouched. */
+function markLearnerActivity(id: string): void {
+	const record = getChat(id);
+	if (!record) return;
+	record.activityAt = new Date().toISOString();
+	writeChat(record);
+}
+
 export const chatStore: ChatStore = {
+	markLearnerActivity,
 	commitNotebookSubmission,
 	saveNotebook,
 	createChat,

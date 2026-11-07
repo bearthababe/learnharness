@@ -16,11 +16,32 @@ function jobStatusText(job: { status: string; error?: string }): string {
 	return "Finished";
 }
 
-/** A failed job's reason, readable in full (owner O2): no "Error:" noise,
- *  no stack, whitespace folded — never cut to a fragment. */
+/** A failed job's reason in plain words, with what to do next (owner O2,
+ *  P8): no raw codes ("ENOENT"), no file paths, no stack — the known
+ *  causes say what happened and how to recover; anything else is shown
+ *  cleaned, never cut to a fragment. */
+const JOB_ERRORS: [RegExp, string][] = [
+	[/ENOENT|no such file|not found on disk|file .* (?:missing|not found)/i, "The file it needed is no longer where it was imported from. Import it again with Extract files, then retry."],
+	[/EACCES|EPERM|permission denied/i, "LearnHarness isn't allowed to read that file. Check the file's permissions, then retry."],
+	[/invalid pdf|pdf structure|bad xref|not a pdf|pdf.*(?:corrupt|damaged)/i, "This PDF couldn't be read; it may be damaged. Export or download it again, then retry."],
+	[/aborted by learner|cancell?ed/i, "You stopped this job."],
+	[/ETIMEDOUT|timed? ?out|deadline/i, "It took too long and stopped. Retry when you're ready."],
+	[/ENOTFOUND|ECONNREFUSED|ECONNRESET|fetch failed|network|socket hang up/i, "LearnHarness couldn't reach the service it needed. Check your connection, then retry."],
+	[/\b401\b|unauthori[sz]ed|invalid (?:api )?key|api key/i, "The model provider refused the request. Check its key in Settings → Providers, then retry."],
+	[/\b429\b|rate ?limit|too many requests/i, "The model provider is busy right now. Retry in a minute."],
+	[/\b5\d\d\b|overloaded|internal server error|bad gateway|unavailable/i, "The model provider had a problem. Retry in a minute."],
+];
 export function readableJobError(error: string): string {
+	for (const [pattern, plain] of JOB_ERRORS) if (pattern.test(error)) return plain;
 	const firstLines = error.split(/\n\s*at\s/)[0] ?? error;
-	return firstLines.replace(/^(?:\s*(?:error|failed|fatal)\s*[:—-]\s*)+/i, "").replace(/\s+/g, " ").trim() || "The job stopped without saying why.";
+	const cleaned = firstLines
+		.replace(/^(?:\s*(?:error|failed|fatal)\s*[:—-]\s*)+/i, "")
+		.replace(/\b[A-Z][A-Z0-9_]{2,}:\s*/g, "") // codes like "EISDIR: "
+		.replace(/(?:[A-Za-z]:)?[\\/][^\s'"`,;)]+/g, "the file") // paths
+		.replace(/\s+/g, " ")
+		.trim();
+	if (!cleaned) return "The job stopped without saying why. Retry, or open the session and ask the tutor.";
+	return `${cleaned.replace(/[.!]?$/, ".")} Retry, or open the session and ask the tutor.`;
 }
 
 /**
@@ -420,10 +441,14 @@ export function ActivitySection({ feed: feedProp, trailing }: { feed?: ActivityF
 				className="lh-activity-header flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm text-muted-foreground"
 				aria-expanded={recent.length > 0 ? historyOpen : undefined}
 				data-testid="activity-history-toggle"
+				title="Background agents"
 				onClick={() => { if (recent.length > 0) setHistoryOpen((v) => !v); }}
 			>
 				<ActivityIcon className="size-4 shrink-0" />
-				<span className="truncate">Background agents</span>
+				{/* R10 (round 13): "Agents" keeps the footer on one line beside
+				    Settings; the full name stays in its accessible name. */}
+				<span className="truncate" aria-hidden="true">Agents</span>
+				<span className="sr-only">Background agents</span>
 				{blobs.length === 0 && (
 					<span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground/80">
 						{failedCount > 0 ? `${failedCount} failed` : recent.length > 0 ? `${recent.length} recent` : "Idle"}

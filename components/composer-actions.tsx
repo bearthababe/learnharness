@@ -45,6 +45,7 @@ export function NodePickerControl({ count, onOpen, onClear }: {
 				<button
 					type="button"
 					data-testid="practice-props-clear"
+					aria-label="Clear picked ideas"
 					onClick={onClear}
 					className="cursor-pointer rounded-full px-2 py-1 font-ui text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 				>

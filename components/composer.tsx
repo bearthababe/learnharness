@@ -165,7 +165,7 @@ export function Composer({
 				act();
 			}}
 		>
-			<CompactLearningInput dictation={dictation} enabled={!!dictation}><PathInput
+			<CompactLearningInput dictation={dictation} enabled={!!dictation} keyboardToggle><PathInput
 				ref={editorRef}
 				value={value}
 				onValueChange={onChange}
