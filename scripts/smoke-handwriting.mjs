@@ -296,12 +296,12 @@ try {
 	const dividerShare = await page.$eval('[data-testid="notebook-split-divider"]', e => e.getAttribute("aria-valuenow"));
 	await page.$eval('[data-testid="notebook-paper-scroll"]', e => { e.scrollTop = 180; });
 	const beforeExpand = await page.$eval('[data-testid="notebook-paper-scroll"]', e => e.scrollTop);
-	await action("Expand notebook");
+	await action("Full page"); // accessible names match the visible labels (round 9)
 	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]').dataset.expanded === "true");
 	await action("Back to question");
 	await page.waitForFunction(expected => Math.abs(document.querySelector('[data-testid="notebook-paper-scroll"]').scrollTop - expected) <= 1, {}, beforeExpand);
 	assert.equal(await page.$eval(field, e => e.textContent), "My unsent explanation");
-	await page.click('[aria-label="Close notebook"]');
+	await page.click('[aria-label="Close page"]');
 	await page.click('[data-testid="open-notebook"]');
 	assert.equal(await bitmap(), pendingInk);
 	assert.equal(await page.$eval('[data-testid="notebook-split-divider"]', e => e.getAttribute("aria-valuenow")), dividerShare, "Closing/reopening retains the during-use split choice");

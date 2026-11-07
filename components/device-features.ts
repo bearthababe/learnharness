@@ -110,3 +110,29 @@ function subscribePalette(update: () => void) {
 export function useCanvasPalette(): CanvasPalette {
 	return useSyncExternalStore(subscribePalette, canvasPalette, () => "wheel");
 }
+
+/* ── The phone equation notebook's layout (owner amendment 2, ruling 1) ──
+   "split": beside the lesson, both in view (the default); "full": the
+   notebook opens full screen, one surface at a time (its expand button
+   still offers the split). Settings → Writing; this device. */
+export type NotebookLayout = "split" | "full";
+export const NOTEBOOK_LAYOUT_KEY = "lh:pref:notebook-layout";
+const NOTEBOOK_LAYOUT_EVENT = "lh:notebook-layout";
+export function notebookLayoutPref(): NotebookLayout {
+	try { return window.localStorage.getItem(NOTEBOOK_LAYOUT_KEY) === "full" ? "full" : "split"; } catch { return "split"; }
+}
+export function setNotebookLayoutPref(layout: NotebookLayout): void {
+	try {
+		if (layout === "split") window.localStorage.removeItem(NOTEBOOK_LAYOUT_KEY);
+		else window.localStorage.setItem(NOTEBOOK_LAYOUT_KEY, layout);
+	} catch { /* storage blocked */ }
+	window.dispatchEvent(new CustomEvent(NOTEBOOK_LAYOUT_EVENT));
+}
+function subscribeNotebookLayout(update: () => void) {
+	window.addEventListener(NOTEBOOK_LAYOUT_EVENT, update);
+	window.addEventListener("storage", update);
+	return () => { window.removeEventListener(NOTEBOOK_LAYOUT_EVENT, update); window.removeEventListener("storage", update); };
+}
+export function useNotebookLayoutPref(): NotebookLayout {
+	return useSyncExternalStore(subscribeNotebookLayout, notebookLayoutPref, () => "split");
+}

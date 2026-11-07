@@ -138,7 +138,7 @@ export function Toggle({
 			data-testid={`toggle-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
 			onClick={() => onChange(!checked)}
 			className={cn(
-				"relative h-5 w-9 shrink-0 rounded-full transition-colors",
+				"lh-switch relative h-5 w-9 shrink-0 rounded-full transition-colors",
 				// On = the accent track with a white disc; off = a quiet raised track.
 				checked ? "bg-(--lh-accent)" : "bg-accent",
 				disabled && "cursor-not-allowed",

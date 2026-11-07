@@ -84,8 +84,10 @@ describe("stats bar", () => {
 		assert.equal(formatContextMeasurement(83_000, null), "83k");
 		const html = renderToStaticMarkup(<StatsBar chatId="fixture" turns={[turn()]} contextTokens={null} />);
 		assert.match(html, /data-testid="stats-context">\?</);
+		// Round 9: a session with no turns says so instead of "? · —".
 		const empty = renderToStaticMarkup(<StatsBar chatId="fixture" turns={[]} />);
-		assert.match(empty, /data-testid="stats-context">\?</);
+		assert.match(empty, /data-testid="stats-context"[^>]*>No usage yet</);
+		assert.ok(!empty.includes('data-testid="stats-cost"'), "no cost figure before any turn");
 	});
 
 	it("prettyModel strips only the vendor path, preserving versions, dates and variants", () => {

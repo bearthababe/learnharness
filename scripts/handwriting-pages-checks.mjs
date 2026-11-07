@@ -104,7 +104,7 @@ export async function checkHandwritingPages({ page, origin, draw, ready, dir }) 
 	const file = path.join(dir, "data/chats/handwriting_pages.json"), record = JSON.parse(await readFile(file, "utf8"));
 	record.messages.unshift({ role: "user", id: "sent-stage", content: [{ type: "text", text: "Previously sent stage." }], sharedWriting: [a], timestamp: Date.now() }); await writeFile(file, JSON.stringify(record));
 	await page.reload({ waitUntil: "networkidle2" }); await ready();
-	await page.click('[aria-label="Close notebook"]');
+	await page.click('[aria-label="Close page"]'); // the canvas's Close (visible "Close")
 	await actions(a.id); await page.click('[data-testid="snapshot-menu"] button:first-child'); await page.waitForSelector('[data-testid="handwriting-page-decision"]');
 	assert.equal(await page.$eval('[data-testid="handwriting-page-decision"] h2', e => document.activeElement === e), true);
 	await page.click('[data-choice="restore"]'); await page.waitForSelector('[data-testid="shared-writing-viewer"]', { hidden: true }); await ready();

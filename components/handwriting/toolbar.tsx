@@ -3,7 +3,7 @@
 // Corner arc selectively carried forward from c663dcecd22a. Drawing values and
 // the shared Pencil release-inside activation path belong to the notebook.
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { EllipsisIcon, Undo2Icon, Redo2Icon, XIcon } from "lucide-react";
+import { ChevronDownIcon, EllipsisIcon, Undo2Icon, Redo2Icon, XIcon } from "lucide-react";
 import { HANDWRITING_HIGHLIGHT_COLOUR } from "@/src/core";
 import { useCanvasPalette } from "@/components/device-features";
 
@@ -60,7 +60,7 @@ function useWheelLegend(active: boolean) {
 		return () => document.removeEventListener("pointerdown", away, true);
 	}, [shown]);
 	const dismiss = () => { setShown(false); try { window.localStorage.setItem(LEGEND_KEY, "99"); } catch { /* storage blocked */ } };
-	return [shown, dismiss] as const;
+	return [shown, dismiss, () => setShown(true)] as const;
 }
 function WheelLegend({ colour, dim, onDismiss }: { colour: string; dim: boolean; onDismiss: () => void }) {
 	const row = "flex items-center gap-2.5";
@@ -78,7 +78,7 @@ function WheelLegend({ colour, dim, onDismiss }: { colour: string; dim: boolean;
 export function HandwritingToolbar(p: Props) {
 	const [expanded, setExpanded] = useState(false), [pageOpen, setPageOpen] = useState(false);
 	const palette = useCanvasPalette();
-	const [legend, dismissLegend] = useWheelLegend(palette === "wheel");
+	const [legend, dismissLegend, showLegend] = useWheelLegend(palette === "wheel");
 	const [preview, setPreview] = useState<string | null>(null);
 	const previewFrom = (event: ReactPointerEvent) => {
 		const name = (event.target as Element | null)?.closest?.("[data-wheel-name]")?.getAttribute("data-wheel-name");
@@ -95,6 +95,7 @@ export function HandwritingToolbar(p: Props) {
 			<button type="button" aria-pressed={p.dimPaper} data-testid="notebook-paper-mode" {...p.handlers("Dim paper", () => { p.togglePaper(); setPageOpen(false); })}>Paper<span>{p.dimPaper ? "Dimmed" : "White"}</span></button>
 			{p.toggleFingerDraw && <button type="button" aria-pressed={!!p.fingerDraw} data-testid="notebook-finger-draw" {...p.handlers("Draw with finger", () => { p.toggleFingerDraw!(); setPageOpen(false); })}>Draw with finger<span>{p.fingerDraw ? "On" : "Off"}</span></button>}
 			<button type="button" aria-label="Clear" {...p.handlers("Clear", () => { p.clear(); setPageOpen(false); })}>Clear page<span>You can undo it</span></button>
+			{palette === "wheel" && <button type="button" data-testid="wheel-names" {...p.handlers("Tool names", () => { setPageOpen(false); showLegend(); })}>Tool names<span>Show the legend</span></button>}
 		</div>}
 	</div>;
 	const inspector = expanded && <div className={palette === "wheel" ? "hw-arcInspector hw-wheelInspector" : "hw-arcInspector"}>
@@ -127,7 +128,7 @@ export function HandwritingToolbar(p: Props) {
 				<div className="hw-wheelRedo">{redo}</div>
 				<button type="button" className="hw-wheelCenter" aria-label="Tool size and colour" aria-expanded={expanded} disabled={p.disabled} {...p.handlers("Tool size and colour", () => setExpanded(v => !v))}>
 					<span className="hw-wheelInk" style={{ background: activeInk, filter: p.dimPaper && p.tool === "pen" ? "var(--lh-dim-paper-filter)" : undefined }} />
-					<span className="hw-wheelLabel" data-preview={preview ? "" : undefined}>{preview ?? label}</span>
+					<span className="hw-wheelLabel" data-preview={preview ? "" : undefined}>{preview ?? label}{!preview && <ChevronDownIcon aria-hidden className="hw-wheelChevron" />}</span>
 				</button>
 				{inspector}
 				{legend && !expanded && <WheelLegend colour={p.colour} dim={p.dimPaper} onDismiss={dismissLegend} />}

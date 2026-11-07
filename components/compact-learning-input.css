@@ -1,6 +1,6 @@
 .lh-compact-field { display: contents; }
 .lh-practice-collapsed { display: none; }
-.lh-compact-speech, .lh-compact-error, .lh-phone-plan:not(.lh-phone-plan-header), .lh-row-plan, .lh-phone-usage-label, .lh-phone-reveal, .lh-phone-submit-icon { display: none; }
+.lh-compact-speech, .lh-compact-error, .lh-phone-plan, .lh-row-plan, .lh-phone-usage-label, .lh-phone-reveal, .lh-phone-submit-icon { display: none; }
 
 @media (max-width: 767px) {
 	.lh-reading-input { padding: 6px; }
@@ -77,9 +77,6 @@
 	.lh-compact-error button { min-height: 44px; min-width: 44px; text-decoration: underline; }
 	.lh-compact-stats .lh-dictation-slot { display: none; }
 	.lh-compact-stats { flex-wrap: nowrap; gap: 6px; padding-inline: 6px; padding-top: 2px; }
-	/* Plan sits in the phone's session header; the row keeps it only inside
-	   the controls card (notebook open). */
-	[data-tablet-controls="open"] .lh-compact-stats .lh-row-plan { display: block; min-width: 44px; min-height: 44px; }
 	.lh-compact-stats .lh-usage { position: static; order: 3; flex-shrink: 0; }
 	.lh-compact-stats .lh-usage-numbers { display: none; }
 	.lh-compact-stats .lh-phone-usage-label { display: inline; }

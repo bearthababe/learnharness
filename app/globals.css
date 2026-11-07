@@ -398,12 +398,13 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.lh-session-header .lh-coverage-ring {
 		display: none;
 	}
-	/* Plan is a word in the header (as on tablet and laptop), so the row
-	   under the composer has room to name the model. With the notebook
-	   open it moves into the controls card. */
-	.lh-session-header .lh-phone-plan-header { display: inline-flex; height: 44px; padding-inline: 10px; font-size: 15px; }
-	.lh-session-header .lh-phone-plan-header svg { display: none; }
-	.session-panes[data-notebook-open="true"] .lh-session-header .lh-phone-plan-header { display: none; }
+	/* Plan sits beside the phase under the title, in every state (round 9):
+	   the title keeps its width, and the row under the composer has room to
+	   name the model. A finger-sized target around a compact label. */
+	.lh-session-header .lh-header-plan { display: none; }
+	.lh-session-header .lh-phone-plan-sub { position: relative; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding-inline: 2px; font-size: 14px; font-weight: 500; color: color-mix(in oklab, var(--foreground) 80%, transparent); }
+	.lh-session-header .lh-phone-plan-sub::after { content: ""; position: absolute; inset: -10px -8px; }
+
 	/* Pencil plus its word (a lone pencil reads as "rename"), packed
 	   tight so the session title keeps as much width as possible. */
 	.lh-header-write {
@@ -1276,9 +1277,10 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.lh-choice-title { display: block; font-size: 14.5px; font-weight: 600; color: color-mix(in oklab, var(--foreground) 72%, transparent); }
 	.lh-choice-sub { display: block; margin-top: 2px; font-size: 13.5px; }
 	/* A compact follow-up, so the reserved space leaves every option in
-	   view: the field's own placeholder asks "Why this answer?". */
-	[data-testid="question-dock"] [data-testid="thinking-field"] .lh-input-label { display: none; }
-	[data-testid="question-dock"] .lh-question-confidence { padding-block: 6px; }
+	   view; "Your thinking" keeps its label, as on tablet and laptop. */
+	[data-testid="question-dock"] .lh-question-confidence { padding-block: 4px; }
+	[data-testid="question-dock"] [data-testid="thinking-field"] .lh-input-label { padding-top: 4px; }
+	[data-testid="question-dock"] .lh-question-form { padding: 4px; }
 }
 
 /* Phones: the lesson's control row (Plan, model, thinking, Usage) reads at
@@ -1353,3 +1355,66 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.lh-dictation-slot { justify-content: flex-end; }
 	.lh-dictation-slot [data-testid="dictation-toggle"] { width: auto; }
 }
+
+/* Question and problem cards read at the lesson's size (round-9 review:
+   16px cards under a 19px lesson on the tablet, 12.5px headings). */
+@media (min-width: 768px) and (pointer: coarse) {
+	[data-testid="question-dock"] .lh-question-text { font-size: 19px; line-height: 1.4; }
+	[data-testid="question-dock"] .lh-option { font-size: 17.5px; }
+	.lh-problem-text { font-size: 18px; }
+	.lh-dock-eyebrow, :is([data-testid="question-dock"], [data-testid="practice-dock"]) .lh-input-label { font-size: 14px; }
+}
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	[data-testid="question-dock"] .lh-question-text { font-size: 17px; }
+	[data-testid="question-dock"] .lh-option { font-size: 16px; }
+	.lh-problem-text { font-size: 16.5px; }
+	.lh-dock-eyebrow, :is([data-testid="question-dock"], [data-testid="practice-dock"]) .lh-input-label { font-size: 13.5px; }
+}
+
+/* "Share from Concepts" reads as a control, not stray grey text. */
+@media (min-width: 768px) {
+	.lh-concepts-summary { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding-inline: 12px; border: 1px solid var(--border); border-radius: 999px; color: color-mix(in oklab, var(--foreground) 78%, transparent); font-weight: 500; }
+	.lh-concepts-summary::after { content: ""; }
+	.lh-concepts-summary::before { content: ""; width: 15px; height: 15px; background: currentColor; -webkit-mask: var(--lh-share-icon) center / contain no-repeat; mask: var(--lh-share-icon) center / contain no-repeat; }
+	.lh-concepts-setup[open] .lh-concepts-summary { background: var(--accent); }
+	:root { --lh-share-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2v13'/%3E%3Cpath d='m16 6-4-4-4 4'/%3E%3Cpath d='M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8'/%3E%3C/svg%3E"); }
+}
+@media (pointer: coarse) and (min-width: 768px) {
+	.lh-concepts-summary { min-height: 40px; }
+}
+
+/* Laptops: the session list's small labels read at 13.5px, the table copy
+   corner is visible before hover (faint until the table is hovered), and
+   the composer footer's controls are not so faint they are overlooked. */
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	.lh-session-meta, .lh-kind-tag, [data-testid="activity-recent-toggle"], [data-testid^="kind-filter-"] { font-size: 13.5px; }
+	.lh-sessions-tools { font-size: 13px; }
+	[data-testid="md-table"] .lh-table-copy .lh-copy-corner { opacity: .55; }
+	[data-testid="md-table"]:hover .lh-table-copy .lh-copy-corner, [data-testid="md-table"] .lh-table-copy .lh-copy-corner:focus-visible { opacity: 1; }
+	.lh-stats-bar { color: color-mix(in oklab, var(--foreground) 72%, transparent); }
+}
+
+/* Touch screens: switches at the platform's size (52×32) and a confidence
+   slider you can grab — a 44px-tall touch strip around the same 16px look. */
+@media (pointer: coarse) {
+	.lh-switch { width: 52px; height: 32px; }
+	.lh-switch > span { top: 2px; width: 28px; height: 28px; }
+	.lh-switch[aria-checked="true"] > span { translate: 22px 0; }
+	.lh-switch[aria-checked="false"] > span { translate: 2px 0; }
+	[data-testid="confidence-slider"] { top: -14px; bottom: auto; height: 44px; }
+	[data-testid="confidence-slider"]::-webkit-slider-runnable-track { height: 44px; }
+	[data-testid="confidence-slider"]::-webkit-slider-thumb { margin-top: 14px; }
+	[data-testid="confidence-slider"]::-moz-range-track { height: 44px; }
+}
+
+/* Phone home: the graph's cost sits at the end of the search row instead
+   of on a row of its own (round-9 review: a busy stack of bands). */
+@media (max-width: 767px) {
+	.lh-home-toolbar > .lh-graph-costwrap { position: absolute; top: 0; right: 0; }
+	.lh-home-toolbar:has(> .lh-graph-costwrap) .lh-graph-search { margin-right: 64px; }
+	.lh-home-toolbar > .lh-graph-costwrap .lh-graph-cost { height: 44px; border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent); border-radius: 22px; background: color-mix(in oklab, var(--color-card) 92%, transparent); }
+}
+
+/* Phones: Background agents' history stays below the session filters. */
+@media (max-width: 767px) { .lh-recent-popover { max-height: min(22rem, 38dvh); } }
+@media (pointer: coarse) { .lh-choice button { min-height: 44px; padding-inline: 14px; font-size: 14.5px; } }

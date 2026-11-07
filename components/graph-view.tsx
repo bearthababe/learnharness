@@ -349,7 +349,7 @@ export function GraphCostControl({ costs }: { costs: GraphCostSummary }) {
 	const rootRef = useRef<HTMLDivElement>(null);
 	usePopoverDismiss(rootRef, open, () => setOpen(false));
 	return (
-		<div ref={rootRef} className="relative">
+		<div ref={rootRef} className="lh-graph-costwrap relative">
 			<Hint
 				// Trimmed (owner, subtlety round 2026-09-25).
 				label="Graph costs — click for details"

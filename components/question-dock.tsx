@@ -694,7 +694,7 @@ function QuestionDockForm({
 					// After the pick re-renders (layout settled) — never inside the click.
 					if (row && typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(() => revealRow(row));
 				}}>
-				<div className="mb-1 text-[12.5px] font-semibold text-muted-foreground">
+				<div className="lh-dock-eyebrow mb-1 text-[12.5px] font-semibold text-muted-foreground">
 					{toolName === "probe"
 						? "Probe"
 						: toolName === "recall"

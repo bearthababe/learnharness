@@ -44,7 +44,7 @@ import type { NotebookInputFields, TutorDraftOwner } from "@/src/core";
 import { NotebookPanel } from "@/components/notebook-panel";
 import { NotebookFrame, NotebookSplit, useNotebookLayout } from "@/components/notebook-layout";
 import { useSidebar } from "@/components/sidebar";
-import { useDeviceFeature } from "@/components/device-features";
+import { useDeviceFeature, useNotebookLayoutPref } from "@/components/device-features";
 import { TabletModelButton, useTabletControls, TABLET_MEDIA } from "@/components/tablet-controls";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { NotebookSavedDrafts } from "@/components/notebook-saved-drafts";
@@ -78,7 +78,7 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, RepeatIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, RepeatIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -306,6 +306,15 @@ export function Chat({
 	const canvasOpen = canvasOffered && handwriting.open;
 	const phoneLayout = usePhoneLayout();
 	const notebookLayout = useNotebookLayout(notebookVisible);
+	// Settings → Writing → "Full screen": on a phone the notebook opens
+	// expanded, one surface at a time (its expand button returns to the split).
+	const notebookLayoutChoice = useNotebookLayoutPref();
+	const wasNotebookVisible = useRef(notebookVisible);
+	useEffect(() => {
+		const opened = notebookVisible && !wasNotebookVisible.current;
+		wasNotebookVisible.current = notebookVisible;
+		if (opened && phoneLayout && notebookLayoutChoice === "full") void notebook.session.speech.choose({ kind: "notebook" }).then(notebookLayout.expand).catch(() => {});
+	}, [notebookVisible, phoneLayout, notebookLayoutChoice]);
 	// Portrait tablets: the notebook needs the width, so the sidebar steps
 	// aside while it is open (preference untouched; the toggle still works).
 	const { holdClosed: holdSidebarClosed } = useSidebar();
@@ -663,12 +672,16 @@ export function Chat({
 		setComposerDraftRevision((revision) => revision + 1);
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
 	}, [notebook.session, persistLocalDraft]);
-	// "Ask the tutor again" from a failed background job: fills the composer
-	// only when it is empty (a draft is never replaced; nothing is sent).
+	// "Ask the tutor again" from a failed background job: an empty composer
+	// gets the request; a draft keeps every word and gains the request below
+	// it (round-9 review: a draft silently blocked it). Nothing is sent.
 	useEffect(() => {
 		const onSuggest = (event: Event) => {
 			const detail = (event as CustomEvent<{ chatId: string; text: string }>).detail;
-			if (detail?.chatId === chatId && !textRef.current.trim()) applyText(detail.text);
+			if (detail?.chatId !== chatId) return;
+			const draft = textRef.current.trimEnd();
+			if (draft.includes(detail.text)) return;
+			applyText(draft ? `${draft}\n\n${detail.text}` : detail.text);
 		};
 		window.addEventListener(COMPOSER_SUGGEST_EVENT, onSuggest);
 		return () => window.removeEventListener(COMPOSER_SUGGEST_EVENT, onSuggest);
@@ -1531,6 +1544,7 @@ export function Chat({
 							{titleText}
 							</button>
 						</Hint>
+							<div className="lh-title-meta flex min-w-0 items-center gap-3">
 							{kind === "practice" ? (
 								<span
 									data-testid="phase-chip"
@@ -1544,6 +1558,13 @@ export function Chat({
 							) : (
 								<PhaseChip phase={phases.at(-1) ?? "probe"} />
 							)}
+							{/* Phones: Plan lives here, beside the phase, in every state —
+							    the title keeps its width and the notebook never moves it
+							    (round-9 review). Wider screens use the header chip. */}
+							{planTree && <button type="button" className="lh-phone-plan lh-phone-plan-sub lh-no-drag" onClick={(e) => { blurAfterPointerClick(e); setPlanOpen(true); }}>
+								<WaypointsIcon className="size-3.5" aria-hidden />Plan<ChevronRightIcon className="size-3.5 opacity-70" aria-hidden />
+							</button>}
+							</div>
 						</div>
 							{/* flex-1 spacer: keeps the chips at the right edge AND stays a
 							    drag surface (no carve-out) — the freed bar is grippable. */}
@@ -1563,7 +1584,7 @@ export function Chat({
 								blurAfterPointerClick(e);
 								setPlanOpen(true);
 							}}
-							className="lh-header-plan lh-phone-plan lh-phone-plan-header lh-no-drag flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+							className="lh-header-plan lh-no-drag flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 						>
 							<WaypointsIcon className="size-4" aria-hidden />
 							Plan
@@ -1908,7 +1929,7 @@ export function Chat({
 					notebook={notebook.session}
 					controlsOpen={controlsOpen}
 					fullQuestionWidth={canvasOpen}
-					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} compact={canvasOpen && !phoneLayout} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} pendingWriting={sharedWriting.pending.length} pendingPages={new Set(sharedWriting.pending.flatMap((w) => (w.notebook ? [w.notebook.pageId] : [])))} /></>}
+					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} compact={canvasOpen && !phoneLayout} conceptsOffered={canvasOffered} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} pendingWriting={sharedWriting.pending.length} pendingPages={new Set(sharedWriting.pending.flatMap((w) => (w.notebook ? [w.notebook.pageId] : [])))} /></>}
 					hasSharedWriting={hasSharedWriting || handwritingSubmission.hasAttempt()}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.key)?.form : undefined}
@@ -2755,7 +2776,7 @@ function DockOverlay({
 						pricing={pricing}
 						dictationSlot={notebook.getSnapshot().view ? dictationSlot : undefined}
 						compactInput
-						phonePlan={plan ? <button type="button" className="lh-row-plan" onClick={onOpenPlan}>Plan</button> : undefined}
+						phonePlan={undefined}
 						chatId={chatId}
 						onModelChange={onModelChange}
 					/>

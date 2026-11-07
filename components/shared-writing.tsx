@@ -191,10 +191,13 @@ function SharedWritingViewer({ chatId, writing, label, initialDecision = false, 
 // globals.css), not underlined words.
 const WRITING_ACTION = "lh-writing-action inline-flex h-8 items-center rounded-full border border-border px-3 font-medium text-foreground transition-colors hover:bg-accent";
 
-export function SharedWritingPanel({ chatId, writing, busy, compact = false }: {
+export function SharedWritingPanel({ chatId, writing, busy, compact = false, conceptsOffered = true }: {
 	chatId: string;
 	writing: ReturnType<typeof useSharedWriting>;
 	busy: boolean;
+	/** "Share from Concepts" belongs with the drawing canvas (Settings →
+	 *  Writing): offered where the canvas is on; shared pages always show. */
+	conceptsOffered?: boolean;
 	/** Beside an open page (the drawing canvas): one line with small
 	 *  thumbnails, so the question being answered stays in view. */
 	compact?: boolean;
@@ -216,7 +219,7 @@ export function SharedWritingPanel({ chatId, writing, busy, compact = false }: {
 			<button type="button" className="lh-writing-retry min-h-9 font-medium text-foreground underline underline-offset-2" onClick={() => writing.attachAgain()}>Attach again</button>
 		</p>}
 		{writing.error && <p role="alert" className="text-destructive">{writing.error} <button type="button" className="lh-writing-retry underline underline-offset-2" onClick={() => void writing.refresh().catch(() => {})}>Try again</button></p>}
-		<details className={`lh-concepts-setup ${writing.pending.length ? "mt-2" : ""}`}>
+		{conceptsOffered && <details className={`lh-concepts-setup ${writing.pending.length ? "mt-2" : ""}`}>
 			<summary className="lh-concepts-summary cursor-pointer text-muted-foreground transition-colors hover:text-foreground">Share from Concepts</summary>
 			<ol className="my-2 list-decimal space-y-1 pl-5">
 				<li>Create a Shortcut named <strong>Send to LearnHarness</strong> and enable <strong>Show in Share Sheet</strong>, accepting Images.</li>
@@ -231,6 +234,6 @@ export function SharedWritingPanel({ chatId, writing, busy, compact = false }: {
 				<button type="button" className={WRITING_ACTION} onClick={() => location.reload()}>Reload preview</button>
 			</div>
 			<p className="mt-2 text-muted-foreground">Reload keeps uploaded images, the saved conversation and your unsent message.</p>
-		</details>
+		</details>}
 	</section>;
 }

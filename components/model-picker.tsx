@@ -117,6 +117,9 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	// — because that is exactly what the engine build would run. Display-
 	// only: the record stays unset until a fresh pick populates it.
 	const effectiveLevel = storedLevel ?? (entry ? defaultOrderLevel(levels) : undefined);
+	/** Settings read and nothing chosen: the thinking level has nothing to
+	 *  belong to yet, and the model button asks for a choice. */
+	const noModel = models !== undefined && (!chatId || session !== undefined) && !effectiveId;
 
 	// The intuitive dropdown contract (owner, stats-control round 1): any
 	// click outside the open menu — or an Esc keypress — closes it. The
@@ -322,7 +325,9 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				// graph no longer bleeds through these pills.
 				className="lh-pill flex h-8 min-w-0 items-center gap-1 rounded-full bg-card/90 px-3 text-[13px] backdrop-blur transition-colors hover:bg-accent"
 			>
-				<span className="lh-model-name text-card-foreground">{effectiveId ? prettyModel(effectiveId) : "—"}</span>
+				{/* Loaded and no model yet: say what to do (round 9: first run
+				    read "— ⌄ — ⌄"); "—" only while the settings load. */}
+				<span className="lh-model-name text-card-foreground">{effectiveId ? prettyModel(effectiveId) : noModel ? "Choose a model" : "—"}</span>
 				{confirmed === "model"
 					? <CheckIcon aria-hidden data-testid="model-confirmed" className="size-3.5 shrink-0 text-(--lh-success)" />
 					: <ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -339,6 +344,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				<button
 				type="button"
 				data-testid="stats-thinking"
+				hidden={noModel}
 				onClick={() => {
 					// No model picked → nothing to set a level FOR: the click
 					// is a no-op, never an empty menu.

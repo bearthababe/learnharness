@@ -141,8 +141,8 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 			</button>
 			) : (
 			<div data-dock-scroll-area="" className="max-h-[var(--dock-max-h,40vh)] overflow-y-auto px-4 pt-3 pb-2">
-				<div className="mb-1 text-[12.5px] font-semibold text-muted-foreground">Problem</div>
-				<div className="lh-prose text-[15px]">
+				<div className="lh-dock-eyebrow mb-1 text-[12.5px] font-semibold text-muted-foreground">Problem</div>
+				<div className="lh-prose lh-problem-text text-[15px]">
 					<ToolContentResponse>{input.statement}</ToolContentResponse>
 				</div>
 			</div>

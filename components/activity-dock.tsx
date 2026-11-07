@@ -289,13 +289,16 @@ const KIND_ICON: Record<JobKind, typeof SearchIcon> = {
 type AbortState = "pending" | "failed";
 
 /** One finished or failed job in the Background agents history. */
-/** The composer's own draft key (chat.tsx) and its suggestion event: a
- *  suggestion fills an EMPTY composer only — a draft is never replaced, and
- *  nothing is sent until the learner sends it. */
+/** The composer's own draft key (chat.tsx) and its suggestion event: the
+ *  request fills an empty composer or joins a draft below its last line — a
+ *  draft is never replaced, and nothing is sent until the learner sends it. */
 export const COMPOSER_SUGGEST_EVENT = "lh:composer-suggest";
 function suggestToComposer(chatId: string, text: string) {
 	window.dispatchEvent(new CustomEvent(COMPOSER_SUGGEST_EVENT, { detail: { chatId, text } }));
-	try { const key = `lh:composer-draft:${chatId}`; if (!window.localStorage.getItem(key)) window.localStorage.setItem(key, text); }
+	try {
+		const key = `lh:composer-draft:${chatId}`, draft = (window.localStorage.getItem(key) ?? "").trimEnd();
+		if (!draft.includes(text)) window.localStorage.setItem(key, draft ? `${draft}\n\n${text}` : text);
+	}
 	catch { /* storage blocked: the open session still received the event */ }
 }
 
@@ -445,7 +448,7 @@ export function ActivitySection({ feed: feedProp, onOpenChat }: { feed?: Activit
 				)}
 			</div>
 			{blobs.length === 0 && recentOpen && recent.length > 0 && (
-				<ul data-testid="activity-recent" aria-label="Recent background jobs" className="absolute inset-x-2 bottom-full z-30 mb-1 flex max-h-[min(22rem,50dvh)] flex-col gap-px overflow-y-auto overscroll-contain rounded-2xl border bg-popover p-1.5 shadow-2xl">
+				<ul data-testid="activity-recent" aria-label="Recent background jobs" className="lh-recent-popover absolute inset-x-2 bottom-full z-30 mb-1 flex max-h-[min(22rem,50dvh)] flex-col gap-px overflow-y-auto overscroll-contain rounded-2xl border bg-popover p-1.5 shadow-2xl">
 					{recent.map((job) => (
 						<li key={job.id}>
 							<button type="button" onClick={() => onOpenChat?.(job.chatId)} data-testid="activity-recent-row"

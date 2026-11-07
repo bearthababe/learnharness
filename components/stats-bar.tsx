@@ -170,11 +170,13 @@ export function StatsBar({
 				className="flex h-8 items-center gap-1.5 rounded-full px-2.5 tabular-nums transition-colors hover:bg-card hover:text-foreground"
 			>
 				<span className="lh-phone-usage-label">Usage</span>
-				<span className="lh-usage-numbers contents"><span data-testid="stats-context">
+				{/* No turns yet: say so (round-9 review: "? / 1M · —" read as an
+				    error) — figures appear with the first reply. */}
+				<span className="lh-usage-numbers contents">{turns.length === 0 ? <span data-testid="stats-context" className="font-sans">No usage yet</span> : <><span data-testid="stats-context">
 					{contextLabel}
 				</span>
 				<span aria-hidden>·</span>
-				<span data-testid="stats-cost">{costLabel}</span>
+				<span data-testid="stats-cost">{costLabel}</span></>}
 				</span>
 			</button>
 				{presence.value && (
