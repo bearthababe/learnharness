@@ -5,7 +5,14 @@ import assert from "node:assert/strict";
 export async function checkHandwritingTransfers({ page, origin, transferFaults }) {
 	const fill = async (selector, text) => { await page.focus(selector); await page.keyboard.down("Control"); await page.keyboard.press("KeyA"); await page.keyboard.up("Control"); await page.keyboard.sendCharacter(text); };
 	const ready = () => page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]')?.dataset.ready === "true");
-	const open = async () => { if (await page.$eval('[data-testid="notebook-slot"]', element => element.hidden).catch(() => true)) await page.click('[data-testid="open-notebook"]'); await ready(); };
+	// Round 13: phones open the optional drawing canvas from More (the page bar keeps one row); wider screens keep the Write chip.
+	const openWrite = async () => {
+		if (await page.$eval('[data-testid="open-notebook"]', element => element.checkVisibility()).catch(() => false)) return page.click('[data-testid="open-notebook"]');
+		await page.click('[data-testid="page-menu-button"]');
+		await page.waitForSelector('[data-testid="page-menu-write"]', { visible: true });
+		await page.click('[data-testid="page-menu-write"]');
+	};
+	const open = async () => { if (await page.$eval('[data-testid="notebook-slot"]', element => element.hidden).catch(() => true)) await openWrite(); await ready(); };
 	const cdp = await page.createCDPSession();
 	const draw = async (x = 150, y = 300) => {
 		const r = await page.$eval('[data-testid="notebook-canvas"]', element => { const r = element.getBoundingClientRect(); return { x: r.x, y: r.y, scale: r.width / 1400 }; });
