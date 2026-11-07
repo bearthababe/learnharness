@@ -64,9 +64,10 @@
  */
 
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
+import { NotesImportControl, NotesImportErrors, NotesImportNotices, NotesImportReceipts, NotesImportRecovery, useNotesImport } from "@/components/notes-import.tsx";
+import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
-import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon } from "lucide-react";
+import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon, XIcon } from "lucide-react";
 import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
 import { planCostLabel } from "@/components/usage-format";
 import { GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
@@ -78,6 +79,7 @@ import { DeleteNodeDialog } from "@/components/delete-node-dialog.tsx";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { Hint } from "@/components/ui/hint";
 import { useSidebar } from "@/components/sidebar";
+import { clusterHue } from "@/components/cluster-geometry";
 import {
 	ARROW_LENGTH_LADDER,
 	CHARGE_RANGE,
@@ -258,7 +260,7 @@ function SettingSlider({
 }) {
 	return (
 		<label className={`flex flex-col gap-1${disabled ? " opacity-40" : ""}`}>
-			<span className="flex items-center justify-between text-[11px] text-muted-foreground">
+			<span className="flex items-center justify-between text-xs text-muted-foreground">
 				{label}
 				<span className="tabular-nums">{display ?? value}</span>
 			</span>
@@ -347,7 +349,7 @@ export function GraphCostControl({ costs }: { costs: GraphCostSummary }) {
 	const rootRef = useRef<HTMLDivElement>(null);
 	usePopoverDismiss(rootRef, open, () => setOpen(false));
 	return (
-		<div ref={rootRef} className="relative">
+		<div ref={rootRef} className="lh-graph-costwrap relative">
 			<Hint
 				// Trimmed (owner, subtlety round 2026-09-25).
 				label="Graph costs — click for details"
@@ -357,7 +359,7 @@ export function GraphCostControl({ costs }: { costs: GraphCostSummary }) {
 				type="button"
 				aria-expanded={open}
 				onClick={() => setOpen((o) => !o)}
-				className={`rounded-lg px-2 py-1 text-xs tabular-nums transition-colors hover:bg-accent ${
+				className={`lh-graph-cost rounded-lg px-2 py-1 text-xs tabular-nums transition-colors hover:bg-accent ${
 					open ? "text-foreground" : "text-muted-foreground hover:text-foreground"
 				}`}
 			>
@@ -394,7 +396,7 @@ function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 	return (
 		<div className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
 			<div className="mb-2 flex items-baseline justify-between">
-				<span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+				<span className="text-[12.5px] font-semibold text-muted-foreground">
 					Graph pipeline costs
 				</span>
 				<span className="text-foreground tabular-nums">
@@ -406,7 +408,7 @@ function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 			</div>
 			<div className="flex flex-col gap-1">
 				{stageRows.map(([label, stage]) => (
-					<div key={label} className="flex items-baseline justify-between gap-2 text-[11px]">
+					<div key={label} className="flex items-baseline justify-between gap-2 text-xs">
 						<span className="shrink-0 text-muted-foreground">{label}</span>
 						<span className="min-w-0 text-right tabular-nums">
 							{fmtRunCost(stage.runs - stage.unpricedRuns - (stage.subscriptionRuns ?? 0) <= 0 ? null : stage.dollars, graphProviders(stage))}
@@ -423,7 +425,7 @@ function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 			</div>
 			<div className="mt-2 flex flex-col gap-0.5 border-t pt-2">
 				{costs.runs.map((run) => (
-						<div key={run.startedAt} className="flex items-baseline justify-between gap-2 text-[11px]">
+						<div key={run.startedAt} className="flex items-baseline justify-between gap-2 text-xs">
 							<span className="min-w-0 flex-1 truncate text-muted-foreground">
 								<span className="text-foreground/70">{timeAgo(run.startedAt)}</span>{" "}
 								{run.title}
@@ -473,7 +475,7 @@ function GraphSettingsControl({
 				type="button"
 				aria-expanded={open}
 				onClick={() => setOpen((o) => !o)}
-				className={`flex size-9 items-center justify-center rounded-xl border bg-card/85 shadow-lg backdrop-blur transition-colors hover:bg-accent ${
+				className={`flex size-9 items-center justify-center rounded-full border border-border/70 bg-card/90 shadow-lg backdrop-blur transition-colors hover:bg-accent ${
 					open ? "text-foreground" : "text-muted-foreground hover:text-foreground"
 				}`}
 				aria-label="Graph display settings"
@@ -493,7 +495,7 @@ function GraphSettingsControl({
 				// (pr-2.5) -> scrollbar -> 10px (p-2.5) -> panel edge. The
 				// scrollbar itself does NOT move: it stays pinned at the same
 				// distance from the panel's right border.
-				<div className="absolute right-0 top-full mt-2 flex max-h-[60vh] w-72 flex-col rounded-xl border bg-card/85 p-2.5 shadow-lg backdrop-blur">
+				<div className="absolute right-0 top-full mt-2 flex max-h-[60vh] w-72 max-w-[calc(100vw-1.5rem)] flex-col rounded-2xl border bg-popover/95 p-2.5 shadow-2xl backdrop-blur">
 					<div className="flex flex-col gap-2 overflow-y-auto pr-2.5">
 							{/* Size/zoom/region sliders: LADDER-mapped 0-100, step 10 (11
 							    stops, every DEFAULT dead-center at 50, every value a nice
@@ -558,11 +560,11 @@ function GraphSettingsControl({
 						    the whole build (splat/blur/readback/blit), not just
 						    the paint. */}
 						<div className="mt-1.5 flex flex-col gap-1.5 border-t pt-1.5">
-							<span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+							<span className="text-[12.5px] font-semibold text-muted-foreground">
 								Regions
 							</span>
-							<label className="flex cursor-pointer items-center justify-between text-[11px] text-muted-foreground">
-								<span>Background colors</span>
+							<label className="flex cursor-pointer items-center justify-between text-xs text-muted-foreground">
+								<span>Colour regions</span>
 								<input
 									type="checkbox"
 									checked={settings.regions.enabled}
@@ -575,7 +577,7 @@ function GraphSettingsControl({
 								/>
 							</label>
 							<SettingSlider
-								label="Dilation"
+								label="Region spread"
 								disabled={!regionTuning.enabled}
 								min={0}
 								max={100}
@@ -589,7 +591,7 @@ function GraphSettingsControl({
 									}))}
 							/>
 							<SettingSlider
-								label="Blur"
+								label="Region softness"
 								disabled={!regionTuning.enabled}
 								min={0}
 								max={100}
@@ -604,7 +606,7 @@ function GraphSettingsControl({
 								}
 							/>
 							<SettingSlider
-								label="Edge alpha"
+								label="Region edge fade"
 								disabled={!regionTuning.enabled}
 								min={0}
 								max={100}
@@ -618,9 +620,9 @@ function GraphSettingsControl({
 									}))}
 							/>
 							<label
-								className={`flex items-center justify-between gap-2 text-[11px] text-muted-foreground${!regionTuning.enabled ? " opacity-40" : ""}`}
+								className={`flex items-center justify-between gap-2 text-xs text-muted-foreground${!regionTuning.enabled ? " opacity-40" : ""}`}
 							>
-								<span>Bitmap resolution</span>
+								<span>Region detail</span>
 								<select
 									disabled={!regionTuning.enabled}
 									className="rounded-md border bg-background px-1.5 py-0.5 text-xs tabular-nums text-foreground"
@@ -644,7 +646,7 @@ function GraphSettingsControl({
 							    the Background colors switch above — labels follow
 							    their own clusterLabels toggle. Size is screen px
 							    (constant at any zoom, unlike node labels). */}
-							<label className="flex cursor-pointer items-center justify-between text-[11px] text-muted-foreground">
+							<label className="flex cursor-pointer items-center justify-between text-xs text-muted-foreground">
 								<span>Cluster labels</span>
 								<input
 									type="checkbox"
@@ -678,10 +680,10 @@ function GraphSettingsControl({
 						    the negative it is; cluster pull's far left = off.
 						    Order (user 2026-09-17): general forces first; depth
 						    anchor + its gray-out-able controls last. */}
-						<div className="mt-1.5 flex flex-col gap-1.5 border-t pt-1.5">
-							<span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-								Physics
-							</span>
+						<details className="lh-graph-physics mt-1.5 flex flex-col gap-1.5 border-t pt-1.5">
+							<summary className="cursor-pointer text-[12.5px] font-semibold text-muted-foreground">
+								Layout physics (advanced)
+							</summary>
 							<SettingSlider
 								label="Node repulsion"
 								min={0}
@@ -823,7 +825,7 @@ function GraphSettingsControl({
 										physics: { ...cur.physics, depthBaseRadius: fromSliderPosition(p, DEPTH_BASE_RADIUS_RANGE.min, DEPTH_BASE_RADIUS_RANGE.max) },
 									}))}
 							/>
-						</div>
+						</details>
 					</div>
 				</div>
 			)}
@@ -850,10 +852,18 @@ export function GraphChromeRow({
 	settings,
 	changeSettings,
 	onOpenChains,
+	results = [],
+	onPickResult,
+	onHoverResult,
 }: {
 	isEmpty: boolean;
 	query: string;
 	onQuery: (v: string) => void;
+	/** Matching nodes for the typed query (whole-app redesign): a pickable
+	 *  list, so search finds a node instead of only dimming the rest. */
+	results?: readonly Pick<GraphNode, "id" | "name" | "statement">[];
+	onPickResult?: (nodeId: string) => void;
+	onHoverResult?: (nodeId: string | null) => void;
 	/** The search panel's "No matching nodes." note (computed by the
 	 *  wrapper — it owns visibleIds + the snapshot). */
 	noMatch: boolean;
@@ -867,10 +877,12 @@ export function GraphChromeRow({
 	onOpenChains: () => void;
 }) {
 	const { phone } = useSidebar();
+	const [resultsOpen, setResultsOpen] = useState(false);
+	const shownResults = query.trim() && resultsOpen ? results.slice(0, 8) : [];
 	return (
 		<>
 			{!isEmpty && (
-				<div className="lh-graph-search graph-chrome-fade-in w-56 min-w-0 shrink rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
+				<div className="lh-graph-search graph-chrome-fade-in relative z-30 w-64 min-w-0 shrink rounded-full border border-border/70 bg-card/90 p-0.5 shadow-lg backdrop-blur">
 					<Hint
 						// ⌘F focuses node search (surface-scoped registry action).
 						label="Search nodes"
@@ -883,30 +895,56 @@ export function GraphChromeRow({
 						<input
 							ref={searchInputRef}
 							value={query}
-							onChange={(e) => onQuery(e.target.value)}
+							onChange={(e) => { onQuery(e.target.value); setResultsOpen(true); }}
+							onFocus={() => setResultsOpen(true)}
+							onBlur={() => setTimeout(() => setResultsOpen(false), 150)}
+							onKeyDown={(e) => {
+								if (e.key === "Escape") { setResultsOpen(false); return; }
+								if (e.key === "Enter" && results[0]) { e.preventDefault(); setResultsOpen(false); onPickResult?.(results[0].id); }
+							}}
 							placeholder="Search nodes…"
 							aria-label="Search nodes"
 							spellCheck={false}
-							className="h-7 w-full rounded-lg border bg-background pl-8 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
+							className="h-8 w-full rounded-full border-0 bg-transparent pl-8 pr-3 text-[13.5px] outline-none placeholder:text-muted-foreground"
 						/>
 					</div>
 					</Hint>
 					{noMatch && (
-						<div className="px-1.5 pt-1 text-[11px] text-muted-foreground">No matching nodes.</div>
+						<div className="lh-graph-results absolute inset-x-0 top-full z-30 mt-2 rounded-2xl border bg-popover px-3.5 py-2.5 text-[13px] text-muted-foreground shadow-2xl">No matching nodes.</div>
+					)}
+					{shownResults.length > 0 && (
+						<ul data-testid="graph-search-results" role="listbox" aria-label="Matching nodes" className="lh-graph-results absolute inset-x-0 top-full z-30 mt-2 max-h-[min(20rem,55dvh)] overflow-y-auto overscroll-contain rounded-2xl border bg-popover p-1 shadow-2xl">
+							{shownResults.map((node) => (
+								<li key={node.id} role="none">
+									<button type="button" role="option" aria-selected={false}
+										onMouseDown={(e) => e.preventDefault()}
+										onMouseEnter={() => onHoverResult?.(node.id)}
+										onMouseLeave={() => onHoverResult?.(null)}
+										onClick={() => { setResultsOpen(false); onHoverResult?.(null); onPickResult?.(node.id); }}
+										className="block w-full rounded-xl px-3 py-2 text-left transition-colors hover:bg-accent">
+										<span className="block truncate text-[13.5px] font-medium text-foreground">{node.name}</span>
+										<span className="block truncate text-[12px] text-muted-foreground">{node.statement}</span>
+									</button>
+								</li>
+							))}
+							{results.length > shownResults.length && (
+								<li role="none" className="px-3 py-1.5 text-[12px] text-(--lh-faint)">{results.length - shownResults.length} more match — keep typing to narrow</li>
+							)}
+						</ul>
 					)}
 				</div>
 			)}
 			{/* The chain table (chains overlay, owner plan 2026-09-29). Own
 			    container (36px band), between the search and Import. */}
-				<div className="lh-graph-chains graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
+				<div className="lh-graph-chains graph-chrome-fade-in shrink-0 rounded-full border border-border/70 bg-card/90 p-0.5 shadow-lg backdrop-blur">
 					<Hint label="Every reasoning chain" side="bottom" disabled={phone}>
 						<button
 							type="button"
 							onClick={onOpenChains}
 							data-testid="open-chain-table"
-							className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
+							className="flex h-8 items-center gap-1.5 rounded-full px-3 text-[13.5px] font-medium text-foreground/85 transition-colors hover:bg-accent hover:text-foreground"
 						>
-							<ListTreeIcon className="size-3" />
+							<ListTreeIcon className="size-3.5 text-muted-foreground" />
 							Chains
 						</button>
 					</Hint>
@@ -1022,6 +1060,23 @@ export function GraphView({
 	// changes (its camera is never reset by either); `posRef` carries the
 	// frozen layout out of the layout effect.
 	const rendererRef = useRef<GraphCanvasRenderer | null>(null);
+	// A picked search result opens the node's card at its position (or the
+	// canvas center when the node sits off-screen).
+	const pickSearchResult = useCallback((nodeId: string) => {
+		const snap = snapshotRef.current;
+		const node = snap?.nodes.find((n) => n.id === nodeId);
+		const container = containerRef.current;
+		if (!snap || !node || !container) return;
+		const w = container.clientWidth, h = container.clientHeight;
+		let anchor = rendererRef.current?.screenPositionOf(nodeId) ?? null;
+		// Narrow screens: open the card just under the toolbar, clear of the
+		// composer at the bottom.
+		const toolbar = container.parentElement?.querySelector(".lh-home-toolbar")?.getBoundingClientRect();
+		const top = container.getBoundingClientRect().top;
+		if (w < 768) anchor = { x: w / 2, y: toolbar ? toolbar.bottom - top : 120 };
+		else if (!anchor || anchor.x < 0 || anchor.y < 0 || anchor.x > w || anchor.y > h) anchor = { x: w / 2, y: h / 3 };
+		setSelected({ node, sourceIds: snap.nodeSessions[node.id] ?? [], anchor });
+	}, []);
 	const posRef = useRef<Map<string, { x: number; y: number }> | null>(null);
 
 	// The id set that survives the current search — consumed by the
@@ -1033,6 +1088,17 @@ export function GraphView({
 				if (isNodeVisible(node, query)) set.add(node.id);
 			}
 		return set;
+	}, [snapshot, query]);
+	// The pickable result list: name matches first, then statement matches.
+	const searchResults = useMemo(() => {
+		const q = query.trim().toLowerCase();
+		if (!snapshot || !q) return [];
+		const byName: GraphNode[] = [], byStatement: GraphNode[] = [];
+		for (const node of snapshot.nodes) {
+			if (node.name.toLowerCase().includes(q)) byName.push(node);
+			else if (node.statement.toLowerCase().includes(q)) byStatement.push(node);
+		}
+		return [...byName, ...byStatement];
 	}, [snapshot, query]);
 
 	// Fetch the derived graph. Re-runs when a background pipeline run
@@ -1075,11 +1141,15 @@ export function GraphView({
 	// start; from its first setPhase the run announces itself on the events
 	// channel (S5), and the dock rides those announcements thereafter.
 	const refreshActivity = useActivity().refresh;
+	const { open: openSettings } = useSettingsDialog();
 	const notesImport = useNotesImport({
 		onStart: () => {
 			refreshActivity();
 			setTimeout(() => refreshActivity(), 600);
 		},
+		// An import's merge is on disk when its response returns: refetch so
+		// search and the canvas show the new ideas without a reload.
+		onFinish: () => setRefreshTick((tick) => tick + 1),
 	});
 	const { importing, onImportFiles } = notesImport;
 
@@ -1279,6 +1349,38 @@ export function GraphView({
 	// away (the empty-graph placeholder replaces it). The callbacks are
 	// created once and read through refs, so they never go stale.
 	const isEmpty = snapshot === null || snapshot.nodes.length === 0;
+	const { open: sidebarOpen } = useSidebar();
+	const namedClusters = useMemo(() => (snapshot?.clusters ?? [])
+		.filter((c): c is typeof c & { label: string } => !!c.label && c.members.length > 0)
+		.sort((a, b) => b.members.length - a.members.length), [snapshot]);
+	// The toolbar column's bottom edge: the lead column (caption + source
+	// chips) starts below it, so status lines never collide with it.
+	const [toolbarBottom, setToolbarBottom] = useState(96);
+	const toolbarObserver = useRef<ResizeObserver | null>(null);
+	const toolbarRef = useCallback((el: HTMLDivElement | null) => {
+		toolbarObserver.current?.disconnect();
+		toolbarObserver.current = null;
+		if (!el) return;
+		const update = () => { const next = Math.round(el.offsetTop + el.offsetHeight); setToolbarBottom((prior) => prior === next ? prior : next); };
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(el);
+		toolbarObserver.current = observer;
+	}, []);
+	// The chip strip scrolls sideways; a fade at the right edge says so.
+	const chipsRef = useRef<HTMLDivElement>(null);
+	const [chipsMoreRight, setChipsMoreRight] = useState(false);
+	const updateChipsMore = useCallback(() => {
+		const el = chipsRef.current;
+		if (!el) return;
+		const more = el.scrollWidth - el.scrollLeft - el.clientWidth > 4;
+		setChipsMoreRight((prior) => prior === more ? prior : more);
+	}, []);
+	useEffect(() => {
+		updateChipsMore();
+		window.addEventListener("resize", updateChipsMore);
+		return () => window.removeEventListener("resize", updateChipsMore);
+	}, [updateChipsMore, namedClusters]);
 	useEffect(() => {
 		if (isEmpty) return;
 		const canvas = canvasRef.current;
@@ -1349,10 +1451,12 @@ export function GraphView({
 				// it, and (debounced) remember where the camera stands. The
 				// context menu closes with it: a menu floating over a moved
 				// graph is anchored to nothing.
-				onCameraMove: (t) => {
+				onCameraMove: (t, user = true) => {
 					setSelected(null);
 					setCtxNode(null);
-					persistCamera(t);
+					// The renderer's own framing is not the learner's camera:
+					// persisting it would pin a frame computed for another size.
+					if (user) persistCamera(t);
 				},
 				// Live physics settled: persist the new rest state. Fire-and-
 				// forget — the next snapshot fetch carries the ledger anyway.
@@ -1404,9 +1508,12 @@ export function GraphView({
 			clusters: snapshot.clusters.map((c) => ({ id: c.id, label: c.label, members: c.members })),
 			colors: {
 				node: tokenHex(NODE_COLOR_TOKEN),
-				edge: tokenHex("--ring"),
+				// Edges stay a quiet neutral so the cluster tints carry the
+				// structure (the accent would paint every edge the same hue).
+				edge: tokenHex("--lh-graph-edge"),
 				label: tokenHex("--muted-foreground"),
 				hoverText: tokenHex("--foreground"),
+				halo: tokenHex("--background"),
 			},
 			// Match the app typography (Geist via the body's stack).
 			fontFamily: getComputedStyle(document.body).fontFamily,
@@ -1443,6 +1550,19 @@ export function GraphView({
 		rendererRef.current?.setPhysicsTuning(physicsTuning);
 	}, [physicsTuning, isEmpty]);
 
+	// Escape closes the node card (whole-app redesign) — claimed, so nothing
+	// else in the window's Escape chain also acts on it.
+	useEffect(() => {
+		if (!selected) return;
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.key !== "Escape" || e.defaultPrevented) return;
+			e.preventDefault();
+			setSelected(null);
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [selected]);
+
 	// Position the detail card: below the clicked node, flipped above near
 	// the bottom edge, clamped horizontally. Imperative (ref + layout effect,
 	// before paint) because the flip needs the card's measured height.
@@ -1472,12 +1592,14 @@ export function GraphView({
 			{isEmpty ? (
 				// The empty graph keeps the first action clear without zero-valued statistics.
 				<div className="flex h-full w-full items-center justify-center px-4">
-					<div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
-						<WaypointsIcon className="size-10 opacity-40" strokeWidth={1.25} />
-						<div className="text-lg font-medium text-foreground">Knowledge graph</div>
-						<div className="max-w-sm text-sm">
+					<div className="-mt-24 flex flex-col items-center gap-4 text-center text-muted-foreground">
+						<span className="flex size-14 items-center justify-center rounded-2xl bg-card text-muted-foreground">
+							<WaypointsIcon className="size-7" strokeWidth={1.5} />
+						</span>
+						<div className="font-title text-[26px] leading-tight tracking-tight text-foreground">Knowledge graph</div>
+						<div className="max-w-sm text-[15px] leading-relaxed">
 							<p>Start a session to begin learning.</p>
-							<p className="mt-1 text-xs">Attach your material with the paperclip or drag and drop.</p>
+							<p className="mt-1 text-[13.5px] text-(--lh-faint)">Attach your material with the paperclip or drag and drop.</p>
 						</div>
 					</div>
 				</div>
@@ -1568,7 +1690,40 @@ export function GraphView({
 			    against the full-bleed parent) — the row NEVER wraps (owner
 			    rejected the two-row fold); in narrow windows the search is
 			    the flexible element and shrinks instead. */}
-			<div className="lh-home-toolbar lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
+			{/* The lead column (phones and tablets) — what the canvas is, then
+			    every source as a chip (only the biggest cluster's name fits on
+			    a small canvas; tap one to frame it). It sits BELOW the toolbar
+			    column, measured, so import errors, notices, costs and running
+			    pipelines push it down instead of painting over it. Laptops keep
+			    the caption in the top-left corner beside the toolbar. */}
+			{!isEmpty && snapshot && (
+				<div data-testid="graph-lead" style={{ ["--lh-lead-top" as string]: `${toolbarBottom + 10}px` }}
+					className={`lh-graph-lead pointer-events-none absolute inset-x-0 top-(--lh-lead-top) z-[6] flex flex-col gap-3 lg:top-3 lg:right-auto lg:max-w-[min(24rem,36%)] ${sidebarOpen ? "lg:left-5" : "lg:left-16"}`}>
+					<div data-testid="graph-caption" className="lh-graph-caption select-none px-5 max-md:hidden md:max-w-[34rem] lg:px-0">
+						<div className="font-title text-[20px] leading-tight tracking-tight text-foreground">Knowledge graph</div>
+						<div className="mt-1 text-[13px] leading-snug text-muted-foreground">
+							{snapshot.nodes.length} {snapshot.nodes.length === 1 ? "idea" : "ideas"} from {snapshot.clusters.length} {snapshot.clusters.length === 1 ? "session or source" : "sessions and sources"}. Each glow is where they were learned — search, or select a dot, to see an idea and open its session.
+						</div>
+					</div>
+					{namedClusters.length > 1 && (
+						<div ref={chipsRef} data-testid="graph-clusters" data-more-right={chipsMoreRight} onScroll={updateChipsMore}
+							className="lh-graph-clusters pointer-events-auto flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:px-5 lg:hidden" role="group" aria-label="Sources in the graph">
+							<button type="button" onClick={() => rendererRef.current?.showAll()}
+								className="flex h-9 shrink-0 items-center rounded-full border border-border/70 bg-card/90 px-3 text-[13px] font-medium text-foreground backdrop-blur transition-colors hover:bg-accent">
+								Whole graph
+							</button>
+							{namedClusters.map((c) => (
+								<button key={c.id} type="button" onClick={() => rendererRef.current?.focusNodes(c.members)}
+									className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-card/90 px-3 text-[13px] font-medium text-foreground/85 backdrop-blur transition-colors hover:bg-accent">
+									<span aria-hidden className="size-2 rounded-full" style={{ background: `hsl(${clusterHue(c.id)}, 70%, 70%)` }} />
+									{c.label}
+								</button>
+							))}
+						</div>
+					)}
+				</div>
+			)}
+			<div ref={toolbarRef} className="lh-home-toolbar lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
 			{/* z-20 (2026-09-20): the row paints above the cost number below
 			    it — without this, the later-in-DOM cost control layered over
 			    the settings/coverage dropdowns (owner report), still hoverable
@@ -1589,10 +1744,15 @@ export function GraphView({
 					settings={settings}
 					changeSettings={changeSettings}
 					onOpenChains={() => setChainsOpen(true)}
+					results={searchResults}
+					onPickResult={pickSearchResult}
+					onHoverResult={(id) => rendererRef.current?.highlight(id)}
 				/>
 			</div>
 
+			<NotesImportReceipts receipts={notesImport.receipts} onDismiss={notesImport.dismiss} />
 			<NotesImportErrors errors={notesImport.errors} />
+				<NotesImportRecovery errors={notesImport.errors} retryable={notesImport.retryable} onRetry={notesImport.retry} onDismiss={notesImport.dismiss} onOpenSettings={() => openSettings("keys")} onOpenModels={() => openSettings("agent")} />
 			<NotesImportNotices notices={notesImport.notices} />
 			{/* Top-right tail (owner, 2026-09-20): the pipeline cost number —
 			    just a number, hover-highlighted, dropdown breakdown — then
@@ -1623,13 +1783,18 @@ export function GraphView({
 					// lh-no-drag: the card is placed anywhere on the canvas —
 					// when it lands in the top strip it must stay interactive
 					// over home.tsx's drag surface (2026-09-17).
-					className="lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-xl border bg-card p-4 text-left shadow-lg"
+					data-testid="graph-node-card"
+					className="lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-2xl border bg-popover p-4 text-left shadow-2xl max-md:max-h-[42dvh] max-md:overflow-y-auto max-md:overscroll-contain"
 				>
-					<div className="text-sm font-medium leading-snug">{selected.node.name}</div>
-					<div className="mt-1 text-xs leading-relaxed text-muted-foreground">{selected.node.statement}</div>
+					<button type="button" aria-label="Close details" data-testid="graph-node-card-close" onClick={() => setSelected(null)}
+						className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-md:size-10">
+						<XIcon className="size-4" />
+					</button>
+					<div className="pr-8 text-[15px] font-semibold leading-snug">{selected.node.name}</div>
+					<div className="mt-1.5 text-[13.5px] leading-relaxed text-muted-foreground">{selected.node.statement}</div>
 					{selected.sourceIds.length > 0 ? (
-						<div className="mt-3 flex flex-col gap-1">
-							<div className="text-xs text-muted-foreground">Sessions</div>
+						<div className="mt-3 flex flex-col gap-1 border-t border-border/70 pt-3">
+							<div className="text-[12.5px] font-semibold text-muted-foreground">Learned in</div>
 							{selected.sourceIds.map((sourceId) => {
 								// An imported-notes file: a STATIC entry — the path,
 								// plain text, never a link (no session to open).
@@ -1649,7 +1814,7 @@ export function GraphView({
 										<Link
 											href={propositionSessionHref(selected.node, sourceId)}
 											scroll={false}
-											className="min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-sm text-foreground transition-colors hover:bg-accent"
+											className="-mx-2 min-w-0 flex-1 truncate rounded-lg px-2 py-1.5 text-[14px] text-foreground transition-colors hover:bg-accent"
 										>
 											{snapshot?.sessions[sourceId] ?? sourceId}
 										</Link>
@@ -1658,7 +1823,7 @@ export function GraphView({
 							})}
 						</div>
 					) : (
-						<div className="mt-3 text-xs text-muted-foreground">No sessions recorded.</div>
+						<div className="mt-3 text-[12.5px] text-muted-foreground">No sessions recorded.</div>
 					)}
 				</div>
 			)}

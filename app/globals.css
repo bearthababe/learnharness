@@ -28,83 +28,57 @@
 	outline: none;
 }
 
-/* Palette (owner's hexes): main #141414, raised #1C1C1C, edges #434343.
-   Mono chrome = JetBrains Mono; prose = Source Sans 3; titles = CMU Serif. */
-:root {
+/* Palette (whole-app redesign, 2026-11): a quiet graphite dark with ONE
+   cool accent. Surfaces step by fill, not by outline — hairline borders
+   only where an edge carries meaning. Chrome and prose share Source Sans 3;
+   titles = CMU Serif; code = JetBrains Mono. */
+:root,
+.dark {
 	color-scheme: dark;
-	--radius: 8px;
-	--background: #141414;
-	--foreground: #e6e6e6;
-	--card: #1c1c1c;
-	--card-foreground: #e6e6e6;
-	--popover: #1c1c1c;
-	--popover-foreground: #e6e6e6;
-	--primary: #e6e6e6;
-	--primary-foreground: #141414;
-	--secondary: #1c1c1c;
-	--secondary-foreground: #e6e6e6;
-	--muted: #1c1c1c;
-	--muted-foreground: #8d8d8d;
-	--accent: #2a2a2a;
-	--accent-foreground: #e6e6e6;
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: #434343;
-	--input: #434343;
-	--ring: #8d8d8d;
+	--radius: 10px;
+	--background: #111113;
+	--foreground: #ececef;
+	--card: #19191c;
+	--card-foreground: #ececef;
+	--popover: #1c1c20;
+	--popover-foreground: #ececef;
+	--primary: #ececef;
+	--primary-foreground: #111113;
+	--secondary: #19191c;
+	--secondary-foreground: #ececef;
+	--muted: #19191c;
+	--muted-foreground: #9d9da6;
+	--accent: #25252a;
+	--accent-foreground: #ececef;
+	--destructive: #f07167;
+	--border: #2b2b31;
+	--input: #2b2b31;
+	--ring: #8b93ff;
+	/* The one accent hue: selection, focus, progress, links. */
+	--lh-accent: #8b93ff;
+	--lh-accent-soft: color-mix(in oklab, #8b93ff 16%, transparent);
+	/* Third text tier (hints, timestamps) and the success register. */
+	--lh-faint: #6f6f79;
+	--lh-success: #4cc38a;
+	/* Graph edges: neutral, so cluster tints read as the structure. */
+	--lh-graph-edge: #8d8d96;
+	--lh-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 12px 32px -12px rgb(0 0 0 / 0.6);
 	/* Writing stays white in storage; its on-screen paper follows the theme. */
 	--lh-dim-paper-filter: invert(1) hue-rotate(180deg) contrast(.65) brightness(1.3);
-	--lh-writing-image-filter: none;
-	/* Emphasis inks default to the REGULAR TEXT COLOR (owner ruling,
-	   appearance wave 2026-09-26 — the old #ee928c/#6fa9d6 factory
-	   emphasis colors are gone). Explicit overrides land via the
-	   appearance settings vars. */
-	--lh-ink-strong: var(--foreground);
-	--lh-ink-italic: var(--foreground);
-	/* THE READING SIZE = the ladder's 16px rung (--text-lg). Can't be
-	   var()-linked: @theme inline inlines literals into utilities without
-	   emitting runtime vars — so this is the one documented duplication:
-	   change one, change both. (owner, typography round 4: snapped from
-	   the reskin's hand-tuned 16.5 to the ladder's 16.) */
-	--lh-prose-size: 16px;
-	--lh-prose-leading: 1.5;
-	/* Markdown heading weight (appearance settings; 900 = the Black cut). */
-	--lh-heading-weight: 900;
-}
-
-/* The app is always dark (<html class="dark">); mirror the same values so
-   the block stays coherent under Tailwind's variant. */
-.dark {
 	--lh-writing-image-filter: var(--lh-dim-paper-filter);
-	--background: #141414;
-	--foreground: #e6e6e6;
-	--card: #1c1c1c;
-	--card-foreground: #e6e6e6;
-	--popover: #1c1c1c;
-	--popover-foreground: #e6e6e6;
-	--primary: #e6e6e6;
-	--primary-foreground: #141414;
-	--secondary: #1c1c1c;
-	--secondary-foreground: #e6e6e6;
-	--muted: #1c1c1c;
-	--muted-foreground: #8d8d8d;
-	--accent: #2a2a2a;
-	--accent-foreground: #e6e6e6;
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: #434343;
-	--input: #434343;
-	--ring: #8d8d8d;
-	/* Same emphasis ruling as the block above: unset = text color. */
+	/* Emphasis inks default to the regular text color; explicit overrides
+	   land via the appearance settings vars. */
 	--lh-ink-strong: var(--foreground);
 	--lh-ink-italic: var(--foreground);
 	/* THE READING SIZE = the ladder's 16px rung (--text-lg). Can't be
 	   var()-linked: @theme inline inlines literals into utilities without
-	   emitting runtime vars — so this is the one documented duplication:
-	   change one, change both. (owner, typography round 4: snapped from
-	   the reskin's hand-tuned 16.5 to the ladder's 16.) */
+	   emitting runtime vars — change one, change both. */
 	--lh-prose-size: 16px;
-	--lh-prose-leading: 1.5;
-	/* Markdown heading weight (appearance settings; 900 = the Black cut). */
-	--lh-heading-weight: 900;
+	--lh-prose-leading: 1.6;
+	/* Markdown heading weight (appearance settings). */
+	--lh-heading-weight: 700;
+	/* The reading column: prose, cards and the dock share one measure. */
+	--lh-column: 46rem;
 }
 
 /* CMU Serif bold (titles) — bundled local file, no CDN dependency. */
@@ -123,7 +97,7 @@
 	   fonts: `font-mono`/`font-sans` utilities would otherwise fall to the
 	   SYSTEM stacks — a fourth font the app never chose — and streamdown's
 	   code-block chrome + mermaid-error + demo-card all use them. */
-	--font-ui: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
+	--font-ui: var(--font-sans3), ui-sans-serif, system-ui, sans-serif;
 	--font-prose: var(--font-sans3), ui-sans-serif, system-ui, sans-serif;
 	--font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
 	--font-sans: var(--font-sans3), ui-sans-serif, system-ui, sans-serif;
@@ -133,16 +107,18 @@
 	   distinction with no visible difference, and 10px sits at the mono
 	   legibility floor; quiet labels get their quiet from color +
 	   tracking, not a notch of size. Reading prose = the 16px rung via
-	   --lh-prose-size.) */
+	   --lh-prose-size.) Whole-app redesign: the chrome is Source Sans 3
+	   now, which sets smaller than the old mono — the floor rung is 12px
+	   and the small rung 13px. */
 	/* --font-title lives in the NON-inline @theme below: inline tokens get
 	   their literal values baked into the utilities (.font-title{font-family:
 	   lh-cmu,serif}), which made the appearance "session names in serif"
 	   toggle write a runtime --font-title no consumer ever read (owner, fix
 	   wave: toggle looked dead). Non-inline emits :root { --font-title: … }
 	   and the utility reads var(--font-title) — appearance overrides win. */
-	--text-xs: 11px;
+	--text-xs: 12px;
 	--text-xs--line-height: 1.4;
-	--text-sm: 12.5px;
+	--text-sm: 13px;
 	--text-sm--line-height: 1.4;
 	--text-base: 14px;
 	--text-base--line-height: 1.45;
@@ -155,11 +131,12 @@
 	--text-3xl: 32px;
 	--text-3xl--line-height: 1.25;
 	/* Radii ladder — 4/8/12/16 multiples of the 4px base. */
-	--radius-sm: 4px;
+	--radius-sm: 6px;
 	--radius-md: 8px;
-	--radius-lg: 12px;
-	--radius-xl: 16px;
-	--radius: 8px;
+	--radius-lg: 10px;
+	--radius-xl: 14px;
+	--radius-2xl: 18px;
+	--radius: 10px;
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
@@ -188,6 +165,20 @@ body {
 	background: var(--color-background);
 	color: var(--color-foreground);
 	font-family: var(--font-ui);
+	font-feature-settings: "kern", "liga", "calt";
+	text-rendering: optimizeLegibility;
+}
+
+/* Keyboard-only focus (whole-app redesign): pointer focus stays ring-free,
+   but a keyboard walk always shows where it is. html[data-lh-keyboard] is
+   set on Tab and cleared on the next pointer press (keyboard-shortcuts). */
+html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="button"], [role="tab"], [role="option"], [role="menuitem"], [tabindex="0"], [contenteditable="true"]):focus-visible {
+	outline: 2px solid var(--lh-accent);
+	outline-offset: 2px;
+}
+
+::selection {
+	background: color-mix(in oklab, var(--lh-accent) 38%, transparent);
 }
 
 /* Phone shell — keep the breakpoint in sync with PHONE_MEDIA. The layout
@@ -292,29 +283,22 @@ body {
 		display: none;
 	}
 	.lh-sessions-create {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 8px;
 		margin: 0 16px 12px;
+		gap: 8px;
 	}
 	.lh-sessions-create button {
-		justify-content: center;
-		gap: 5px;
-		padding: 8px;
-		border: 1px solid var(--color-border);
+		height: 44px;
 		border-radius: 12px;
-		background: var(--color-card);
-		color: var(--color-foreground);
 		font-size: 15px;
-		font-weight: 500;
-		text-transform: none;
-		letter-spacing: normal;
 		white-space: nowrap;
 	}
-	.lh-sessions-create svg {
-		width: 15px;
-		height: 15px;
-		flex-shrink: 0;
+	.lh-sessions-create .lh-create-primary {
+		height: 48px;
+		justify-content: center;
+		font-size: 16px;
+	}
+	.lh-wordmark {
+		display: none;
 	}
 	.lh-sessions-search {
 		margin: 0 16px 12px;
@@ -324,6 +308,7 @@ body {
 		padding-left: 36px;
 		border-radius: 12px;
 		background: var(--color-card);
+		font-size: 16px;
 	}
 	.lh-sessions-search svg {
 		left: 12px;
@@ -338,63 +323,51 @@ body {
 		background: var(--color-card);
 	}
 	.lh-sessions-content [data-testid="session-kind-filter"] button {
-		border-radius: 9px;
+		border-radius: 10px;
 		font-size: 14px;
 		font-weight: 500;
-		text-transform: none;
-		letter-spacing: normal;
 	}
 	.lh-sessions-content > [data-testid="session-list"] {
 		min-height: 6rem;
 		padding: 8px 12px;
 	}
 	.lh-session-row {
-		min-height: 64px;
-		margin-bottom: 3px;
+		min-height: 60px;
+		margin-bottom: 2px;
 		padding: 10px 12px;
 		border-radius: 12px;
 	}
 	.lh-session-name {
 		font-size: 17px;
-		font-weight: 500;
 		line-height: 23px;
 	}
 	.lh-session-meta {
 		margin-top: 2px;
-		font-size: 13px;
+		font-size: 14px;
 		line-height: 18px;
 	}
 	.lh-sessions-content > [data-testid="activity-section"] {
-		padding: 10px 16px 4px;
+		padding: 4px 8px 0;
 	}
 	.lh-sessions-content > [data-testid="activity-section"] > div:first-child {
-		margin-bottom: 0;
-		font-size: 13px;
-		line-height: 20px;
-		text-transform: none;
-		letter-spacing: normal;
+		min-height: 44px;
+		padding-inline: 12px;
+		font-size: 16px;
 	}
 	.lh-sessions-footer {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		align-items: start;
 		gap: 8px;
-		padding: 4px 16px 8px;
+		padding: 0 8px 8px;
+		border-top: 0;
 	}
 	.lh-sessions-footer [data-testid="settings-entry"], .lh-sessions-tools summary {
+		height: 44px;
+		padding-inline: 12px;
 		font-size: 16px;
 		font-weight: 500;
 		line-height: 28px;
-		text-transform: none;
-		letter-spacing: normal;
-	}
-	.lh-sessions-footer [data-testid="settings-entry"] {
-		width: 100%;
-		gap: 8px;
-	}
-	.lh-sessions-footer [data-testid="settings-entry"] svg {
-		width: 16px;
-		height: 16px;
 	}
 	.lh-sessions-tools {
 		margin-top: 0;
@@ -416,6 +389,29 @@ body {
 	.lh-app-shell input, .lh-app-shell textarea {
 		font-size: max(16px, 1em);
 	}
+	/* Session header on phones: the title owns the bar; Plan lives in the
+	   stats row and the phase reads from the transcript. */
+	.lh-session-title {
+		font-size: 18px;
+		line-height: 1.3;
+	}
+	.lh-session-header .lh-coverage-ring {
+		display: none;
+	}
+	/* Plan sits beside the phase under the title, in every state (round 9):
+	   the title keeps its width, and the row under the composer has room to
+	   name the model. A finger-sized target around a compact label. */
+	.lh-session-header .lh-header-plan { display: none; }
+	.lh-session-header .lh-phone-plan-sub { display: inline-flex; align-items: center; gap: 4px; height: 44px; margin-block: -10px; padding-inline: 6px; margin-inline: -4px; border-radius: 10px; font-size: 14px; font-weight: 500; color: color-mix(in oklab, var(--foreground) 80%, transparent); }
+
+	/* Pencil plus its word (a lone pencil reads as "rename"), packed
+	   tight so the session title keeps as much width as possible. */
+	.lh-header-write {
+		height: 40px;
+		padding-inline: 10px;
+		gap: 4px;
+		font-size: 15px;
+	}
 	.lh-stats-bar {
 		flex-wrap: wrap;
 		row-gap: 8px;
@@ -432,6 +428,11 @@ body {
 	.lh-stats-bar [data-testid="model-control"] {
 		max-width: 100%;
 		margin-left: auto;
+	}
+	.lh-stats-bar [data-testid="model-control"] button {
+		min-height: 44px;
+		padding-inline: 14px;
+		font-size: 14px;
 	}
 	.lh-shared-writing[data-has-writing="false"], .lh-concepts-setup {
 		display: none;
@@ -479,8 +480,11 @@ body {
 	.lh-graph-search input {
 		height: 44px;
 		padding-left: 36px;
-		border-radius: 12px;
-		background: var(--color-card);
+		border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent);
+		border-radius: 22px;
+		background: color-mix(in oklab, var(--color-card) 92%, transparent);
+		-webkit-backdrop-filter: blur(12px);
+		backdrop-filter: blur(12px);
 	}
 	.lh-graph-search svg {
 		left: 12px;
@@ -490,7 +494,6 @@ body {
 	.lh-graph-chains, .lh-graph-import {
 		min-width: 0;
 		padding: 0;
-		background: var(--color-card);
 	}
 	.lh-graph-chains button, .lh-graph-import button {
 		justify-content: center;
@@ -508,6 +511,11 @@ body {
 	.lh-graph-settings button[aria-label="Graph display settings"] {
 		width: 44px;
 		height: 44px;
+	}
+	.lh-mode-switch button {
+		height: 40px;
+		padding-inline: 14px;
+		font-size: 15px;
 	}
 	.lh-home-toolbar-minimal .lh-home-toolbar-actions {
 		width: calc(100% - 52px);
@@ -692,12 +700,14 @@ body {
    no edge doubles. (md-blocks supplies the wrapper + the copy corner.) */
 [data-streamdown="table"] {
 	border: 1px solid var(--border);
-	/* Tables HUG their contents (owner, callout round 2026-10-07): no more
-	   full-width stretch with dead space. max-content sizes to the cells
-	   (width:auto would still stretch — the classic table trap). No
-	   max-width cap: a max-width would squish-wrap wide tables instead of
-	   letting the md-blocks overflow-x scroller carry them. */
-	width: max-content;
+	/* Tables HUG their contents (owner, callout round 2026-10-07): no
+	   full-width stretch with dead space. fit-content sizes to the cells up
+	   to the column, then long cells wrap (whole-app redesign, round 8: a
+	   max-content table of sentences ran to 2,300px+ behind a sideways
+	   scroll). Only a table whose words alone are wider than the column
+	   still scrolls, with a fade at its cut edge. */
+	width: fit-content;
+	max-width: 100%;
 	/* Tables run at the SESSION prose size (owner note, 2026-09-19: they
 	   visibly lagged the 16px chat text at streamdown's 12.5px text-sm).
 	   Unlayered CSS beats the cells' own utility-layer text-sm, and the
@@ -706,7 +716,12 @@ body {
 }
 [data-streamdown="table"] :where(th, td) {
 	font-size: inherit;
+	vertical-align: top;
+	overflow-wrap: break-word;
 }
+/* Sentences in a cell keep a readable measure. */
+[data-testid="md-table"][data-prose] [data-streamdown="table-cell"] { min-width: 9em; }
+[data-testid="md-table"][data-cut] .lh-table-scroll { mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); }
 /* Column separators: a hairline left rule on every cell but the first in
    its row (owner ask, 2026-09-19) — border-collapse merges it with the row
    rules and the outer border, no doubled lines anywhere. */
@@ -936,4 +951,475 @@ body {
 	background-color: var(--accent);
 	outline: 1px solid var(--border);
 	border-radius: 0.25rem;
+}
+
+/* ============================================================
+ * Whole-app redesign layer (2026-11)
+ * ============================================================ */
+
+/* Steps whose tools render nothing must not stack empty hairlines. */
+.lh-step-rule + .lh-step-rule,
+.lh-step-rule:last-child {
+	display: none;
+}
+
+/* The Concepts share setup is a quiet disclosure until writing arrives or
+   the learner opens it: no box around a single line of help. */
+.lh-shared-writing[data-has-writing="false"]:not(:has(details[open])) {
+	margin-bottom: 4px;
+	padding: 0 6px;
+	border-color: transparent;
+	background: transparent;
+}
+.lh-concepts-summary {
+	list-style: none;
+	font-size: 12.5px;
+}
+.lh-concepts-summary::-webkit-details-marker {
+	display: none;
+}
+.lh-concepts-summary::after {
+	content: " ›";
+}
+
+/* Touch screens wider than a phone (tablets): the desktop layout, but with
+   finger-sized targets. Phones already get their own 44px rules above. */
+@media (pointer: coarse) and (min-width: 768px) {
+	.lh-sessions-create .lh-create-primary { height: 46px; font-size: 15px; }
+	.lh-sessions-create button { height: 44px; font-size: 14.5px; }
+	.lh-sessions-search input { height: 44px; font-size: 15px; }
+	[data-testid="session-kind-filter"] button { min-height: 38px; font-size: 14px; }
+	.lh-session-row { min-height: 56px; }
+	.lh-sessions-footer [data-testid="settings-entry"],
+	[data-testid="activity-section"] > div:first-child { min-height: 44px; }
+	.lh-session-header .lh-header-plan,
+	.lh-session-header .lh-header-write { height: 40px; padding-inline: 12px; font-size: 14.5px; }
+	.lh-coverage-ring > button { min-width: 40px; min-height: 40px; }
+	.lh-stats-bar :is([data-testid="stats-model"], [data-testid="stats-thinking"], [data-testid="stats-summary"], [data-testid="dictation-toggle"]) { height: 40px; font-size: 14px; }
+	.lh-writing-action { min-height: 44px; padding-inline: 16px; font-size: 14px; }
+	.lh-writing-retry { min-height: 44px; }
+	.lh-mode-switch button { height: 38px; padding-inline: 14px; font-size: 14.5px; }
+	.lh-graph-chains button, .lh-graph-import button { height: 40px; font-size: 14.5px; }
+	.lh-graph-search input { height: 40px; }
+	.lh-graph-settings button[aria-label="Graph display settings"] { width: 44px; height: 44px; }
+	[data-testid="settings-nav"] button { min-height: 44px; }
+	[data-testid="session-row-actions"] { width: 40px; height: 40px; opacity: 1; }
+}
+
+/* Session row actions: on hover the "…" takes the kind tag's place; touch
+   screens keep it visible and reserve its lane. */
+.lh-session-item:is(:hover, :focus-within) .lh-session-row {
+	padding-right: 44px;
+}
+@media (pointer: coarse) {
+	/* Touch: the "…" stays visible in a slim lane; its 44px hit area
+	   extends over the row's padding instead of taking title width. */
+	.lh-session-item .lh-session-row {
+		padding-right: 36px;
+	}
+	.lh-session-actions {
+		right: 0;
+		width: 40px;
+		height: 44px;
+		opacity: 1;
+		background: transparent;
+		color: color-mix(in oklab, var(--color-muted-foreground) 65%, transparent);
+	}
+}
+
+/* Dense tree controls keep their alignment, but get finger-sized hit
+   areas on touch screens. */
+@media (pointer: coarse) {
+	/* The box itself grows (negative margins keep the staircase aligned). */
+	.lh-touch-hit { width: 30px !important; height: 34px !important; margin: -7px -8px; }
+	.lh-chain-check { width: 22px; height: 22px; margin: -4px; }
+}
+
+/* Question options that continue below the fold fade out at the edge. */
+[data-dock-scroll-area][data-more-below="true"] {
+	-webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+	mask-image: linear-gradient(to bottom, #000 calc(100% - 36px), transparent);
+}
+
+@media (max-width: 767px) {
+	/* After the check opens, an empty reading field shrinks to one line so
+	   the question keeps its options in view. */
+	.lh-reading-input[data-reading-claim="false"]:has([data-file-path-input][data-empty="true"]) > div:first-child {
+		padding-bottom: 2px;
+		font-size: 12px;
+	}
+	.lh-reading-input[data-reading-claim="false"]:has([data-file-path-input][data-empty="true"]) .lh-compact-field {
+		min-height: 44px;
+	}
+	.lh-reading-input[data-reading-claim="false"]:has([data-file-path-input][data-empty="true"]) .lh-compact-field > :is(textarea, [data-file-path-input]) {
+		min-height: 42px;
+		padding-block: 9px;
+	}
+	.lh-option {
+		padding-block: 8px;
+		line-height: 1.35;
+	}
+}
+
+@media (max-width: 767px) {
+	/* The fade above the dock: shorter on phones, and nearly gone when the
+	   notebook shares the screen, so the lesson keeps visible lines. */
+	.lh-dock-fade { height: 56px; }
+	.session-panes[data-notebook-open="true"] .lh-dock-fade { height: 16px; }
+	.session-panes[data-notebook-open="true"] .lh-stats-bar { padding-top: 0; }
+	.session-panes[data-notebook-open="true"] .session-tutor > header { height: 52px; }
+}
+
+@media (max-width: 767px) {
+	/* Notebook beside the lesson: every spare pixel goes to the lesson. */
+	.session-panes[data-notebook-open="true"] .lh-dock-block { padding-bottom: 2px; }
+	.session-panes[data-notebook-open="true"] .lh-compact-field { min-height: 46px; }
+	.session-panes[data-notebook-open="true"] .lh-compact-field > :is(textarea, [data-file-path-input]) { min-height: 44px; padding-block: 10px; }
+	.session-panes[data-notebook-open="true"] .session-tutor > header { height: 48px; }
+}
+
+.lh-graph-physics[open] { display: flex; }
+.lh-graph-physics > summary { list-style: none; }
+.lh-graph-physics > summary::-webkit-details-marker { display: none; }
+.lh-graph-physics > summary::after { content: " ›"; }
+.lh-graph-physics[open] > summary::after { content: " ⌄"; }
+
+/* The source-chip strip scrolls sideways: fade the right edge while more
+   chips wait off-screen. */
+.lh-graph-clusters[data-more-right="true"] {
+	-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+	mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+
+/* Beside the session (tablets and up): Dictate keeps its whole label; the
+   model name is the element that gives way in a narrow composer row. */
+@media (min-width: 768px) {
+	.lh-dictation-slot { min-width: fit-content; }
+	.lh-stats-bar [data-testid="model-control"] { min-width: 0; flex-shrink: 1; }
+	.lh-stats-bar [data-testid="stats-model"] > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* ── The drawing canvas's header (every size it appears at) ─────────────
+   One obvious, filled "Attach page"; the rest are labelled, finger-sized
+   buttons — never bare text links. */
+.hw-notebookHeader { min-height: 56px; gap: 6px; padding: 6px 10px; }
+.hw-notebookHeader h2 { font-size: 14px; font-weight: 600; color: var(--foreground); }
+.hw-headerAction { height: 44px; gap: 6px; padding-inline: 12px; border-radius: 12px; font-size: 14px; font-weight: 500; color: var(--foreground); }
+.hw-headerAction svg { width: 16px; height: 16px; }
+.hw-primaryAction { background: var(--primary); color: var(--primary-foreground); font-weight: 600; }
+.hw-primaryAction:hover:not(:disabled) { background: var(--primary); opacity: .9; }
+@media (max-width: 767px) {
+	.hw-notebookHeader { gap: 2px; padding-inline: 6px; }
+	.hw-headerAction { padding-inline: 9px; }
+	.hw-headerAction:not(.hw-primaryAction) svg { display: none; }
+}
+.lh-header-write[aria-pressed="true"] { background: var(--lh-accent-soft); color: var(--foreground); }
+
+/* ── Tablets: touch-first, wider than a phone ───────────────────────────
+   Designed as its own device (owner's tablet review + the tablet research):
+   the lesson reads as a page, chrome recedes, every control is labelled and
+   at least 44px, answer choices 52px. Portrait at 820px is the reviewed
+   size; landscape keeps working. */
+@media (min-width: 768px) and (pointer: coarse) {
+	/* Reading as a page: 19px prose, a 560px (about 70 characters) measure,
+	   real margins; the composer card lines up with the text column. */
+	/* The learner's Appearance size is the base (written inline on <html>);
+	   a tablet reads it a step larger, at arm's length (16px → 19px). */
+	:root { --lh-prose-leading: 1.55; }
+	.lh-reading-column :is(.lh-prose, [data-streamdown="table"]) { font-size: calc(var(--lh-prose-size) * 1.1875); }
+	.lh-reading-column { max-width: 624px; padding-inline: 32px; }
+	.lh-dock-column { max-width: 640px; padding-inline: 24px; }
+	/* Answer footers are touch-first: no keyboard hint, a full-size Submit. */
+	.lh-submit-hint[data-keys-hint] { visibility: hidden; }
+	.lh-question-submit :is([data-testid="question-send"], [data-testid="practice-send"]) { height: 44px; padding-inline: 20px; border-radius: 10px; font-size: 15px; }
+
+	/* The composer is one row: the field with its mic inside, attach, send.
+	   Dictation status lives in the field, not in a row of its own. */
+	:root .lh-compact-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px; }
+	:root form.lh-compact-row:has([data-testid="attach-files"]) { grid-template-columns: minmax(0, 1fr) auto auto; }
+	:root .lh-compact-field { display: flex; position: relative; min-width: 0; min-height: 52px; border: 1px solid var(--border); border-radius: 12px; background: var(--background); }
+	/* Focus is a quiet grey edge, not a bright white outline. */
+	:root .lh-compact-field:focus-within { border-color: color-mix(in oklab, var(--foreground) 34%, var(--border)); }
+	:root [data-testid="composer"] .lh-compact-field { border-color: transparent; background: transparent; }
+	:root .lh-compact-field > :is(textarea, [data-file-path-input]) { width: 100%; min-width: 0; min-height: 50px; max-height: 30dvh; padding: 13px 12px; line-height: 24px; field-sizing: content; overflow-y: auto; overscroll-behavior: contain; }
+	:root .lh-compact-field[data-has-mic] > :is(textarea, [data-file-path-input]) { flex: 0 1 auto; width: calc(100% - 52px); padding-right: 0; }
+	:root .lh-compact-field > :is(textarea:placeholder-shown, [data-file-path-input][data-empty="true"]) { white-space: nowrap; text-overflow: ellipsis; }
+	/* While recording the meter covers the field; the text only fades, so a
+	   focused field keeps focus (a Pencil tap on the page must not steal it). */
+	:root .lh-compact-field[data-recording] > :is(textarea, [data-file-path-input]) { opacity: 0; height: var(--lh-capture-height); min-height: var(--lh-capture-height, 50px); }
+	:root .lh-compact-speech { display: block; position: absolute; right: 3px; bottom: 3px; }
+	:root .lh-compact-field[data-recording] .lh-compact-speech { left: 3px; }
+	:root .lh-compact-speech button, :root .lh-compact-row > button:not(.lh-phone-reveal) { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; flex-shrink: 0; border-radius: 10px; }
+	:root .lh-compact-row > button:not(.lh-phone-reveal) { margin-bottom: 4px; }
+	:root .lh-compact-speech button:disabled { opacity: .4; }
+	:root .lh-compact-recording { display: flex; align-items: center; min-width: 0; }
+	:root .lh-compact-feedback { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; padding-left: 6px; }
+	:root .lh-compact-timer { font-size: 13px; font-variant-numeric: tabular-nums; }
+	:root .lh-compact-meter { display: flex; align-items: center; height: 24px; flex: 1; min-width: 0; gap: 2px; overflow: hidden; }
+	:root .lh-compact-meter > span { flex: 1; min-width: 1px; background: var(--foreground); border-radius: 2px; }
+	:root .lh-compact-status { display: flex; align-items: center; gap: 4px; font-size: 13px; overflow-wrap: anywhere; }
+	:root .lh-compact-error { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; color: var(--destructive); font-size: 14px; overflow-wrap: anywhere; }
+	:root .lh-compact-error > span { flex: 1; min-width: 0; }
+	:root .lh-compact-error button { min-height: 44px; min-width: 44px; text-decoration: underline; }
+	:root .lh-compact-stats .lh-dictation-slot { display: none; }
+	:root [data-testid="composer"] .lh-send { width: 44px; height: 44px; }
+
+	/* Model, thinking and usage: no permanent row across the page — the
+	   header's Model button opens them as a card above the composer. */
+	.lh-session-controls { display: inline-flex; }
+	[data-tablet-controls] .lh-stats-bar { display: none; }
+	/* A tablet that has switched the equation notebook on keeps its toggle
+	   in reach: a slim row holding only that toggle. */
+	[data-tablet-controls="closed"] .lh-stats-bar:has([data-notebook-view-control]) { display: flex; justify-content: flex-start; padding-top: 4px; }
+	[data-tablet-controls="closed"] .lh-stats-bar:has([data-notebook-view-control]) > :not(:first-child) { display: none; }
+	[data-tablet-controls="open"] .lh-stats-bar {
+		display: flex; position: absolute; z-index: 30; bottom: calc(100% + 10px); right: 24px;
+		gap: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 18px;
+		background: var(--popover); box-shadow: 0 16px 40px #0007;
+	}
+	/* In a lesson the card opens under the header's Model button. */
+	.lh-dock-block[data-tablet-controls="open"] .lh-stats-bar { position: fixed; top: 68px; bottom: auto; right: 16px; }
+	.lh-dock-block[data-tablet-controls="open"] [data-testid="stats-detail"] { top: calc(100% + 8px); bottom: auto; margin-bottom: 0; }
+
+	/* Portrait: the session list slides over the page (320px, the platform
+	   primary-column width), dimming it; choosing a session closes it. */
+	.lh-sessions-panel[data-overlay="tablet"] { position: fixed; inset-block: 0; left: 0; z-index: 50; }
+	.lh-sessions-panel[data-overlay="tablet"][aria-hidden="false"] { width: 320px !important; box-shadow: 0 0 48px #000b; }
+	.lh-sessions-panel[data-overlay="tablet"] .lh-sessions-content { width: 320px; }
+
+	/* Answer choices: 52px rows, 16px labels — easy for a finger or Pencil. */
+	.lh-option { min-height: 52px; align-items: center; padding-block: 12px; font-size: 16px; }
+	.lh-option > span:first-child { margin-top: 0; }
+
+	/* Switches get a finger-sized hit area without changing their look. */
+	button[role="switch"] { position: relative; }
+	button[role="switch"]::after { content: ""; position: absolute; inset: -12px -6px; }
+
+	/* The writing page: larger header text at arm's length. */
+	.hw-notebookHeader h2 { font-size: 15px; }
+}
+@media (min-width: 768px) and (pointer: coarse) {
+	/* The Concepts share disclosure is a real, finger-sized row. */
+	.lh-concepts-summary { display: flex; align-items: center; min-height: 44px; font-size: 14px; }
+}
+
+/* Phones: the quiz reveal names itself ("Check ›"), not a bare chevron. */
+@media (max-width: 767px) {
+	.lh-compact-row > .lh-phone-reveal { gap: 2px; padding-inline: 12px 8px; font-size: 15px; font-weight: 600; }
+}
+
+/* ── Laptops and desktops: the lesson reads as a page too ───────────────
+   A step larger than the learner's Appearance size (16px → 17px) at a
+   ~75-character measure, so explanations no longer run 100 characters
+   wide; the composer card lines up with that column. */
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	.lh-reading-column :is(.lh-prose, [data-streamdown="table"]) { font-size: calc(var(--lh-prose-size) * 1.0625); }
+	.lh-reading-column { max-width: 608px; }
+	/* The composer and question cards line up with the text (544px). */
+	.lh-dock-column { max-width: 576px; }
+	.lh-stats-bar { font-size: 13px; }
+}
+@media (max-width: 767px) {
+	/* The practice pause: "Next problem" stays inline with its words; the
+	   attach button steps aside until something is typed, so the field keeps
+	   its room and the composer never grows over the problem. */
+	:root form.lh-compact-row:has([data-testid="next-problem-button"]) { grid-template-columns: minmax(0, 1fr) auto; }
+	:root form.lh-compact-row:has([data-testid="next-problem-button"]) [data-testid="attach-files"] { display: none; }
+	:root form.lh-compact-row > [data-testid="next-problem-button"] { min-height: 44px; margin-bottom: 5px; padding-inline: 14px; }
+}
+
+/* ── Phone + equation notebook (whole-app redesign, round 6) ─────────────
+   A live question beside the notebook keeps the question in view: the
+   empty reading field and the "Your thinking" caption step aside and the
+   confidence row tightens. The lesson's Plan / model / thinking / usage
+   stay one tap away behind a header Model button (a card above the dock). */
+@media (max-width: 767px) {
+	.session-panes[data-notebook-open="true"] .lh-reading-input[data-reading-claim="false"]:has([data-file-path-input][data-empty="true"]) { display: none; }
+	.session-panes[data-notebook-open="true"] [data-testid="question-dock"] .lh-input-label { display: none; }
+	.session-panes[data-notebook-open="true"] .lh-question-confidence { padding-block: 4px; }
+	/* Icon-only here, so the session title keeps its width. */
+	.session-panes[data-notebook-open="true"] .lh-session-controls { display: inline-flex; width: 44px; height: 44px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+	.session-panes[data-notebook-open="true"] .lh-session-controls svg { width: 18px; height: 18px; }
+	.session-panes[data-notebook-open="true"] .lh-dock-block[data-tablet-controls="open"] .lh-stats-bar {
+		display: flex; position: absolute; z-index: 30; bottom: calc(100% + 8px); left: 12px; right: 12px;
+		padding: 4px 6px; border: 1px solid var(--border); border-radius: 16px; background: var(--popover); box-shadow: 0 16px 40px #0007;
+	}
+}
+
+@media (min-width: 768px) and (pointer: coarse) {
+	/* The coverage ring is named on touch tablets: [◔ Graph]. */
+	.lh-coverage-ring > button { width: auto; height: 40px; gap: 6px; padding-inline: 10px 12px; border-radius: 10px; }
+	.lh-coverage-ring .lh-coverage-glyph { width: 20px; height: 20px; }
+	.lh-coverage-ring .lh-coverage-label { display: inline; font-size: 14.5px; font-weight: 500; color: var(--muted-foreground); }
+}
+
+/* Answer rows show their number key on keyboard-and-mouse screens. */
+.lh-option-key { display: none; }
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	.lh-option-key { display: inline-flex; align-self: center; align-items: center; justify-content: center; flex-shrink: 0; min-width: 22px; height: 22px; padding-inline: 5px; border: 1px solid var(--border); border-radius: 6px; font: 500 12px/1 var(--font-ui); color: var(--lh-faint); }
+}
+
+/* Phones: a select question shows its options first; confidence and
+   "Your thinking" arrive once an answer is picked (owner amendment 2). */
+.lh-choice-hint { display: none; }
+@media (max-width: 767px) {
+	/* The follow-up keeps its space while it waits, so the options never
+	   move under the finger when it arrives; a step-2 note covers it. */
+	[data-testid="question-dock"][data-awaiting-choice] { position: relative; }
+	[data-testid="question-dock"][data-awaiting-choice] :is(.lh-question-confidence, .lh-question-form) { visibility: hidden; }
+	[data-testid="question-dock"][data-awaiting-choice] .lh-choice-hint {
+		position: absolute; inset: var(--lh-followup-top, auto) 0 0 0; display: flex; align-items: center; gap: 12px;
+		padding: 10px 18px; border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+		background: color-mix(in oklab, var(--foreground) 3%, transparent); color: var(--muted-foreground);
+	}
+	.lh-choice-step { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 26px; height: 26px; border: 1px dashed color-mix(in oklab, var(--foreground) 35%, transparent); border-radius: 50%; font: 600 13px/1 var(--font-ui); }
+	.lh-choice-title { display: block; font-size: 14.5px; font-weight: 600; color: color-mix(in oklab, var(--foreground) 72%, transparent); }
+	.lh-choice-sub { display: block; margin-top: 2px; font-size: 13.5px; }
+	/* A compact follow-up, so the reserved space leaves every option in
+	   view; "Your thinking" keeps its label, as on tablet and laptop. */
+	[data-testid="question-dock"] .lh-question-confidence { padding-block: 4px; }
+	[data-testid="question-dock"] [data-testid="thinking-field"] .lh-input-label { padding-top: 4px; }
+	[data-testid="question-dock"] .lh-question-form { padding: 4px; }
+}
+
+/* Phones: the lesson's control row (Plan, model, thinking, Usage) reads at
+   the same size as the rest of the chrome. */
+@media (max-width: 767px) {
+	.lh-compact-stats { font-size: 14px; }
+	.lh-compact-stats :is(.lh-row-plan, [data-testid="stats-summary"]) { color: color-mix(in oklab, var(--foreground) 78%, transparent); font-size: 14.5px; }
+	.lh-compact-stats [data-testid="model-control"] button { font-size: 14.5px; }
+}
+
+/* Touch screens: small text controls keep a finger-sized target — the
+   history's fold rows, the graph's cost chip and the copy corners. Tables
+   and code show theirs (no hover reveals it on touch); a table's sits on a
+   slim row above it, so it never covers a heading cell. */
+@media (pointer: coarse) {
+	.lh-fold-toggle { min-height: 40px; }
+	.lh-graph-cost { min-width: 44px; min-height: 44px; padding-inline: 10px; font-size: 13.5px; }
+	.lh-copy-corner { position: relative; width: 36px; height: 36px; }
+	.lh-copy-corner::after { content: ""; position: absolute; inset: -4px; }
+	[data-testid="md-code"] .lh-copy-corner { opacity: .8; }
+	/* A table's copy is a small tab on its frame's top-right corner. */
+	[data-testid="md-table"] > .lh-table-copy { position: static; display: flex; justify-content: flex-end; margin-bottom: -1px; }
+	[data-testid="md-table"] > .lh-table-copy .lh-copy-corner { width: 44px; height: 30px; border: 1px solid var(--border); border-bottom: 0; border-radius: 8px 8px 0 0; background: var(--background); opacity: 1; }
+	[data-testid="md-table"] > .lh-table-copy .lh-copy-corner::after { inset: -6px -2px -4px; }
+}
+
+/* Keyboard-and-mouse screens name the coverage pie too: [◔ Graph], beside
+   Plan — a lone circle in the header read as a loading spinner. */
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	.lh-coverage-ring > button { width: auto; height: 34px; gap: 6px; padding-inline: 8px 10px; border-radius: 8px; }
+	.lh-coverage-ring .lh-coverage-glyph { width: 18px; height: 18px; }
+	.lh-coverage-ring .lh-coverage-label { display: inline; font-size: 14px; color: var(--muted-foreground); }
+}
+
+/* Phones: a table of sentences becomes one card per row, each value under
+   its column's heading — no sideways reading at 343px. */
+@media (max-width: 767px) {
+	[data-testid="md-table"][data-prose] { width: 100%; }
+	[data-testid="md-table"][data-prose] .lh-table-scroll { overflow: visible; mask-image: none; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table"] { display: block; width: 100%; border: 0; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-header"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+	[data-testid="md-table"][data-prose] :is([data-streamdown="table-body"], [data-streamdown="table-row"], [data-streamdown="table-cell"]) { display: block; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-body"] [data-streamdown="table-row"] { margin-bottom: 10px; padding: 2px 14px; border: 1px solid var(--border); border-radius: 12px; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-body"] [data-streamdown="table-row"]:first-child { border-top-right-radius: 0; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-cell"] { min-width: 0; padding: 10px 0; border-left: 0; }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-cell"] + [data-streamdown="table-cell"] { border-top: 1px solid var(--border); }
+	[data-testid="md-table"][data-prose] [data-streamdown="table-cell"]::before { content: attr(data-label); display: block; margin-bottom: 3px; font: 600 13px/1.3 var(--font-ui); color: var(--muted-foreground); }
+}
+
+/* Wider screens: a table may run into the right margin beside the text
+   column (its left edge stays on the text), so wide tables need less
+   sideways scrolling. */
+@media (min-width: 1100px) and (not (pointer: coarse)) {
+	.lh-reading-column [data-testid="md-table"] { --lh-table-breakout: clamp(0px, (100vw - 1056px) / 2, 200px); max-width: calc(100% + var(--lh-table-breakout)); margin-right: calc(-1 * var(--lh-table-breakout)); }
+	.lh-reading-column .is-assistant .lh-message-content:has([data-testid="md-table"]) { overflow: visible; }
+}
+@media (min-width: 768px) and (pointer: coarse) {
+	.lh-reading-column [data-testid="md-table"] { --lh-table-breakout: clamp(0px, (100vw - 624px) / 2 - 28px, 96px); max-width: calc(100% + var(--lh-table-breakout)); margin-right: calc(-1 * var(--lh-table-breakout)); }
+	.lh-reading-column .is-assistant .lh-message-content:has([data-testid="md-table"]) { overflow: visible; }
+}
+
+/* Tablets and laptops: secondary text reads at 13px and up (round-8
+   review: fold rows, session dates and the Concepts link sat at 11–12px). */
+@media (min-width: 768px) {
+	.lh-fold-toggle, .lh-concepts-summary { font-size: 13.5px; }
+	.lh-session-meta, .lh-kind-tag, [data-testid="activity-recent-toggle"] { font-size: 13px; }
+}
+/* Laptops: a calmer composer footer — usage on the left; Dictate (its
+   label only), model and thinking grouped on the right. */
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	.lh-stats-bar { font-size: 13.5px; }
+	.lh-dictation-slot { justify-content: flex-end; }
+	.lh-dictation-slot [data-testid="dictation-toggle"] { width: auto; }
+}
+
+/* Question and problem cards read at the lesson's size (round-9 review:
+   16px cards under a 19px lesson on the tablet, 12.5px headings). */
+@media (min-width: 768px) and (pointer: coarse) {
+	[data-testid="question-dock"] .lh-question-text { font-size: 19px; line-height: 1.4; }
+	[data-testid="question-dock"] .lh-option { font-size: 17.5px; }
+	.lh-problem-text { font-size: 18px; }
+	.lh-dock-eyebrow, :is([data-testid="question-dock"], [data-testid="practice-dock"]) .lh-input-label { font-size: 14px; }
+}
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	[data-testid="question-dock"] .lh-question-text { font-size: 17px; }
+	[data-testid="question-dock"] .lh-option { font-size: 16px; }
+	.lh-problem-text { font-size: 16.5px; }
+	.lh-dock-eyebrow, :is([data-testid="question-dock"], [data-testid="practice-dock"]) .lh-input-label { font-size: 13.5px; }
+}
+
+/* "Share from Concepts" reads as a control, not stray grey text. */
+@media (min-width: 768px) {
+	.lh-concepts-summary { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding-inline: 12px; border: 1px solid var(--border); border-radius: 999px; color: color-mix(in oklab, var(--foreground) 78%, transparent); font-weight: 500; }
+	.lh-concepts-summary::after { content: ""; }
+	.lh-concepts-summary::before { content: ""; width: 15px; height: 15px; background: currentColor; -webkit-mask: var(--lh-share-icon) center / contain no-repeat; mask: var(--lh-share-icon) center / contain no-repeat; }
+	.lh-concepts-setup[open] .lh-concepts-summary { background: var(--accent); }
+	:root { --lh-share-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2v13'/%3E%3Cpath d='m16 6-4-4-4 4'/%3E%3Cpath d='M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8'/%3E%3C/svg%3E"); }
+}
+@media (pointer: coarse) and (min-width: 768px) {
+	.lh-concepts-summary { min-height: 40px; }
+}
+
+/* Laptops: the session list's small labels read at 13.5px, the table copy
+   corner is visible before hover (faint until the table is hovered), and
+   the composer footer's controls are not so faint they are overlooked. */
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	.lh-session-meta, .lh-kind-tag, [data-testid="activity-recent-toggle"], [data-testid^="kind-filter-"] { font-size: 13.5px; }
+	.lh-sessions-tools { font-size: 13px; }
+	[data-testid="md-table"] .lh-table-copy .lh-copy-corner { opacity: .55; }
+	[data-testid="md-table"]:hover .lh-table-copy .lh-copy-corner, [data-testid="md-table"] .lh-table-copy .lh-copy-corner:focus-visible { opacity: 1; }
+	.lh-stats-bar { color: color-mix(in oklab, var(--foreground) 72%, transparent); }
+}
+
+/* Touch screens: switches at the platform's size (52×32) and a confidence
+   slider you can grab — a 44px-tall touch strip around the same 16px look. */
+@media (pointer: coarse) {
+	.lh-switch { width: 52px; height: 32px; }
+	.lh-switch > span { top: 2px; width: 28px; height: 28px; }
+	.lh-switch[aria-checked="true"] > span { translate: 22px 0; }
+	.lh-switch[aria-checked="false"] > span { translate: 2px 0; }
+	[data-testid="confidence-slider"] { top: -14px; bottom: auto; height: 44px; }
+	[data-testid="confidence-slider"]::-webkit-slider-runnable-track { height: 44px; }
+	[data-testid="confidence-slider"]::-webkit-slider-thumb { margin-top: 14px; }
+	[data-testid="confidence-slider"]::-moz-range-track { height: 44px; }
+}
+
+/* Phone home: the graph's cost sits at the end of the search row instead
+   of on a row of its own (round-9 review: a busy stack of bands). */
+@media (max-width: 767px) {
+	.lh-home-toolbar > .lh-graph-costwrap { position: absolute; top: 0; right: 0; }
+	.lh-home-toolbar:has(> .lh-graph-costwrap) .lh-graph-search { margin-right: 64px; }
+	.lh-home-toolbar > .lh-graph-costwrap .lh-graph-cost { height: 44px; border: 1px solid color-mix(in oklab, var(--color-border) 70%, transparent); border-radius: 22px; background: color-mix(in oklab, var(--color-card) 92%, transparent); }
+}
+
+/* Phones: Background agents' history stays below the session filters. */
+@media (max-width: 767px) { .lh-recent-popover { max-height: min(22rem, 38dvh); } }
+@media (pointer: coarse) { .lh-choice button { min-height: 44px; padding-inline: 14px; font-size: 14.5px; } }
+
+/* Laptops and tablets: the small labels around the lesson read at 13px+. */
+@media (min-width: 768px) {
+	.lh-submit-hint { font-size: 13px; }
+	.lh-phase-chip { font-size: 13.5px; }
 }

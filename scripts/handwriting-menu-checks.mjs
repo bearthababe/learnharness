@@ -9,7 +9,7 @@ export async function checkHandwritingMenus({ page, origin }) {
 	const field = '[data-testid="composer"] [data-file-path-input]', cdp = await page.createCDPSession();
 	await page.focus(field); await page.keyboard.sendCharacter("Keep my typed explanation.");
 	await page.evaluate(() => { window.menuCancellation = { speech: 0, turn: 0 }; window.addEventListener("lh:kbd-cancel-dictation", () => window.menuCancellation.speech++); window.addEventListener("lh:kbd-abort-turn", () => window.menuCancellation.turn++); });
-	for (const [label, selector] of [["Pages", '[data-testid="notebook-pages"]'], ["Notebook options", '[data-testid="notebook-options"]']]) {
+	for (const [label, selector] of [["Pages", '[data-testid="notebook-pages"]'], ["More page actions", '[data-testid="notebook-options"]']]) {
 		await page.focus(field); await page.evaluate(() => window.dispatchEvent(new CustomEvent("lh:kbd-toggle-dictation")));
 		await page.waitForFunction(() => window.speech?.readyState === 1);
 		const before = await page.evaluate(() => ({ ...window.menuCancellation }));
@@ -46,7 +46,7 @@ export async function checkHandwritingMenus({ page, origin }) {
 	const beforeWorking = await working(); let actionRequests = 0;
 	const countAction = request => { if (request.url().endsWith("/source") || (request.method() === "POST" && request.url().endsWith("/handwriting/pages"))) actionRequests++; };
 	page.on("request", countAction);
-	for (const label of ["Pages", "Notebook options"]) for (const newest of ["snapshot", "notebook"]) for (const focus of ["menu", "chat"]) {
+	for (const label of ["Pages", "More page actions"]) for (const newest of ["snapshot", "notebook"]) for (const focus of ["menu", "chat"]) {
 		const notebookTrigger = `[aria-label="${label}"]`, notebookMenu = label === "Pages" ? '[data-testid="notebook-pages"]' : '[data-testid="notebook-options"]';
 		await page.waitForFunction(() => [...document.querySelectorAll('[aria-label="Start dictation"]')].some(button => button.checkVisibility()));
 		await page.focus(field); await page.evaluate(() => window.dispatchEvent(new CustomEvent("lh:kbd-toggle-dictation")));

@@ -557,7 +557,7 @@ export function AgentSection({
 				{open && (
 					<div className="mt-1 flex flex-col gap-2">
 						<div>
-							<p className="mb-1 text-xs uppercase tracking-widest text-muted-foreground/70">Source</p>
+							<p className="mb-1 text-[12.5px] font-semibold text-muted-foreground">Source</p>
 							<textarea
 								readOnly
 								value={info.sourceText}
@@ -566,7 +566,7 @@ export function AgentSection({
 							/>
 						</div>
 						<div>
-							<p className="mb-1 text-xs uppercase tracking-widest text-muted-foreground/70">Override</p>
+							<p className="mb-1 text-[12.5px] font-semibold text-muted-foreground">Override</p>
 							<textarea
 								value={segmentDraft[info.path] ?? info.overrideText ?? ""}
 								onChange={(e) => setSegmentDraft({ ...segmentDraft, [info.path]: e.target.value })}
@@ -721,7 +721,7 @@ export function AgentSection({
 										preferredSide="down"
 											anchorTestid={`slot-model-${slot}`}
 										testid={`slot-model-menu-${slot}`}
-										menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
+										menuClass="flex w-[min(22rem,calc(100vw-1.5rem))] flex-col rounded-2xl border border-border bg-popover p-2 text-[13px] shadow-2xl"
 									>
 										<ModelMenuList
 											models={catalog ?? undefined}
@@ -979,7 +979,7 @@ export function AgentSection({
 						    each agent's own section in prompt-assembly order. */}
 						{sectionedSegments(prompts).map((section) => (
 							<div key={section.id} data-testid={`prompt-section-${section.id}`}>
-								<p className="mb-1 text-xs uppercase tracking-widest text-muted-foreground/70">
+								<p className="mb-1 text-[12.5px] font-semibold text-muted-foreground">
 									{section.label}
 								</p>
 								<div className="flex flex-col gap-2">

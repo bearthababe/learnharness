@@ -22,7 +22,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ListTreeIcon } from "lucide-react";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { GraphCostControl } from "@/components/graph-view.tsx";
-import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
+import { NotesImportControl, NotesImportErrors, NotesImportNotices, NotesImportReceipts, NotesImportRecovery, useNotesImport } from "@/components/notes-import.tsx";
+import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import { Hint } from "@/components/ui/hint";
 import { useSidebar } from "@/components/sidebar";
 import type { ChatSummary, GraphCostSummary, GraphSnapshot } from "@/src/core";
@@ -129,6 +130,7 @@ export function MinimalHome({
 
 	// Refetch even after incomplete imports: earlier writes and spend remain.
 	const notesImport = useNotesImport({ onFinish: readState });
+	const { open: openSettings } = useSettingsDialog();
 	const { importing, onImportFiles } = notesImport;
 
 	const teachSessions = chats.filter((c) => c.kind === "teach").length;
@@ -158,22 +160,24 @@ export function MinimalHome({
 			    entry law). */}
 			<div className="lh-home-toolbar lh-home-toolbar-minimal lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
 				<div className="lh-home-toolbar-actions flex min-w-0 items-start gap-2">
-					<div className="lh-graph-chains graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
+					<div className="lh-graph-chains graph-chrome-fade-in shrink-0 rounded-full border border-border/70 bg-card/90 p-0.5 shadow-lg backdrop-blur">
 						<Hint label="Every reasoning chain" side="bottom" disabled={phone}>
 							<button
 								type="button"
 								onClick={() => setChainsOpen(true)}
 								data-testid="open-chain-table"
-								className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
+								className="flex h-8 items-center gap-1.5 rounded-full px-3 text-[13.5px] font-medium text-foreground/85 transition-colors hover:bg-accent hover:text-foreground"
 							>
-								<ListTreeIcon className="size-3" />
+								<ListTreeIcon className="size-3.5 text-muted-foreground" />
 								Chains
 							</button>
 						</Hint>
 					</div>
 					<NotesImportControl importing={importing} onImportFiles={onImportFiles} />
 				</div>
+				<NotesImportReceipts receipts={notesImport.receipts} onDismiss={notesImport.dismiss} />
 				<NotesImportErrors errors={notesImport.errors} />
+				<NotesImportRecovery errors={notesImport.errors} retryable={notesImport.retryable} onRetry={notesImport.retry} onDismiss={notesImport.dismiss} onOpenSettings={() => openSettings("keys")} onOpenModels={() => openSettings("agent")} />
 				<NotesImportNotices notices={notesImport.notices} />
 				{costs && costs.runs.length > 0 && <GraphCostControl costs={costs} />}
 			</div>

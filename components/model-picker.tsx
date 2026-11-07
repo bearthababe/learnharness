@@ -1,5 +1,7 @@
 "use client";
 
+import { CheckIcon, ChevronDownIcon } from "lucide-react";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatSettings, ModelCatalogEntry, ModelCatalogResponse, ModelsSettings, UserSettings } from "@/src/core";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
@@ -50,6 +52,8 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	const presence = usePhoneMenuPresence(open, phone);
 	const [error, setError] = useState<string | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
+	const pendingConfirm = useRef<{ kind: "model" | "thinking"; value: string } | null>(null);
+	const [confirmed, setConfirmed] = useState<"model" | "thinking" | null>(null);
 
 	// The record read — BOTH mount and the cross-surface signal land
 	// here (fix wave: another surface's models write re-reads into the
@@ -113,6 +117,9 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	// — because that is exactly what the engine build would run. Display-
 	// only: the record stays unset until a fresh pick populates it.
 	const effectiveLevel = storedLevel ?? (entry ? defaultOrderLevel(levels) : undefined);
+	/** Settings read and nothing chosen: the thinking level has nothing to
+	 *  belong to yet, and the model button asks for a choice. */
+	const noModel = models !== undefined && (!chatId || session !== undefined) && !effectiveId;
 
 	// The intuitive dropdown contract (owner, stats-control round 1): any
 	// click outside the open menu — or an Esc keypress — closes it. The
@@ -226,9 +233,8 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	);
 
 	// Shortcut seams (keyboard wave A): ⌘K opens the model menu (the
-	// universal command convention); Shift+Tab cycles the thinking level
-	// up the ladder (wrapping) — the owner's replacement for browser
-	// tab-focus. Both work from any focus, including mid-typing.
+	// universal command convention); Alt+T cycles the thinking level up
+	// the ladder (wrapping). Both work from any focus, including mid-typing.
 	useEffect(() => {
 		const onOpenPicker = () => {
 			setOpen("model");
@@ -245,6 +251,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			const idx = effectiveLevel === undefined ? -1 : levels.indexOf(effectiveLevel);
 			const next = levels[(idx + 1) % levels.length];
 			if (next === undefined) return;
+			pendingConfirm.current = { kind: "thinking", value: next };
 			apply(effectiveProvider ?? "", effectiveId ?? "", next);
 		};
 		window.addEventListener("lh:kbd-cycle-thinking", onCycleThinking);
@@ -255,6 +262,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	// thinking level only when the new model supports it — otherwise
 	// drop it (a carry-over would 400 at the server's catalog gate).
 	const pickModel = (m: ModelCatalogEntry) => {
+		pendingConfirm.current = { kind: "model", value: m.id };
 		// Auto-populate (chunk 2, owner: "populate everywhere"): a fresh pick
 		// ALWAYS writes a level — the STORED one rides as-is (the write clamps
 		// server-side when the new model doesn't support it; the signal
@@ -276,10 +284,28 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 		if (kind === "model") refresh();
 	};
 
+	// A pick shows that it landed (round-8 review: on a phone a model change
+	// gave no visible confirmation): once the stored choice reads back, the
+	// button's chevron becomes a tick for two seconds and a status line is
+	// announced.
+	useEffect(() => {
+		const pending = pendingConfirm.current;
+		if (!pending) return;
+		const landed = pending.kind === "model" ? effectiveId === pending.value : effectiveLevel === pending.value;
+		if (!landed) return;
+		pendingConfirm.current = null;
+		setConfirmed(pending.kind);
+	});
+	useEffect(() => {
+		if (!confirmed) return;
+		const timer = setTimeout(() => setConfirmed(null), 2000);
+		return () => clearTimeout(timer);
+	}, [confirmed]);
+
 	const modelMenu = <>
 		{error && <div className="mb-1.5 text-destructive">{error}</div>}
 		<ModelMenuList models={catalog?.models} effectiveId={effectiveId} effectiveProvider={effectiveProvider} onPick={pickModel} focusSearch={!phone}
-			footer={catalog && catalog.models.length === 0 ? "No models — add a provider key in Keys" : chatId ? "This session's model" : "Strong tier — the default for new sessions"} />
+			footer={catalog && catalog.models.length === 0 ? "No models — add a provider key in Keys" : `${chatId ? "This session's model" : "Strong tier — the default for new sessions"}${effectiveId ? `: ${prettyModel(effectiveId)}` : ""}`} />
 	</>;
 	return (
 		<div ref={containerRef} className="relative flex items-center gap-1.5" data-testid="model-control">
@@ -297,16 +323,20 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				// view's floating top-right buttons (import notes, gear,
 				// coverage) — blurred, fuller opacity, shadowed — so the
 				// graph no longer bleeds through these pills.
-				className="flex items-center gap-1.5 rounded-full border bg-card/85 px-2.5 py-1 shadow-lg backdrop-blur transition-colors hover:border-border hover:bg-muted"
+				className="lh-pill flex h-8 min-w-0 items-center gap-1 rounded-full bg-card/90 px-3 text-[13px] backdrop-blur transition-colors hover:bg-accent"
 			>
-				<span className="text-card-foreground">{effectiveId ? prettyModel(effectiveId) : "—"}</span>
-				<span aria-hidden className="text-xs text-muted-foreground">▾</span>
+				{/* Loaded and no model yet: say what to do (round 9: first run
+				    read "— ⌄ — ⌄"); "—" only while the settings load. */}
+				<span className="lh-model-name text-card-foreground">{effectiveId ? prettyModel(effectiveId) : noModel ? "Choose a model" : "—"}</span>
+				{confirmed === "model"
+					? <CheckIcon aria-hidden data-testid="model-confirmed" className="size-3.5 shrink-0 text-(--lh-success)" />
+					: <ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />}
 			</button>
 			</Hint>
 			<Hint
 				// "Thinking" + its real shortcut via the registry (owner interlude
-				// 2026-09-25): ⇧⇥ cycles the level, so "Thinking (⇧⇥)" —
-				// rebind-live like every Hint suffix.
+				// 2026-09-25): the registry binding rides the label
+				// ("Thinking (Alt+T)") — rebind-live like every Hint suffix.
 				label="Thinking"
 				action="cycle-thinking"
 				side="bottom"
@@ -314,6 +344,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				<button
 				type="button"
 				data-testid="stats-thinking"
+				hidden={noModel}
 				onClick={() => {
 					// No model picked → nothing to set a level FOR: the click
 					// is a no-op, never an empty menu.
@@ -325,17 +356,22 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				// view's floating top-right buttons (import notes, gear,
 				// coverage) — blurred, fuller opacity, shadowed — so the
 				// graph no longer bleeds through these pills.
-				className="flex items-center gap-1.5 rounded-full border bg-card/85 px-2.5 py-1 shadow-lg backdrop-blur transition-colors hover:border-border hover:bg-muted"
+				className="lh-pill flex h-8 min-w-0 items-center gap-1 rounded-full bg-card/90 px-3 text-[13px] backdrop-blur transition-colors hover:bg-accent"
 			>
 				{/* Just the level — the button reads like the model button reads
 				   the model name (owner, stats-control round 1). */}
 				<span className="text-card-foreground">
 					{effectiveLevel === undefined ? "—" : (THINKING_LABEL[effectiveLevel] ?? effectiveLevel)}
 				</span>
-				<span aria-hidden className="text-xs text-muted-foreground">▾</span>
+				{confirmed === "thinking"
+					? <CheckIcon aria-hidden className="size-3.5 shrink-0 text-(--lh-success)" />
+					: <ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />}
 			</button>
 			</Hint>
 
+			<span className="sr-only" role="status">
+				{confirmed === "model" && effectiveId ? `Model changed to ${prettyModel(effectiveId)}` : confirmed === "thinking" && effectiveLevel ? `Thinking set to ${THINKING_LABEL[effectiveLevel] ?? effectiveLevel}` : ""}
+			</span>
 			{/* The shared dropdown body (extracted 2026-09-20): the agent
 			    settings' slot selects and the setup dialog use the exact same
 			    one. */}
@@ -349,7 +385,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
 					preferredSide="up"
-					menuClass="flex w-[22rem] flex-col rounded-xl border bg-card p-2 text-xs shadow-xl"
+					menuClass="flex w-[min(22rem,calc(100vw-1.5rem))] flex-col rounded-2xl border bg-popover p-2 text-[13px] shadow-2xl"
 				>
 					{modelMenu}
 				</MenuShell>
@@ -364,12 +400,12 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
 					preferredSide="up"
-					menuClass="flex w-44 flex-col gap-0.5 rounded-xl border bg-card p-2 text-xs shadow-xl"
+					menuClass="flex w-48 flex-col gap-0.5 rounded-2xl border bg-popover p-2 text-[13px] shadow-2xl"
 				>
 					<ThinkingMenuList
 						levels={catalog ? levels : []}
 						effectiveLevel={effectiveLevel}
-						onPick={(level) => apply(effectiveProvider ?? "", effectiveId ?? "", level as ThinkingLevel)}
+						onPick={(level) => { pendingConfirm.current = { kind: "thinking", value: level }; apply(effectiveProvider ?? "", effectiveId ?? "", level as ThinkingLevel); }}
 						empty={catalog ? (effectiveId ? `${prettyModel(effectiveId)} has no thinking levels.` : "Pick a model first.") : "Loading…"}
 						footer="Levels this model actually supports"
 					/>

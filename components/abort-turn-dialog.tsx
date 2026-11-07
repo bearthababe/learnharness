@@ -83,7 +83,7 @@ export function AbortTurnBody({
 					{copy.line}
 					{busy && mode !== "turn" ? " The working turn stops too." : ""}
 				</p>
-				<div className="mt-4 flex justify-end gap-2">
+				<div className="mt-5 flex justify-end gap-2">
 					<button
 						type="button"
 						data-testid="abort-turn-cancel"

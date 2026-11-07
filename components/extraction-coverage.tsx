@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronRightIcon } from "lucide-react";
 import { useActivity } from "@/components/activity-dock";
 import { usePopoverDismiss } from "@/components/popover-dismiss";
 import { useSettingsSaved } from "@/components/settings-signal";
@@ -298,10 +299,10 @@ export function CoverageRing({ chatId, refreshKey = 0 }: { chatId: string; refre
 
 	const fill = ringFill(coverage.uncoveredTokens, graph.chunkTokens);
 	return (
-		<div ref={rootRef} className="lh-no-drag relative shrink-0">
+		<div ref={rootRef} className="lh-coverage-ring lh-no-drag relative shrink-0">
 			<Hint
 				// Trimmed (owner, subtlety round 2026-09-25).
-				label="How much of this session isn't mapped yet"
+				label="How much of this session isn't in your graph yet"
 				side="bottom"
 			>
 				<button
@@ -309,17 +310,21 @@ export function CoverageRing({ chatId, refreshKey = 0 }: { chatId: string; refre
 					data-testid="coverage-ring"
 					onClick={() => setOpen((o) => !o)}
 					aria-expanded={open}
-					className="relative flex size-5 cursor-pointer items-center justify-center transition-opacity hover:opacity-80"
+					aria-label="Graph — how much of this session isn't in your graph yet"
+					className="relative flex size-8 cursor-pointer items-center justify-center rounded-full p-1.5 transition-colors hover:bg-accent"
 				>
 					{/* The donut: track + fill. The whole ring pulses while a run
-					    is in flight (motion = the working-state signal). */}
-					<CoverageRingGlyph fill={fill} running={coverage.running} />
+					    is in flight (motion = the working-state signal). Touch
+					    tablets also name it ("Graph"), so the arc never reads as
+					    a loading spinner without a hover tooltip. */}
+					<span className="lh-coverage-glyph flex size-full items-center justify-center"><CoverageRingGlyph fill={fill} running={coverage.running} /></span>
+					<span className="lh-coverage-label hidden">Graph</span>
 				</button>
 			</Hint>
 			{open && (
 				<div
 					data-testid="coverage-ring-popover"
-					className="absolute top-full right-0 z-40 mt-1.5 w-64 rounded-xl border bg-card p-3 text-xs shadow-xl"
+					className="absolute top-full right-0 z-40 mt-2 w-72 rounded-2xl border bg-popover p-3.5 text-[13px] shadow-2xl"
 				>
 					<CoverageRingDetail coverage={coverage} chunkTokens={graph.chunkTokens} />
 				</div>
@@ -328,80 +333,94 @@ export function CoverageRing({ chatId, refreshKey = 0 }: { chatId: string; refre
 	);
 }
 
-/** The donut itself (exported for static-render tests): a hairline track
- *  plus the fill arc — uncovered/chunk of the circumference, starting at
- *  12 o'clock. The whole ring pulses while a run is in flight. */
+/** The glyph (exported for static-render tests): a small pie inside a
+ *  hairline circle — the wedge is the share of a chunk not yet in the graph,
+ *  growing clockwise from 12 o'clock. A filled wedge reads as "how full",
+ *  never as a loading spinner (round-6 review). The whole glyph pulses
+ *  while a run is in flight. */
 export function CoverageRingGlyph({ fill, running }: { fill: number; running: boolean }) {
-	const C = 2 * Math.PI * 6; // r=6 in the 16px viewBox
+	const C = 2 * Math.PI * 3.25; // the wedge: r=3.25 drawn with a 6.5 stroke = a pie of radius 6.5
 	return (
 		<svg
 			viewBox="0 0 16 16"
 			className={running ? "size-full animate-pulse" : "size-full"}
 			aria-hidden="true"
 		>
-			<circle cx="8" cy="8" r="6" fill="none" strokeWidth="2.5" className="stroke-border" />
+			<circle cx="8" cy="8" r="7" fill="none" strokeWidth="1.25" className="stroke-foreground/45" />
 			<circle
 				cx="8"
 				cy="8"
-				r="6"
+				r="3.25"
 				fill="none"
-				strokeWidth="2.5"
+				strokeWidth="6.5"
 				className="stroke-foreground/70"
 				strokeDasharray={`${fill * C} ${C}`}
-				strokeLinecap="round"
 				transform="rotate(-90 8 8)"
 			/>
 		</svg>
 	);
 }
 
-/** The popover body (exported for static-render tests): the exact numbers —
- *  covered/uncovered tokens, message coverage, the threshold, the last
- *  fold's age. */
+/** The popover body (exported for static-render tests): what the circle
+ *  means in plain words first, then the exact numbers — covered/uncovered
+ *  tokens, message coverage, the threshold, the last fold — under
+ *  "Technical details". */
 export function CoverageRingDetail({ coverage, chunkTokens }: { coverage: SessionCoverage; chunkTokens: number }) {
+	const waiting = coverage.uncoveredCount;
+	const summary = coverage.running
+		? "Adding this session's newest ideas to your graph now."
+		: coverage.uncoveredTokens === 0 || waiting === 0
+			? "Everything in this session is in your graph."
+			: `${waiting === 1 ? "1 message" : `${waiting} messages`} of this session ${waiting === 1 ? "isn't" : "aren't"} in your graph yet. They're added on their own once there's a little more to read — the circle fills up until then.`;
 	return (
 		<>
-			<div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-				Extraction coverage
-			</div>
-			<div className="flex flex-col gap-1 text-muted-foreground">
-				<div className="flex justify-between gap-2">
-					<span>Uncovered</span>
-					<span className="tabular-nums text-card-foreground">
-						{formatTokens(coverage.uncoveredTokens)} tokens
-					</span>
-				</div>
-				<div className="flex justify-between gap-2">
-					<span>Covered</span>
-					<span className="tabular-nums text-card-foreground">
-						{formatTokens(coverage.coveredTokens)} tokens
-					</span>
-				</div>
-				<div className="flex justify-between gap-2">
-					<span>Messages</span>
-					<span className="tabular-nums text-card-foreground">
-						{coverage.coveredCount} / {coverage.totalMessages}
-					</span>
-				</div>
-				<div className="flex justify-between gap-2">
-					<span>Chunk threshold</span>
-					<span className="tabular-nums text-card-foreground">
-						{formatTokens(chunkTokens)} tokens
-					</span>
-				</div>
-				<div className="flex justify-between gap-2">
-					<span>Last extraction</span>
-					<span className="tabular-nums text-card-foreground">
-						{coverage.lastFoldedAt ? timeAgo(coverage.lastFoldedAt) : "—"}
-					</span>
-				</div>
-				{coverage.running && (
-					<div className="flex justify-between gap-2" data-testid="coverage-ring-running">
-						<span>Status</span>
-						<span className="text-card-foreground">extracting…</span>
+			<div className="mb-1.5 text-[13.5px] font-semibold text-card-foreground">Your graph and this session</div>
+			<p data-testid="coverage-ring-summary" className="text-[13.5px] leading-snug text-muted-foreground">{summary}</p>
+			{coverage.lastFoldedAt && <p className="mt-1 text-[12.5px] text-muted-foreground/80">Last added {timeAgo(coverage.lastFoldedAt)}.</p>}
+			<details className="group mt-2.5 border-t border-border/70 pt-2">
+				<summary className="flex min-h-8 cursor-pointer list-none items-center gap-1.5 text-[12.5px] text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+					<ChevronRightIcon aria-hidden className="size-3.5 transition-transform group-open:rotate-90" />
+					Technical details
+				</summary>
+				<div className="mt-1 flex flex-col gap-1 text-[12.5px] text-muted-foreground">
+					<div className="flex justify-between gap-2">
+						<span>Uncovered</span>
+						<span className="tabular-nums text-card-foreground">
+							{formatTokens(coverage.uncoveredTokens)} tokens
+						</span>
 					</div>
-				)}
-			</div>
+					<div className="flex justify-between gap-2">
+						<span>Covered</span>
+						<span className="tabular-nums text-card-foreground">
+							{formatTokens(coverage.coveredTokens)} tokens
+						</span>
+					</div>
+					<div className="flex justify-between gap-2">
+						<span>Messages</span>
+						<span className="tabular-nums text-card-foreground">
+							{coverage.coveredCount} / {coverage.totalMessages}
+						</span>
+					</div>
+					<div className="flex justify-between gap-2">
+						<span>Chunk threshold</span>
+						<span className="tabular-nums text-card-foreground">
+							{formatTokens(chunkTokens)} tokens
+						</span>
+					</div>
+					<div className="flex justify-between gap-2">
+						<span>Last extraction</span>
+						<span className="tabular-nums text-card-foreground">
+							{coverage.lastFoldedAt ? timeAgo(coverage.lastFoldedAt) : "—"}
+						</span>
+					</div>
+					{coverage.running && (
+						<div className="flex justify-between gap-2" data-testid="coverage-ring-running">
+							<span>Status</span>
+							<span className="text-card-foreground">extracting…</span>
+						</div>
+					)}
+				</div>
+			</details>
 		</>
 	);
 }

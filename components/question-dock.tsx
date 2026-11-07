@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { tabbedOffEnd } from "@/components/tab-wrap";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PathInput } from "@/components/path-input";
@@ -8,7 +9,7 @@ import { MalformedQuestion } from "@/components/malformed-question";
 import { dictationCheckpoint, finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
 import { CompactLearningInput } from "@/components/compact-learning-input";
-import { CornerDownLeftIcon } from "lucide-react";
+import { ArrowUpIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
 import { useHandwritingEditor } from "./handwriting/submission";
@@ -240,14 +241,14 @@ export function QuestionDockBar({
 				onClick={onExpand}
 				className="lh-question-reveal dock-variant flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40"
 			>
-				<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+				<span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-(--lh-accent-soft) text-(--lh-accent)">
 					<PlayIcon className="size-3.5" />
 				</span>
 				<span className="min-w-0 flex-1">
-					<span className="block text-sm font-medium">Check your understanding</span>
-					<span className="block truncate text-xs text-muted-foreground">{teaserText(question)}</span>
+					<span className="block text-[14.5px] font-semibold">Check your understanding</span>
+					<span className="block truncate text-[13px] text-muted-foreground">{teaserText(question)}</span>
 				</span>
-				<span className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary">
+				<span className="flex shrink-0 items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-[13px] font-semibold text-primary-foreground">
 					Open <ChevronRightIcon className="size-3.5" />
 				</span>
 			</button>
@@ -260,13 +261,13 @@ export function QuestionDockBar({
 			onClick={onExpand}
 			className="dock-variant flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent/40"
 		>
-			<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+			<span className="shrink-0 text-[12.5px] font-semibold text-muted-foreground">
 				{label ??
 							toolLabel ??
 							(toolName === "quiz" ? "Check" : toolName === "explain" ? "Explain" : "Question")}
 			</span>
 			<span className="min-w-0 flex-1 truncate text-muted-foreground">{teaserText(question)}</span>
-			<span className="flex shrink-0 items-center gap-1 text-xs font-medium">
+			<span className="flex shrink-0 items-center gap-1 text-[13px] font-semibold">
 				Answer <ArrowDownIcon className="size-3.5" />
 			</span>
 		</button>
@@ -488,15 +489,19 @@ function QuestionDockForm({
 	   walk stops at the last row). Space acts on the walked row exactly
 	   like a click (multi toggles, single displaces; Other also focuses
 	   its input for typing), Enter submits once an answer exists.
-	   Tab toggles FOCUS between the thinking field and the answer rows
-	   (owner round 3) — nothing else; Shift+Tab is NOT ours (the global
-	   thinking-level cycle owns it). Two guards keep native behavior
+	   Tab from nowhere enters the answer rows and Tab from the rows moves
+	   to the thinking field; from there on Tab and Shift+Tab are the
+	   browser's (whole-app redesign — the old rows↔thinking toggle trapped
+	   keyboard users away from Submit). Two guards keep native behavior
 	   intact: keys from a TYPING SURFACE keep their meaning (arrows move
 	   the caret, space types), and modifier combos are never ours
 	   (Alt+arrows cycle sessions — they must not ALSO walk the rows).
 	   The listener is document-level and lives only while the dock is
 	   expanded — collapsed, the bar's native Enter expands it. */
 	const [kbdIdx, setKbdIdx] = useState<number | null>(null);
+	// The walk highlight shows only while the learner walks with arrows or
+	// Tab; a number-key pick is a choice, like a click, and shows as one.
+	const [walkShown, setWalkShown] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
 	const otherInputRef = useRef<HTMLDivElement>(null);
 	const thinkingRef = useRef<HTMLDivElement>(null);
@@ -549,22 +554,30 @@ function QuestionDockForm({
 				!!t &&
 				((t.tagName === "INPUT" && (t as HTMLInputElement).type !== "range") ||
 					t.tagName === "TEXTAREA" ||
-					t.isContentEditable);
+					t.isContentEditable ||
+					!!t.closest?.("[data-file-path-input]"));
 			// Alt/Cmd/Ctrl combos are never ours (Alt+arrows cycle sessions
 			// globally — they must not ALSO walk the question rows).
 			const modded = e.altKey || e.metaKey || e.ctrlKey;
-			// Plain Tab toggles focus: rows → thinking. The confidence
-			// slider takes NO focus at all (owner, UI round 2026-10-01) —
-			// global ←/→ own its keyboard, so it never joins the chain.
-			// Shift+Tab falls through (the global thinking-level cycle owns
-			// it), so the shift check matters.
+			// The confidence slider takes NO focus at all (owner, UI round
+			// 2026-10-01) — global ←/→ own its keyboard, so it never joins
+			// the chain.
+			// From the thinking field (or anywhere else focused) Tab is the
+			// browser's: on to Submit and the rest of the page — the rows are
+			// ONE stop, entered from nowhere, left for the thinking field.
 			if (e.key === "Tab" && !e.shiftKey && !modded) {
+				const inRows = !!t?.closest?.("[data-kbdrow]");
+				const nowhere = !t || t === document.body || t === document.documentElement;
+				if (!inRows && !nowhere) return;
+				// A walk that ran off the end of the page continues natively.
+				if (!inRows && tabbedOffEnd()) return;
 				e.preventDefault();
 				e.stopPropagation();
-				if (t?.closest?.("[data-kbdrow]")) thinkingRef.current?.focus();
+				if (inRows) thinkingRef.current?.focus();
 				else {
 					const idx = kbdIdx ?? 0;
 					setKbdIdx(idx);
+					setWalkShown(true);
 					focusRow(idx);
 				}
 				return;
@@ -572,10 +585,22 @@ function QuestionDockForm({
 			// Keys from a typing surface keep their meaning (arrows move
 			// the caret, space types).
 			if (typing || modded) return;
+			// Number keys pick a row directly (1 = first option, … the last
+			// number is "I don't know" / Other), like a click on it.
+			if (/^[1-9]$/.test(e.key)) {
+				const idx = Number(e.key) - 1;
+				if (idx >= rowCount) return;
+				e.preventDefault();
+				setKbdIdx(idx);
+				setWalkShown(false);
+				kbdAct(idx);
+				return;
+			}
 			if (e.key === "ArrowDown") {
 				e.preventDefault();
 				const next = Math.min((kbdIdx ?? -1) + 1, rowCount - 1);
 				setKbdIdx(next);
+				setWalkShown(true);
 				// Focus follows the walk while the user is IN the rows (Tab
 				// put them there) so focused and walked never diverge.
 				if (t?.closest?.("[data-kbdrow]")) focusRow(next);
@@ -583,6 +608,7 @@ function QuestionDockForm({
 				e.preventDefault();
 				const next = Math.max((kbdIdx ?? rowCount) - 1, 0);
 				setKbdIdx(next);
+				setWalkShown(true);
 				if (t?.closest?.("[data-kbdrow]")) focusRow(next);
 			} else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
 				// Global confidence cycling (owner, UI round 2026-10-01): the
@@ -611,21 +637,64 @@ function QuestionDockForm({
 		return () => document.removeEventListener("keydown", onKeyDown);
 	});
 
-	// Keep the walked row visible (the question area scrolls internally).
+	// A select question with nothing chosen and nothing written yet: phones
+	// show the options first and bring in confidence + thinking after.
+	const awaitingChoice = qd.mode !== "text" && sel.selected.size === 0 && !sel.dontKnow && !sel.otherSelected && !thinking.trim();
+	// Where the waiting follow-up starts (the note over it lines up there).
+	useLayoutEffect(() => {
+		const root = rootRef.current;
+		if (!root || !awaitingChoice) return;
+		const first = root.querySelector<HTMLElement>(".lh-question-confidence") ?? root.querySelector<HTMLElement>(".lh-question-form");
+		if (first) root.style.setProperty("--lh-followup-top", `${first.offsetTop}px`);
+	});
+
+	// More-below cue (whole-app redesign): on short screens the options can
+	// continue under the confidence row; a fade at the scroll edge says so.
+	// Re-checked after every render (the dock-height budget re-renders on
+	// size changes) and on scroll/resize; no observer of its own.
+	const updateMoreBelow = useCallback(() => {
+		const area = rootRef.current?.querySelector<HTMLElement>("[data-dock-scroll-area]");
+		if (!area) return;
+		const more = area.scrollHeight - area.scrollTop - area.clientHeight > 4;
+		if ((area.dataset.moreBelow === "true") !== more) area.dataset.moreBelow = String(more);
+	}, []);
+	useEffect(() => { updateMoreBelow(); });
+	useEffect(() => {
+		const area = rootRef.current?.querySelector<HTMLElement>("[data-dock-scroll-area]");
+		area?.addEventListener("scroll", updateMoreBelow, { passive: true });
+		window.addEventListener("resize", updateMoreBelow);
+		return () => { area?.removeEventListener("scroll", updateMoreBelow); window.removeEventListener("resize", updateMoreBelow); };
+	}, [updateMoreBelow]);
+
+	// Keep a walked or chosen row in full view: the question area scrolls
+	// internally and fades at its lower edge, so a row is scrolled clear of
+	// that fade (a learner's own pick is never left half-faded).
+	const revealRow = useCallback((row: Element | null | undefined) => {
+		const area = rootRef.current?.querySelector<HTMLElement>("[data-dock-scroll-area]");
+		if (!area || !(row instanceof HTMLElement) || typeof row.getBoundingClientRect !== "function") return;
+		const a = area.getBoundingClientRect(), r = row.getBoundingClientRect();
+		const fade = area.scrollHeight - area.scrollTop - area.clientHeight > 4 ? 36 : 0;
+		if (r.bottom > a.bottom - fade) area.scrollTop += r.bottom - (a.bottom - fade) + 6;
+		else if (r.top < a.top) area.scrollTop -= a.top - r.top + 6;
+		updateMoreBelow();
+	}, [updateMoreBelow]);
 	useEffect(() => {
 		if (kbdIdx === null) return;
-		rootRef.current
-			?.querySelector(`[data-kbdrow="${kbdIdx}"]`)
-			?.scrollIntoView({ block: "nearest" });
-	}, [kbdIdx]);
+		revealRow(rootRef.current?.querySelector(`[data-kbdrow="${kbdIdx}"]`));
+	}, [kbdIdx, revealRow]);
 
 	return (
-		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-notebook-question={toolCallId} data-notebook-channel={owner.channel}>
+		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-awaiting-choice={awaitingChoice || undefined} data-notebook-question={toolCallId} data-notebook-channel={owner.channel}>
 			{/* Question area — scrolls internally if very tall; the bottom row stays put.
 			    Capped by the measured column (--dock-max-h; the old fixed 55dvh cut
 			    long questions short — owner round, 2026-10-05). */}
-			<div data-dock-scroll-area="" data-session-find-root="" className="max-h-[var(--dock-max-h,55dvh)] overflow-y-auto px-4 pt-3">
-				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+			<div data-dock-scroll-area="" data-session-find-root="" className="max-h-[var(--dock-max-h,55dvh)] overflow-y-auto px-4 pt-3"
+				onClickCapture={(e) => {
+					const row = (e.target as HTMLElement).closest?.("[data-kbdrow]");
+					// After the pick re-renders (layout settled) — never inside the click.
+					if (row && typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(() => revealRow(row));
+				}}>
+				<div className="lh-dock-eyebrow mb-1 text-[12.5px] font-semibold text-muted-foreground">
 					{toolName === "probe"
 						? "Probe"
 						: toolName === "recall"
@@ -639,7 +708,7 @@ function QuestionDockForm({
 											: "Question"}
 					{qd.mode === "multi-select" && " · select all that apply"}
 				</div>
-				<div className="mb-3 font-medium">
+				<div className="lh-question-text mb-3 text-[16px] font-semibold leading-snug">
 					<ToolContentResponse>{qd.question}</ToolContentResponse>
 				</div>
 				{qd.context && (
@@ -661,16 +730,16 @@ function QuestionDockForm({
 									data-kbdrow={i}
 									onClick={() => toggle(i)}
 									className={cn(
-										"flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
-										isSel ? "border-primary bg-accent" : "hover:bg-accent/50",
-										i === kbdIdx && !isSel && "ring-1 ring-border bg-accent/40",
+										"lh-option flex items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left text-[15px] outline-none transition-colors",
+										isSel ? "border-(--lh-accent) bg-(--lh-accent-soft)" : "border-border/80 hover:bg-accent/50",
+										i === kbdIdx && walkShown && !isSel && "ring-1 ring-border bg-accent/40",
 									)}
 								>
 									<span
 										className={cn(
-											"mt-0.5 flex size-4 shrink-0 items-center justify-center border",
+											"mt-[3px] flex size-4 shrink-0 items-center justify-center border",
 											qd.mode === "multi-select" ? "rounded-sm" : "rounded-full",
-											isSel ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40",
+											isSel ? "border-(--lh-accent) bg-(--lh-accent) text-background" : "border-muted-foreground/50",
 										)}
 									>
 										{isSel && (
@@ -679,7 +748,7 @@ function QuestionDockForm({
 											</span>
 										)}
 									</span>
-									<span>
+									<span className="min-w-0 flex-1">
 										<ToolContentResponse>{opt.label}</ToolContentResponse>
 										{kind !== "quiz" && opt.description && (
 											// Option subtext renders in Source Sans 3 (owner's mockup);
@@ -694,6 +763,8 @@ function QuestionDockForm({
 											</ToolContentResponse>
 										)}
 									</span>
+									{/* Its number key (shown with a keyboard): press it to pick. */}
+									{i < 9 && <kbd aria-hidden className="lh-option-key">{i + 1}</kbd>}
 								</button>
 							);
 						})}
@@ -709,22 +780,23 @@ function QuestionDockForm({
 								className={cn(
 									// Option-row layout + radio circle (owner); the dashed
 									// outline stays — this is the deliberate non-answer.
-									"flex items-start gap-3 rounded-lg border border-dashed px-3 py-2 text-left text-sm outline-none transition-colors",
-									sel.dontKnow ? "border-primary text-foreground" : "text-muted-foreground",
+									"lh-option flex items-start gap-3 rounded-xl border border-dashed px-3.5 py-2.5 text-left text-[15px] outline-none transition-colors",
+									sel.dontKnow ? "border-(--lh-accent) bg-(--lh-accent-soft) text-foreground" : "border-border text-muted-foreground hover:bg-accent/40",
 									kbdIdx === optionCount && !sel.dontKnow && "ring-1 ring-border bg-accent/40",
 								)}
 							>
 								<span
 									className={cn(
-										"mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
+										"mt-[3px] flex size-4 shrink-0 items-center justify-center rounded-full border",
 										sel.dontKnow
-											? "border-primary bg-primary text-primary-foreground"
-											: "border-muted-foreground/40",
+											? "border-(--lh-accent) bg-(--lh-accent) text-background"
+											: "border-muted-foreground/50",
 									)}
 								>
 									{sel.dontKnow && <span className="size-1.5 rounded-full bg-current" />}
 								</span>
-								<span>I don't know</span>
+								<span className="min-w-0 flex-1">I don't know</span>
+								{optionCount < 9 && <kbd aria-hidden className="lh-option-key">{optionCount + 1}</kbd>}
 							</button>
 						)}
 
@@ -736,18 +808,18 @@ function QuestionDockForm({
 								data-kbdrow={optionCount}
 								onClick={selectOther}
 								className={cn(
-									"flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
-									sel.otherSelected ? "border-primary bg-accent" : "border-dashed hover:bg-accent/50",
+									"lh-option flex items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left text-[15px] outline-none transition-colors",
+									sel.otherSelected ? "border-(--lh-accent) bg-(--lh-accent-soft)" : "border-dashed border-border hover:bg-accent/50",
 									kbdIdx === optionCount && !sel.otherSelected && "ring-1 ring-border bg-accent/40",
 								)}
 							>
 								<span
 									className={cn(
-										"mt-0.5 flex size-4 shrink-0 items-center justify-center border",
+										"mt-[3px] flex size-4 shrink-0 items-center justify-center border",
 										qd.mode === "multi-select" ? "rounded-sm" : "rounded-full",
 										sel.otherSelected
-											? "border-primary bg-primary text-primary-foreground"
-											: "border-muted-foreground/40",
+											? "border-(--lh-accent) bg-(--lh-accent) text-background"
+											: "border-muted-foreground/50",
 									)}
 								>
 									{sel.otherSelected && (
@@ -819,7 +891,7 @@ function QuestionDockForm({
 					<div className="flex items-center gap-3">
 						<span
 							className={cn(
-								"shrink-0 text-xs font-medium uppercase tracking-wide",
+								"shrink-0 text-[12.5px] font-semibold",
 								sel.dontKnow ? "text-muted-foreground/50" : "text-muted-foreground",
 							)}
 						>
@@ -882,7 +954,7 @@ function QuestionDockForm({
 						<span
 							data-testid="confidence-value"
 							className={cn(
-								"w-9 shrink-0 text-right font-mono text-sm tabular-nums",
+								"w-10 shrink-0 text-right text-[14px] font-semibold tabular-nums",
 								sel.dontKnow && "text-muted-foreground/50",
 							)}
 						>
@@ -899,8 +971,18 @@ function QuestionDockForm({
 			    send. Select modes get "Your thinking" (Enter makes a newline — it
 			    is for dumping, soon dictated; the button submits); text mode
 			    keeps "Your answer" with Enter-to-submit. */}
+			{/* Phones: until an answer is picked, confidence and "Your thinking"
+			    wait as a follow-up step, so the question and every option get
+			    the room first (owner amendment 2). */}
+			{/* The follow-up keeps its place while it waits (round-8 review: the
+			    card grew under the finger on the pick), so nothing moves when
+			    it arrives: the note covers the space it will fill. */}
+			{qd.mode !== "text" && <div aria-hidden className="lh-choice-hint">
+				<span className="lh-choice-step">2</span>
+				<span><span className="lh-choice-title">Then say how sure you are, and why</span><span className="lh-choice-sub">Pick an answer above first.</span></span>
+			</div>}
 			<form
-				className="border-t border-border/60 p-1.5"
+				className="lh-question-form border-t border-border/60 p-1.5"
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit();
@@ -908,10 +990,10 @@ function QuestionDockForm({
 			>
 				<div
 					data-testid={qd.mode === "text" ? "answer-field" : "thinking-field"}
-					className="lh-question-input rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
+					className="lh-question-input rounded-[12px] border border-border/80 bg-background/60 transition-colors focus-within:border-muted-foreground/60"
 				>
-					<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-						{qd.mode === "text" ? "Your answer" : "YOUR THINKING"}
+					<div className="lh-input-label px-2.5 pt-2 text-[12.5px] font-semibold text-muted-foreground">
+						{qd.mode === "text" ? "Your answer" : "Your thinking"}
 					</div>
 					<CompactLearningInput dictation={dictationClaim ? dictation : undefined}>{qd.mode === "text" ? (
 						<PathInput
@@ -978,7 +1060,7 @@ function QuestionDockForm({
 						/>
 					)}</CompactLearningInput>
 					<div className="lh-question-submit flex items-center justify-between gap-2 p-1">
-						<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
+						<span aria-hidden data-keys-hint={!compactionRunning || undefined} className="lh-submit-hint pl-1.5 text-[12px] text-(--lh-faint)">
 								{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 						</span>
 						<Button
@@ -986,9 +1068,9 @@ function QuestionDockForm({
 							data-testid="question-send"
 							disabled={owned.blocked || (!canSubmit && !isDictationActive()) || compactionRunning}
 							aria-label="Submit answer"
-							className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
+							className="ml-auto h-9 rounded-[8px] px-4 text-[14px] font-semibold"
 						>
-							<span className="lh-wide-submit-label">Submit answer</span><CornerDownLeftIcon className="lh-phone-submit-icon" size={20} />
+							<span className="lh-wide-submit-label">Submit answer</span><ArrowUpIcon className="lh-phone-submit-icon" size={20} strokeWidth={2.25} />
 						</Button>
 					</div>
 				</div>

@@ -86,6 +86,24 @@ function listJobs(chatId: string): JobRecord[] {
 	}
 }
 
+/** Recent jobs across every chat, newest activity first — the sidebar's
+ *  Background agents history (finished and failed work stays findable
+ *  app-wide, not only inside its session). Read-only. */
+export function listRecentJobs(limit = 6): JobRecord[] {
+	try {
+		fs.mkdirSync(JOBS_DIR, { recursive: true });
+		return fs
+			.readdirSync(JOBS_DIR)
+			.filter((f) => f.endsWith(".json"))
+			.map((f) => getJob(f.slice(0, -5)))
+			.filter((j): j is JobRecord => j !== null)
+			.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+			.slice(0, Math.max(0, limit));
+	} catch {
+		return [];
+	}
+}
+
 /** The job fulfilling a given tool part, if any (spawn-hook dedup). */
 function findJobByToolCallId(chatId: string, toolCallId: string): JobRecord | null {
 	return listJobs(chatId).find((j) => j.toolCallId === toolCallId) ?? null;

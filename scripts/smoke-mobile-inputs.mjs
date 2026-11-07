@@ -190,6 +190,12 @@ try {
 	await page.evaluateOnNewDocument(() => {
 		if (window !== window.top) return;
 		localStorage.setItem("lh:sidebar-open", "0");
+		// The drawing canvas is a tablet surface by default (Settings → Writing);
+		// these phone checks exercise its mechanics, so they switch it on.
+		localStorage.setItem("lh:feature:drawing-canvas", "on");
+		// The tablet-width checks below also exercise the equation notebook
+		// (a phone surface by default), so it is switched on too.
+		localStorage.setItem("lh:feature:equation-notebook", "on");
 		// Keep the real graph/worklet/audio. Only emulate Safari's paused state
 		// between runs; a resumed graph must produce actual PCM again.
 		const NativeAudioContext = window.AudioContext;
@@ -1253,10 +1259,13 @@ try {
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0);
 	await page.keyboard.press("Escape");
 	assert.equal(await page.evaluate(() => document.body.style.overflow), "", "Phone modal releases its background lock on desktop");
-	// A fresh desktop open retains the inherited search-focus behavior.
+	// A fresh desktop open retains the inherited search-focus behavior. Touch
+	// tablets keep Model / thinking / usage behind the header's Model button.
+	if (await page.$eval('[data-testid="session-controls"]', e => e.checkVisibility()).catch(() => false)) await page.click('[data-testid="session-controls"]');
 	await page.click('[data-testid="stats-model"]');
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
 	await page.keyboard.press("Escape");
+	if (await page.$eval('[data-testid="session-controls"]', e => e.getAttribute("aria-expanded") === "true" && e.checkVisibility()).catch(() => false)) await page.click('[data-testid="session-controls"]');
 	console.log("PASS: linear fixed-edge 400ms opening/closing and blur with no separate line phase, normal-sized text, selection exits, quick-close continuity, repeated-close guards, viewport interruption/reduced motion, safe taps, stationary lesson, keyboard/query/results, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
 	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
@@ -1333,8 +1342,10 @@ try {
 	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-attempt-review"]'));
 	await page.goto(`${origin}/chat/mobile_selection`, { waitUntil: "networkidle2" });
 	await page.click('[data-testid="reading-thinking-field"] [data-testid="teach-check-reveal"]');
-	await page.waitForSelector('[data-testid="thinking-field"] [data-file-path-input]', { visible: true });
+	// Phones bring in confidence and "Your thinking" once an answer is picked.
+	await page.waitForSelector('[role="radio"]', { visible: true });
 	await page.locator('[role="radio"]').filter(button => button.textContent.includes("Halve the area")).click();
+	await page.waitForSelector('[data-testid="thinking-field"] [data-file-path-input]', { visible: true });
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "The force stays the same.");
 	assert.ok(await page.$('[data-testid="confidence-slider"]'), "Selection questions retain confidence");
 	await page.click('.lh-phone-plan');
@@ -1451,8 +1462,10 @@ try {
 	await page.setViewport({ width: 1100, height: 800, isMobile: true, hasTouch: true });
 	await page.waitForFunction(() => getComputedStyle(document.body).position !== "fixed");
 	assert.equal(await page.$eval(input, e => e.textContent), longDraft, "Wide-layout transition releases the focus lock without losing the draft");
-	assert.ok(await page.$eval('[data-testid="dictation-toggle"]', e => e.checkVisibility()), "Wide layouts retain their original dictation strip");
-	assert.equal(await page.$eval(mic, e => e.checkVisibility()), false, "Compact microphone stays phone-only");
+	// Touch tablets (whole-app redesign): dictation lives in the field, and the
+	// strip with model / thinking / usage is tucked behind the Model button.
+	assert.equal(await page.$eval('[data-testid="dictation-toggle"]', e => e.checkVisibility()), false, "Touch tablets tuck the dictation strip away");
+	assert.ok(await page.$eval(mic, e => e.checkVisibility()), "Touch tablets keep the microphone in the field");
 	await checkHandwritingMenus({ page, origin });
 	}
 	assert.deepEqual(errors, [], "No browser runtime errors");

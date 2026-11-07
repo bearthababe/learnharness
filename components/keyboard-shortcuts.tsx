@@ -4,9 +4,9 @@
  * Keyboard shortcuts (shortcut wave A, 2026-09-17) — the single document-level
  * keydown listener. Owns the pieces that belong to no surface in particular:
  *
- * - Tab is DEAD: browser tab-focus navigation is abandoned by owner decision
- *   (2026-09-17). Tab is suppressed everywhere (preventDefault, no-op) and
- *   Shift+Tab cycles the thinking level instead.
+ * - Tab / Shift+Tab are the browser's focus navigation (whole-app redesign;
+ *   the 2026-09-17 "Tab is dead" rule trapped keyboard users in fields).
+ *   The thinking-level cycle is Alt+T.
  * - Esc is a layered dismiss: topmost popover first (popovers stopPropagation
  *   on their own Esc — usePopoverDismiss + ModelControl), then dictation
  *   CANCEL (discard the transcript, owner 2026-09-17 round 3), then abort of
@@ -36,6 +36,7 @@ import {
 	KEYBOARD_ACTIONS,
 } from "@/src/core";
 import { isDictationActive } from "@/components/dictation";
+import { clearTabWrap, noteTabFromElement, tabbedOffEnd } from "@/components/tab-wrap";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 
 // Re-exported for the contract pin (tests/keyboard-toggle-sidebar.test.ts):
@@ -57,22 +58,42 @@ export function KeyboardShortcuts() {
 	}>({ router, setCheatOpen, openSettings });
 	handlersRef.current = { router, setCheatOpen, openSettings };
 
+	// Keyboard modality (whole-app redesign): focus rings appear only after a
+	// Tab walk starts, and disappear at the next pointer press — pointer focus
+	// never lights an element (globals.css html[data-lh-keyboard]).
+	useEffect(() => {
+		const root = document.documentElement;
+		const onKey = (e: KeyboardEvent) => { if (e.key === "Tab") root.dataset.lhKeyboard = ""; };
+		const onPointer = () => { delete root.dataset.lhKeyboard; clearTabWrap(); };
+		window.addEventListener("keydown", onKey, true);
+		window.addEventListener("pointerdown", onPointer, true);
+		return () => {
+			window.removeEventListener("keydown", onKey, true);
+			window.removeEventListener("pointerdown", onPointer, true);
+		};
+	}, []);
+
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
 			// ── Tab is dead (owner, 2026-09-17): preventDefault even when
 			// nothing is bound to it — browser tab-focus is abandoned, and
 			// the default action runs after dispatch, so suppressing it here
 			// works from any focus.
+			// Tab / Shift+Tab are the browser's own focus navigation (whole-app
+			// redesign): no field traps focus; the thinking cycle is Alt+T.
+			// One convenience stays: Tab from NOWHERE (nothing focused) enters
+			// the active surface's main field; every later Tab is native.
 			if (e.key === "Tab") {
-				e.preventDefault();
-				if (e.shiftKey) window.dispatchEvent(new CustomEvent("lh:kbd-cycle-thinking"));
-				// Plain Tab cycles the active surface's text fields (owner,
-				// keyboard round 2026-10-06) — forward-only, wrapping; each
-				// composer-bearing page answers with its own chain. The quiz
-				// dock's rows↔thinking claim stops propagation at document
-				// level, so a claimed Tab never reaches this dispatch.
-				else if (!e.metaKey && !e.ctrlKey && !e.altKey)
+				const active = document.activeElement;
+				const nowhere = !active || active === document.body;
+				if (!nowhere) { noteTabFromElement(); return; }
+				// Walked off the end of the page: the browser continues from
+				// the start instead of jumping back into the main field.
+				if (tabbedOffEnd()) { clearTabWrap(); return; }
+				if (!e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
 					window.dispatchEvent(new CustomEvent("lh:kbd-cycle-fields"));
+					if (document.activeElement !== active) e.preventDefault();
+				}
 				return;
 			}
 
@@ -178,7 +199,7 @@ function CheatSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
 					if (actions.length === 0) return null;
 					return (
 						<div key={scope} className="mb-4">
-							<div className="mb-1.5 text-xs uppercase tracking-widest text-muted-foreground/70">
+							<div className="mb-1.5 text-[12.5px] font-semibold text-muted-foreground">
 								{scopeLabels[scope]}
 							</div>
 							<div className="flex flex-col gap-1">

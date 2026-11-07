@@ -43,7 +43,7 @@ try {
 	const errors = [], turns = [];
 	page.on("pageerror", error => { errors.push(error.message); console.error("Browser error:", error.message); });
 	page.on("request", request => { if (new URL(request.url()).pathname === "/api/chat" && request.method() === "POST") turns.push(request.url()); });
-	await page.evaluateOnNewDocument(() => { try { localStorage.setItem("lh:sidebar-open", "0"); } catch { /* sandboxed generated-artifact frames have no storage */ } });
+	await page.evaluateOnNewDocument(() => { try { localStorage.setItem("lh:sidebar-open", "0"); localStorage.setItem("lh:feature:drawing-canvas", "on"); } catch { /* sandboxed generated-artifact frames have no storage */ } });
 	let failWrites = false, failReads = false, holdNextWrite = false, heldWrite, holdNextRead = false, heldRead, failDelete = false;
 	const handwritingWrites = [];
 	const workingUrl = url => new URL(url).pathname.endsWith("/handwriting/pages/page_initial");
@@ -296,12 +296,12 @@ try {
 	const dividerShare = await page.$eval('[data-testid="notebook-split-divider"]', e => e.getAttribute("aria-valuenow"));
 	await page.$eval('[data-testid="notebook-paper-scroll"]', e => { e.scrollTop = 180; });
 	const beforeExpand = await page.$eval('[data-testid="notebook-paper-scroll"]', e => e.scrollTop);
-	await action("Expand notebook");
+	await action("Full page"); // accessible names match the visible labels (round 9)
 	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]').dataset.expanded === "true");
 	await action("Back to question");
 	await page.waitForFunction(expected => Math.abs(document.querySelector('[data-testid="notebook-paper-scroll"]').scrollTop - expected) <= 1, {}, beforeExpand);
 	assert.equal(await page.$eval(field, e => e.textContent), "My unsent explanation");
-	await page.click('[aria-label="Close notebook"]');
+	await page.click('[aria-label="Close page"]');
 	await page.click('[data-testid="open-notebook"]');
 	assert.equal(await bitmap(), pendingInk);
 	assert.equal(await page.$eval('[data-testid="notebook-split-divider"]', e => e.getAttribute("aria-valuenow")), dividerShare, "Closing/reopening retains the during-use split choice");
@@ -336,7 +336,7 @@ try {
 	}
 	await page.goto(`${origin}/chat/handwriting_teach`, { waitUntil: "networkidle2" }); await ready();
 	assert.equal(await bitmap(), pendingInk);
-	await page.click('[aria-label="Notebook options"]'); await page.click('[data-testid="notebook-tools-toggle"]');
+	await page.click('[aria-label="More page actions"]'); await page.click('[data-testid="notebook-tools-toggle"]');
 	await page.waitForSelector('#handwriting-tools');
 	assert.ok(await page.$eval('#handwriting-tools', e => e.textContent.includes("explanation saved at Attach")));
 	await Promise.all([page.waitForNavigation({ waitUntil: "networkidle2" }), page.click('#handwriting-tools button.underline')]); await ready();

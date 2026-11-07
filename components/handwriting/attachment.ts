@@ -2,6 +2,8 @@ import { canonicalHandwriting, handwritingFingerprints, notebookSourceSchema, ty
 import { CaptureRetiredError, type CaptureRecord, type DurableDraft, type TransferDevice } from "./transfer-device.ts";
 
 export type AttachmentReview = { pending: SharedWriting[]; pageAttachments: PageAttachments };
+/** Window event: { chatId, writingId } of a page attached to the next answer. */
+export const WRITING_ATTACHED_EVENT = "lh:writing-attached";
 type Dependencies = { device: TransferDevice; fetch: typeof fetch; encode: (raster: NonNullable<CaptureRecord["raster"]>) => Promise<Blob>; refresh: () => Promise<AttachmentReview>; reveal: (pageId: string) => void; changed: () => void };
 export type AttachPreparation = { pageId: string; head: PageAttachments[string] | undefined; valid: () => boolean; finish: () => Promise<boolean>; freeze: () => { source: NotebookSource; draft: DurableDraft; raster: NonNullable<CaptureRecord["raster"]> } };
 const LIMIT = 25 * 1024 * 1024;
@@ -69,6 +71,11 @@ export class HandwritingAttachment {
 			if (!this.disposed) this.deps.changed();
 		};
 	}
+	/** A page attached (again) to the next answer: a page the learner left
+	 *  out of the answer comes back in (see useSharedWriting). */
+	private announceAttached(writingId: string) {
+		if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(WRITING_ATTACHED_EVENT, { detail: { chatId: this.chatId, writingId } }));
+	}
 	private update(pageId: string, kind: NoticeKind, limit?: SizeLimit) { this.notices.set(pageId, { kind, limit }); if (!this.disposed) this.deps.changed(); }
 	private async validateSource(capture: CaptureRecord) {
 		const source = notebookSourceSchema.parse(JSON.parse(capture.sourceJson)), fingerprints = await handwritingFingerprints(source);
@@ -77,7 +84,9 @@ export class HandwritingAttachment {
 	private async showReview(capture: Pick<CaptureRecord, "pageId" | "writingId" | "expectedPageRevision">) {
 		try {
 			const review = await this.deps.refresh(), head = review.pageAttachments[capture.pageId];
-			this.update(capture.pageId, head?.writingId !== capture.writingId ? "superseded" : review.pending.some(item => item.id === capture.writingId) ? capture.expectedPageRevision > 0 ? "updated" : "attached" : "sent");
+			const pending = head?.writingId === capture.writingId && review.pending.some(item => item.id === capture.writingId);
+			this.update(capture.pageId, head?.writingId !== capture.writingId ? "superseded" : pending ? capture.expectedPageRevision > 0 ? "updated" : "attached" : "sent");
+			if (pending) this.announceAttached(capture.writingId);
 			if (!this.disposed) this.deps.reveal(capture.pageId);
 		} catch { this.update(capture.pageId, "refresh_failed"); }
 	}
@@ -155,6 +164,7 @@ export class HandwritingAttachment {
 			if (preparation.head?.contentFingerprint === fingerprints.contentFingerprint) {
 				await this.deps.device.saveDraft(this.chatId, this.generation, frozen.draft);
 				this.update(pageId, "unchanged");
+				if (preparation.head?.writingId) this.announceAttached(preparation.head.writingId);
 				if (!this.disposed && preparation.valid()) this.deps.reveal(pageId);
 				return;
 			}

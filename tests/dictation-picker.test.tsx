@@ -110,7 +110,7 @@ test("an initial load failure is visible and opening the menu again can retry", 
 test("the real picker searches by language, chooses with Arrow/Enter, and restores focus", async () => {
 	const f = await fixture();
 	assert.match(trigger().textContent!, /English/);
-	for (const token of ["h-7", "rounded-sm", "border-border", "bg-background", "font-ui", "text-xs"]) {
+	for (const token of ["h-8", "rounded-lg", "border-border", "bg-background", "font-ui", "text-[13px]"]) {
 		assert.ok(trigger().className.split(" ").includes(token), `shared settings trigger: ${token}`);
 	}
 	await click(trigger());

@@ -55,10 +55,15 @@ export function useHandwritingSession(chatId: string) {
 	return { open, mounted, expanded, ref, show, register, actions, toggleExpanded: () => setExpanded(value => !value) };
 }
 
+/** The lesson's default share beside the drawing canvas, in percent. */
+const CANVAS_CONTEXT_SHARE = 46;
+
 /** Accepted adjustable context/notebook split; phones retain Write/Chat. */
 export function HandwritingSplit({ hidden, canResize }: { hidden: boolean; canResize: () => boolean }) {
-	const [share, setShare] = useState(50), [wide, setWide] = useState(false), [max, setMax] = useState(65);
-	const divider = useRef<HTMLDivElement>(null), value = useRef(50), drag = useRef<number | null>(null);
+	// The page gets a little more than half (whole-app redesign): the
+	// question stays in view above (portrait) or beside it (landscape).
+	const [share, setShare] = useState(CANVAS_CONTEXT_SHARE), [wide, setWide] = useState(false), [max, setMax] = useState(65);
+	const divider = useRef<HTMLDivElement>(null), value = useRef(CANVAS_CONTEXT_SHARE), drag = useRef<number | null>(null);
 	function resize(element: HTMLElement, next: number) {
 		const layout = element.parentElement!, wide = getComputedStyle(layout).flexDirection === "row";
 		const extent = wide ? layout.clientWidth : layout.clientHeight;
@@ -80,5 +85,5 @@ export function HandwritingSplit({ hidden, canResize }: { hidden: boolean; canRe
 	return <div ref={divider} hidden={hidden} className="hw-splitDivider" role="separator" tabIndex={0} title="Drag to resize context and notebook; arrow keys also work" aria-label="Resize question and notebook" aria-orientation={wide ? "vertical" : "horizontal"} aria-valuemin={30} aria-valuemax={max} aria-valuenow={share} aria-valuetext={`${share}% context`} data-testid="notebook-split-divider"
 		onPointerDown={event => { if (event.button !== 0 || !canResize()) return; event.preventDefault(); if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); drag.current = event.pointerId; event.currentTarget.setPointerCapture(event.pointerId); }}
 		onPointerMove={move} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }} onLostPointerCapture={() => { drag.current = null; }}
-		onKeyDown={event => { if (!canResize() || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home"].includes(event.key)) return; event.preventDefault(); event.stopPropagation(); resize(event.currentTarget, event.key === "Home" ? 50 : share + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -5 : 5)); }}><span aria-hidden="true" /></div>;
+		onKeyDown={event => { if (!canResize() || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home"].includes(event.key)) return; event.preventDefault(); event.stopPropagation(); resize(event.currentTarget, event.key === "Home" ? CANVAS_CONTEXT_SHARE : share + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -5 : 5)); }}><span aria-hidden="true" /></div>;
 }

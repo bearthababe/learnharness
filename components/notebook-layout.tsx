@@ -17,13 +17,18 @@ export function useNotebookLayout(open: boolean) {
 	return { mounted: mounted || open, expanded: open && expanded, expand: () => setExpanded(true), back: () => setExpanded(false) };
 }
 
+/** The lesson's share of a stacked (portrait/phone) split, in percent. */
+export const STACKED_SHARE = 56;
+
 /** Same divider protocol as the iPad shell; equation panes use percentage bounds
  * rather than handwriting-tool pixel minima. Each orientation retains its share. */
 export function NotebookSplit({ hidden }: { hidden: boolean }) {
 	const divider = useRef<HTMLDivElement>(null);
-	const shares = useRef({ row: 60, column: 50 });
+	// Stacked (phones): the lesson keeps a little more than half — the
+	// working card still shows several lines (whole-app redesign).
+	const shares = useRef({ row: 60, column: STACKED_SHARE });
 	const drag = useRef<number | null>(null);
-	const [state, setState] = useState({ wide: false, share: 50 });
+	const [state, setState] = useState({ wide: false, share: STACKED_SHARE });
 	function resize(element: HTMLElement, next?: number) {
 		const layout = element.parentElement!;
 		const wide = getComputedStyle(layout).flexDirection === "row";
@@ -58,7 +63,7 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 		onKeyDown={event => {
 			if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home"].includes(event.key)) return;
 			event.preventDefault(); event.stopPropagation();
-			resize(event.currentTarget, event.key === "Home" ? state.wide ? 60 : 50 : state.share + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -5 : 5));
+			resize(event.currentTarget, event.key === "Home" ? state.wide ? 60 : STACKED_SHARE : state.share + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -5 : 5));
 		}}><span aria-hidden="true" /></div>;
 }
 
@@ -78,6 +83,9 @@ export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, chi
 		const prior = previous.current.expanded ? "full" : "split";
 		const position = positions.current[mode] ?? positions.current[prior];
 		if (position) { scroll.scrollTop = position.top; scroll.scrollLeft = position.left; }
+		// First open: start at the newest line (round-10 review: it sat
+		// below the fold until you scrolled).
+		else scroll.scrollTop = scroll.scrollHeight;
 		previous.current = { hidden, expanded };
 		const save = () => { if (!element.hidden) positions.current[mode] = { top: scroll.scrollTop, left: scroll.scrollLeft }; };
 		save();
@@ -107,9 +115,9 @@ export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, chi
 		if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 		action();
 	};
-	return <div ref={slot} hidden={hidden} className="notebook-slot" style={{ position: expanded ? "absolute" : "relative", inset: expanded ? 0 : undefined, flex: "1 1 0px", minWidth: 0, minHeight: 0, boxSizing: "border-box", padding: 16, overflow: "hidden" }}>
+	return <div ref={slot} hidden={hidden} className="notebook-slot" style={{ position: expanded ? "absolute" : "relative", inset: expanded ? 0 : undefined, flex: "1 1 0px", minWidth: 0, minHeight: 0, boxSizing: "border-box", padding: "var(--notebook-frame-inset, 16px)", overflow: "hidden" }}>
 		<aside aria-label="Equation Notebook" className="notebook-frame rounded-2xl border bg-card shadow-lg"
-			style={{ position: "absolute", inset: 16, margin: 0, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
+			style={{ position: "absolute", inset: "var(--notebook-frame-inset, 16px)", margin: 0, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 			{children({ expanded, toggleExpanded: () => changeView(expanded ? onBack : onExpand), close: () => changeView(onClose) })}
 		</aside>
 	</div>;

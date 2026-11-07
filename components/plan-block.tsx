@@ -1006,20 +1006,20 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 				)}
 			</div>
 	);
-	if (phone) return <PhonePanel title="The plan" testid="plan-popup" onClose={onClose}>
-		<p className="mb-2 shrink-0 text-xs text-muted-foreground">live — statuses derive from your check outcomes</p>
+	if (phone) return <PhonePanel title="Lesson plan" testid="plan-popup" onClose={onClose}>
+		<p className="mb-3 shrink-0 text-[13.5px] text-muted-foreground">Live — each step updates as you answer its checks.</p>
 		{graph}
 	</PhonePanel>;
 	return (
-		<div data-testid="plan-popup" className="absolute inset-0 z-40 flex flex-col bg-background/80 p-4 backdrop-blur-sm"
+		<div data-testid="plan-popup" className="absolute inset-0 z-40 flex flex-col bg-background/80 p-5 backdrop-blur-sm"
 			role="dialog" aria-modal="true" aria-label="The full plan"
 			onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-			<div className="mb-2 flex items-center gap-2">
-				<span className="text-sm font-medium">The plan</span>
-				<span className="text-xs text-muted-foreground">live — statuses derive from your check outcomes</span>
+			<div className="mb-3 flex items-baseline gap-3">
+				<span className="text-[17px] font-semibold tracking-tight">Lesson plan</span>
+				<span className="text-[13px] text-muted-foreground">Live — each step updates as you answer its checks.</span>
 				<Hint label="Close" binding="escape" side="left">
 					<button type="button" onClick={onClose} aria-label="Close" data-testid="plan-popup-close"
-						className="ml-auto rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><XIcon className="size-4" /></button>
+						className="ml-auto self-center rounded-full p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><XIcon className="size-4" /></button>
 				</Hint>
 			</div>
 			{graph}

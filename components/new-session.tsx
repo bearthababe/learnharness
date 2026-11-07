@@ -10,8 +10,11 @@ import { SidebarToggle } from "@/components/sidebar";
 import { SetupDialog } from "@/components/setup-dialog";
 import { useModelSetup, selectedModelUnavailable, openModelPicker, ZeroKeysPill } from "@/components/setup-cta";
 import { StatsBar } from "@/components/stats-bar";
+import { TabletModelButton, useTabletControls, useTabletLayout } from "@/components/tablet-controls";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { startPlaceholder } from "@/components/composer-actions";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
-import { ComposerActions, NodePickerControl } from "@/components/composer-actions";
+import { ComposerActions, ModeSwitch, NodePickerControl } from "@/components/composer-actions";
 import { OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { SessionStarter } from "@/components/start-session";
 import type { ChatSettings, GraphSnapshot } from "@/src/core";
@@ -80,7 +83,11 @@ export function DraftShell({
 	onOpenPicker,
 	onClearPicks,
 	overlay,
+	onModeChange,
 }: {
+	/** Switch the draft between teaching, practice and drill (the same
+	 *  segmented control as home). Absent = no switch. */
+	onModeChange?: (mode: "teach" | "practice" | "drill") => void;
 	busy: boolean;
 	text: string;
 	onChange: (v: string) => void;
@@ -125,6 +132,11 @@ export function DraftShell({
 	// buffer — Enter must reach the finish-first send, not be gated out by
 	// an empty textarea. Nothing said → the send no-ops.
 	const canSend = text.trim().length > 0 || dictation.active;
+	// Tablets: model / thinking behind the same Model button as in a lesson.
+	const tablet = useTabletLayout();
+	const [controlsOpen, setControlsOpen] = useTabletControls();
+	// Phones: the mic shares the field, so the prompt is shorter (never "…").
+	const phone = usePhoneLayout();
 	/* FINISH DICTATION FIRST (owner, 2026-10-01): stop the run, let the
 	 * last finals land through onChange, THEN call the parent's send —
 	 * which reads its REF mirror, so the post-await timing of React's
@@ -176,20 +188,31 @@ export function DraftShell({
 											? "Pick nodes from your knowledge graph, describe what you want to practice, or bring your own problem."
 											: "The teacher will open by probing what you already know."
 									}
-								/>
+								>{onModeChange ? <>
+									<div className="max-w-md space-y-2">
+										<h3 className="font-title text-[26px] leading-tight tracking-tight text-foreground">{mode === "drill" ? "New drill" : mode === "practice" ? "New practice session" : "New session"}</h3>
+										<p className="text-[15px] leading-relaxed text-muted-foreground">{mode === "drill" ? "Describe the skill or difficulty you want to work on." : mode === "practice"
+											? "Pick nodes from your knowledge graph, describe what you want to practice, or bring your own problem."
+											: "The teacher will open by probing what you already know."}</p>
+									</div>
+									{/* Tablets carry the switch in the composer's row (as on home). */}
+									{!tablet && <div className="pointer-events-auto mt-2"><ModeSwitch mode={mode} onChange={onModeChange} testid="draft-mode-switch" itemTestid="draft-mode" /></div>}
+								</> : undefined}</ConversationEmptyState>
 							</ConversationContent>
 						</Conversation>
 						<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
 						<div className="bg-background pb-4">
-							<div className={DOCK}>
+							<div className={`${DOCK} relative`} data-tablet-controls={tablet ? (controlsOpen ? "open" : "closed") : undefined}>
 								<ComposerActions
 									picker={(picks.length > 0 || mode !== "teach") && (
 										<NodePickerControl count={picks.length} onOpen={onOpenPicker} onClear={onClearPicks} />
 									)}
 									setup={setupCta}
+									leading={tablet && onModeChange ? <ModeSwitch mode={mode} onChange={onModeChange} testid="draft-mode-switch" itemTestid="draft-mode" /> : undefined}
+									trailing={tablet && <TabletModelButton open={controlsOpen} onToggle={() => setControlsOpen((value) => !value)} />}
 								/>
 								{startError && <p role="alert" className="pointer-events-auto mb-2 text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
-								<div data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-lg">
+								<div data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-[var(--lh-shadow)]">
 									<Composer
 										busy={busy}
 										value={text}
@@ -200,16 +223,18 @@ export function DraftShell({
 										inputRef={composerInputRef}
 										autoFocus
 										onEscape={dictation.active ? dictation.cancel : undefined}
+										dictation={dictation}
 										// The opening question, same as the graph view's new-session
 										// input (owner refinement round, 2026-09-24) — no lesson has
 										// started yet, so the composer must not read like one is in
 										// flight.
-										placeholder={mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
+										placeholder={startPlaceholder(mode, phone)}
 									/>
 								</div>
 								<StatsBar
 									dictationSlot={<DictationBar dictation={dictation} />}
 									turns={[]}
+									compactInput
 								/>
 							</div>
 						</div>
@@ -229,6 +254,9 @@ export function DraftShell({
 	);
 }
 
+/** The new-session draft's unsent text, kept on this device between visits. */
+const DRAFT_KEY = "lh:new-session-draft";
+
 export function NewSession({ initialConfigured, mode = "teach" }: { initialConfigured: boolean; mode?: "teach" | "practice" | "drill" }) {
 	const router = useRouter();
 	const [text, setText] = useState("");
@@ -240,7 +268,15 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 	const applyText = (v: string) => {
 		textRef.current = v;
 		setText(v);
+		// The unsent draft survives leaving this page on this device.
+		try { if (v) localStorage.setItem(DRAFT_KEY, v); else localStorage.removeItem(DRAFT_KEY); } catch { /* storage blocked */ }
 	};
+	useEffect(() => {
+		try {
+			const saved = localStorage.getItem(DRAFT_KEY);
+			if (saved && !textRef.current) { textRef.current = saved; setText(saved); }
+		} catch { /* storage blocked */ }
+	}, []);
 	const [busy, setBusy] = useState(false);
 	const startingRef = useRef(false);
 	const starterRef = useRef(new SessionStarter());
@@ -308,7 +344,10 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 		void startDraftSession(draft, fetch, mode === "teach" ? undefined : mode, mode !== "teach" ? picksRef.current : undefined,
 			starterRef.current, JSON.stringify(catalog?.slots.strong))
 			.then((target) => {
-				if (target) router.push(target);
+				if (target) {
+					try { localStorage.removeItem(DRAFT_KEY); } catch { /* storage blocked */ }
+					router.push(target);
+				}
 				else { startingRef.current = false; setBusy(false); }
 			})
 			.catch(() => {
@@ -330,6 +369,7 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 				picks={picks}
 				onOpenPicker={openPicker}
 				onClearPicks={() => applyPicks([])}
+				onModeChange={(next) => { if (next !== mode) router.replace(next === "teach" ? "/chat/new" : `/chat/new?mode=${next}`); }}
 				overlay={
 					// THE PICKER (owner round 10b): hosted INSIDE the content
 					// column — absolute inset-0 resolves to the column's relative
@@ -364,7 +404,7 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 								type="button"
 								data-testid="setup-cta"
 								onClick={() => setSetupOpen(true)}
-								className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
+								className="h-8 cursor-pointer rounded-full bg-primary px-3.5 font-ui text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
 							>
 								Set up your models
 							</button>

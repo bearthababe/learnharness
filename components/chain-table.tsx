@@ -315,12 +315,12 @@ export function ChainTableBody({
 			    close only. Search + close carve out with lh-no-drag (the mask
 			    law: later in the DOM). */}
 			<TopBar>
-				<span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+				<span className="min-w-0 flex-1 truncate text-[13px] text-muted-foreground">
 					{chains.length} {chains.length === 1 ? "chain" : "chains"} · {nodes.length} {nodes.length === 1 ? "node" : "nodes"}
 				</span>
 				{onOrganizationChange && <button type="button" aria-label="Add folder" data-testid="add-source-folder"
-					onClick={() => setCreatingFolder(true)} className="lh-no-drag rounded-lg p-2 text-muted-foreground hover:bg-accent"><FolderPlusIcon className="size-4" /></button>}
-				<div className="relative shrink-0">
+					onClick={() => setCreatingFolder(true)} className="lh-no-drag flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent max-md:size-11"><FolderPlusIcon className="size-4" /></button>}
+				<div className="relative min-w-0 shrink">
 					<SearchIcon className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
 					<input
 						ref={searchRef}
@@ -330,7 +330,7 @@ export function ChainTableBody({
 						placeholder="Search nodes…"
 						aria-label="Search nodes"
 						spellCheck={false}
-						className="lh-no-drag h-8 w-56 rounded-lg border bg-background pl-8 pr-3 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
+						className="lh-no-drag h-9 w-60 max-w-full rounded-full border bg-card pl-8 pr-3 text-[13.5px] outline-none placeholder:text-muted-foreground focus:border-muted-foreground/60 max-md:h-11"
 					/>
 				</div>
 			<button
@@ -338,7 +338,7 @@ export function ChainTableBody({
 					data-testid="chain-table-close"
 					onClick={onClose}
 					aria-label="Close chains"
-					className="lh-no-drag flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-card/80 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					className="lh-no-drag flex size-9 shrink-0 items-center justify-center rounded-full bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-md:size-11"
 				>
 					<XIcon className="size-4" />
 				</button>
@@ -353,7 +353,7 @@ export function ChainTableBody({
 			<div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 				{/* The TOP rule (owner round 5: the table is framed — a line under
 			    the header, a line under the last group, lines between groups). */}
-				<div className="sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/80 px-3 py-1.5 text-[11px] uppercase tracking-widest text-muted-foreground/70 backdrop-blur">
+				<div className="sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/80 px-3 py-1.5 text-[12px] font-semibold text-muted-foreground backdrop-blur">
 					<button
 						type="button"
 						data-testid="sort-name"
@@ -377,7 +377,7 @@ export function ChainTableBody({
 						data-testid="sort-created"
 						onClick={() => onSort("created")}
 						aria-sort={sort.col === "created" ? (sort.dir === 1 ? "ascending" : "descending") : "none"}
-						className="flex w-20 shrink-0 items-center justify-end gap-1 text-right transition-colors hover:text-foreground"
+						className="flex w-20 shrink-0 items-center justify-end max-md:hidden gap-1 text-right transition-colors hover:text-foreground"
 					>
 						Created {dirIcon("created")}
 					</button>
@@ -445,11 +445,11 @@ export function ChainTableBody({
 								{onOrganizationChange && group.birth && group.kind !== null
 									? <EditableSourceName name={group.label ?? ""} muted={empty} onSave={(name) => onOrganizationChange({ action: "rename-source", id: group.birth!, name })} />
 									: <span className={`min-w-0 flex-1 truncate text-sm font-medium${empty ? " text-muted-foreground/60" : ""}`}>{group.label ?? <span className="text-muted-foreground/60">unlabeled</span>}</span>}
-								{group.kind === "notes" && <span className="text-[11px] uppercase tracking-widest text-muted-foreground/60">notes</span>}
+								{group.kind === "notes" && <span className="text-[12.5px] font-medium text-muted-foreground">notes</span>}
 								<span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
 									{group.nodeIds.length}
 								</span>
-								<span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+								<span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground max-md:hidden">
 									{group.newestCreatedAt.slice(0, 10)}
 								</span>
 							</SourceDragRow>
@@ -530,7 +530,7 @@ export function ChainTableBody({
 												<span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
 													{memberIds.length}
 												</span>
-												<span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+												<span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground max-md:hidden">
 													{dateOf(chain.conclusion)}
 												</span>
 											</div>
@@ -561,7 +561,7 @@ export function ChainTableBody({
 																{node.statement}
 															</span>
 															<span className="w-14 shrink-0" />
-															<span className="w-20 shrink-0" />
+															<span className="w-20 shrink-0 max-md:hidden" />
 														</div>
 													);
 												})}
@@ -642,7 +642,7 @@ function Expander({ open, onClick, testid, label }: { open: boolean; onClick: ()
 			onClick={onClick}
 			aria-label={label}
 			aria-expanded={open}
-			className="flex h-5 w-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+			className="lh-touch-hit flex h-5 w-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
 		>
 			<ChevronRightIcon className={`size-3.5 transition-transform ${open ? "rotate-90" : ""}`} />
 		</button>
@@ -677,7 +677,7 @@ function RowCheckbox({
 			data-testid={testid}
 			aria-label={label}
 			onChange={(e) => onToggle(e.target.checked)}
-			className="size-3.5 shrink-0 accent-primary"
+			className="lh-chain-check size-3.5 shrink-0 accent-(--lh-accent)"
 		/>
 	);
 }

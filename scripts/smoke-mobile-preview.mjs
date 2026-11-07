@@ -82,8 +82,8 @@ async function checkLaunch(page, destination, manifestPath) {
 }
 
 async function checkReload(page, destination) {
-	const input = '[data-file-path-input][data-placeholder="What do you want to learn?"]';
-	const draft = "Preview verification: unsent draft must reset on reload.";
+	const input = '[data-attachment-composer] [data-file-path-input]'; // the start composer (its prompt is shorter on phones)
+	const draft = "Preview verification: unsent draft survives the reload.";
 	await page.locator(input).fill(draft);
 	assert.equal(await page.$eval(input, element => element.textContent), draft);
 	await page.evaluate(() => { window.__lhPreviewBeforeReload = true; });
@@ -99,8 +99,11 @@ async function checkReload(page, destination) {
 	await page.waitForSelector(input);
 	assert.equal(await page.evaluate(() => window.__lhPreviewBeforeReload), undefined, "Reload must replace the document");
 	assert.equal(await page.evaluate(() => performance.getEntriesByType("navigation")[0]?.type), "reload", "The actual Reload preview control must reload");
-	assert.equal(await page.$eval(input, element => element.textContent), "", "Reload must clear the unsent Home draft");
-	console.log("PASS Sessions → Tools → Reload preview: fresh document, same URL, unsent Home draft reset");
+	// Unsent drafts are kept on the device (whole-app redesign), so the
+	// reloaded document restores the Home draft; clear it afterwards.
+	await page.waitForFunction((input, draft) => document.querySelector(input)?.textContent === draft, {}, input, draft);
+	await page.evaluate(() => { try { localStorage.removeItem("lh:home-start-draft"); } catch { /* storage blocked */ } });
+	console.log("PASS Sessions → Tools → Reload preview: fresh document, same URL, unsent Home draft kept");
 }
 
 async function closeBrowser(browser) {

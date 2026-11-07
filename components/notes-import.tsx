@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
-import { WaypointsIcon } from "lucide-react";
+import { FileUpIcon, CheckCircle2Icon, XIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { usePhoneLayout } from "./use-phone-viewport";
 import { createNotesImportQueue, EMPTY_IMPORT_QUEUE, notesPath } from "./notes-import-queue";
@@ -77,7 +77,10 @@ export function useNotesImport(callbacks: { onStart?: () => void; onFinish?: () 
 		}
 	}, [snapshot.completion]);
 	return {
-		errors: snapshot.errors, notices: snapshot.notices, importing: snapshot.importing,
+		errors: snapshot.errors, notices: snapshot.notices, receipts: snapshot.receipts ?? [], importing: snapshot.importing,
+		retryable: snapshot.retryable ?? 0,
+		retry: () => { latest.current.onStart?.(); pageImportQueue.retry(); },
+		dismiss: () => pageImportQueue.dismiss(),
 		onImportFiles: (files: FileList | null) => {
 			if (!files || files.length === 0) return;
 			latest.current.onStart?.();
@@ -100,21 +103,21 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	};
 	const choices = [["Files", filesRef], ["Folder", folderRef]] as const;
 	return (
-		<div className="lh-graph-import relative shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur"
+		<div className="lh-graph-import relative shrink-0 rounded-full border border-border/70 bg-card/90 p-0.5 shadow-lg backdrop-blur"
 			onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
 			onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
 			<input ref={filesRef} type="file" multiple accept=".md,.markdown,.txt,.pdf" className="hidden" onChange={onChange} />
 			<input ref={folderRef} type="file" {...{ webkitdirectory: "" }} className="hidden" onChange={onChange} />
 			<Hint label="Extract files into the graph" side="bottom" disabled={phone}>
 				<button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu" data-testid="import-notes"
-					className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
-					<WaypointsIcon className="size-3" />{importing ? "Extracting…" : "Extract files…"}
+					className="flex h-8 items-center gap-1.5 rounded-full px-3 text-[13.5px] font-medium text-foreground/85 transition-colors hover:bg-accent hover:text-foreground">
+					<FileUpIcon className="size-3.5 text-muted-foreground" />{importing ? "Extracting…" : "Extract files…"}
 				</button>
 			</Hint>
 			{open && (
-				<div role="menu" aria-label="Extract files into the graph" aria-describedby={hintId} className="absolute right-0 top-full z-50 mt-1 w-52 rounded-lg border bg-card p-1 shadow-lg">
-					<div role="none"><p id={hintId} className="px-2 py-1.5 text-xs leading-relaxed text-muted-foreground">For lessons, attach material to a session instead.</p></div>
-					{choices.map(([label, input]) => <button key={label} type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-accent"
+				<div role="menu" aria-label="Extract files into the graph" aria-describedby={hintId} className="absolute right-0 top-full z-50 mt-2 w-60 rounded-2xl border bg-popover p-1.5 shadow-2xl">
+					<div role="none"><p id={hintId} className="px-2.5 pb-1.5 pt-1 text-[12.5px] leading-relaxed text-muted-foreground">Adds your notes to the knowledge graph. For lessons, attach material to a session instead.</p></div>
+					{choices.map(([label, input]) => <button key={label} type="button" role="menuitem" className="block min-h-9 w-full rounded-lg px-2.5 py-1.5 text-left text-[13.5px] hover:bg-accent"
 						onClick={() => { setOpen(false); input.current?.click(); }}>{label}</button>)}
 				</div>
 			)}
@@ -122,8 +125,63 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	);
 }
 
+/** Provider refusals arrive as "file: 401: {json}" — say what happened and
+ *  what to do instead of showing the raw payload. Other messages pass
+ *  through unchanged. Pure; exported for tests. */
+export function readableImportError(error: string): string {
+	// The queue appends the refusal code on its own line ("code — details"):
+	// keep the server's message, replace the internal code with what to do.
+	const coded = /^([^\n]*)\n(models_not_configured|provider_key_missing)\b[^\n]*$/s.exec(error);
+	if (coded) {
+		const [, message, code] = coded;
+		return `${message} — nothing was extracted. ${code === "models_not_configured" ? "Set up your models, then try again." : "Add the provider key in Settings, then try again."}`;
+	}
+	const unsupported = /^(.*?): Unsupported format or unsafe relative path\.$/s.exec(error);
+	if (unsupported) return `${unsupported[1]}: this file can't be imported. Use Markdown (.md), plain text (.txt) or PDF.`;
+	const match = /^(.*?): (\d{3}): (\{.*\})\s*$/s.exec(error);
+	if (!match) return error;
+	const [, file, status] = match;
+	return status === "401" || status === "403"
+		? `${file}: nothing was extracted — the model provider turned the request down. Check your provider key in Settings, then try again. (Error ${status})`
+		: `${file}: nothing was extracted — the model provider didn't respond normally. Try again in a moment. (Error ${status})`;
+}
+
+/** Recovery for failed imports: retry definitely refused files, jump to the
+ *  provider keys, or clear the messages. Rendered beside the plain alerts. */
+export function NotesImportRecovery({ errors, retryable, onRetry, onDismiss, onOpenSettings, onOpenModels }: {
+	errors: readonly string[]; retryable: number; onRetry: () => void; onDismiss: () => void; onOpenSettings?: () => void;
+	/** Opens model setup (the refusal names no models configured). */
+	onOpenModels?: () => void;
+}) {
+	if (errors.length === 0) return null;
+	const modelsProblem = errors.some((error) => /\nmodels_not_configured\b/.test(error));
+	const keyProblem = !modelsProblem && errors.some((error) => /\b(401|403)\b|provider key|api key|authentication|provider_key_missing/i.test(error));
+	const action = "h-8 rounded-full px-3 text-[13px] font-medium transition-colors max-md:h-11 max-md:px-4 max-md:text-[14px]";
+	return (
+		<div data-testid="notes-import-recovery" className="pointer-events-auto flex flex-wrap justify-end gap-1.5">
+			{modelsProblem && onOpenModels && <button type="button" onClick={onOpenModels} className={`${action} bg-primary text-primary-foreground hover:opacity-90`}>Set up models</button>}
+			{keyProblem && onOpenSettings && <button type="button" onClick={onOpenSettings} className={`${action} bg-primary text-primary-foreground hover:opacity-90`}>Open provider settings</button>}
+			{retryable > 0 && <button type="button" onClick={onRetry} className={`${action} bg-card/90 text-foreground backdrop-blur hover:bg-accent`}>Try again</button>}
+			<button type="button" onClick={onDismiss} className={`${action} text-muted-foreground hover:bg-accent hover:text-foreground`}>Dismiss</button>
+		</div>
+	);
+}
+
 export function NotesImportErrors({ errors }: { errors: readonly string[] }) {
-	return <>{errors.map((error, i) => <p key={i} role="alert" className="max-w-full whitespace-pre-wrap break-words text-xs text-red-400">{error}</p>)}</>;
+	return <>{errors.map((error, i) => <p key={i} role="alert" className="max-w-80 whitespace-pre-wrap break-words text-right text-[12.5px] leading-snug text-red-300">{readableImportError(error)}</p>)}</>;
+}
+/** What each finished import added — a receipt the learner can dismiss. */
+export function NotesImportReceipts({ receipts, onDismiss }: { receipts: readonly string[]; onDismiss: () => void }) {
+	if (receipts.length === 0) return null;
+	return (
+		<div data-testid="notes-import-receipts" role="status" className="pointer-events-auto flex max-w-80 items-start gap-2 rounded-2xl border border-border/70 bg-card/95 px-3 py-2 text-[13px] shadow-lg backdrop-blur">
+			<CheckCircle2Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-(--lh-success)" />
+			<div className="min-w-0 flex-1 space-y-0.5">
+				{receipts.map((receipt, i) => <p key={i} className="break-words leading-snug text-foreground/90">{receipt}</p>)}
+			</div>
+			<button type="button" onClick={onDismiss} aria-label="Dismiss import results" className="-my-1 -mr-1.5 flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground max-md:size-10"><XIcon className="size-4" aria-hidden /></button>
+		</div>
+	);
 }
 export function NotesImportNotices({ notices }: { notices: readonly string[] }) {
 	return <>{notices.map((notice, i) => <p key={i} role="status" className="max-w-full whitespace-pre-wrap break-words text-xs text-muted-foreground">{notice}</p>)}</>;

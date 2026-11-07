@@ -34,7 +34,8 @@ test("cache hit rate appears only inside expanded session stats, follows the ses
 	try {
 		await act(async () => render([turn(900)]));
 		const collapsedSummary = summary().textContent;
-		assert.equal(summary().querySelector('.lh-usage-numbers')?.textContent, "42k·—");
+		// Round 10: the readout names its figure ("42k context · —").
+		assert.equal(summary().querySelector('.lh-usage-numbers')?.textContent, "42kcontext·—");
 		assert.equal(cacheRow(), null);
 		assert(!host.textContent?.includes("Cache hit rate"), "no new chip in the collapsed bar");
 

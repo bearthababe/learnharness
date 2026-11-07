@@ -1,7 +1,7 @@
 /* Presentation counterpart of handwriting/notebook.css at 329677b. Keep these
  * shell classes independent of equation content for later shared extraction. */
 .session-workspace { container: equation-notebook / inline-size; }
-.session-panes { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; --notebook-context-share: var(--notebook-share-column, 50%); }
+.session-panes { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; --notebook-context-share: var(--notebook-share-column, 56%); }
 .session-tutor { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .session-panes[data-notebook-open="true"] > .session-tutor { flex: 0 0 calc(var(--notebook-context-share) - 14px); }
 .notebook-slot { display: flex; flex-direction: column; }
@@ -21,7 +21,7 @@
 .notebook-instruction-form { flex: none; max-height: calc(100% - 52px); padding: 8px; overflow-y: auto; overscroll-behavior: contain; }
 .notebook-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px; }
 .notebook-input-row .lh-compact-field { display: flex; position: relative; min-width: 0; min-height: 54px; border: 1px solid var(--border); border-radius: 12px; background: var(--background); }
-.notebook-input-row .lh-compact-field:focus-within { border-color: var(--primary); }
+.notebook-input-row .lh-compact-field:focus-within { border-color: color-mix(in oklab, var(--foreground) 34%, var(--border)); }
 .notebook-input-row textarea { min-width: 0; min-height: 52px; max-height: min(8rem, 20dvh); padding: 12px 8px; font-size: var(--text-lg); line-height: var(--text-lg--line-height); field-sizing: content; overflow-y: auto; overscroll-behavior: contain; }
 .notebook-input-row [data-has-mic] > textarea { flex: 0 1 auto; width: calc(100% - 48px); padding-right: 0; }
 .notebook-input-row textarea:placeholder-shown { white-space: nowrap; text-overflow: ellipsis; }
@@ -79,3 +79,17 @@ html[data-session-input-locked], html[data-session-input-locked] body { overflow
 	width: var(--session-viewport-width); height: calc(var(--session-viewport-height) - var(--lh-safe-top, 0px) - var(--lh-safe-bottom, 0px)); overflow: hidden;
 }
 .session-workspace[data-input-focused] :is(textarea, [data-file-path-input], [data-notebook-scroll], [data-dock-scroll-area], [data-input-owner="tutor"] [style*="overflow"]) { overscroll-behavior: contain; }
+
+/* Phones (whole-app redesign): the working card sits closer to the edges,
+   with a slimmer header, and the instruction field moves to the bottom of
+   the card — next to the thumb, like the lesson's own composer. */
+@media (max-width: 767px) {
+	.session-panes { --notebook-frame-inset: 8px; }
+	.notebook-frame-header { min-height: 44px; padding-block: 0; }
+	.notebook-panel > [data-notebook-scroll] { order: 1; }
+	.notebook-panel > .notebook-instruction-form { order: 2; border-top: 1px solid var(--border); }
+	/* The lesson's Plan / model / thinking / usage row steps aside while the
+	   notebook shares the screen — two more lines of lesson; it returns
+	   when the notebook closes (its header has a direct Close). */
+	.session-panes[data-notebook-open="true"] .lh-stats-bar { display: none; }
+}

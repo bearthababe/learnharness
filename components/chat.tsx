@@ -32,6 +32,9 @@ import { Separator } from "@/components/ui/separator";
 import { AnsweredCard } from "@/components/answered-card";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { artifactRenderers } from "@/components/artifacts";
+import { WorkSteps, workSegments } from "@/components/work-steps";
+import { COMPOSER_SUGGEST_EVENT } from "@/components/activity-dock";
+import { confirmedUserCount, forgetUnsent, plainSendError, readUnsent, recordKept, rememberUnsent, withoutUnconfirmedSend } from "@/components/unsent-send";
 import { SubagentSteerCard } from "@/components/artifacts/steer-card";
 import { ChatSessionComposer } from "@/components/composer";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
@@ -41,6 +44,10 @@ import type { NotebookSession } from "@/components/notebook-session";
 import type { NotebookInputFields, TutorDraftOwner } from "@/src/core";
 import { NotebookPanel } from "@/components/notebook-panel";
 import { NotebookFrame, NotebookSplit, useNotebookLayout } from "@/components/notebook-layout";
+import { useSidebar } from "@/components/sidebar";
+import { useDeviceFeature, useNotebookLayoutPref } from "@/components/device-features";
+import { TabletModelButton, useTabletControls, TABLET_MEDIA } from "@/components/tablet-controls";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { NotebookSavedDrafts } from "@/components/notebook-saved-drafts";
 import { useNotebookDestination } from "@/components/notebook-destination";
 import { notebookTutorInput } from "@/components/notebook-speech-input";
@@ -72,13 +79,13 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, RepeatIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
 import { SessionMessageNavigation } from "@/components/session-navigation";
 import { PracticeDock } from "@/components/practice-dock";
-import { ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
+import { ThinkingCard, type PracticeThinkingData, ActiveProblemContext } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
 import { TopBar } from "@/components/top-bar";
 import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
@@ -114,8 +121,9 @@ import { currentUserThinkingOpen, setAllUserThinkingOpen } from "@/components/th
  * deliberately narrower (~46rem centered) per the reference. Same ELEMENT,
  * same place — width polish only.
  */
-const COLUMN = "mx-auto w-full max-w-none px-6";
-const DOCK = "mx-auto w-full max-w-[46rem] px-4";
+const COLUMN = "lh-reading-column mx-auto w-full max-w-[48rem] px-4 md:px-8";
+const DOCK = "lh-dock-column mx-auto w-full max-w-[46rem] px-4";
+
 // The DOCK container's fixed width (46rem) and the plan marginalia's
 // geometry (owner, plan-placement round): the bare diagram sits in the
 // dock band's RIGHT flank — MARGIN_GAP from the DOCK container's edge and
@@ -127,8 +135,8 @@ const DOCK = "mx-auto w-full max-w-[46rem] px-4";
 const DOCK_W = 46 * 16;
 const MARGIN_GAP = 16;
 const MARGIN_MIN_W = 220;
-// The dock overlay's gradient band (h-24) — part of the reserved tail.
-const GRADIENT_H = 96;
+// The dock overlay's gradient band (h-14) — part of the reserved tail.
+const GRADIENT_H = 56;
 // Fold thresholds (owner, scroll round 1, tuned round 3): pixel distance
 // from the bottom — position, not velocity. Leave the bottom → the box
 // folds (visual only); reach it again → it re-opens. 96 (was 64, owner
@@ -290,8 +298,39 @@ export function Chat({
 	const workspaceRef = useRef<HTMLDivElement | null>(null);
 	const workspaceId = useId();
 	const notebook = useNotebookSession(chatId);
-	const notebookVisible = notebook.view?.visible ?? false;
+	// Device features (owner, 2026-11-06): the equation notebook is a phone
+	// surface and the drawing canvas a tablet one by default (Settings →
+	// Writing). Off = not offered and shown closed; nothing saved is touched.
+	const notebookOffered = useDeviceFeature("equation-notebook");
+	const canvasOffered = useDeviceFeature("drawing-canvas");
+	const notebookVisible = notebookOffered && (notebook.view?.visible ?? false);
+	const canvasOpen = canvasOffered && handwriting.open;
+	const phoneLayout = usePhoneLayout();
 	const notebookLayout = useNotebookLayout(notebookVisible);
+	// Settings → Writing → "Full screen": on a phone the notebook opens
+	// expanded, one surface at a time (its expand button returns to the split).
+	const notebookLayoutChoice = useNotebookLayoutPref();
+	const wasNotebookVisible = useRef(notebookVisible);
+	useEffect(() => {
+		const opened = notebookVisible && !wasNotebookVisible.current;
+		wasNotebookVisible.current = notebookVisible;
+		if (opened && phoneLayout && notebookLayoutChoice === "full") void notebook.session.speech.choose({ kind: "notebook" }).then(notebookLayout.expand).catch(() => {});
+	}, [notebookVisible, phoneLayout, notebookLayoutChoice]);
+	// Portrait tablets: the notebook needs the width, so the sidebar steps
+	// aside while it is open (preference untouched; the toggle still works).
+	const { holdClosed: holdSidebarClosed } = useSidebar();
+	useEffect(() => {
+		if (!notebookVisible || !window.matchMedia("(min-width: 768px) and (max-width: 1023px)").matches) return;
+		return holdSidebarClosed();
+	}, [notebookVisible, holdSidebarClosed]);
+	// Writing on a tablet: the page gets the whole width (side by side in
+	// landscape), so the session column steps aside while the canvas is up.
+	useEffect(() => {
+		if (!canvasOpen || !window.matchMedia(TABLET_MEDIA).matches) return;
+		return holdSidebarClosed();
+	}, [canvasOpen, holdSidebarClosed]);
+	// The tablet Model card (shared with home and new session).
+	const [controlsOpen, setControlsOpen] = useTabletControls(chatId);
 	const notebookSpeech = useSyncExternalStore(notebook.session.speech.subscribe, notebook.session.speech.getSnapshot, notebook.session.speech.getSnapshot);
 	const tutorDraftState = useSyncExternalStore(notebook.session.tutor.subscribe, notebook.session.tutor.getSnapshot, notebook.session.tutor.getSnapshot);
 	const ordinaryDraft = tutorDraftState.drafts.find((draft) => draft.owner.kind === "ordinary");
@@ -606,24 +645,71 @@ export function Chat({
 	 * read the latest text without a parent render per input event. Explicit
 	 * resets still bump a revision so the local field can sync. */
 	const textRef = useRef("");
+	/* THE DEVICE DRAFT (whole-app redesign): without a notebook context the
+	 * ordinary composer text lived only in memory, so leaving the session
+	 * (another session, Back, a reload) silently discarded unsent work. The
+	 * text now also rides this device's storage per session and returns on
+	 * remount; a notebook context's server draft stays authoritative. */
+	const localDraftKey = `lh:composer-draft:${chatId}`;
+	const persistLocalDraft = useCallback((v: string) => {
+		try {
+			if (v) localStorage.setItem(localDraftKey, v);
+			else localStorage.removeItem(localDraftKey);
+		} catch { /* storage blocked: memory-only, as before */ }
+	}, [localDraftKey]);
+	const restoredLocalDraftRef = useRef(false);
+	useLayoutEffect(() => {
+		let saved: string | null = null;
+		try { saved = localStorage.getItem(localDraftKey); } catch { /* storage blocked */ }
+		if (saved && !textRef.current) {
+			textRef.current = saved;
+			restoredLocalDraftRef.current = true;
+			setComposerDraftRevision((revision) => revision + 1);
+		}
+	}, [localDraftKey]);
 	const applyText = useCallback((v: string) => {
 		textRef.current = v;
+		persistLocalDraft(v);
 		setComposerDraftRevision((revision) => revision + 1);
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
-	}, [notebook.session]);
+	}, [notebook.session, persistLocalDraft]);
+	// "Ask the tutor again" from a failed background job: an empty composer
+	// gets the request; a draft keeps every word and gains the request below
+	// it (round-9 review: a draft silently blocked it). Nothing is sent.
+	useEffect(() => {
+		const onSuggest = (event: Event) => {
+			const detail = (event as CustomEvent<{ chatId: string; text: string }>).detail;
+			if (detail?.chatId !== chatId) return;
+			const draft = textRef.current.trimEnd();
+			if (draft.includes(detail.text)) return;
+			applyText(draft ? `${draft}\n\n${detail.text}` : detail.text);
+		};
+		window.addEventListener(COMPOSER_SUGGEST_EVENT, onSuggest);
+		return () => window.removeEventListener(COMPOSER_SUGGEST_EVENT, onSuggest);
+	}, [chatId, applyText]);
 	const recordComposerText = useCallback((v: string) => {
 		textRef.current = v;
+		persistLocalDraft(v);
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
-	}, [notebook.session]);
+	}, [notebook.session, persistLocalDraft]);
 	useLayoutEffect(() => {
 		if (!notebook.view?.contextId) return;
+		// A locally restored draft the notebook has never seen is handed to
+		// it rather than wiped by its empty record.
+		if (!ordinaryDraft && restoredLocalDraftRef.current && textRef.current) {
+			restoredLocalDraftRef.current = false;
+			notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
+			return;
+		}
+		restoredLocalDraftRef.current = false;
 		const part = ordinaryDraft?.parts.at(-1);
 		const value = part?.kind === "text" ? part.text : "";
 		if (textRef.current !== value) {
 			textRef.current = value;
+			persistLocalDraft(value);
 			setComposerDraftRevision((revision) => revision + 1);
 		}
-	}, [ordinaryDraft, notebook.view?.contextId]);
+	}, [ordinaryDraft, notebook.view?.contextId, notebook.session, persistLocalDraft]);
 	const focusDictationDestination = useNotebookDestination(workspaceRef, notebook.session, notebookVisible);
 	// Saved slot completeness is live, but the session's selected route
 	// comes from its own ordinary model control, never today's Strong pin.
@@ -638,6 +724,9 @@ export function Chat({
 	 *  Auto-continuations (probe answers) never set it — their refusal
 	 *  opens recovery with no replay. */
 	const draftRef = useRef<string | null>(null);
+	const [unsent, setUnsent] = useState<{ reason: string | null } | null>(null);
+	const nativeMessagesRef = useRef(nativeMessages);
+	nativeMessagesRef.current = nativeMessages;
 	const openingDraftRef = useRef<string | null>(null);
 	const [openingError, setOpeningError] = useState(false);
 	const openingMountedRef = useRef(false);
@@ -716,6 +805,37 @@ export function Chat({
 		// connected, repair belongs to the ordinary current-session picker;
 		// otherwise setup derives its exclusive provider/loading stage.
 		const keyRefused = parseProviderKeyRefusal(error.message);
+		// A plain send that failed (round 10: offline, the text was lost):
+		// ask the saved record whether it kept the message. Kept → adopt the
+		// record, never offer it twice. Not kept (or unreachable) → drop the
+		// unconfirmed bubble and give the text back to the composer, which
+		// keeps it across a reload; "Send again" is the learner's choice.
+		const heldSend = readUnsent(chatId);
+		if (!missing && !keyRefused && draftRef.current !== null && heldSend?.text === draftRef.current) {
+			const text = draftRef.current;
+			const reason = plainSendError(error.message);
+			let cancelled = false;
+			void (async () => {
+				let record = null as { messages?: LhMessage[]; turnError?: string } | null;
+				try {
+					const res = await fetch(`/api/chats/${encodeURIComponent(chatId)}`, { cache: "no-store" });
+					if (res.ok) record = (await res.json().catch(() => null)) as typeof record;
+				} catch { /* unreachable: the device copy decides */ }
+				if (cancelled) return;
+				draftRef.current = null;
+				if (Array.isArray(record?.messages) && recordKept(record.messages, heldSend)) {
+					forgetUnsent(chatId);
+					setMessages(record.messages, record.turnError);
+					return; // delivered: any turn error keeps its own banner
+				}
+				setMessages(Array.isArray(record?.messages) ? record.messages : withoutUnconfirmedSend(nativeMessagesRef.current, text), record?.turnError);
+				const typed = textRef.current.trim();
+				applyText(typed && typed !== text.trim() ? `${text}\n\n${typed}` : text);
+				setUnsent({ reason });
+				clearError();
+			})();
+			return () => { cancelled = true; };
+		}
 		if (!missing && !keyRefused) return; // a real error keeps the honest banner
 		// ORDER MATTERS: clearError() flips this effect's own dep (`error`)
 		// and would cancel the in-flight work below — so the banner dismiss,
@@ -743,6 +863,35 @@ export function Chat({
 		// (setMessages/clearError are stable per useChat instance — the
 		//  dep pair [error, chatId] is what the flow actually keys on.)
 	}, [error, chatId]);
+	// On load and on reconnect: a send this device still holds is checked
+	// against the saved record — kept → the held copy goes (and a draft
+	// that is only that text clears, so it is never sent twice); not kept
+	// and the composer empty → the text comes back with the "Not sent" note.
+	const sendStatusRef = useRef(status);
+	sendStatusRef.current = status;
+	useEffect(() => {
+		const check = async () => {
+			const held = readUnsent(chatId);
+			if (!held || sendStatusRef.current === "submitted" || sendStatusRef.current === "streaming") return;
+			try {
+				const res = await fetch(`/api/chats/${encodeURIComponent(chatId)}`, { cache: "no-store" });
+				if (!res.ok) return;
+				const record = (await res.json().catch(() => null)) as { messages?: LhMessage[] } | null;
+				if (!Array.isArray(record?.messages) || readUnsent(chatId)?.text !== held.text) return;
+				if (recordKept(record.messages, held)) {
+					forgetUnsent(chatId);
+					setUnsent(null);
+					if (textRef.current.trim() === held.text.trim()) applyText("");
+				} else {
+					if (!textRef.current.trim()) applyText(held.text);
+					setUnsent({ reason: null });
+				}
+			} catch { /* still offline: try again on reconnect */ }
+		};
+		void check();
+		window.addEventListener("online", check);
+		return () => window.removeEventListener("online", check);
+	}, [chatId]);
 	// Voice dictation (STT wave, 2026-09-17): finals append at the end of
 	// the current text (the page owns the separator, dictate-flush style);
 	// interims ghost in the stats bar's middle slot next to the meter.
@@ -993,6 +1142,25 @@ export function Chat({
 	// guess so the static paint has a sane tail. The first layout effect
 	// replaces it with the measured truth before paint.
 	const [dockReserve, setDockReserve] = useState(208);
+	// Opening a working surface (canvas or notebook) shrinks the lesson
+	// pane; a learner reading the latest turn keeps it in view instead of
+	// being left at the top of the transcript.
+	const latestInViewRef = useRef(true);
+	useEffect(() => {
+		const scroller = scrollContextRef.current?.scrollRef.current;
+		if (!scroller) return;
+		const track = () => { latestInViewRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 120; };
+		track();
+		scroller.addEventListener("scroll", track, { passive: true });
+		return () => scroller.removeEventListener("scroll", track);
+	}, [chatId]);
+	useEffect(() => {
+		if (!(canvasOpen || notebookVisible) || !latestInViewRef.current) return;
+		let second = 0;
+		const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => { void scrollContextRef.current?.scrollToBottom("instant"); }); });
+		return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+	}, [canvasOpen, notebookVisible]);
+
 	const syncTurns = useCallback(async () => {
 		try {
 			const res = await fetch(`/api/chats/${chatId}`);
@@ -1297,8 +1465,10 @@ export function Chat({
 			return;
 		}
 		draftRef.current = t; // the refusal flow's preserve-and-replay seam
+		rememberUnsent(chatId, { text: t, before: confirmedUserCount(nativeMessages) }); // kept on this device until the server confirms it
+		setUnsent(null);
 		applyText("");
-		void send({ type: "text", text: t });
+		void send({ type: "text", text: t }).then((accepted) => { if (accepted) forgetUnsent(chatId); });
 	};
 
 	/* STEER VS SEND (owner arc 2026-10-03): a send while a turn runs steers
@@ -1341,7 +1511,7 @@ export function Chat({
 
 	return (
 		<HandwritingSubmissionContext.Provider value={handwritingSubmission}>
-		<HandwritingPagesContext.Provider value={handwriting.actions}>
+		<HandwritingPagesContext.Provider value={canvasOffered ? handwriting.actions : null}>
 		<ChatActionsContext.Provider
 			value={{
 				chatId,
@@ -1365,9 +1535,9 @@ export function Chat({
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" className={`session-workspace flex h-dvh overflow-hidden ${handwriting.open ? "hw-workspace" : ""}`}>
-		<div className={handwriting.open ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
-			<div inert={handwriting.open && handwriting.expanded} className={handwriting.open ? "hw-chat hw-mobileHidden flex min-h-0 min-w-0 flex-1 flex-col" : "contents"}>
+		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" className={`session-workspace flex h-dvh overflow-hidden ${canvasOpen ? "hw-workspace" : ""}`}>
+		<div className={canvasOpen ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
+			<div inert={canvasOpen && handwriting.expanded} className={canvasOpen ? "hw-chat hw-mobileHidden flex min-h-0 min-w-0 flex-1 flex-col" : "contents"}>
 			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
 			<div className="session-tutor" inert={notebookLayout.expanded}>
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
@@ -1413,7 +1583,7 @@ export function Chat({
 								spellCheck={false}
 								aria-label="Session title"
 								title="Rename this session"
-								className="lh-no-drag min-w-[8ch] max-w-[70%] shrink-0 bg-transparent font-title text-3xl tracking-tight caret-current outline-none [field-sizing:content]"
+								className="lh-session-title lh-no-drag min-w-[8ch] max-w-[70%] shrink-0 bg-transparent font-title text-[20px] leading-[1.3] tracking-tight caret-current outline-none [field-sizing:content] xl:text-[22px]"
 							/>
 							{/* flex-1 spacer during rename too, so the chips stay at
 							    the right edge; clicks here commit via the header
@@ -1422,6 +1592,7 @@ export function Chat({
 						</>
 					) : (
 					<>
+						<div className="lh-title-block flex min-w-0 shrink flex-col items-start justify-center">
 						<Hint
 							// F2 renames (registry) — surfaced on the hover.
 							label="Rename session"
@@ -1434,11 +1605,33 @@ export function Chat({
 								setTitleDraft(titleText);
 								setRenaming(true);
 							}}
-							className="lh-no-drag -mx-1.5 min-w-4 shrink cursor-text truncate rounded-md px-1.5 text-left font-title text-3xl tracking-tight transition-colors hover:bg-accent"
+							className="lh-session-title lh-no-drag -mx-1.5 min-w-4 max-w-[calc(100%+0.75rem)] cursor-text truncate rounded-lg px-1.5 text-left font-title text-[20px] leading-[1.3] tracking-tight transition-colors hover:bg-accent/70 xl:text-[22px]"
 						>
 							{titleText}
 							</button>
 						</Hint>
+							<div className="lh-title-meta flex min-w-0 items-center gap-3">
+							{kind === "practice" ? (
+								<span
+									data-testid="phase-chip"
+									data-phase="practice"
+									aria-hidden="true"
+									className="lh-phase-chip pointer-events-none flex shrink-0 select-none items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground"
+								>
+									{practiceMode === "drill" ? <RepeatIcon className="size-3" /> : <DumbbellIcon className="size-3" />}
+									{practiceMode === "drill" ? "Drill" : "Practice"}
+								</span>
+							) : (
+								<PhaseChip phase={phases.at(-1) ?? "probe"} />
+							)}
+							{/* Phones: Plan lives here, beside the phase, in every state —
+							    the title keeps its width and the notebook never moves it
+							    (round-9 review). Wider screens use the header chip. */}
+							{planTree && <button type="button" className="lh-phone-plan lh-phone-plan-sub lh-no-drag" onClick={(e) => { blurAfterPointerClick(e); setPlanOpen(true); }}>
+								<WaypointsIcon className="size-3.5" aria-hidden />Plan<ChevronRightIcon className="size-3.5 opacity-70" aria-hidden />
+							</button>}
+							</div>
+						</div>
 							{/* flex-1 spacer: keeps the chips at the right edge AND stays a
 							    drag surface (no carve-out) — the freed bar is grippable. */}
 							<div className="min-w-4 flex-1" aria-hidden="true" />
@@ -1457,9 +1650,9 @@ export function Chat({
 								blurAfterPointerClick(e);
 								setPlanOpen(true);
 							}}
-							className="lh-no-drag flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border/80 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+							className="lh-header-plan lh-no-drag flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 						>
-							<WaypointsIcon className="size-3.5 text-primary" aria-hidden />
+							<WaypointsIcon className="size-4" aria-hidden />
 							Plan
 						</button>
 </Hint>
@@ -1472,31 +1665,23 @@ export function Chat({
 				    practice never extracts, so an ever-filling ring with no
 				    run behind it would lie. */}
 					{kind !== "practice" && <CoverageRing chatId={chatId} refreshKey={coverageTick} />}
-					{/* Practice sessions: no phase arc — a quiet Practice tag
-					    instead of the phase chip. */}
-					{kind === "practice" ? (
-						<span
-							data-testid="phase-chip"
-							data-phase="practice"
-							aria-hidden="true"
-							className="pointer-events-none flex shrink-0 select-none items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
-						>
-							<DumbbellIcon className="size-3" />
-							{practiceMode === "drill" ? "Drill" : "Practice"}
-						</span>
-					) : (
-						<PhaseChip phase={phases.at(-1) ?? "probe"} />
-					)}
-					<Button variant="outline" size="sm" className="shrink-0" onClick={() => handwriting.show(true)} data-testid="open-notebook">Write</Button>
+					{/* Tablets: model, thinking and usage live behind this one
+					    button instead of a permanent row under the composer. */}
+					<TabletModelButton open={controlsOpen} onToggle={() => setControlsOpen((value) => !value)} />
+					{canvasOffered && <Button variant="secondary" size="sm" className="lh-header-write shrink-0 gap-1.5" aria-pressed={canvasOpen} onClick={() => handwriting.show(true)} data-testid="open-notebook"><PenLineIcon className="size-4" aria-hidden /><span className="lh-header-write-label">Write</span></Button>}
 				</TopBar>
 				{!notebookVisible && notebook.error && <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>}
 
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
 				<div ref={sessionFindScopeRef} data-input-owner="tutor" className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
+				<ActiveProblemContext.Provider value={activeProblem?.toolCallId ?? null}>
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
 					<ConversationContent className="min-h-full gap-0 p-0">
-						<div data-session-find-root="" className={`${COLUMN} flex flex-1 flex-col gap-4 pt-4`}>
+						{/* data-task-pending: with a question or problem waiting in the
+						    dock, a tablet anchors a short transcript just above it, so
+						    the lead-in and the task read as one workspace. */}
+						<div data-session-find-root="" data-task-pending={!!(pending || activeProblem) || undefined} className={`${COLUMN} flex flex-1 flex-col gap-4 pt-4`}>
 							{messages.length === 0 && !busy && (
 								<ConversationEmptyState
 									title="New session"
@@ -1551,7 +1736,7 @@ export function Chat({
 													<div
 														key={pi}
 														data-testid="practice-next-line"
-														className="my-4 flex items-center justify-center gap-1.5 font-ui text-xs font-medium uppercase tracking-wide text-muted-foreground"
+														className="my-5 flex items-center justify-center gap-1.5 font-ui text-[13px] font-medium text-muted-foreground"
 													>
 														<ArrowRightIcon className="size-3" />
 														Next problem
@@ -1608,12 +1793,12 @@ export function Chat({
 										    inset (the band is the authorship mark against the agent's
 										    transparent prose). The "You" label stays — one register
 										    with the thinking labels. */
-										className="my-2 w-full border-l-[calc(3ch-14px)] border-muted-foreground/30 bg-card py-1 pl-[14px] pr-4 font-ui text-xs"
+										className="lh-user-message my-2 w-full rounded-2xl bg-card px-4 py-3 font-ui text-xs"
 									>
 												{/* The rail GROUPS (owner round 4, 2026-10-05): the YOU heading
 												    sits INSIDE the rail, same mono-xs register and same 1ch
 												    rail as the thinking rows — one quote geometry. */}
-												<div className="font-medium uppercase tracking-wide text-muted-foreground">You</div>
+												<div className="mb-1 text-[13px] font-semibold text-muted-foreground">You</div>
 												<div className="lh-prose whitespace-pre-wrap text-foreground">
 													{m.parts.some((part) => part.type === "data-learner-explanation")
 														? m.parts.filter((part) => part.type === "data-learner-explanation").map((part, index) => <LearnerExplanation key={index} parts={part.data as Explanation} />)
@@ -1624,7 +1809,8 @@ export function Chat({
 									) : (
 									<Message from="assistant" className="max-w-full">
 									<MessageContent className="w-full">
-											{m.parts.map((part, pi) => {
+											{(() => {
+											const renderPart = (part: (typeof m.parts)[number], pi: number) => {
 												const isLastPart = mi === messages.length - 1 && pi === m.parts.length - 1;
 												// The step boundary where teaching begins (round 8): when
 												// the teach flip happens in a LATER step, its PhaseDivider
@@ -1675,7 +1861,7 @@ export function Chat({
 													case "step-start":
 														if (teachBoundary)
 															return <PhaseDivider key={`teach-step-${pi}`} phase="teach" />;
-														return pi > 0 ? <Separator key={pi} className="my-3" /> : null;
+														return pi > 0 ? <Separator key={pi} className="lh-step-rule my-4 bg-border/60" /> : null;
 													case "data-plan-block":
 														// The plan in the chat (wave 4): a frozen snapshot
 														// block — rendered as carried, never re-derived.
@@ -1726,7 +1912,17 @@ export function Chat({
 														return null;
 													}
 												}
-											})}
+											};
+											// The tutor's working (whole-app redesign, owner amendment
+											// 2): a run of thinking and tool steps reads as ONE quiet
+											// line saying what it did, its steps one tap away.
+											const isTeachBoundary = (pi: number) => mi > 0 && phases[mi] === "teach" && phases[mi - 1] !== "teach" && teachStepIndex(m.parts) === pi;
+											return workSegments(m.parts, isTeachBoundary).map((segment) => segment.kind === "part"
+												? renderPart(m.parts[segment.index]!, segment.index)
+												: <WorkSteps key={`work-${segment.indexes[0]}`} parts={segment.indexes.map((index) => m.parts[index]!)}>
+													{segment.indexes.map((index) => m.parts[index]!.type === "step-start" ? null : renderPart(m.parts[index]!, index))}
+												</WorkSteps>);
+											})()}
 										</MessageContent>
 									</Message>
 									)}
@@ -1754,23 +1950,33 @@ export function Chat({
 						    the THINKING placeholder by construction (the gate sits
 						    BEFORE beginTurn; the settle kick runs after endTurn). */}
 							{compacting && (
-								<span className="flex items-center gap-2 font-ui text-xs font-medium uppercase tracking-wide text-muted-foreground">
+								<span className="flex items-center gap-2 font-ui text-[13.5px] font-medium text-muted-foreground">
 									<BrailleSpinner label="Compacting context" />
-									<Shimmer duration={1}>COMPACTING CONTEXT…</Shimmer>
+									<Shimmer duration={1}>Compacting context…</Shimmer>
 								</span>
 							)}
 							{(status === "submitted" || turnInFlight) && (
-								<span className="flex items-center gap-2 font-ui text-xs font-medium uppercase tracking-wide text-muted-foreground">
+								<span className="flex items-center gap-2 font-ui text-[13.5px] font-medium text-muted-foreground">
 									<BrailleSpinner label="Thinking" />
 									<Shimmer duration={1}>
-										THINKING…
+										Thinking…
 									</Shimmer>
 								</span>
 							)}
 							{openingError && <p role="alert" className="text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
+							{unsent && !error && (
+								<div role="alert" data-testid="unsent-notice" className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
+									<span><strong className="font-semibold">Not sent.</strong> {unsent.reason ?? "The server didn't confirm your message."} Your message is back in the box below.</span>
+									<Button variant="outline" size="xs" data-testid="unsent-send-again" className="min-h-9" onClick={() => doSteerOrSend()}>Send again</Button>
+								</div>
+							)}
 							{error && (
 								<div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
-									<span>Something went wrong: {error.message}</span>
+									{/* A network failure reads as what it is (round 10): not sent,
+									    and the learner's words are still in the box. */}
+									<span>{/^Couldn't reach the server/.test(plainSendError(error.message))
+										? <><strong className="font-semibold">Not sent.</strong> {plainSendError(error.message)}{textRef.current.trim() ? " Your message is still in the box below." : ""}</>
+										: <>Something went wrong: {plainSendError(error.message)}</>}</span>
 									{retryable && (
 										<Button variant="outline" size="xs" data-testid="retry-failed-turn" onClick={retryFailedTurn}>
 											Retry
@@ -1797,8 +2003,9 @@ export function Chat({
 				    fold) and NEVER overlaps the composer. */}
 				<DockOverlay
 					notebook={notebook.session}
-					fullQuestionWidth={handwriting.open}
-					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} /></>}
+					controlsOpen={controlsOpen}
+					fullQuestionWidth={canvasOpen}
+					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} compact={canvasOpen && !phoneLayout} conceptsOffered={canvasOffered} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} pendingWriting={sharedWriting.pending.length} pendingPages={new Set(sharedWriting.pending.flatMap((w) => (w.notebook ? [w.notebook.pageId] : [])))} /></>}
 					hasSharedWriting={hasSharedWriting || handwritingSubmission.hasAttempt()}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.key)?.form : undefined}
@@ -1819,7 +2026,7 @@ export function Chat({
 					contextTokens={contextTokens}
 					cliContextWindow={cliContextWindowOf(nativeMessages)}
 					pricing={pricing}
-					notebookToggle={<span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
+					notebookToggle={notebookOffered && <span className="relative inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
 						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
 						className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
 						onClick={() => {
@@ -1828,7 +2035,9 @@ export function Chat({
 								void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
 							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
 						}}><NotebookPenIcon className="size-4" /></button>
-						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="text-muted-foreground"><PaperclipIcon className="size-3" aria-hidden="true" /></span>}
+						{/* A badge on the notebook button (not a second paperclip beside the
+						    composer's attach): the working rides along with the next send. */}
+						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="pointer-events-none absolute top-1 right-0.5 flex size-[15px] items-center justify-center rounded-full bg-(--lh-accent) text-background ring-2 ring-background"><PaperclipIcon className="size-2.5" strokeWidth={2.5} aria-hidden="true" /></span>}
 					</span>}
 					onReserve={setDockReserve}
 					dictationSlot={<DictationBar dictation={dictation} />}
@@ -1848,7 +2057,7 @@ export function Chat({
 										type="button"
 										data-testid="setup-cta"
 										onClick={() => setSetupOpen(true)}
-										className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
+										className="h-8 cursor-pointer rounded-full bg-primary px-3.5 font-ui text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90"
 									>
 										Set up your models
 									</button>
@@ -1883,7 +2092,10 @@ export function Chat({
 							// applies.
 							nextProblem={nextReady}
 							onNext={sendNext}
-							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : undefined}
+							// Beside the phone's equation notebook the two fields say whose
+							// they are: this one talks to the tutor, the notebook's edits
+							// your working (round-8 review).
+							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : notebookVisible && phoneLayout ? "Message the tutor…" : undefined}
 						/>
 						</div>
 					}
@@ -1908,6 +2120,7 @@ export function Chat({
 					}}
 				/>
 				</Conversation>
+				</ActiveProblemContext.Provider>
 
 				{/* The session-scoped focuses (chrome-melt wave, 2026-09-19): mounted
 				    INSIDE the session area — absolute inset-0 siblings of the scroller,
@@ -1944,8 +2157,8 @@ export function Chat({
 				</>}
 			</div>
 			</div>
-			{handwriting.mounted && <HandwritingSplit hidden={!handwriting.open} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
-			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
+			{handwriting.mounted && <HandwritingSplit hidden={!canvasOpen} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
+			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!canvasOpen} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
 		</div>
 		</div>
 		</JobsContext.Provider>
@@ -2082,6 +2295,7 @@ export function shouldStampGeometryMute(nextH: number, prevH: number, pending: b
 function DockOverlay({
 	notebook,
 	notebookToggle,
+	controlsOpen = false,
 	fullQuestionWidth = false,
 	sharedWritingSlot,
 	hasSharedWriting,
@@ -2115,6 +2329,9 @@ function DockOverlay({
 }: {
 	notebook: NotebookSession;
 	notebookToggle: React.ReactNode;
+	/** Tablets: the model / thinking / usage row is tucked away until the
+	 *  header's Model button opens it as a card above the composer. */
+	controlsOpen?: boolean;
 	/** In the notebook split, a question fills the context pane. */
 	fullQuestionWidth?: boolean;
 	sharedWritingSlot?: React.ReactNode;
@@ -2299,8 +2516,11 @@ function DockOverlay({
 	// practice problem owns the dock: shrinking flow space could pin a nearby
 	// learner back to the bottom. Composer mode may give space back.
 	const reserveRef = useRef(0);
+	// The fade band is measured (CSS shortens it in cramped panes, e.g. the
+	// phone notebook split); the constant is only the pre-layout fallback.
+	const fadeRef = useRef<HTMLDivElement>(null);
 	const offer = useCallback((blockH: number) => {
-		const next = blockH + GRADIENT_H;
+		const next = blockH + (fadeRef.current?.offsetHeight ?? GRADIENT_H);
 		if (next <= reserveRef.current + 0.5 && pendingRef.current) return;
 		// Stamp growth at the source, including child-only field resizes, so
 		// stick-to-bottom's catch-up is not mistaken for the learner leaving.
@@ -2521,8 +2741,8 @@ function DockOverlay({
 
 	return (
 		<div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }}>
-			<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
-			<div ref={blockRef} className="relative bg-background pb-5">
+			<div ref={fadeRef} className="lh-dock-fade h-14 bg-gradient-to-t from-background via-background/85 to-transparent" />
+			<div ref={blockRef} className="lh-dock-block relative bg-background pb-5" data-tablet-controls={controlsOpen ? "open" : "closed"}>
 				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
 					{!notebook.getSnapshot().view && <div data-tutor-draft-loading="" role={notebook.getSnapshot().error ? "alert" : "status"} className="px-3 py-2 text-xs text-muted-foreground">
@@ -2563,7 +2783,7 @@ function DockOverlay({
 							claim={revealPending}
 						/>
 					)}
-					<div ref={shellRef} data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-lg">
+					<div ref={shellRef} data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-[var(--lh-shadow)]">
 						{/* Include descendant margins (notably practice thinking's
 						    bottom margin) in the natural content measurement. */}
 						<div
@@ -2632,7 +2852,7 @@ function DockOverlay({
 						pricing={pricing}
 						dictationSlot={notebook.getSnapshot().view ? dictationSlot : undefined}
 						compactInput
-						phonePlan={plan ? <button type="button" className="lh-phone-plan" onClick={onOpenPlan}>Plan</button> : undefined}
+						phonePlan={undefined}
 						chatId={chatId}
 						onModelChange={onModelChange}
 					/>

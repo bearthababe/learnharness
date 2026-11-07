@@ -151,6 +151,10 @@ export function computeMenuPlacement(
 	contentHeight: number,
 	preferredSide: MenuSide,
 	align: MenuAlign,
+	/** The measured menu width: when known, the menu is kept inside the
+	 *  viewport horizontally (a left-aligned menu near the right edge slides
+	 *  left instead of clipping). */
+	menuWidth?: number,
 ): MenuPlacement {
 	const availDown = viewport.height - EDGE - (rect.bottom + GAP);
 	const availUp = rect.top - GAP - EDGE;
@@ -166,8 +170,9 @@ export function computeMenuPlacement(
 	}
 	const avail = side === "down" ? availDown : availUp;
 	const maxHeight = Math.max(MIN_USABLE, Math.min(CAP_VH * viewport.height, avail));
+	const fits = (offset: number) => menuWidth && menuWidth > 0 ? Math.max(EDGE, Math.min(offset, viewport.width - EDGE - menuWidth)) : offset;
 	const horizontal: Record<string, number> =
-		align === "right" ? { right: viewport.width - rect.right } : { left: rect.left };
+		align === "right" ? { right: fits(viewport.width - rect.right) } : { left: fits(rect.left) };
 	const vertical: Record<string, number> =
 		side === "down" ? { top: rect.bottom + GAP } : { bottom: viewport.height - rect.top + GAP };
 	return { side, style: { ...horizontal, ...vertical }, maxHeight };
@@ -491,6 +496,7 @@ export function MenuShell({
 				menuRef.current.scrollHeight,
 				preferredSide,
 				align,
+				menuRef.current.offsetWidth,
 			);
 			setPlaced(p);
 		};

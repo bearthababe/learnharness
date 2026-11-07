@@ -4,7 +4,7 @@
  * Only completed strokes touch recovery. No React/storage work on movement. */
 import { useCallback, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { Maximize2Icon, Minimize2Icon, MoreHorizontalIcon, XIcon } from "lucide-react";
+import { FilesIcon, Maximize2Icon, Minimize2Icon, MoreHorizontalIcon, PaperclipIcon, XIcon } from "lucide-react";
 import { useSidebar } from "@/components/sidebar";
 import { HandwritingPages, type PagesState } from "./pages";
 import { handwritingPagesDevice } from "./pages-device";
@@ -58,8 +58,18 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const [colour, setColour] = useState<Stroke["colour"]>(HANDWRITING_PEN_COLOURS[0]);
 	const [penScale, setPenScale] = useState<Stroke["penScale"]>(HANDWRITING_PEN_SCALES[1]), [eraserWidth, setEraserWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]), [highlighterWidth, setHighlighterWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]);
 	const [dimPaper, setDimPaper] = useState(true), [toolsOpen, setToolsOpen] = useState(false);
+	// Finger drawing (whole-app redesign): Pencil-first stays the default —
+	// fingers scroll — but phones have no stylus, so a finger touch on the
+	// paper offers the opt-in, remembered on this device.
+	const [fingerDraw, setFingerDrawState] = useState(false), [fingerHint, setFingerHint] = useState(false);
+	const fingerDrawRef = useRef(false);
+	useEffect(() => { try { if (localStorage.getItem("lh:hw-finger-draw") === "1") { fingerDrawRef.current = true; setFingerDrawState(true); } } catch { /* storage blocked */ } }, []);
+	const setFingerDraw = (on: boolean) => {
+		fingerDrawRef.current = on; setFingerDrawState(on); setFingerHint(false);
+		try { localStorage.setItem("lh:hw-finger-draw", on ? "1" : "0"); } catch { /* storage blocked */ }
+	};
 	useMenuEscape(hidden ? null : pagesOpen ? "pages" : optionsOpen ? "options" : toolsOpen ? "tools" : null, () => {
-		const trigger = pagesOpen ? "Pages" : "Notebook options";
+		const trigger = pagesOpen ? "Pages" : "More page actions";
 		setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false);
 		controlsRef.current?.querySelector<HTMLButtonElement>(`[aria-label="${trigger}"]`)?.focus();
 	});
@@ -194,7 +204,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	useEffect(() => {
 		const canvas = canvasRef.current!, controls = controlsRef.current!;
 		const claimCanvas = (event: TouchEvent) => {
-			if (event.cancelable && Array.from(event.touches).some(touch => (touch as Touch & { touchType?: string }).touchType === "stylus")) event.preventDefault();
+			if (event.cancelable && (fingerDrawRef.current || Array.from(event.touches).some(touch => (touch as Touch & { touchType?: string }).touchType === "stylus"))) event.preventDefault();
 		};
 		const claimTool = (event: TouchEvent) => {
 			if (event.cancelable && event.target instanceof Element && event.target.closest("button[data-notebook-pencil-control]") && Array.from(event.changedTouches).some(touch => (touch as Touch & { touchType?: string }).touchType === "stylus")) event.preventDefault();
@@ -209,7 +219,8 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		return { x: Math.max(0, Math.min(WIDTH, (event.clientX - rect.left) * WIDTH / rect.width)), y: Math.max(0, Math.min(HEIGHT, (event.clientY - rect.top) * HEIGHT / rect.height)), pressure: event.pointerType === "pen" && event.pressure > 0 ? event.pressure : 0.5 };
 	}
 	function start(event: ReactPointerEvent<HTMLCanvasElement>) {
-		if (event.pointerType === "touch" || event.button !== 0 || active.current || decoding.current) return;
+		if (event.pointerType === "touch" && !fingerDrawRef.current) { setFingerHint(true); return; }
+		if (event.button !== 0 || active.current || decoding.current) return;
 		const complete = recovery.current?.beginStroke(); if (!complete) return;
 		event.preventDefault(); if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 		const first = point(event.nativeEvent);
@@ -264,13 +275,16 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		style={{ position: expanded ? "absolute" : "relative", inset: expanded ? 0 : undefined, flex: "1 1 0px", minWidth: 0, minHeight: 0, boxSizing: "border-box", padding: 16, overflow: "hidden" }}>
 		<aside ref={controlsRef} className="rounded-2xl border bg-card shadow-lg hw-notebook" aria-label="Handwriting notebook" data-testid="handwriting-notebook" data-ready={saved.ready} data-page-id={pageId} data-expanded={expanded}
 			style={{ position: "absolute", inset: 16, margin: 0, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
-			<header className="hw-notebookHeader"><h2>Notebook</h2>
-				<Button variant="ghost" size="sm" className="hw-headerAction" disabled={!saved.ready || submission?.preparing} {...handlers("Attach snapshot", () => { void attachSnapshot(); })} data-testid="notebook-attach">Attach snapshot</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Pages" aria-expanded={pagesOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Pages", () => { setPagesOpen(value => !value); setOptionsOpen(false); setToolsOpen(false); void recovery.current?.refreshPages().catch(() => {}); })}>Pages</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? "Back to question" : "Expand notebook"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? "Back to question" : "Expand"}</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close notebook" {...handlers("Close notebook", () => { if (expanded) prepareViewChange(false); onClose(); })}>Close notebook</Button>
+			{/* The page's header (whole-app redesign): one obvious way to hand
+			    the page to the tutor — "Attach page", filled — then labelled,
+			    finger-sized controls; nothing here is a bare text link. */}
+			<header className="hw-notebookHeader"><h2>Your page</h2>
+				<Button variant="ghost" size="sm" className="hw-headerAction hw-primaryAction" disabled={!saved.ready || submission?.preparing} {...handlers("Attach snapshot", () => { void attachSnapshot(); })} data-testid="notebook-attach"><PaperclipIcon aria-hidden />Attach page</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Pages" aria-expanded={pagesOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Pages", () => { setPagesOpen(value => !value); setOptionsOpen(false); setToolsOpen(false); void recovery.current?.refreshPages().catch(() => {}); })}><FilesIcon aria-hidden />Pages</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? "Back to question" : "Full page"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? "Back to question" : "Full page"}</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close page" {...handlers("Close page", () => { if (expanded) prepareViewChange(false); onClose(); })}><XIcon aria-hidden />Close</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" {...handlers("Chat", onClose)} data-testid="open-notebook-chat">Chat</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Notebook options" aria-expanded={optionsOpen} {...handlers("Notebook options", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="More page actions" title="More page actions" aria-expanded={optionsOpen} {...handlers("More page actions", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
 			</header>
 			{optionsOpen && <div className="hw-toolsPanel" data-testid="notebook-options">
 				<Button variant="ghost" disabled={!saved.ready || submission?.preparing} {...handlers("Duplicate", () => { setOptionsOpen(false); void recovery.current?.duplicateWorking(); })}>Duplicate</Button><hr />
@@ -281,21 +295,27 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				{pages.map((page, index) => <PageRow key={page.id} page={page} index={index} pages={pages} current={pageId} revision={page.id === pageId ? recovery.current?.getSnapshot().working.head : undefined} model={recovery.current!} disabled={!saved.ready || !!submission?.preparing} choose={() => { void recovery.current?.switchPage(page.id).then(opened => { if (opened) { setPagesOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Pages"]')?.focus(); } }); }} />)}
 			</div>}
 			{toolsOpen && <div id="handwriting-tools" className="hw-toolsPanel" role="group" aria-label="Notebook tools">
-				<div className="hw-toolsHeading"><span>Notebook tools</span><Button variant="ghost" size="icon" aria-label="Close notebook tools" {...handlers("Close tools", () => { setToolsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')?.focus(); })}><XIcon /></Button></div>
-				<p>Write with Pencil; scroll the paper with a finger. Working, Undo and Redo save automatically. A new edit clears Redo. Clear can be undone.</p>
+				<div className="hw-toolsHeading"><span>Notebook tools</span><Button variant="ghost" size="icon" aria-label="Close notebook tools" {...handlers("Close tools", () => { setToolsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="More page actions"]')?.focus(); })}><XIcon /></Button></div>
+				<p>{fingerDraw ? "Write with Pencil or a finger. " : "Write with Pencil; scroll the paper with a finger (turn on Draw with finger in Page ⋯ to draw with it instead). "}Working, Undo and Redo save automatically. A new edit clears Redo. Clear can be undone.</p>
 				<button type="button" className="min-h-11 underline" {...handlers("Reload preview", () => location.reload())}>Reload preview</button>
 				<p>Reload keeps your notebook, Undo and Redo, attached snapshots and explanation saved at Attach.</p>
 			</div>}
-			{flattened && <p className="hw-notice">Flattened image · original marks cannot be erased</p>}
 			<div className="hw-drawingWorkspace"><div className="hw-paperArea"><div ref={areaRef} className="hw-paperScroll" data-testid="notebook-paper-scroll">
 				<div className={`hw-paperStack ${dimPaper ? "hw-dimPaper" : ""}`} style={{ width: paperSize.width, height: paperSize.height }}>
 					<canvas ref={backgroundRef} width={WIDTH} height={HEIGHT} className="hw-figureBackground" aria-hidden="true" data-testid="notebook-background" />
-					<canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="hw-paper" style={{ cursor: tool === "eraser" ? "cell" : "crosshair" }} aria-label="Handwriting page — use Pencil or mouse; fingers do not draw" data-testid="notebook-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onContextMenu={e => e.preventDefault()} />
+					<canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="hw-paper" style={{ cursor: tool === "eraser" ? "cell" : "crosshair", touchAction: fingerDraw ? "none" : undefined }} aria-label={fingerDraw ? "Handwriting page — draw with Pencil, mouse or finger" : "Handwriting page — use Pencil or mouse; fingers do not draw"} data-testid="notebook-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onContextMenu={e => e.preventDefault()} />
 					<canvas ref={highlightRef} width={WIDTH} height={HEIGHT} className="hw-highlightOverlay" style={{ opacity: HIGHLIGHT_OPACITY }} aria-hidden="true" data-testid="notebook-highlight-overlay" />
 				</div>
-			</div><HandwritingToolbar tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} clear={clear} togglePaper={() => setDimPaper(v => !v)} /></div></div>
-			{saved.notice && <div className="hw-notice" role="status">{saved.notice}{saved.notice !== "Opening notebook…" && <button type="button" className="min-h-11 px-3 underline" {...handlers("Retry", () => { void recovery.current?.retry().then(() => refreshStatus.current()); })}>Retry</button>}</div>}
-			{attachmentNotice && <div className="hw-notice" role="status">{attachmentNotice.text}{attachmentNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
+			</div><HandwritingToolbar tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} clear={clear} togglePaper={() => setDimPaper(v => !v)} fingerDraw={fingerDraw} toggleFingerDraw={() => setFingerDraw(!fingerDrawRef.current)} /></div></div>
+			{/* Status lines stack at the paper's foot instead of overlapping;
+			    the page-attached line shows here only when the chat (which has
+			    its own delivery line) is out of view. */}
+			<div className="hw-notices">
+				{flattened && <p className="hw-notice">Flattened image · original marks cannot be erased</p>}
+				{fingerHint && !fingerDraw && <div className="hw-notice" role="status" data-testid="notebook-finger-hint">Fingers scroll the page. <button type="button" className="min-h-11 px-2 font-semibold underline" onClick={() => setFingerDraw(true)}>Draw with finger</button><button type="button" className="min-h-11 px-2 text-muted-foreground" aria-label="Dismiss" onClick={() => setFingerHint(false)}>Not now</button></div>}
+				{saved.notice && <div className="hw-notice" role="status">{saved.notice}{saved.notice !== "Opening notebook…" && <button type="button" className="min-h-11 px-3 underline" {...handlers("Retry", () => { void recovery.current?.retry().then(() => refreshStatus.current()); })}>Retry</button>}</div>}
+				{attachmentNotice && <div className="hw-notice hw-attachmentNotice" role="status">{attachmentNotice.text}{attachmentNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
+			</div>
 		</aside>
 	</div>;
 }

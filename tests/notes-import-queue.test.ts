@@ -93,14 +93,14 @@ it("an all-skipped selection publishes completion without validation errors or u
 	Object.defineProperty(oversized, "size", { value: Number.MAX_SAFE_INTEGER });
 	queue.append([file("config", "Vault/.git/config"), file(".draft.md", "Vault/.draft.md"), oversized]);
 	assert.equal(publications, 1);
-	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], completion: 1 });
+	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], receipts: [], completion: 1, retryable: 0 });
 	await tick();
 	assert.deepEqual(paths, []);
 	assert.equal(publications, 1, "no asynchronous settlement for skipped files");
 	queue.append([file("notes.md")]);
 	await tick();
 	assert.deepEqual(paths, ["notes.md"]);
-	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], completion: 2 });
+	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], receipts: ["notes.md: read — nothing new to add to your graph"], completion: 2, retryable: 0 });
 	unsubscribe();
 });
 
@@ -111,11 +111,12 @@ it("an all-skipped append does not complete or disturb an active import", async 
 	queue.append([file("notes.md")]);
 	queue.append([file("config", "Vault/.git/config"), file(".draft.md", "Vault/.draft.md")]);
 	assert.equal(calls, 1);
-	assert.deepEqual(queue.getSnapshot(), { importing: true, errors: [], notices: [], completion: 0 });
+	assert.deepEqual(queue.getSnapshot(), { importing: true, errors: [], notices: [], receipts: [], completion: 0, retryable: 0 });
 	resolve([success("notes.md")]);
 	await tick();
 	assert.equal(calls, 1);
-	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], completion: 1 });
+	// A finished file leaves a receipt saying what it added (whole-app redesign).
+	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], receipts: ["notes.md: read — nothing new to add to your graph"], completion: 1, retryable: 0 });
 });
 
 it("synchronous transport failures settle one wave once without reentrant pump recursion", async () => {
@@ -125,4 +126,35 @@ it("synchronous transport failures settle one wave once without reentrant pump r
 	await tick();
 	assert.equal(calls, 4); assert.equal(queue.getSnapshot().completion, 1); assert.equal(queue.getSnapshot().importing, false);
 	assert.equal(queue.getSnapshot().errors.length, 4);
+});
+
+it("definitely refused files can be retried; ambiguous transport failures never are", async () => {
+	const calls: { file: File; resolve: (rows: NotesImportResult[]) => void; reject: (error: Error) => void }[] = [];
+	const queue = createNotesImportQueue(async (files) => new Promise((resolve, reject) => { calls.push({ file: files[0]!, resolve, reject }); }));
+	queue.append([file("refused.md"), file("lost.md")]);
+	calls[0]!.resolve([{ requestIndex: 0, filePath: "refused.md", ok: false, outcome: "failed", error: "401: rejected" }]);
+	calls[1]!.reject(new Error("lost response"));
+	await tick();
+	assert.equal(queue.getSnapshot().retryable, 1);
+	assert.equal(queue.getSnapshot().errors.length, 2);
+	queue.retry();
+	assert.equal(calls.length, 3, "only the refused file is sent again");
+	assert.equal(calls[2]!.file.name, "refused.md");
+	calls[2]!.resolve([success("refused.md")]); await tick();
+	assert.deepEqual(queue.getSnapshot().errors, [], "a retry starts a fresh result set");
+	assert.equal(queue.getSnapshot().retryable, 0);
+	queue.append([file("again.md")]);
+	calls[3]!.resolve([{ requestIndex: 0, filePath: "again.md", ok: false, outcome: "failed", error: "nope" }]); await tick();
+	queue.dismiss();
+	assert.deepEqual(queue.getSnapshot().errors, []);
+	assert.equal(queue.getSnapshot().retryable, 0);
+});
+
+it("a finished import's receipt names the file and what landed in the graph", async () => {
+	const queue = createNotesImportQueue(async () => [{ requestIndex: 0, filePath: "hydraulics.md", ok: true, outcome: "completed", stats: { nodes: 2, chains: 1 } }]);
+	queue.append([file("hydraulics.md")]);
+	await tick();
+	assert.deepEqual(queue.getSnapshot().receipts, ["hydraulics.md: 2 ideas and 1 chain added to your graph"]);
+	queue.dismiss();
+	assert.deepEqual(queue.getSnapshot().receipts, []);
 });

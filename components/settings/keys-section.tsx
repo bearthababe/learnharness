@@ -147,13 +147,13 @@ export function providerKeyLabel(id: string, providers: readonly ProviderKeyInfo
 	return matches?.[0]?.label;
 }
 
-/** The minimal status line, e.g. "…ab12 · 64 chars" (" · env" marks an
- *  environment-owned value — the row itself is read-only then). Pure. */
+/** The minimal status line in words, e.g. "Saved key …ab12" or "From the
+ *  environment · …ca10" (an environment-owned value — the row itself is
+ *  read-only then). The character count was noise to a learner. Pure. */
 export function keyStatusLine(status: AuthKeyStatus): string {
-	if (!status.present || !status.masked) return "not set";
+	if (!status.present || !status.masked) return "Not set";
 	const tail = status.masked.replace(/ \((\d+) chars\)$/, "");
-	const chars = status.masked.match(/\((\d+) chars\)$/)?.[1] ?? "?";
-	return `${tail} · ${chars}${status.source === "env" ? " · env" : ""}`;
+	return status.source === "env" ? `From the environment · ${tail}` : `Saved key ${tail}`;
 }
 
 /** One table row: label left, tiny docs link + status right. Writable
@@ -267,11 +267,11 @@ function KeyTableRow({
 				aria-expanded={expanded}
 				data-testid={`${testid}-row`}
 				onClick={() => !envOwned && onToggle()}
-				className={`flex w-full items-center justify-between gap-3 rounded-sm px-1 py-1.5 text-left ${
+				className={`flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left ${
 					envOwned ? "cursor-default" : "cursor-pointer transition-colors hover:bg-accent/50"
 				}`}
 			>
-				<span className="font-ui text-xs text-foreground">{label}</span>
+				<span className="font-ui text-[14px] text-foreground">{label}</span>
 				<span className="flex items-center gap-2">
 					{docsUrl && (
 						<a
@@ -279,12 +279,12 @@ function KeyTableRow({
 							target="_blank"
 							rel="noreferrer"
 							onClick={(e) => e.stopPropagation()}
-							className="text-[10px] text-muted-foreground/60 underline-offset-2 hover:text-foreground hover:underline"
+							className="text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
 						>
-							key ↗
+							Get a key ↗
 						</a>
 					)}
-					<span data-testid={`${testid}-status`} className="font-mono text-[11px] text-muted-foreground">
+					<span data-testid={`${testid}-status`} className="text-[12.5px] text-muted-foreground">
 						{keyStatusLine(status)}
 					</span>
 				</span>
@@ -339,10 +339,10 @@ function AddProviderRow({
 				aria-expanded={open}
 				data-testid="add-provider"
 				onClick={() => setOpen((v) => !v)}
-				className="flex w-full items-center justify-between gap-3 rounded-sm px-1 py-1.5 text-left font-ui text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+				className="flex min-h-9 w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left font-ui text-[13.5px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
 			>
 				<span>+ Add a provider</span>
-				{addable.length > 0 && <span className="font-mono text-[11px]">{addable.length}</span>}
+				{addable.length > 0 && <span className="text-[12px]">{addable.length} available</span>}
 			</button>
 			{open && (
 				<MenuShell
@@ -566,7 +566,7 @@ export function KeysSection({
 				{unknownRows.length > 0 && <div data-testid="group-unknown-keys">
 					{unknownRows.map((status) => <div key={status.id} data-testid={`unknown-${status.id}`} className="flex items-center justify-between gap-3 px-1 py-1.5 opacity-40">
 						<span className="font-mono text-xs text-foreground">{status.id}</span>
-						<span className="font-mono text-[11px] text-muted-foreground">{status.masked}</span>
+						<span className="font-mono text-xs text-muted-foreground">{status.masked}</span>
 					</div>)}
 				</div>}
 			</SettingsGroup>
@@ -600,7 +600,7 @@ export function KeysSection({
 				))}
 				{label === "Dictation" && <>
 					<DictationLanguageSetting />
-					<p data-testid="dictation-setup-hint" className="px-1 text-[11px] leading-relaxed text-muted-foreground/70">
+					<p data-testid="dictation-setup-hint" className="px-1 text-xs leading-relaxed text-muted-foreground/70">
 						Create a <a
 							href="https://console.deepgram.com/"
 							target="_blank"
@@ -706,7 +706,7 @@ function CustomEndpointRow({
 				className="flex w-full items-center justify-between gap-3 rounded-sm px-1 py-1.5 text-left cursor-pointer transition-colors hover:bg-accent/50"
 			>
 				<span className="font-ui text-xs text-foreground">Custom endpoint</span>
-				<span data-testid="custom-endpoint-status" className="max-w-[60%] truncate font-mono text-[11px] text-muted-foreground">
+				<span data-testid="custom-endpoint-status" className="max-w-[60%] truncate font-mono text-xs text-muted-foreground">
 					{line}
 				</span>
 			</button>
@@ -906,8 +906,8 @@ function CustomEndpointEditor({
 					<option value="keyless">Keyless</option><option value="apiKey">API key</option>
 				</select>
 			</label>
-			{authMode === "apiKey" && keySource === "env" && <p className="text-[11px] text-muted-foreground" data-testid="custom-env-owned">Environment supplies the effective key. Change the environment to replace it.</p>}
-			{authMode === "apiKey" && keyPresent && (changedTarget || keyReuseRequired) && <label className="text-[11px]"><input type="checkbox" data-testid="custom-reuse-key" checked={reuseKey} onChange={(e) => setReuseKey(e.target.checked)} /> Allow reuse of the effective existing key for this URL</label>}
+			{authMode === "apiKey" && keySource === "env" && <p className="text-xs text-muted-foreground" data-testid="custom-env-owned">Environment supplies the effective key. Change the environment to replace it.</p>}
+			{authMode === "apiKey" && keyPresent && (changedTarget || keyReuseRequired) && <label className="text-xs"><input type="checkbox" data-testid="custom-reuse-key" checked={reuseKey} onChange={(e) => setReuseKey(e.target.checked)} /> Allow reuse of the effective existing key for this URL</label>}
 			<div className="flex items-center gap-2">
 				{authMode === "apiKey" && <input
 					type="password"
@@ -963,9 +963,9 @@ function CustomEndpointEditor({
 							const d = draftOf(m);
 							return (
 								<div key={m.id} className="flex items-center gap-2" data-testid={pinTestid("custom-pin-row", m.id)}>
-									<span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground" title={m.id}>
+									<span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground" title={m.id}>
 										{m.id}
-										<span className="block text-[10px] text-muted-foreground">Context: {d.context.trim() ? "user pin" : m.context ? `reported ${m.context}` : `fallback ${CUSTOM_MODEL_DEFAULT_CONTEXT_WINDOW}`} · Output: {d.maxTokens.trim() ? "user pin" : m.maxTokens ? `reported ${m.maxTokens}` : `fallback ${CUSTOM_MODEL_DEFAULT_MAX_TOKENS}`}</span>
+										<span className="block text-xs text-muted-foreground">Context: {d.context.trim() ? "user pin" : m.context ? `reported ${m.context}` : `fallback ${CUSTOM_MODEL_DEFAULT_CONTEXT_WINDOW}`} · Output: {d.maxTokens.trim() ? "user pin" : m.maxTokens ? `reported ${m.maxTokens}` : `fallback ${CUSTOM_MODEL_DEFAULT_MAX_TOKENS}`}</span>
 									</span>
 									<input
 										type="text"
@@ -976,7 +976,7 @@ function CustomEndpointEditor({
 										aria-label={`${m.id} context window in tokens`}
 										data-testid={pinTestid("custom-pin-context", m.id)}
 										disabled={pinsBusy}
-										className="h-7 w-20 shrink-0 rounded-sm border border-border bg-background px-1.5 text-right font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-muted-foreground/50"
+										className="h-7 w-20 shrink-0 rounded-sm border border-border bg-background px-1.5 text-right font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-muted-foreground/50"
 									/>
 									<input
 										type="text"
@@ -987,7 +987,7 @@ function CustomEndpointEditor({
 										aria-label={`${m.id} max output tokens`}
 										data-testid={pinTestid("custom-pin-maxtokens", m.id)}
 										disabled={pinsBusy}
-										className="h-7 w-20 shrink-0 rounded-sm border border-border bg-background px-1.5 text-right font-mono text-[11px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-muted-foreground/50"
+										className="h-7 w-20 shrink-0 rounded-sm border border-border bg-background px-1.5 text-right font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-muted-foreground/50"
 									/>
 									<select
 										value={d.reasoning}
@@ -995,7 +995,7 @@ function CustomEndpointEditor({
 										aria-label={`${m.id} reasoning effort support`}
 										data-testid={pinTestid("custom-pin-reasoning", m.id)}
 										disabled={pinsBusy}
-										className="h-7 shrink-0 rounded-sm border border-border bg-background px-1 font-ui text-[11px] text-foreground outline-none focus:border-muted-foreground/50"
+										className="h-7 shrink-0 rounded-sm border border-border bg-background px-1 font-ui text-xs text-foreground outline-none focus:border-muted-foreground/50"
 									>
 										<option value="">Reasoning effort: Use reported</option>
 										<option value="on">Reasoning effort: Supported</option>
@@ -1007,7 +1007,7 @@ function CustomEndpointEditor({
 					</div>
 					<div className="flex items-center gap-2">
 						{pinsError && (
-							<p role="alert" data-testid="custom-pins-error" className="text-[11px] text-red-500">
+							<p role="alert" data-testid="custom-pins-error" className="text-xs text-red-500">
 								{pinsError}
 							</p>
 						)}
@@ -1023,7 +1023,7 @@ function CustomEndpointEditor({
 					</div>
 				</div>
 			)}
-			<div className="flex flex-col gap-1 text-[11px] text-muted-foreground" data-testid="custom-help">
+			<div className="flex flex-col gap-1 text-xs text-muted-foreground" data-testid="custom-help">
 				{!setup && models.length > 0 && <p data-testid="custom-budget-help">Budget pins do not resize backend context. Blank uses reported limits, then fallback (8192 context / 4096 output). Custom pricing is unknown.</p>}
 				<p data-testid="custom-reasoning-help">Reasoning support is a capability declaration. The effort picker’s Off may not disable a custom backend’s default thinking.</p>
 			</div>

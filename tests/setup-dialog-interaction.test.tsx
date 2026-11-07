@@ -44,7 +44,7 @@ let host: HTMLDivElement | null = null;
 let closed = 0;
 let completed = 0;
 
-async function mount({ keyed = false, catalogFails = false } = {}) {
+async function mount({ keyed = false, catalogFails = false, models = [model] }: { keyed?: boolean; catalogFails?: boolean; models?: ModelCatalogEntry[] } = {}) {
 	closed = 0;
 	completed = 0;
 	globalThis.fetch = async (input, init) => {
@@ -55,7 +55,7 @@ async function mount({ keyed = false, catalogFails = false } = {}) {
 		if (catalogFails) throw new Error("fixture catalog failure");
 		return Response.json({
 			providers: [{ ...provider, keyPresent: keyed }],
-			models: keyed ? [model] : [],
+			models: keyed ? models : [],
 			slots: { strong: null, cheap: null, vision: null },
 		});
 	};
@@ -159,7 +159,7 @@ describe("setup polish interactions", () => {
 
 	it("model and thinking dropdowns keep outside-click dismissal and model guidance uses two sentences", async () => {
 		await mount({ keyed: true });
-		assert.equal(element('[data-testid="setup-stage-pickers"] > p').textContent, "Pick the model for each tier. All three are required before chats can start.");
+		assert.equal(element('[data-testid="setup-stage-pickers"] > p').textContent, "Sessions need a model for each of three tiers. Pick one model for all of them, or choose each tier yourself.");
 		await click(element('[data-testid="setup-trigger-strong"]'));
 		await click(element('[data-testid="setup-dialog"] h2'));
 		assert.equal(document.querySelector('[data-testid="setup-menu-strong"]'), null);
@@ -181,6 +181,19 @@ describe("setup polish interactions", () => {
 		const menu = element('[data-testid="setup-menu-vision"]');
 		assert.ok(!menu.textContent?.includes("fixture-text"));
 		assert.ok(menu.textContent?.includes("No models match."));
+	});
+
+	it("quick setup: one image-capable model fills every tier and enables Save", async () => {
+		const seeing: ModelCatalogEntry = { ...model, id: "fixture-vision", name: "Fixture vision", input: ["text", "image"] };
+		await mount({ keyed: true, models: [model, seeing] });
+		assert.equal((element('[data-testid="setup-save"]') as HTMLButtonElement).disabled, true);
+		await click(element('[data-testid="setup-trigger-all"]'));
+		const menu = element('[data-testid="setup-menu-all"]');
+		assert.ok(!menu.textContent?.includes("fixture-text"), "only models that can also read images are offered");
+		await click(element('[data-testid="model-option-fixture-vision"]'));
+		for (const slot of ["strong", "cheap", "vision"]) assert.match(element(`[data-testid="setup-trigger-${slot}"]`).textContent!, /fixture-vision/);
+		assert.equal((element('[data-testid="setup-save"]') as HTMLButtonElement).disabled, false);
+		assert.equal(closed, 0);
 	});
 
 	it("catalog failure uses the approved two-sentence error", async () => {

@@ -6,8 +6,9 @@
  * user-editable key map without touching any component.
  *
  * Design (owner-approved plan):
- * - Tab is DEAD: browser tab-focus navigation is abandoned entirely. Tab
- *   does nothing; Shift+Tab alone cycles the thinking level.
+ * - Tab and Shift+Tab move focus natively (whole-app redesign: keyboard
+ *   users must be able to leave every field). The thinking-level cycle
+ *   moved from Shift+Tab to Alt+T.
  * - Esc is a layered dismiss: topmost popover (each popover stopPropagation's
  *   its own Esc) → dictation stop → abort in-flight turn.
  * - The key map persists overrides in localStorage (`lh:keymap`, overrides
@@ -34,6 +35,7 @@ export type KeyAction =
 	| "question-next-row"
 	| "question-prev-row"
 	| "question-pick-row"
+	| "question-pick-number"
 	| "question-submit"
 	| "open-settings"
 	| "toggle-user-thinking";
@@ -58,7 +60,7 @@ export const KEYBOARD_ACTIONS: readonly KeyActionDef[] = [
 	{ id: "toggle-dictation", label: "Toggle dictation", scope: "global", binding: "mod+d" },
 	{ id: "open-settings", label: "Open settings", scope: "global", binding: "mod+," },
 	{ id: "open-model-picker", label: "Model selector", scope: "global", binding: "mod+k" },
-	{ id: "cycle-thinking", label: "Cycle thinking level", scope: "global", binding: "shift+tab" },
+	{ id: "cycle-thinking", label: "Cycle thinking level", scope: "global", binding: "alt+t" },
 	{ id: "toggle-sidebar", label: "Toggle sessions sidebar", scope: "global", binding: "mod+b" },
 	{ id: "sessions-search", label: "Search sessions", scope: "global", binding: "mod+shift+f" },
 	// (The Alt+↑/↓/↵ session cycle was RETIRED, owner 2026-10-10: barely
@@ -84,6 +86,9 @@ export const KEYBOARD_ACTIONS: readonly KeyActionDef[] = [
 	{ id: "question-next-row", label: "Question · next row", scope: "chat", binding: "arrowdown", displayOnly: true },
 	{ id: "question-prev-row", label: "Question · previous row", scope: "chat", binding: "arrowup", displayOnly: true },
 	{ id: "question-pick-row", label: "Question · pick row", scope: "chat", binding: "space", displayOnly: true },
+	// Number keys pick the answer with that number (round-6 redesign); the
+	// "binding" is a range label, shown as-is and never dispatched.
+	{ id: "question-pick-number", label: "Question · pick an answer by its number", scope: "chat", binding: "1–9", displayOnly: true },
 	{ id: "question-submit", label: "Question · submit", scope: "chat", binding: "enter", displayOnly: true },
 ];
 

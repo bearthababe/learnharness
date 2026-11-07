@@ -1,6 +1,6 @@
 .lh-compact-field { display: contents; }
 .lh-practice-collapsed { display: none; }
-.lh-compact-speech, .lh-compact-error, .lh-phone-plan, .lh-phone-usage-label, .lh-phone-reveal, .lh-phone-submit-icon { display: none; }
+.lh-compact-speech, .lh-compact-error, .lh-phone-plan, .lh-row-plan, .lh-phone-usage-label, .lh-phone-reveal, .lh-phone-submit-icon { display: none; }
 
 @media (max-width: 767px) {
 	.lh-reading-input { padding: 6px; }
@@ -30,7 +30,7 @@
 		border-radius: 12px;
 		background: var(--background);
 	}
-	.lh-compact-field:focus-within { border-color: var(--primary); }
+	.lh-compact-field:focus-within { border-color: color-mix(in oklab, var(--foreground) 34%, var(--border)); }
 	.lh-compact-field > :is(textarea, [data-file-path-input]) {
 		width: 100%;
 		min-width: 0;
@@ -77,15 +77,17 @@
 	.lh-compact-error button { min-height: 44px; min-width: 44px; text-decoration: underline; }
 	.lh-compact-stats .lh-dictation-slot { display: none; }
 	.lh-compact-stats { flex-wrap: nowrap; gap: 6px; padding-inline: 6px; padding-top: 2px; }
-	.lh-compact-stats .lh-phone-plan { display: block; min-width: 44px; min-height: 44px; }
 	.lh-compact-stats .lh-usage { position: static; order: 3; flex-shrink: 0; }
 	.lh-compact-stats .lh-usage-numbers { display: none; }
 	.lh-compact-stats .lh-phone-usage-label { display: inline; }
 	.lh-compact-stats [data-testid="stats-summary"] { min-height: 44px; min-width: 44px; justify-content: center; }
-	.lh-compact-stats [data-testid="model-control"] { flex: 1; min-width: 0; justify-content: center; gap: 2px; }
-	.lh-compact-stats [data-testid="model-control"] button { min-height: 44px; min-width: 44px; padding-inline: 6px; }
+	.lh-compact-stats [data-testid="model-control"] { flex: 1; min-width: 0; justify-content: flex-end; gap: 0; }
+	.lh-compact-stats [data-testid="model-control"] button { min-height: 44px; min-width: 44px; padding-inline: 7px; background: transparent; font-size: 14px; }
 	.lh-compact-stats [data-testid="stats-model"] { min-width: 0; }
-	.lh-compact-stats [data-testid="stats-model"] span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.lh-compact-stats [data-testid="stats-model"] .lh-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	/* The row under the composer names the model (round 8): with Plan in
+	   the header, notebook, model, thinking and Usage fit side by side. */
+	.lh-compact-stats [data-testid="stats-model"] { gap: 3px; padding-inline: 8px 6px; }
 	.lh-compact-stats [data-testid="stats-detail"] {
 		--tw-translate-x: 0;
 		left: 0; right: 0; transform: none; translate: none; width: 100%;

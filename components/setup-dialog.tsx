@@ -75,6 +75,9 @@ interface ModelsBody {
 	slots?: Record<ModelSlotName, { model: { provider: string; id: string }; thinkingLevel?: ThinkingLevel } | null>;
 }
 
+/** What the price pairs in the model lists mean, in plain words. */
+const PRICE_NOTE = "Prices are US dollars per million tokens read / written. A million tokens is roughly 750,000 words.";
+
 /** Pure: which stage the flow opens at — no keyed provider = keys first
  *  (owner's dependency ordering). Exported for tests. */
 export function setupStage(
@@ -160,7 +163,7 @@ export function SetupKeysBody({
 }) {
 	return (
 		<div className="flex flex-col gap-3 px-6 py-5" data-testid="setup-stage-keys">
-			<p className="text-xs text-muted-foreground">
+			<p className="text-[13.5px] leading-relaxed text-muted-foreground">
 				Choose your AI provider and paste its API key. You’ll pick your models next.
 			</p>
 			<div className="flex flex-col gap-2">
@@ -171,7 +174,7 @@ export function SetupKeysBody({
 						data-testid="setup-key-provider"
 						aria-expanded={menuOpen}
 						onClick={onToggleMenu}
-						className="flex h-7 w-full items-center gap-1 rounded-sm border border-border bg-background px-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50"
+						className="flex h-9 w-full items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 font-ui text-[13.5px] text-foreground transition-colors hover:border-muted-foreground/50"
 					>
 						<span className="min-w-0 flex-1 truncate text-left">{provider ? provider.label : "Pick a provider…"}</span>
 						<span aria-hidden className="text-muted-foreground">
@@ -184,7 +187,7 @@ export function SetupKeysBody({
 							testid="setup-key-provider-menu"
 							preferredSide="down"
 							align="left"
-							menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
+							menuClass="flex w-[min(22rem,calc(100vw-1.5rem))] flex-col rounded-2xl border border-border bg-popover p-2 text-[13px] shadow-2xl"
 						>
 							<ProviderMenuList providers={providers ?? []} onPick={onPick} />
 						</MenuShell>
@@ -205,14 +208,14 @@ export function SetupKeysBody({
 								data-testid="setup-key-input"
 								disabled={saving}
 								autoFocus
-								className="h-7 min-w-0 flex-1 rounded-sm border border-border bg-background px-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-muted-foreground/50"
+								className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2.5 font-mono text-[13px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-muted-foreground/50"
 							/>
 							<button
 								type="button"
 								onClick={onSave}
 								disabled={saving || !value.trim()}
 								data-testid="setup-key-save"
-								className="shrink-0 rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
+								className="shrink-0 rounded-lg bg-primary px-4 py-2 font-ui text-[13.5px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-accent disabled:text-muted-foreground"
 							>
 								{saving ? "Saving…" : "Save key"}
 							</button>
@@ -225,7 +228,7 @@ export function SetupKeysBody({
 					</p>
 				)}
 			</div>
-			<div className="mt-2 border-t border-border/60 pt-4"><h3 className="mb-3 font-ui text-xs text-muted-foreground">Subscriptions</h3><SubscriptionConnections setup /></div>
+			<div className="mt-2 border-t border-border/60 pt-4"><h3 className="mb-3 font-ui text-[13px] font-semibold text-muted-foreground">Subscriptions</h3><SubscriptionConnections setup /></div>
 		</div>
 	);
 }
@@ -264,7 +267,8 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 	const editedSlots = useRef(new Set<ModelSlotName>());
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [openMenu, setOpenMenu] = useState<{ slot: ModelSlotName; kind: "model" | "thinking" } | null>(null);
+	// "all" = the quick-setup picker that fills every tier at once.
+	const [openMenu, setOpenMenu] = useState<{ slot: ModelSlotName | "all"; kind: "model" | "thinking" } | null>(null);
 	// Stage 1's first-key screen (zero-keys wave): the provider roster,
 	// the chosen provider + pasted value, its busy/error pair, and its own
 	// menu-open bit (the slot menus' dismissal machinery covers it too —
@@ -448,7 +452,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 
 	return createPortal(
 		<div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-background/80"
+			className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-[2px]"
 			data-testid="setup-backdrop"
 			{...backdropDismiss}
 		>
@@ -457,18 +461,18 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 				aria-modal="true"
 				aria-label="Set up your models"
 				data-testid="setup-dialog"
-				className="settings-dialog-pop flex max-h-[85vh] w-[640px] max-w-[90vw] flex-col overflow-hidden rounded-md border border-border bg-card shadow-xl"
+				className="settings-dialog-pop flex max-h-[88dvh] w-[640px] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-border bg-popover shadow-2xl max-md:h-dvh max-md:max-h-none max-md:w-full max-md:max-w-none max-md:rounded-none max-md:border-0 max-md:pt-[env(safe-area-inset-top)]"
 				onClick={(e) => e.stopPropagation()}
 			>
 				<header className="flex h-15 shrink-0 items-center gap-3 border-b border-border px-5">
-					<h2 className="font-title text-2xl tracking-tight">Set up your models</h2>
+					<h2 className="text-[19px] font-semibold tracking-tight">Set up your models</h2>
 					<Hint label="Close" binding="escape" side="left">
 <button
 						type="button"
 						aria-label="Close setup"
 						data-testid="setup-close"
 						onClick={onClose}
-						className="ml-auto text-muted-foreground transition-colors hover:text-foreground"
+						className="ml-auto flex size-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-md:size-11"
 					>
 						✕
 					</button>
@@ -481,14 +485,71 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 					</p>
 				)}
 				{stage === "loading" ? (
-					!failed && <p data-testid="setup-stage-loading" role="status" className="px-6 py-5 text-xs text-muted-foreground">Loading models…</p>
+					!failed && <p data-testid="setup-stage-loading" role="status" className="px-6 py-5 text-[13px] text-muted-foreground">Loading models…</p>
 				) : stage === "keys" ? (
 					<div className="flex flex-col px-6 py-5">{keysBody}</div>
 				) : (
 					<div className="flex flex-col gap-4 overflow-y-auto px-6 py-5" data-testid="setup-stage-pickers">
-						<p className="text-xs text-muted-foreground">
-							Pick the model for each tier. All three are required before chats can start.
+						<p className="text-[13.5px] leading-relaxed text-muted-foreground">
+							Sessions need a model for each of three tiers. Pick one model for all of them, or choose each tier yourself.
 						</p>
+						{(() => {
+							// QUICK SETUP (whole-app redesign): one image-capable model
+							// fills all three tiers; the per-tier rows below stay for
+							// anyone who wants cheaper helpers.
+							const imageCapable = (catalog?.models ?? (failed ? [] : undefined))?.filter((m) => m.input.includes("image") || m.provider === CUSTOM_PROVIDER.id);
+							const strong = picked.strong;
+							const allSame = !!strong && SLOT_ORDER.every((slot) => picked[slot]?.id === strong.id && picked[slot]?.provider === strong.provider);
+							return (
+								<div data-testid="setup-quick" className="flex flex-col gap-2.5 rounded-xl border border-border bg-background/50 p-3.5">
+									<span>
+										<span className="block text-[14.5px] font-semibold text-foreground">One model for everything</span>
+										<span className="block text-[12.5px] leading-relaxed text-muted-foreground">The quickest start: one model teaches, helps and reads images. You can give each tier its own model later in Settings.</span>
+									</span>
+									<div className="relative">
+										<button
+											type="button"
+											aria-label="One model for every tier"
+											data-testid="setup-trigger-all"
+											aria-expanded={openMenu?.slot === "all"}
+											onClick={() => setOpenMenu(openMenu?.slot === "all" ? null : { slot: "all", kind: "model" })}
+											className="flex h-10 w-full items-center gap-1.5 rounded-lg border border-border bg-background px-3 font-ui text-[14px] text-foreground transition-colors hover:border-muted-foreground/50"
+										>
+											<span className="min-w-0 flex-1 truncate text-left">{allSame ? prettyModel(strong!.id) : "Pick one model…"}</span>
+											<span aria-hidden className="text-muted-foreground">▾</span>
+										</button>
+										{openMenu?.slot === "all" && (
+											<MenuShell
+												anchorTestid="setup-trigger-all"
+												testid="setup-menu-all"
+												preferredSide="down"
+												align="left"
+												menuClass="flex w-[min(22rem,calc(100vw-1.5rem))] flex-col rounded-2xl border border-border bg-popover p-2 text-[13px] shadow-2xl"
+											>
+												<ModelMenuList
+													models={imageCapable}
+													effectiveId={allSame ? strong?.id : undefined}
+													effectiveProvider={allSame ? strong?.provider : undefined}
+													vision
+													onPick={(m) => {
+														for (const slot of SLOT_ORDER) editedSlots.current.add(slot);
+														setPicked((prev) => ({ ...prev, strong: m, cheap: m, vision: m }));
+														setLevels((prev) => {
+															const next = { ...prev };
+															for (const slot of SLOT_ORDER) next[slot] = populateLevel(prev[slot], m.supportedLevels);
+															return next;
+														});
+														setOpenMenu(null);
+													}}
+													footer={imageCapable && imageCapable.length === 0 ? "No image-capable models. Pick each tier below instead." : `Models that can also read images. ${PRICE_NOTE}`}
+												/>
+											</MenuShell>
+										)}
+									</div>
+								</div>
+							);
+						})()}
+						<div aria-hidden className="flex items-center gap-3 text-[12px] text-(--lh-faint)"><span className="h-px flex-1 bg-border" />or pick each tier<span className="h-px flex-1 bg-border" /></div>
 						{SLOT_ORDER.map((slot) => {
 							const entry = picked[slot];
 							const level = levels[slot];
@@ -502,17 +563,17 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 							return (
 								<div key={slot} data-testid={`setup-slot-${slot}`} className="flex flex-col gap-1.5">
 									<span className="flex items-center gap-1.5">
-										<span className="font-ui text-sm text-foreground">{SLOT_META[slot].label}</span>
+										<span className="font-ui text-[15px] font-semibold text-foreground">{SLOT_META[slot].label}</span>
 										{!catalog?.slots?.[slot]?.model && !picked[slot] && (
 											<span
 												data-testid={`setup-needed-${slot}`}
-												className="rounded-sm border border-border px-1 py-0.5 text-[10px] font-normal tracking-wide text-muted-foreground"
+												className="rounded-full bg-accent px-2 py-0.5 text-[12.5px] font-medium text-muted-foreground"
 											>
 												needed
 											</span>
 										)}
 									</span>
-									<span className="text-xs text-muted-foreground/70">{SLOT_META[slot].roster}</span>
+									<span className="text-[12.5px] text-muted-foreground">{SLOT_META[slot].roster}</span>
 									{slot !== "strong" && <><ChatGPTBackgroundAccess provider={entry?.provider} /><NativeSubscriptionBackgroundAccess provider={entry?.provider} /></>}
 									<div className="flex items-center gap-2">
 										<div className="relative flex-1">
@@ -523,9 +584,9 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 												data-testid={`setup-trigger-${slot}`}
 												aria-expanded={openMenu?.slot === slot && openMenu.kind === "model"}
 												onClick={() => setOpenMenu(openMenu?.slot === slot && openMenu.kind === "model" ? null : { slot, kind: "model" })}
-												className="flex h-7 min-w-40 w-full items-center gap-1 rounded-sm border border-border bg-background px-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50"
+												className="flex h-9 min-w-40 w-full items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 font-ui text-[13.5px] text-foreground transition-colors hover:border-muted-foreground/50"
 											>
-												<span className="min-w-0 flex-1 truncate">{entry ? prettyModel(entry.id) : "Pick a model…"}</span>
+												<span className="min-w-0 flex-1 truncate text-left">{entry ? prettyModel(entry.id) : "Pick a model…"}</span>
 												<span aria-hidden className="text-muted-foreground">
 													▾
 												</span>
@@ -546,7 +607,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 													testid={`setup-menu-${slot}`}
 													preferredSide="down"
 													align="left"
-													menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
+													menuClass="flex w-[min(22rem,calc(100vw-1.5rem))] flex-col rounded-2xl border border-border bg-popover p-2 text-[13px] shadow-2xl"
 												>
 													<ModelMenuList
 														models={slotCatalog}
@@ -566,7 +627,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 															}));
 															setOpenMenu(null);
 														}}
-														footer={slotCatalog && slotCatalog.length === 0 && slot === "vision" ? "No image-capable models. Add a provider key with access to a vision model." : undefined}
+														footer={slotCatalog && slotCatalog.length === 0 && slot === "vision" ? "No image-capable models. Add a provider key with access to a vision model." : PRICE_NOTE}
 													/>
 												</MenuShell>
 											)}
@@ -581,7 +642,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 												aria-expanded={openMenu?.slot === slot && openMenu.kind === "thinking"}
 												disabled={!entry}
 												onClick={() => setOpenMenu(openMenu?.slot === slot && openMenu.kind === "thinking" ? null : { slot, kind: "thinking" })}
-												className="flex h-7 w-24 items-center gap-1 rounded-sm border border-border bg-background px-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
+												className="flex h-9 w-28 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 font-ui text-[13.5px] text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
 											>
 												<span className="min-w-0 flex-1 truncate text-left">
 													{entry ? (level ? THINKING_LABEL[level] ?? level : "…") : "—"}
@@ -614,13 +675,14 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 								</div>
 							);
 						})}
-						<div className="flex items-center gap-3">
+						{/* Save stays reachable without scrolling on short screens. */}
+						<div className="sticky -bottom-5 -mx-6 -mb-5 mt-1 flex items-center gap-3 border-t border-border bg-popover px-6 pb-5 pt-3">
 							<button
 								type="button"
 								data-testid="setup-save"
 								disabled={!allPicked || saving}
 								onClick={() => void save()}
-								className="rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
+								className="rounded-lg bg-primary px-4 py-2 font-ui text-[13.5px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-accent disabled:text-muted-foreground"
 							>
 								{saving ? "Saving…" : "Save models"}
 							</button>

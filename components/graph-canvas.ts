@@ -118,6 +118,8 @@ export interface CanvasColors {
 	edge: string;
 	label: string;
 	hoverText: string;
+	/** Text halo behind cluster names (the page background). Optional. */
+	halo?: string;
 }
 
 export interface CanvasData {
@@ -148,7 +150,9 @@ export interface RendererCallbacks {
 	onStageClick: () => void;
 	/** Any camera move (pan/zoom) — the caller dismisses anchored UI and
 	 *  persists the camera (view state). */
-	onCameraMove: (transform: { k: number; x: number; y: number }) => void;
+	/** `user` is false for the renderer's own framing (fit), which callers
+	 *  should not persist as the learner's chosen camera. */
+	onCameraMove: (transform: { k: number; x: number; y: number }, user?: boolean) => void;
 	/** The live sim settled after a drag: commit the new rest state
 	 *  (the caller PUTs it to the positions ledger). */
 	onCommit: (positions: Record<string, Position>) => void;
@@ -157,7 +161,10 @@ export interface RendererCallbacks {
 // ─── Constants (ported verbatim from the sigma view) ────────────────────────
 
 const LABEL_SIZE = 12; // the reference label size the wrap-width ratio is taken against
-const LABEL_WEIGHT = "500";
+const LABEL_WEIGHT = "600";
+/** Screen padding around the framed graph: room for cluster names, which
+ *  extend past their outermost nodes. */
+const FIT_PADDING = 72;
 
 /** Region (cluster) labels — wave 7's session names made the labels
  *  LONG: imported-file paths and renamed chat titles. They wrap at a
@@ -569,6 +576,10 @@ export class GraphCanvasRenderer {
 	private transform: ZoomTransform = zoomIdentity;
 	/** Set once the first fit happens; the camera then survives setData. */
 	private hasFit = false;
+	/** The camera is still the renderer's own fit (no learner pan/zoom
+	 *  since): a resize re-frames instead of keeping a stale scale. */
+	private autoFitted = false;
+	private fitting = false;
 	/** Last-synced CSS size — the resize anchor computes the world point
 	 *  under the PRE-resize viewport center from these (ResizeObserver
 	 *  callbacks already see the NEW size in clientWidth/Height). */
@@ -644,7 +655,7 @@ export class GraphCanvasRenderer {
 	/** World rect the bitmap covers (drawImage target coords). */
 	private regionRect: { minX: number; minY: number; w: number; h: number } | null = null;
 	/** Region labels: cluster centroid + hue, computed at splat build. */
-	private regionMeta: { id: string; label: string | null; lines: string[] | null; cx: number; cy: number; hue: number }[] = [];
+	private regionMeta: { id: string; label: string | null; lines: string[] | null; cx: number; cy: number; hue: number; members?: number }[] = [];
 	private regionTuning: RegionTuning = DEFAULT_REGION_TUNING;
 	private physicsTuning: PhysicsTuning = DEFAULT_PHYSICS_TUNING;
 	/** Gravity center for the live sim (graph bbox centroid at setData). */
@@ -677,8 +688,9 @@ export class GraphCanvasRenderer {
 			.on("zoom", ({ transform }) => {
 				this.transform = transform;
 				this.markDirty();
+				if (!this.fitting) this.autoFitted = false;
 				// The transform doubles as the persistence payload (view state).
-				this.callbacks.onCameraMove(transform);
+				this.callbacks.onCameraMove(transform, !this.fitting);
 			});
 		select(canvas)
 			.call(this.zoomBehavior)
@@ -725,7 +737,7 @@ export class GraphCanvasRenderer {
 			const wx = (prevW / 2 - tx) / k;
 			const wy = (prevH / 2 - ty) / k;
 			this.syncSize();
-			if (!this.hasFit) this.fit(); // first real size → fit once
+			if (!this.hasFit || this.autoFitted) this.fit(); // first real size, or still the auto-fit → (re)frame
 			else {
 				this.refreshFitZoom(); // the gate's "1×" is viewport-bound
 				// Center-anchor (2026-09-17, owner): same world point under
@@ -861,6 +873,50 @@ export class GraphCanvasRenderer {
 		if (changed) this.markDirty();
 	}
 
+	/** A node's current position in canvas pixels (null when unknown) — the
+	 *  search results anchor the detail card to the picked node. */
+	screenPositionOf(nodeId: string): Pt | null {
+		const n = this.nodeById.get(nodeId);
+		if (!n) return null;
+		const { x: tx, y: ty, k } = this.transform;
+		return { x: n.x * k + tx, y: n.y * k + ty };
+	}
+
+	/** Frame a set of nodes (a cluster chip): the camera eases to fit them
+	 *  with the standard padding. A learner action, so it is persisted. */
+	focusNodes(ids: readonly string[]): void {
+		const pts = ids.map((id) => this.nodeById.get(id)).filter((n): n is CanvasNode => !!n);
+		if (pts.length === 0) return;
+		const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+		if (w < 10 || h < 10) return;
+		const box = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+		for (const n of pts) {
+			box.minX = Math.min(box.minX, n.x); box.maxX = Math.max(box.maxX, n.x);
+			box.minY = Math.min(box.minY, n.y); box.maxY = Math.max(box.maxY, n.y);
+		}
+		const t = fitTransform(box, w, h, FIT_PADDING);
+		// Never zoom in past a comfortable reading scale for tiny clusters.
+		const k = Math.min(t.k, this.kFit * 4);
+		const cx = (box.minX + box.maxX) / 2, cy = (box.minY + box.maxY) / 2;
+		select(this.canvas).call(this.zoomBehavior.transform, zoomIdentity.translate(w / 2 - cx * k, h / 2 - cy * k).scale(k));
+	}
+
+	/** Frame the whole graph as a learner action (the "Whole graph" chip):
+	 *  persisted like any other camera move, and still re-fits on resize. */
+	showAll(): void {
+		if (!this.worldBBox) return;
+		const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+		if (w < 10 || h < 10) return;
+		const t = fitTransform(this.worldBBox, w, h, FIT_PADDING);
+		select(this.canvas).call(this.zoomBehavior.transform, zoomIdentity.translate(t.x, t.y).scale(t.k));
+		this.autoFitted = true;
+	}
+
+	/** Glow one node as if hovered (search result hover), or clear it. */
+	highlight(nodeId: string | null): void {
+		this.setHover(nodeId);
+	}
+
 	setVisible(visible: ReadonlySet<string> | null): void {
 		this.visible = visible;
 		this.geoVersion++; // member visibility changes hulls + paths
@@ -875,13 +931,19 @@ export class GraphCanvasRenderer {
 		const w = this.canvas.clientWidth;
 		const h = this.canvas.clientHeight;
 		if (w < 10 || h < 10) return; // layout not ready yet; the ResizeObserver retries
-		const t = fitTransform(this.worldBBox, w, h, 40);
+		const t = fitTransform(this.worldBBox, w, h, FIT_PADDING);
 		this.kFit = t.k;
 		this.hasFit = true;
-		select(this.canvas).call(
-			this.zoomBehavior.transform,
-			zoomIdentity.translate(t.x, t.y).scale(t.k),
-		);
+		this.fitting = true;
+		try {
+			select(this.canvas).call(
+				this.zoomBehavior.transform,
+				zoomIdentity.translate(t.x, t.y).scale(t.k),
+			);
+		} finally {
+			this.fitting = false;
+		}
+		this.autoFitted = true;
 	}
 
 	/** Refresh the label-gate's "1×" reference from the current bbox +
@@ -891,7 +953,7 @@ export class GraphCanvasRenderer {
 		if (!this.worldBBox) return;
 		const w = this.canvas.clientWidth;
 		const h = this.canvas.clientHeight;
-		if (w >= 10 && h >= 10) this.kFit = fitTransform(this.worldBBox, w, h, 40).k;
+		if (w >= 10 && h >= 10) this.kFit = fitTransform(this.worldBBox, w, h, FIT_PADDING).k;
 	}
 
 	destroy(): void {
@@ -1427,6 +1489,7 @@ export class GraphCanvasRenderer {
 					cy: sumY / members,
 					hue: clusterHue(cluster.id),
 					lines: null,
+					members,
 				});
 			}
 		});
@@ -1735,12 +1798,35 @@ export class GraphCanvasRenderer {
 			// Screen px ÷ k = world units — the lines stay evenly spaced
 			// at a constant on-screen pitch at any zoom.
 			const lineH = (settings.clusterLabelSize * REGION_LABEL_LINE_HEIGHT) / k;
-			for (const rm of this.regionMeta) {
+			// A background-coloured halo keeps the names readable where they
+			// cross bright edges (the labels sit on top of the graph).
+			ctx.lineJoin = "round";
+			ctx.lineWidth = 5 / k;
+			ctx.strokeStyle = data.colors.halo ?? "rgba(17, 17, 19, 0.88)";
+			// Names never stack on each other: larger clusters claim their
+			// spot first; a name that would overlap one already drawn waits
+			// for a zoom level where it fits.
+			const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
+			const pad = 4 / k;
+			// The visible world span: names near an edge slide inward instead
+			// of running off the canvas.
+			const viewLeft = -this.transform.x / k + 16 / k;
+			const viewRight = (this.canvas.clientWidth - this.transform.x) / k - 16 / k;
+			const ordered = [...this.regionMeta].sort((a, b) => (b.members ?? 0) - (a.members ?? 0));
+			for (const rm of ordered) {
 				if (!rm.lines) continue;
-				ctx.fillStyle = `hsla(${rm.hue}, 55%, 78%, 0.85)`;
+				const width = Math.max(...rm.lines.map((line) => ctx.measureText(line).width));
+				const height = rm.lines.length * lineH;
+				let cx = rm.cx;
+				if (viewRight - viewLeft > width) cx = Math.min(Math.max(cx, viewLeft + width / 2), viewRight - width / 2);
+				const box = { x0: cx - width / 2 - pad, x1: cx + width / 2 + pad, y0: rm.cy - height / 2 - pad, y1: rm.cy + height / 2 + pad };
+				if (placed.some((p) => box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0)) continue;
+				placed.push(box);
+				ctx.fillStyle = `hsla(${rm.hue}, 70%, 82%, 1)`;
 				const firstOffset = (-(rm.lines.length - 1) / 2) * lineH;
 				for (let i = 0; i < rm.lines.length; i++) {
-					ctx.fillText(rm.lines[i]!, rm.cx, rm.cy + firstOffset + i * lineH);
+					ctx.strokeText(rm.lines[i]!, cx, rm.cy + firstOffset + i * lineH);
+					ctx.fillText(rm.lines[i]!, cx, rm.cy + firstOffset + i * lineH);
 				}
 			}
 			ctx.restore();

@@ -28,7 +28,7 @@
 @media (min-width: 768px) {
 	.hw-splitLayout { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
 	.hw-tabletControl { display: inline-flex; }
-	.hw-chat { flex: 0 0 calc(var(--notebook-context-share, 50%) - 14px); overflow: hidden; }
+	.hw-chat { flex: 0 0 calc(var(--notebook-context-share, 46%) - 14px); overflow: hidden; }
 	.hw-mobileHidden { display: flex; }
 	.hw-mobileSwitch { display: none; }
 	.hw-splitDivider { display: flex; flex: 0 0 28px; align-items: center; justify-content: center; touch-action: none; user-select: none; cursor: ns-resize; background: var(--background); border-block: 1px solid var(--border); }
@@ -89,3 +89,52 @@
 .hw-pageRow > button:first-child { display: flex; align-items: center; gap: 16px; padding: 8px; width: 100%; text-align: left; }
 .hw-pageRow img { width: 140px; height: 180px; object-fit: contain; border: 1px solid var(--border); }
 .hw-pageRow small { display: block; }
+/* Status lines stack at the foot of the paper (whole-app redesign). */
+.hw-notices { position: absolute; z-index: 4; inset-inline: 8px; bottom: 8px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.hw-notices:empty { display: none; }
+.hw-notices > .hw-notice { position: static; inset: auto; pointer-events: auto; }
+@media (min-width: 768px) {
+	.hw-splitLayout:not(.hw-fullNotebook) .hw-attachmentNotice { display: none; }
+}
+
+/* ── The tool wheel (owner amendment 2; after the Concepts wheel) ─────────
+   One 184px disc docked in the paper's upper-right corner: pen, highlighter
+   and eraser on its ring (52px each), Undo/Redo on its left, the current
+   ink and tool in the middle. Every control is at least 44px. */
+.hw-wheel { position: absolute; top: 10px; right: 10px; width: 184px; height: 184px; pointer-events: none; }
+.hw-wheel > * { pointer-events: auto; }
+.hw-wheelRing { position: absolute; inset: 0; border-radius: 50%; background: var(--tool-surface); border: 1px solid var(--tool-edge); box-shadow: var(--tool-shadow); pointer-events: none !important; }
+.hw-wheelRing::after { content: ""; position: absolute; inset: 56px; border-radius: 50%; border: 1px solid var(--tool-edge); }
+.hw-wheelTool { position: absolute; display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; border: 1px solid transparent; border-radius: 50%; color: var(--muted-foreground); transition: background 120ms, color 120ms, border-color 120ms; }
+.hw-wheelTool:hover { background: var(--accent); color: var(--foreground); }
+.hw-wheelTool[aria-pressed="true"] { color: var(--foreground); background: color-mix(in srgb, var(--foreground) 12%, var(--card)); border-color: color-mix(in srgb, var(--foreground) 55%, transparent); }
+.hw-wheelTool .hw-toolGlyph { width: 26px; height: 32px; }
+/* Five evenly spaced slots on the ring (every 72° from 12 o'clock): pen,
+   highlighter, eraser, then redo and undo — no empty side of the disc. */
+.hw-wheel_pen { left: 66px; top: 2px; }
+.hw-wheel_highlighter { left: 127px; top: 46px; }
+.hw-wheel_eraser { left: 104px; top: 118px; }
+.hw-wheelRedo { position: absolute; left: 32px; top: 122px; }
+.hw-wheelUndo { position: absolute; left: 9px; top: 50px; }
+.hw-wheelUndo .hw-iconButton, .hw-wheelRedo .hw-iconButton { width: 44px; height: 44px; }
+.hw-wheelCenter { position: absolute; left: 60px; top: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 64px; height: 64px; border-radius: 50%; background: var(--card); border: 1px solid var(--tool-edge); color: var(--foreground); }
+.hw-wheelCenter:hover, .hw-wheelCenter[aria-expanded="true"] { background: var(--accent); }
+.hw-wheelInk { display: block; width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1px #ffffff30; }
+.hw-wheelLabel { font-size: 12px; font-weight: 600; line-height: 1; }
+.hw-wheelInspector { right: 192px; top: 0; }
+.hw-wheelLabel[data-preview] { color: var(--foreground); }
+.hw-wheelLabel { display: inline-flex; align-items: center; gap: 1px; }
+.hw-wheelChevron { width: 11px; height: 11px; opacity: .7; }
+.hw-wheelLegend { position: absolute; right: 196px; top: 4px; width: 214px; padding: 12px 14px; border: 1px solid var(--tool-edge); border-radius: 16px; background: var(--tool-surface); box-shadow: var(--tool-shadow); color: var(--foreground); font-size: 14px; }
+.hw-wheelLegend ul { display: grid; gap: 7px; margin: 8px 0 10px; }
+.hw-wheelLegend .hw-toolGlyph { width: 18px; height: 22px; color: var(--muted-foreground); }
+.hw-wheelLegendTitle { font-size: 13px; font-weight: 600; color: var(--muted-foreground); }
+.hw-wheelLegendInk { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: var(--foreground); box-shadow: 0 0 0 3px var(--card), 0 0 0 4px var(--tool-edge); margin-inline: 1px; }
+.hw-wheelLegendHint { font-size: 13px; line-height: 1.35; color: var(--muted-foreground); }
+.hw-wheelLegendDone { margin-top: 10px; min-height: 40px; width: 100%; border-radius: 10px; background: var(--accent); font-weight: 600; }
+/* The legend never takes a stroke: ink passes under it (only "Got it" is
+   pressable), and a page narrower than a tablet's leaves it out. */
+.hw-wheel > .hw-wheelLegend { pointer-events: none; }
+.hw-wheel > .hw-wheelLegend .hw-wheelLegendDone { pointer-events: auto; }
+@media (max-width: 767px) { .hw-wheel > .hw-wheelLegend { display: none; } }
+@media (prefers-reduced-motion: reduce) { .hw-wheelTool { transition: none; } }

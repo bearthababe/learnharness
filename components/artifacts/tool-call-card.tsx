@@ -33,14 +33,24 @@ function headlineArg(tool: string, input: unknown): string {
 		return p;
 	}
 	if (typeof inp.pattern === "string") return inp.pattern;
-	// list_propositions: the session id is the call's subject — the
-	// collapsed line reads "list_propositions chat_…". Shown as given
-	// (the id is exactly what list_sessions reported to the model).
-	if (tool === "list_propositions" && typeof inp.session === "string" && inp.session.length > 0) {
-		return inp.session;
-	}
+	// list_propositions: the session id stays in the expanded input — an
+	// opaque id on the collapsed line is noise to the learner.
 	return "";
 }
+
+/** The learner-facing verb for each tool (whole-app redesign): the collapsed
+ *  line says what happened in plain words; the technical name and raw
+ *  arguments stay one click away in the expanded view. */
+const TOOL_LABEL: Record<string, string> = {
+	read: "Read file",
+	ls: "Listed folder",
+	find: "Searched files for",
+	grep: "Searched text for",
+	show_image: "Looked at image",
+	list_sessions: "Looked through your sessions",
+	list_propositions: "Read the ideas from a session",
+};
+const toolLabel = (tool: string) => TOOL_LABEL[tool] ?? tool.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
 
 /** Render a tool result body: plain strings verbatim, image-bearing read
  *  results show their text + an attachment note (the image itself is the
@@ -73,39 +83,40 @@ export function ToolCallCard({ part }: ArtifactPartProps) {
 			data-tool={tool}
 			className="group my-1 w-full max-w-2xl select-none"
 		>
-			<summary className="flex cursor-pointer list-none items-center gap-2 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
-				<span className={`font-medium uppercase tracking-wide ${failed ? "text-red-500" : ""}`}>
-					{tool}
+			<summary title={tool} className="flex cursor-pointer list-none items-center gap-2 text-[13px] text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+				<span className={`font-medium ${failed ? "text-red-500" : ""}`}>
+					{toolLabel(tool)}{failed ? " — failed" : ""}
 				</span>
-				{arg && <span className="truncate">{arg}</span>}
+				{arg && <span className="truncate font-mono text-[12px] text-foreground/70">{arg}</span>}
 				<ChevronRight className="size-3 shrink-0 opacity-50 transition-transform group-open:rotate-90" />
 			</summary>
 			<div className="mt-2 space-y-2 rounded-xl border bg-card p-3 text-xs">
+				<div className="font-mono text-xs text-muted-foreground">{tool}</div>
 				{p.input != null && (
 					<div>
-						<div className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">
+						<div className="mb-1 font-semibold text-muted-foreground">
 							Input
 						</div>
-						<pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
+						<pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-relaxed">
 							{JSON.stringify(p.input, null, 2)}
 						</pre>
 					</div>
 				)}
 				{typeof p.errorText === "string" ? (
 					<div>
-						<div className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">
+						<div className="mb-1 font-semibold text-muted-foreground">
 							Error
 						</div>
-						<pre className="whitespace-pre-wrap break-all font-mono text-[11px] text-red-500">
+						<pre className="whitespace-pre-wrap break-all font-mono text-xs text-red-500">
 							{p.errorText}
 						</pre>
 					</div>
 				) : out != null ? (
 					<div>
-						<div className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">
+						<div className="mb-1 font-semibold text-muted-foreground">
 							Output
 						</div>
-						<pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
+						<pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-relaxed">
 							{out}
 						</pre>
 					</div>

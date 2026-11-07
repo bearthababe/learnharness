@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIcon, BotIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
+import { ActivityIcon, AlertCircleIcon, BotIcon, CheckCircle2Icon, ChevronDownIcon, CircleSlashIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CallUsage, JobKind, JobRecord } from "@/src/core";
 import { isModelsRefusal, isProviderKeyRefusal, subscriptionLabel, subscriptionLabels } from "@/src/core";
@@ -288,7 +288,68 @@ const KIND_ICON: Record<JobKind, typeof SearchIcon> = {
 /** Abort states per blob id: pending (fired) / failed (backend absent). */
 type AbortState = "pending" | "failed";
 
-export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
+/** One finished or failed job in the Background agents history. */
+/** The composer's own draft key (chat.tsx) and its suggestion event: the
+ *  request fills an empty composer or joins a draft below its last line — a
+ *  draft is never replaced, and nothing is sent until the learner sends it. */
+export const COMPOSER_SUGGEST_EVENT = "lh:composer-suggest";
+function suggestToComposer(chatId: string, text: string) {
+	window.dispatchEvent(new CustomEvent(COMPOSER_SUGGEST_EVENT, { detail: { chatId, text } }));
+	try {
+		const key = `lh:composer-draft:${chatId}`, draft = (window.localStorage.getItem(key) ?? "").trimEnd();
+		if (!draft.includes(text)) window.localStorage.setItem(key, draft ? `${draft}\n\n${text}` : text);
+	}
+	catch { /* storage blocked: the open session still received the event */ }
+}
+
+/** A failed job's reason, in full (two lines by default, the rest one tap
+ *  away), and what to do next (round-8 review): open the session it belongs
+ *  to, or open it with a request to try again ready in the composer. */
+function RecentFailure({ message, label, chatId, onOpenChat }: { message: string; label: string; chatId: string; onOpenChat?: (chatId: string) => void }) {
+	const [open, setOpen] = useState(false);
+	const long = message.length > 110 || message.includes("\n");
+	const reason = message.split("\n")[0]!.replace(/\.$/, "").slice(0, 160);
+	const action = "min-h-9 rounded-lg px-2.5 text-[13px] font-medium text-foreground/90 transition-colors hover:bg-accent";
+	return (
+		<div data-testid="activity-recent-failure" className="pb-2 pl-9 pr-2.5 text-[13px] leading-snug">
+			<p className={cn("whitespace-pre-wrap break-words text-destructive/90", !open && "line-clamp-2")}>{message}</p>
+			<div className="-ml-2.5 mt-1 flex flex-wrap items-center gap-x-1">
+				<button type="button" data-testid="activity-failure-ask" className={action}
+					onClick={() => { suggestToComposer(chatId, `The ${label} didn't finish (${reason}). Could you try it again?`); onOpenChat?.(chatId); }}>
+					Ask the tutor again
+				</button>
+				<button type="button" data-testid="activity-failure-open" className={action} onClick={() => onOpenChat?.(chatId)}>Open session</button>
+				{long && (
+					<button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}
+						className="min-h-9 px-2 text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+						{open ? "Show less" : "Whole message"}
+					</button>
+				)}
+			</div>
+		</div>
+	);
+}
+
+type RecentJob = { id: string; chatId: string; chatTitle: string; kind: JobKind; status: "done" | "error" | string; error: string | null; updatedAt: string };
+const RECENT_LABEL: Record<string, string> = { research: "Research", demo: "Demo", visual: "Figure", pdf: "PDF brief" };
+/** The same jobs mid-sentence ("The PDF brief didn't finish…"). */
+const RECENT_NOUN: Record<string, string> = { research: "research", demo: "demo", visual: "figure", pdf: "PDF brief" };
+/** A job the learner stopped is cancelled, not failed (the server records it
+ *  as an error with this exact reason). */
+function recentCancelled(job: RecentJob): boolean {
+	return job.status === "error" && job.error === "Aborted by learner";
+}
+function recentAgo(iso: string): string {
+	const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+	if (min < 1) return "just now";
+	if (min < 60) return `${min}m ago`;
+	const h = Math.floor(min / 60);
+	if (h < 24) return `${h}h ago`;
+	const d = Math.floor(h / 24);
+	return d < 7 ? `${d}d ago` : new Date(iso).toISOString().slice(0, 10);
+}
+
+export function ActivitySection({ feed: feedProp, onOpenChat }: { feed?: ActivityFeed; onOpenChat?: (chatId: string) => void }) {
 	const ctx = useContext(ActivityContext);
 	const feed = feedProp ?? ctx.feed;
 	const refresh = ctx.refresh;
@@ -296,6 +357,30 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 	const [openBlob, setOpenBlob] = useState<string | null>(null); // detail, inline-expanded
 	const [abortStates, setAbortStates] = useState<Record<string, AbortState>>({});
 	const now = useNow(blobs.length > 0);
+	// The history (whole-app redesign): finished and failed jobs stay
+	// findable app-wide; each row opens its session.
+	const [recent, setRecent] = useState<RecentJob[]>([]);
+	const [recentOpen, setRecentOpen] = useState(false);
+	const loadRecent = useCallback(async () => {
+		try {
+			const res = await fetch("/api/jobs?recent=1", { cache: "no-store" });
+			if (res.ok) setRecent(((await res.json()) as { recent?: RecentJob[] }).recent ?? []);
+		} catch { /* the last snapshot stays */ }
+	}, []);
+	// Reload whenever the running set changes: a job that just settled
+	// moves from the live blobs into this history.
+	useEffect(() => { void loadRecent(); }, [loadRecent, blobs.length]);
+	// The history opens as a popover over the list (it must not squeeze the
+	// sessions); outside presses and Escape close it.
+	const sectionRef = useRef<HTMLElement>(null);
+	useEffect(() => {
+		if (!recentOpen) return;
+		const onPointerDown = (e: PointerEvent) => { if (!sectionRef.current?.contains(e.target as Node)) setRecentOpen(false); };
+		const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setRecentOpen(false); } };
+		document.addEventListener("pointerdown", onPointerDown);
+		document.addEventListener("keydown", onKeyDown);
+		return () => { document.removeEventListener("pointerdown", onPointerDown); document.removeEventListener("keydown", onKeyDown); };
+	}, [recentOpen]);
 	// Refs for stable abort handlers (no re-created closures per tick).
 	const abortRef = useRef({ blobs, refresh, setAbortStates });
 	abortRef.current = { blobs, refresh, setAbortStates };
@@ -344,16 +429,48 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 	// rows match the session rows' hover. Empty means empty: the header sits
 	// alone (the cost span is population, not decoration).
 	return (
-		<section data-testid="activity-section" className="border-t border-border px-3 pb-3 pt-2">
-			<div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-widest text-muted-foreground/70">
-				<ActivityIcon className="size-3" />
+		<section ref={sectionRef} data-testid="activity-section" className="relative border-t border-border/70 px-2 pb-1 pt-1.5">
+			<div className="flex min-h-9 items-center gap-2.5 px-2.5 text-[14px] font-medium text-muted-foreground">
+				<ActivityIcon className="size-4" />
 				Background agents
+				{blobs.length === 0 && recent.length === 0 && <span className="ml-auto text-[12.5px] font-normal text-(--lh-faint)">None running</span>}
+				{blobs.length === 0 && recent.length > 0 && (
+					<button type="button" data-testid="activity-recent-toggle" aria-expanded={recentOpen} onClick={() => setRecentOpen((v) => !v)}
+						className="-mr-1 ml-auto flex min-h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-1.5 text-[12.5px] font-normal text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground">
+						{recent.length} recent
+						<ChevronDownIcon className={cn("size-3.5 transition-transform", recentOpen && "rotate-180")} />
+					</button>
+				)}
 				{blobs.length > 0 && (
 					<span className="ml-auto tabular-nums" data-testid="activity-total-cost" title="Total running cost (inferred)">
 						{planCostLabel(totalCost, subscriptionLabels(blobs.map((blob) => blob.model)))}
 				</span>
 				)}
 			</div>
+			{blobs.length === 0 && recentOpen && recent.length > 0 && (
+				<ul data-testid="activity-recent" aria-label="Recent background jobs" className="lh-recent-popover absolute inset-x-2 bottom-full z-30 mb-1 flex max-h-[min(22rem,50dvh)] flex-col gap-px overflow-y-auto overscroll-contain rounded-2xl border bg-popover p-1.5 shadow-2xl">
+					{recent.map((job) => (
+						<li key={job.id}>
+							<button type="button" onClick={() => onOpenChat?.(job.chatId)} data-testid="activity-recent-row"
+								className="flex w-full items-start gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left transition-colors hover:bg-accent/70">
+								{job.status === "done"
+									? <CheckCircle2Icon aria-label="Finished" className="mt-0.5 size-4 shrink-0 text-(--lh-success)" />
+									: recentCancelled(job)
+										? <CircleSlashIcon aria-label="Cancelled" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+										: <AlertCircleIcon aria-label="Failed" className="mt-0.5 size-4 shrink-0 text-destructive" />}
+								<span className="min-w-0 flex-1">
+									<span className="block truncate text-[13.5px] text-foreground/90">
+										{RECENT_LABEL[job.kind] ?? job.kind} · {job.status === "done" ? "finished" : recentCancelled(job) ? "cancelled" : "failed"}
+										<span className="text-muted-foreground"> · {recentAgo(job.updatedAt)}</span>
+									</span>
+									<span className="block line-clamp-2 break-words text-[13px] text-muted-foreground">{job.chatTitle}</span>
+								</span>
+							</button>
+							{job.status !== "done" && job.error && !recentCancelled(job) && <RecentFailure message={job.error} label={RECENT_NOUN[job.kind] ?? job.kind} chatId={job.chatId} onOpenChat={onOpenChat} />}
+						</li>
+					))}
+				</ul>
+			)}
 			{blobs.length > 0 && (
 				<div className="flex max-h-[40dvh] flex-col gap-1 overflow-y-auto">
 					{blobs.map((blob) => (

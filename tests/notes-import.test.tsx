@@ -5,7 +5,7 @@ import { afterEach, it } from "node:test";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parseHTML } from "linkedom";
-import { MAX_IMPORT_BYTES, NotesImportControl, NotesImportErrors, NotesImportNotices, parseNotesImportResults, postNotesImport, useNotesImport, type NotesImportResult } from "../components/notes-import.tsx";
+import { MAX_IMPORT_BYTES, NotesImportControl, NotesImportErrors, NotesImportNotices, parseNotesImportResults, postNotesImport, readableImportError, useNotesImport, type NotesImportResult } from "../components/notes-import.tsx";
 
 const dom = parseHTML("<html><body></body></html>");
 Object.assign(globalThis, { window: dom.window, document: dom.document, IS_REACT_ACT_ENVIRONMENT: true });
@@ -63,13 +63,13 @@ it("POST includes captured files and relative identities, preserving provider de
 	assert.deepEqual(await postNotesImport([file]), [refused]);
 });
 
-for (const outcome of ["completed", "failed", "partial", "aborted", "busy"] as const) it(`${outcome} preserves escaped raw failure details without result/retry controls`, async () => {
+for (const outcome of ["completed", "failed", "partial", "aborted", "busy"] as const) it(`${outcome} preserves escaped raw failure details; the alert itself carries no controls`, async () => {
 	const file = new File(["notes"], "<script>notes.md");
 	const result: NotesImportResult = { ...completed(0, file.name), outcome, ok: outcome === "completed", error: "<img>synthetic failure", code: "provider_key_missing", provider: "openai", missing: ["OPENAI_API_KEY"], slots: ["cheap", "strong"] };
 	globalThis.fetch = async () => Response.json({ results: [result] });
 	await mount(); await submit([file]);
 	assert.equal(current.importing, false); assert.equal(starts, 1); assert.equal(finishes, 1);
-	assert.deepEqual(Object.keys(current).sort(), ["errors", "importing", "notices", "onImportFiles"]);
+	assert.deepEqual(Object.keys(current).sort(), ["dismiss", "errors", "importing", "notices", "onImportFiles", "receipts", "retry", "retryable"]);
 	const html = host!.innerHTML;
 	assert.doesNotMatch(html, /<button|<section|<ul|border|bg-card|rounded|shadow|Retry|Dismiss|Import complete/);
 	if (outcome === "completed") { assert.equal(html, ""); assert.deepEqual(current.errors, []); }
@@ -149,15 +149,15 @@ it("graph menu clearly distinguishes extraction from lesson material, above unch
 	await act(async () => { root!.render(<NotesImportControl importing={false} onImportFiles={(files) => selected.push(files)} />); });
 	const trigger = host.querySelector<HTMLButtonElement>('[data-testid="import-notes"]')!;
 	assert.equal(trigger.textContent, "Extract files…");
-	assert.ok(trigger.querySelector(".lucide-waypoints"));
+	assert.ok(trigger.querySelector(".lucide-file-up"));
 	await act(async () => { trigger.click(); });
 	const menu = host.querySelector('[role="menu"]')!;
 	assert.equal(menu.getAttribute("aria-label"), "Extract files into the graph");
-	assert.equal(menu.querySelector("p")!.textContent, "For lessons, attach material to a session instead.");
+	assert.equal(menu.querySelector("p")!.textContent, "Adds your notes to the knowledge graph. For lessons, attach material to a session instead.");
 	assert.equal(menu.getAttribute("aria-describedby"), menu.querySelector("p")!.id);
-	assert.ok(menu.className.includes("w-52"), "compact width wraps the short hint");
+	assert.ok(menu.className.includes("w-60"), "compact width wraps the hint");
 	assert.deepEqual(Array.from(menu.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent), ["Files", "Folder"]);
-	assert.equal(menu.firstElementChild!.textContent, "For lessons, attach material to a session instead.");
+	assert.equal(menu.firstElementChild!.textContent, "Adds your notes to the knowledge graph. For lessons, attach material to a session instead.");
 	const inputs = host.querySelectorAll<HTMLInputElement>('input[type="file"]');
 	let filesClicks = 0, folderClicks = 0;
 	inputs[0]!.click = () => { filesClicks++; }; inputs[1]!.click = () => { folderClicks++; };
@@ -180,4 +180,17 @@ it("alerts/notices stay plain and escaped", () => {
 	assert.equal((html.match(/role="alert"/g) ?? []).length, 2); assert.doesNotMatch(html, /<section|<button|border|bg-/);
 	const notices = renderToStaticMarkup(<NotesImportNotices notices={["a.pdf: Scanned pages may have errors."]} />);
 	assert.match(notices, /role="status"/); assert.match(notices, /text-muted-foreground/); assert.doesNotMatch(notices, /text-red/);
+});
+
+it("provider refusals read as plain guidance instead of a raw payload", () => {
+	assert.equal(readableImportError('buoyancy.md: 401: {"message":"Missing Authentication header","code":401}'),
+		"buoyancy.md: nothing was extracted — the model provider turned the request down. Check your provider key in Settings, then try again. (Error 401)");
+	assert.equal(readableImportError("a.pdf: OCR not supported yet."), "a.pdf: OCR not supported yet.");
+	assert.match(readableImportError('n.md: 503: {"error":"busy"}'), /didn't respond normally\. Try again in a moment\. \(Error 503\)/);
+});
+
+it("refusal codes and unsupported files read as plain guidance", () => {
+	assert.equal(readableImportError("n.md: Models are not configured\nmodels_not_configured — cheap"), "n.md: Models are not configured — nothing was extracted. Set up your models, then try again.");
+	assert.equal(readableImportError("n.md: Missing key\nprovider_key_missing — openai"), "n.md: Missing key — nothing was extracted. Add the provider key in Settings, then try again.");
+	assert.equal(readableImportError("a.docx: Unsupported format or unsafe relative path."), "a.docx: this file can't be imported. Use Markdown (.md), plain text (.txt) or PDF.");
 });
