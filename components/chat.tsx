@@ -2743,24 +2743,29 @@ function DockOverlay({
 		const overlay = overlayRef.current;
 		if (!questionScreen || !overlay) return;
 		let frame = 0;
-		const reveal = () => {
-			cancelAnimationFrame(frame);
-			frame = requestAnimationFrame(() => {
-				const active = document.activeElement;
-				if (!(active instanceof HTMLElement) || !overlay.contains(active) || getComputedStyle(overlay).overflowY !== "auto") return;
-				const field = active.closest<HTMLElement>(".lh-compact-field") ?? active;
-				const box = field.getBoundingClientRect(), view = overlay.getBoundingClientRect();
-				const top = view.top + (overlay.querySelector<HTMLElement>(".lh-question-back")?.offsetHeight ?? 0) + 8;
-				const bottom = view.bottom - 8;
-				if (box.bottom > bottom) overlay.scrollTop += Math.min(box.bottom - bottom, box.top - top);
-				else if (box.top < top) overlay.scrollTop -= top - box.top;
-			});
+		const fit = () => {
+			const active = document.activeElement;
+			if (!(active instanceof HTMLElement) || !overlay.contains(active) || getComputedStyle(overlay).overflowY !== "auto") return;
+			const field = active.closest<HTMLElement>(".lh-compact-field") ?? active;
+			const box = field.getBoundingClientRect(), view = overlay.getBoundingClientRect();
+			const top = view.top + (overlay.querySelector<HTMLElement>(".lh-question-back")?.offsetHeight ?? 0) + 8;
+			const bottom = view.bottom - 8;
+			if (box.bottom > bottom) overlay.scrollTop += Math.min(box.bottom - bottom, box.top - top);
+			else if (box.top < top) overlay.scrollTop -= top - box.top;
 		};
+		// Now (focus, typing that grows the field) and once more after layout
+		// settles (the keyboard resizing the visible area).
+		const reveal = () => { fit(); cancelAnimationFrame(frame); frame = requestAnimationFrame(fit); };
 		overlay.addEventListener("focusin", reveal);
+		overlay.addEventListener("input", reveal);
 		window.visualViewport?.addEventListener("resize", reveal);
+		const sized = new ResizeObserver(reveal);
+		sized.observe(overlay);
 		return () => {
 			cancelAnimationFrame(frame);
+			sized.disconnect();
 			overlay.removeEventListener("focusin", reveal);
+			overlay.removeEventListener("input", reveal);
 			window.visualViewport?.removeEventListener("resize", reveal);
 		};
 	}, [questionScreen]);
