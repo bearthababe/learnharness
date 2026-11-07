@@ -1,7 +1,7 @@
 /* Presentation counterpart of handwriting/notebook.css at 329677b. Keep these
  * shell classes independent of equation content for later shared extraction. */
 .session-workspace { container: equation-notebook / inline-size; }
-.session-panes { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; --notebook-context-share: var(--notebook-share-column, 58%); }
+.session-panes { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; --notebook-context-share: var(--notebook-share-column, calc(100% - 256px)); }
 .session-tutor { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .session-panes[data-notebook-open="true"] > .session-tutor { flex: 0 0 calc(var(--notebook-context-share) - 14px); }
 .notebook-slot { display: flex; flex-direction: column; }
@@ -121,3 +121,6 @@ html[data-session-input-locked], html[data-session-input-locked] body { overflow
 .notebook-frame-header .notebook-scope button { width: 36px; height: 36px; border-radius: 999px; }
 .notebook-frame-header .notebook-scope svg { width: 15px; height: 15px; }
 .notebook-numbers-hint { margin-top: 14px; color: var(--muted-foreground); font-size: 13px; line-height: 1.4; }
+/* First use (owner O3): the grip says what it does, once, then goes. */
+.notebook-split-hint { position: absolute; left: 50%; bottom: calc(100% + 8px); z-index: 3; transform: translateX(-50%); padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); box-shadow: 0 6px 18px #0005; color: var(--foreground); font: 500 13px/1.3 var(--font-sans); white-space: nowrap; pointer-events: none; }
+.notebook-split-divider > .notebook-split-hint { width: auto; height: auto; opacity: 1; background: var(--card); border-radius: 999px; }

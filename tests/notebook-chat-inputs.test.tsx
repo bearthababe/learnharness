@@ -7,6 +7,8 @@ import { after, test } from "node:test";
 import { parseHTML } from "linkedom";
 import { createFauxCore, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime.js";
+// Browsers have `self`; Next's Link schedules prefetch through it (round 12: every bar has a Home link).
+(globalThis as unknown as { self?: unknown }).self ??= globalThis;
 
 const dir = fs.mkdtempSync(join(tmpdir(), "notebook-chat-inputs-"));
 process.env.LH_DATA_DIR = dir;

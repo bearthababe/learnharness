@@ -447,7 +447,7 @@ try {
 	console.log("PASS: missing-key Settings round trip and subsequent capture");
 	const navigateSession = async title => {
 		const previousInput = await page.$(input);
-		await page.click('button[aria-label="Open sidebar"]');
+		await page.click('button[data-testid="open-sidebar"]');
 		await page.waitForSelector('[data-testid="session-search"]', { visible: true });
 		await fill('[data-testid="session-search"]', title);
 		const row = await page.waitForFunction(title => [...document.querySelectorAll('[data-testid="session-list"] button')].find(e => e.textContent.includes(title)), {}, title);
@@ -491,10 +491,17 @@ try {
 		await page.waitForFunction(() => location.pathname.endsWith("mobile_conversation"));
 		console.log(`PASS: navigation cancels ${phase} without cross-session leakage`);
 	}
+	// Round 12 (owner O1): on phones Model, Reasoning and Usage open from
+	// the page menu ("More" in the bar); their cards are unchanged.
+	const openPhoneCard = async (row) => {
+		await page.click('[data-testid="page-menu-button"]');
+		await page.waitForSelector(`[data-testid="page-menu-${row}"]`, { visible: true });
+		await page.click(`[data-testid="page-menu-${row}"]`);
+	};
 	for (const width of [320, 375, 430]) {
 		await page.setViewport({ width, height: 550, isMobile: true, hasTouch: true });
 		await fill(input, "Panel round trip keeps this draft.");
-		await page.click('[data-testid="stats-model"]');
+		await openPhoneCard("model");
 		await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 		assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Phone Model opens without search focus");
 		await page.$eval('[data-testid="model-menu"]', async e => { await Promise.all(e.getAnimations().map(a => a.finished.catch(() => {}))); });
@@ -502,7 +509,7 @@ try {
 		assert.ok(menu.left >= 0 && menu.right <= width && menu.top >= 0 && menu.bottom <= 550, `Real model options fit ${width}px`);
 		await page.keyboard.press("Escape");
 		await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
-		await page.click('[data-testid="stats-summary"]');
+		await openPhoneCard("usage");
 		await page.waitForSelector('[data-testid="stats-detail"]');
 		await page.$eval('[data-testid="stats-detail"]', async e => { await Promise.all(e.getAnimations().map(a => a.finished.catch(() => {}))); });
 		const usage = await page.$eval('[data-testid="stats-detail"]', e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top }; });
@@ -556,7 +563,13 @@ try {
 	await page.waitForFunction(() => window.speech.finishing);
 	await page.evaluate(() => { window.speech.final("Final image explanation."); window.speech.close(); });
 	await page.waitForFunction(() => !document.querySelector('.lh-shared-writing [data-testid="shared-writing-images"]'));
-	const withImage = await (await fetch(`${origin}/api/chats/mobile_conversation`)).json();
+	// The tray empties when the send starts, before the server has stored it:
+	// wait for the stored message instead of racing it (round 12).
+	let withImage = await (await fetch(`${origin}/api/chats/mobile_conversation`)).json();
+	for (let tries = 0; tries < 60 && !withImage.messages.some(m => m.sharedWriting?.length); tries++) {
+		await new Promise(resolve => setTimeout(resolve, 250));
+		withImage = await (await fetch(`${origin}/api/chats/mobile_conversation`)).json();
+	}
 	assert.equal(withImage.messages.filter(m => m.sharedWriting?.length).length, 1, "Deliberate Send persists the reviewed image once");
 	assert.equal(withImage.messages.find(m => m.sharedWriting?.length).sharedWriting.length, 3, "Deliberate Send includes all three recovered pending images");
 	assert.ok(withImage.messages.some(m => m.writingSubmission && JSON.stringify(m.content).includes("Final image explanation.")), "Image-bearing conversation uses receipt and finalized speech");
@@ -617,12 +630,15 @@ try {
 		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "The lesson unlocks as soon as the card closes");
 		assert.ok(await page.$(`[data-testid="${trigger}"]`), "The opener stays in place");
 	};
-	for (const [trigger, card, otherTrigger] of [
-		["stats-model", "model-menu", "stats-thinking"],
-		["stats-thinking", "thinking-menu", "stats-model"],
-		["stats-summary", "stats-detail", "stats-model"],
+	// The opener on phones is the page menu's button (its aperture stays
+	// sharp above the blur); an outside tap lands on Home and must not go there.
+	const trigger = "page-menu-button", otherTrigger = "nav-home";
+	for (const [row, card] of [
+		["model", "model-menu"],
+		["reasoning", "thinking-menu"],
+		["usage", "stats-detail"],
 	]) {
-		await page.locator(`[data-testid="${trigger}"]`).click();
+		await openPhoneCard(row);
 		await page.waitForSelector(`[data-testid="${card}"]`, { visible: true });
 		assert.equal(await page.$eval(`[data-testid="${card}"]`, e => e.getAnimations().length), 0, "The card opens at once, without a fall-out animation");
 		assert.equal(await page.$eval('[data-testid="phone-menu-backdrop"]', e => e.getAnimations().length), 0, "The backdrop appears at once too");
@@ -650,22 +666,25 @@ try {
 		await tapAt(trigger);
 		await assertCardExit(trigger, card);
 		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Opener closes without reopening");
-		await page.locator(`[data-testid="${trigger}"]`).click();
+		await openPhoneCard(row);
+		await page.waitForSelector(`[data-testid="${card}"]`, { visible: true });
 		await fitPanel(`[data-testid="${card}"]`);
 		await tapAt(otherTrigger, true);
 		assert.ok(await page.$(`[data-testid="${card}"]`), "Cancelled outside gesture leaves the card open");
 		await tapAt(otherTrigger);
 		await assertCardExit(trigger, card);
 		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Outside tap cannot activate another card underneath");
+		assert.ok(new URL(page.url()).pathname.startsWith("/chat/"), "The outside tap did not go Home");
 	}
 	await cardTouch.detach();
 	// Escape closes an open card at once and returns the lesson.
-	await page.locator('[data-testid="stats-model"]').click();
+	await openPhoneCard("model");
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	await page.keyboard.press("Escape");
-	await assertCardExit("stats-model", "model-menu");
+	await assertCardExit("page-menu-button", "model-menu");
 	await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
-	await page.locator('[data-testid="stats-model"]').click();
+	await openPhoneCard("model");
+	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	assert.equal(await page.$eval('[data-testid="model-menu"]', e => e.getAnimations().length), 0, "Reduced motion skips card entrance");
 	assert.equal(await page.$eval('[data-testid="phone-menu-backdrop"]', e => e.getAnimations().length), 0, "Reduced motion skips blur entrance too");
 	await assertCardBackdrop();
@@ -691,7 +710,7 @@ try {
 		const readingPosition = await scrollHistoryBack();
 		const assertReading = async label => assert.ok(Math.abs(await page.$eval(history, e => e.scrollTop) - readingPosition) <= 1, `${label}: reading position ${readingPosition} → ${await page.$eval(history, e => e.scrollTop)}`);
 		assert.ok(readingPosition > 0, "Panel review starts partway through scrollable history");
-		await page.click('[data-testid="stats-model"]');
+		await openPhoneCard("model");
 		await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 		await fitPanel('[data-testid="model-menu"]');
 		await assertCardBackdrop();
@@ -706,9 +725,9 @@ try {
 		await captureCardExit();
 		await page.locator(modelRow).click();
 		await pickedModel;
-		await assertCardExit("stats-model", "model-menu");
+		await assertCardExit("page-menu-button", "model-menu");
 		await assertReading("Model selection");
-		await page.click('[data-testid="stats-thinking"]');
+		await openPhoneCard("reasoning");
 		await page.waitForSelector('[data-testid="thinking-menu"]', { visible: true });
 		await fitPanel('[data-testid="thinking-menu"]');
 		await assertCardBackdrop();
@@ -721,10 +740,10 @@ try {
 		const settings = (await (await fetch(`${origin}/api/chats/mobile_panels`)).json()).settings;
 		assert.equal(settings.model.id, longModel.id);
 		assert.equal(settings.thinkingLevel, level, "Real model/thinking choices persist through the session API");
-		await assertCardExit("stats-thinking", "thinking-menu");
+		await assertCardExit("page-menu-button", "thinking-menu");
 		await assertReading("Thinking selection");
 		await page.focus(input);
-		await page.click('[data-testid="stats-summary"]');
+		await openPhoneCard("usage");
 		await page.waitForSelector('[data-testid="stats-detail"]');
 		await fitPanel('[data-testid="stats-detail"]');
 		await assertCardBackdrop();
@@ -734,7 +753,7 @@ try {
 		assert.ok(lastUsageVisible, "Usage's overflowed final turn is reachable and visible");
 		await captureCardExit();
 		await page.keyboard.press("Escape");
-		await assertCardExit("stats-summary", "stats-detail");
+		await assertCardExit("page-menu-button", "stats-detail");
 		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Card dismissal restores lesson interaction");
 		await assertReading("Usage dismissal");
 		await page.focus(input);
@@ -761,7 +780,7 @@ try {
 	});
 	const keyboardEntryShell = await page.$eval('.lh-app-shell', e => { const r = e.getBoundingClientRect(); return { top: r.top, height: r.height }; });
 	assert.equal(keyboardEntryShell.height, 350, "Composer keyboard shrinks the lesson before opening Model");
-	await page.click('[data-testid="stats-model"]');
+	await openPhoneCard("model");
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Keyboard-open entry still leaves search unfocused");
 	const keyboardEntryFrames = await page.evaluate(async () => {
@@ -798,8 +817,17 @@ try {
 	});
 	const entrySearch = await page.$eval('[data-testid="model-menu"]', e => ({ bottom: e.getBoundingClientRect().bottom, keyboardTop: visualViewport.offsetTop + visualViewport.height }));
 	assert.ok(Math.abs(entrySearch.bottom - entrySearch.keyboardTop) <= 1, `Search after keyboard-open entry docks at the keyboard: ${JSON.stringify(entrySearch)}`);
-	assert.ok(await page.$eval('[data-testid="phone-menu-trigger"]', e => e.hidden), "Covered opener is hidden and cannot intercept search results");
-	assert.equal(await page.$eval('[data-testid="phone-menu-backdrop"]', e => getComputedStyle(e).clipPath), "none", "Covered opener has no clear backdrop aperture");
+	// Round 12 (owner O1): the phone opener is "More" in the bar, above the
+	// docked card — never covered, so its close target can never sit over
+	// the search results, and its clear aperture stays.
+	const noOverlap = () => page.evaluate(() => {
+		const proxy = document.querySelector('[data-testid="phone-menu-trigger"]'), card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
+		if (proxy.hidden) return true;
+		const r = proxy.getBoundingClientRect();
+		return r.bottom <= card.top || r.top >= card.bottom || r.right <= card.left || r.left >= card.right;
+	});
+	assert.ok(await noOverlap(), "The opener's close target cannot intercept search results");
+	assert.ok(await page.$eval('[data-testid="phone-menu-backdrop"]', e => getComputedStyle(e).clipPath.startsWith("polygon(evenodd,")), "The uncovered opener keeps its clear aperture");
 	assert.ok(await page.$eval('[data-testid="stats-model"]', e => {
 		const r = e.getBoundingClientRect();
 		return document.querySelector('[data-testid="model-menu"]').contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
@@ -816,7 +844,8 @@ try {
 			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 			const card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
 			const opener = document.querySelector('[data-testid="stats-model"]').getBoundingClientRect();
-			frames.push({ height, bottom: card.bottom, openerTop: opener.top, hidden: document.querySelector('[data-testid="phone-menu-trigger"]').hidden });
+			const proxy = document.querySelector('[data-testid="phone-menu-trigger"]').getBoundingClientRect();
+			frames.push({ height, bottom: card.bottom, openerTop: opener.top, clear: proxy.bottom <= card.top || proxy.top >= card.bottom });
 		}
 		delete visualViewport.height; delete visualViewport.offsetTop;
 		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
@@ -825,11 +854,15 @@ try {
 	for (const frame of entryReturn) {
 		const resting = frame.openerTop - 4;
 		assert.ok(Math.abs(frame.bottom - (resting + (entrySearch.bottom - resting) * (700 - frame.height) / 350)) <= 1, "Search returns continuously to its frozen browsing anchor");
-		assert.equal(frame.hidden, frame.bottom > frame.openerTop, "Opener restores only when the card uncovers it");
+		assert.ok(frame.clear, "The opener's close target stays clear of the card throughout");
 	}
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e.value), "a");
 	assert.deepEqual(await page.$$eval('[data-testid="model-list"] button', buttons => buttons.map(e => e.dataset.testid)), entryResults, "Search dismissal retains results after keyboard-open entry");
-	assert.ok(await page.$eval('[data-testid="phone-menu-backdrop"]', e => getComputedStyle(e).clipPath.startsWith("polygon(evenodd,")), "Uncovered opener regains its clear aperture");
+	assert.ok(await page.evaluate(() => {
+		const opener = document.querySelector('[data-testid="page-menu-button"]').getBoundingClientRect(), card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
+		const covered = opener.left < card.right && opener.right > card.left && opener.top < card.bottom && opener.bottom > card.top;
+		return getComputedStyle(document.querySelector('[data-testid="phone-menu-backdrop"]')).clipPath.startsWith("polygon(evenodd,") === !covered;
+	}), "The opener's clear aperture follows whether the card covers it");
 	await page.keyboard.press("Escape");
 	await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
 	assert.equal(await page.$eval(input, e => e.textContent), "Already-open keyboard preserves this draft.");
@@ -845,7 +878,7 @@ try {
 	await page.setViewport({ width: 375, height: 700, isMobile: true, hasTouch: true });
 	await fill(input, "Keyboard-aware panels preserve this draft.");
 	const keyboardReading = await scrollHistoryBack();
-	await page.click('[data-testid="stats-model"]');
+	await openPhoneCard("model");
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Opening Model does not request a keyboard");
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0, "Model uses the compact floating menu");
@@ -997,7 +1030,7 @@ try {
 		visualViewport.dispatchEvent(new Event("scroll"));
 		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 	});
-	await page.click('[data-testid="stats-summary"]');
+	await openPhoneCard("usage");
 	await page.waitForSelector('[data-testid="stats-detail"]');
 	await fitPanel('[data-testid="stats-detail"]');
 	const usagePopup = await visibleBounds('[data-testid="stats-detail"]');
@@ -1007,7 +1040,7 @@ try {
 	await page.waitForSelector('[data-testid="stats-detail"]', { hidden: true });
 	assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false);
 	// A browser can expose new viewport geometry before notifying listeners.
-	await page.click('[data-testid="stats-model"]');
+	await openPhoneCard("model");
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	await fitPanel('[data-testid="model-menu"]');
 	await page.click('[data-testid="model-search"]');
@@ -1075,7 +1108,7 @@ try {
 	assert.equal(await page.$eval(input, e => e.textContent), "Keyboard-aware panels preserve this draft.");
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0, "Closing panels releases native modal ownership");
 	// Compact menus retain the inherited desktop placement across the breakpoint.
-	await page.click('[data-testid="stats-model"]');
+	await openPhoneCard("model");
 	await page.setViewport({ width: 1100, height: 800, isMobile: true, hasTouch: true });
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	await fitPanel('[data-testid="model-menu"]');
@@ -1273,7 +1306,7 @@ try {
 		assert.equal(await gesture(selector, "middle", -30), false, "Interior gestures keep native scrolling");
 	}
 	assert.equal(await gesture('[data-testid="composer"]', "top", 30), true, "Composer gestures do not move the surrounding page");
-	assert.equal(await gesture('button[aria-label="Open sidebar"]', "top", 30), true, "Header gestures do not move the surrounding page");
+	assert.equal(await gesture('button[data-testid="open-sidebar"]', "top", 30), true, "Header gestures do not move the surrounding page");
 	assert.equal(await gesture(input, "middle", -30, 2), false, "Pinch gestures are not cancelled");
 	await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
 	await page.locator(mic).click();

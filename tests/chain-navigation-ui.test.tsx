@@ -7,6 +7,8 @@ import { parseHTML } from "linkedom";
 import { ChainTableBody } from "../components/chain-table.tsx";
 import { chainRow, useChainNavigation } from "../components/chain-navigation.ts";
 import type { SourceDirectory } from "../src/core/index.ts";
+// Browsers have `self`; Next's Link schedules prefetch through it (round 12: every bar has a Home link).
+(globalThis as unknown as { self?: unknown }).self ??= globalThis;
 const dom = parseHTML("<html><body></body></html>");
 Object.assign(globalThis, { window: dom.window, document: dom.document, Element: dom.window.Element, IS_REACT_ACT_ENVIRONMENT: true });
 let focused: Element | undefined, scrolled = 0, selectedText = 0;

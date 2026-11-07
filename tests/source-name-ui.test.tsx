@@ -6,6 +6,8 @@ import { createRoot } from "react-dom/client";
 import { parseHTML } from "linkedom";
 import { ChainTableOverlay } from "../components/chain-table.tsx";
 import { ServerEventsProvider } from "../components/server-events.tsx";
+// Browsers have `self`; Next's Link schedules prefetch through it (round 12: every bar has a Home link).
+(globalThis as unknown as { self?: unknown }).self ??= globalThis;
 const dom = parseHTML("<html><head></head><body></body></html>");
 // linkedom omits selection; native browser behavior is covered by the UI check.
 dom.window.HTMLInputElement.prototype.select = function () {};

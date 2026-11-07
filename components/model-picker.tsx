@@ -15,6 +15,7 @@ import { useModelCatalog } from "@/components/model-catalog";
 export { useModelCatalog } from "@/components/model-catalog";
 import { defaultOrderLevel, populateLevel, THINKING_LABEL } from "@/components/thinking-default";
 import { useOneMenu } from "@/components/one-menu";
+import { OPEN_THINKING_EVENT, publishPageMenu } from "@/components/page-menu";
 
 /** provider:id → known contextWindow over the cached catalog, mirroring
  * the server's catalogContextLimits join. CLI aliases have no global
@@ -244,8 +245,19 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			refresh(); // mid-session key changes widen the menu (cache fix)
 		};
 		window.addEventListener("lh:kbd-open-model-picker", onOpenPicker);
-		return () => window.removeEventListener("lh:kbd-open-model-picker", onOpenPicker);
+		// The phone page menu's Reasoning row (owner O1).
+		const onOpenThinking = () => { setOpen("thinking"); setError(null); };
+		window.addEventListener(OPEN_THINKING_EVENT, onOpenThinking);
+		return () => {
+			window.removeEventListener("lh:kbd-open-model-picker", onOpenPicker);
+			window.removeEventListener(OPEN_THINKING_EVENT, onOpenThinking);
+		};
 	}, [refresh]);
+	// What the phone page menu shows: the model in full, never cut short.
+	const modelLabel = effectiveId ? prettyModel(effectiveId) : nothingChosen ? "Choose a model" : null;
+	const levelLabel = effectiveLevel === undefined ? (nothingChosen ? "Choose a model first" : null) : (THINKING_LABEL[effectiveLevel] ?? effectiveLevel);
+	useEffect(() => { publishPageMenu({ model: modelLabel, level: levelLabel }); }, [modelLabel, levelLabel]);
+	useEffect(() => () => publishPageMenu({ model: null, level: null }), []);
 
 	useEffect(() => {
 		const onCycleThinking = () => {
@@ -352,7 +364,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 					closing={presence.closing} onClosed={presence.onClosed}
 					anchorRef={containerRef}
 					testid="model-menu"
-					phoneTriggerTestid="stats-model"
+					phoneTriggerTestid={phone ? "page-menu-button" : "stats-model"}
 					focusSearch={!phone}
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
@@ -368,7 +380,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 					closing={presence.closing} onClosed={presence.onClosed}
 					anchorRef={containerRef}
 					testid="thinking-menu"
-					phoneTriggerTestid="stats-thinking"
+					phoneTriggerTestid={phone ? "page-menu-button" : "stats-thinking"}
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
 					preferredSide="up"

@@ -69,7 +69,7 @@ import { sourceFileLabel } from "@/src/core";
 import { NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
-import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon, XIcon } from "lucide-react";
+import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SlidersHorizontalIcon, WaypointsIcon, XIcon } from "lucide-react";
 import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
 import { planCostLabel } from "@/components/usage-format";
 import { GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
@@ -486,7 +486,8 @@ function GraphSettingsControl({
 				}`}
 				aria-label="Graph display settings"
 			>
-				<SettingsIcon className="size-4" />
+				{/* Sliders, not the gear: the gear means the app's Settings everywhere (round 12). */}
+				<SlidersHorizontalIcon className="size-4" />
 			</button>
 			</Hint>
 			{open && (

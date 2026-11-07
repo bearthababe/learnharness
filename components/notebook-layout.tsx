@@ -18,19 +18,32 @@ export function useNotebookLayout(open: boolean) {
 }
 
 const SPLIT_KEY = "lh:notebook-split";
-// Stacked (phones): the lesson and its composer start with most of the
-// height, and the sheet can be pulled from a peek to most of the screen
-// (round 11). Side by side keeps its original bounds.
-const DEFAULT_SHARES = { row: 60, column: 58 };
+const HINT_KEY = "lh:notebook-split-hint-seen";
+// Side by side keeps its original bounds. Stacked (phones, owner O3): with
+// no saved size the notebook opens tall enough for about two lines of
+// working (header, two lines, the instruction field); once the learner
+// resizes it, that size is remembered for every later opening.
+const DEFAULT_ROW = 60;
 const BOUNDS = { row: [30, 65], column: [25, 78] } as const;
+/** The notebook's height for two lines of working, plus the grip. */
+const TWO_LINES_PX = 236 + 20;
 /** A tap on the stacked grip swaps between these two tutor shares. */
 const FOCUS_SHARES = { lesson: 72, working: 40 } as const;
-function storedShares(): { row: number; column: number } {
+type Shares = { row: number; column: number | null };
+function storedShares(): Shares {
 	try {
 		const value = JSON.parse(window.localStorage.getItem(SPLIT_KEY) ?? "null") as { row?: unknown; column?: unknown } | null;
-		const pick = (n: unknown, direction: "row" | "column") => typeof n === "number" && n >= BOUNDS[direction][0] && n <= BOUNDS[direction][1] ? n : DEFAULT_SHARES[direction];
-		return { row: pick(value?.row, "row"), column: pick(value?.column, "column") };
-	} catch { return { ...DEFAULT_SHARES }; }
+		const fits = (n: unknown, direction: "row" | "column"): n is number => typeof n === "number" && n >= BOUNDS[direction][0] && n <= BOUNDS[direction][1];
+		return { row: fits(value?.row, "row") ? value!.row as number : DEFAULT_ROW, column: fits(value?.column, "column") ? value!.column as number : null };
+	} catch { return { row: DEFAULT_ROW, column: null }; }
+}
+/** The tutor's share that leaves the notebook about two lines tall. */
+export function twoLineShare(layoutHeight: number): number {
+	if (!(layoutHeight > 0)) return 58;
+	return Math.max(BOUNDS.column[0], Math.min(BOUNDS.column[1], 100 * (layoutHeight - TWO_LINES_PX) / layoutHeight));
+}
+function saveShares(shares: Shares) {
+	try { window.localStorage.setItem(SPLIT_KEY, JSON.stringify(shares.column === null ? { row: shares.row } : shares)); } catch { /* this view only */ }
 }
 
 /** Same divider protocol as the iPad shell; equation panes use percentage bounds
@@ -38,20 +51,35 @@ function storedShares(): { row: number; column: number } {
  * and the split the learner chose is remembered on this device. */
 export function NotebookSplit({ hidden }: { hidden: boolean }) {
 	const divider = useRef<HTMLDivElement>(null);
-	const shares = useRef<{ row: number; column: number } | null>(null);
+	const shares = useRef<Shares | null>(null);
 	const drag = useRef<number | null>(null);
 	const press = useRef<{ x: number; y: number; at: number; moved: boolean } | null>(null);
-	const [state, setState] = useState({ wide: false, share: DEFAULT_SHARES.column });
-	function resize(element: HTMLElement, next?: number) {
+	const [state, setState] = useState({ wide: false, share: 58 });
+	// First use (owner O3): the grip says what it does, once.
+	const [hint, setHint] = useState(false);
+	const seenHint = () => { setHint(false); try { window.localStorage.setItem(HINT_KEY, "1"); } catch { /* this view only */ } };
+	function resize(element: HTMLElement, next?: number | "default") {
 		const layout = element.parentElement!;
 		const wide = getComputedStyle(layout).flexDirection === "row";
 		const direction = wide ? "row" : "column";
 		shares.current ??= storedShares();
-		const share = Math.max(BOUNDS[direction][0], Math.min(BOUNDS[direction][1], next ?? shares.current[direction]));
-		if (next !== undefined && Math.round(share) !== Math.round(shares.current[direction])) {
-			try { window.localStorage.setItem(SPLIT_KEY, JSON.stringify({ ...shares.current, [direction]: Math.round(share) })); } catch { /* this view only */ }
+		const current = shares.current;
+		let share: number;
+		if (next === "default") {
+			// Back to the two-line opening size; nothing chosen is kept.
+			if (direction === "column") { current.column = null; saveShares(current); }
+			else { current.row = DEFAULT_ROW; saveShares(current); }
+			share = direction === "column" ? twoLineShare(layout.getBoundingClientRect().height) : DEFAULT_ROW;
+		} else if (next === undefined) {
+			share = direction === "row" ? current.row : current.column ?? twoLineShare(layout.getBoundingClientRect().height);
+		} else {
+			share = Math.max(BOUNDS[direction][0], Math.min(BOUNDS[direction][1], next));
+			const before = direction === "row" ? current.row : current.column;
+			if (before === null || Math.round(share) !== Math.round(before)) {
+				if (direction === "row") current.row = share; else current.column = share;
+				saveShares({ row: Math.round(current.row), column: current.column === null ? null : Math.round(current.column) });
+			}
 		}
-		shares.current[direction] = share;
 		layout.style.setProperty(`--notebook-share-${direction}`, `${share}%`);
 		setState(prior => prior.wide === wide && prior.share === Math.round(share) ? prior : { wide, share: Math.round(share) });
 	}
@@ -61,6 +89,15 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 		observer.observe(element.parentElement!);
 		return () => observer.disconnect();
 	}, []);
+	useEffect(() => {
+		if (hidden || state.wide) return;
+		let seen = false;
+		try { seen = window.localStorage.getItem(HINT_KEY) === "1"; } catch { /* show it */ }
+		if (seen) return;
+		setHint(true);
+		const timer = window.setTimeout(seenHint, 8000);
+		return () => window.clearTimeout(timer);
+	}, [hidden, state.wide]);
 	function move(event: PointerEvent<HTMLDivElement>) {
 		if (drag.current !== event.pointerId) return;
 		const start = press.current;
@@ -72,13 +109,15 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 		const wide = getComputedStyle(layout).flexDirection === "row";
 		resize(event.currentTarget, 100 * (wide ? (event.clientX - rect.left) / rect.width : (event.clientY - rect.top) / rect.height));
 	}
-	return <div ref={divider} hidden={hidden} className="notebook-split-divider" role="separator" tabIndex={0}
+	return <div ref={divider} hidden={hidden} className="notebook-split-divider" role="separator" tabIndex={0} data-testid="notebook-grip"
 		aria-label="Resize Tutor and Notebook" aria-orientation={state.wide ? "vertical" : "horizontal"}
+		aria-describedby={hint ? "notebook-split-hint" : undefined}
 		title={state.wide ? undefined : "Drag to resize · tap to switch between lesson and working"}
 		aria-valuemin={BOUNDS[state.wide ? "row" : "column"][0]} aria-valuemax={BOUNDS[state.wide ? "row" : "column"][1]} aria-valuenow={state.share} aria-valuetext={`${state.share}% Tutor`}
 		onPointerDown={event => {
 			if (event.button !== 0) return;
 			event.preventDefault();
+			if (hint) seenHint();
 			if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 			drag.current = event.pointerId; event.currentTarget.setPointerCapture(event.pointerId);
 			press.current = { x: event.clientX, y: event.clientY, at: Date.now(), moved: false };
@@ -94,8 +133,9 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 		onKeyDown={event => {
 			if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home"].includes(event.key)) return;
 			event.preventDefault(); event.stopPropagation();
-			resize(event.currentTarget, event.key === "Home" ? DEFAULT_SHARES[state.wide ? "row" : "column"] : state.share + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -5 : 5));
-		}}><span aria-hidden="true" /></div>;
+			if (hint) seenHint();
+			resize(event.currentTarget, event.key === "Home" ? "default" : state.share + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -5 : 5));
+		}}><span aria-hidden="true" />{hint && <span id="notebook-split-hint" className="notebook-split-hint" data-testid="notebook-grip-hint">Drag to resize · tap to swap</span>}</div>;
 }
 
 /** The accepted four-corner frame and expanded overlay, independent of editor

@@ -8,6 +8,7 @@ import type { NotebookSession } from "./notebook-session";
 import { useNotebookActivityDraft } from "./notebook-activity-draft";
 import { CompactLearningInput } from "@/components/compact-learning-input";
 import { ChevronRightIcon } from "lucide-react";
+import { useRevealStyle } from "@/components/device-prefs";
 
 /**
  * The reading-thinking field (owner design 2026-10-03, "two questions per
@@ -57,6 +58,7 @@ export function ReadingThinkingField({
 	// Phones fold the notes while the question is open (owner B12): the
 	// step stays, the box steps back; one tap unfolds it to re-read or add.
 	const [unfolded, setUnfolded] = useState(false);
+	const revealStyle = useRevealStyle();
 	useLayoutEffect(() => { setDraft(value); }, [revision, value]);
 	const owner = { kind: "question" as const, toolCallId, channel: "reading-thinking" as const };
 	const owned = useNotebookActivityDraft(notebook, owner);
@@ -149,7 +151,7 @@ export function ReadingThinkingField({
 				placeholder="Whatever comes to mind as you read."
 				className="field-sizing-content lh-input max-h-40 w-full resize-none bg-transparent py-0.5 outline-none placeholder:text-muted-foreground/70"
 			/></CompactLearningInput>
-			{claim && onOpen && <button type="button" className="lh-phone-reveal" aria-label="Show question" data-testid="teach-check-reveal" onClick={onOpen}><span className="lh-phone-reveal-label" aria-hidden="true">Show question</span><ChevronRightIcon size={18} /></button>}
+			{claim && onOpen && <button type="button" className="lh-phone-reveal" data-style={revealStyle} aria-label="Show question" data-testid="teach-check-reveal" onClick={onOpen}><span className="lh-phone-reveal-label" aria-hidden="true">Show question</span><ChevronRightIcon size={18} /></button>}
 			</div>
 		</div>
 	);

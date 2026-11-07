@@ -53,6 +53,10 @@ export interface ActivityRecentJob {
 	title: string;
 	updatedAt: string;
 	error?: string;
+	/** Retry (owner O2): a failed job that can run again from the panel. */
+	canRetry?: boolean;
+	/** Set once retried: the re-run's id. */
+	retriedBy?: string;
 }
 
 /** How many settled jobs the history keeps. */
@@ -110,6 +114,8 @@ export function activityFeed(): {
 					title: chat.title ?? chat.id,
 					updatedAt: job.updatedAt ?? job.createdAt,
 					...(job.error ? { error: job.error } : {}),
+					...(job.status === "error" && !job.retriedBy && job.delivery?.status !== "pending" ? { canRetry: true } : {}),
+					...(job.retriedBy ? { retriedBy: job.retriedBy } : {}),
 				});
 			}
 		}

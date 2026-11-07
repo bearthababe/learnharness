@@ -60,7 +60,7 @@ try {
 	await page.waitForSelector('[data-testid="import-notes"]');
 	for (const width of [320, 375, 430]) {
 		await page.setViewport({ width, height: 667, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-		const controls = await page.evaluate(() => [...document.querySelectorAll('.lh-home-toolbar-actions button, .lh-graph-search input, .lh-home-navigation button[aria-label="Open sidebar"]')].map(e => {
+		const controls = await page.evaluate(() => [...document.querySelectorAll('.lh-home-toolbar-actions button, .lh-graph-search input, .lh-home-navigation button[data-testid="open-sidebar"]')].map(e => {
 			const r = e.getBoundingClientRect();
 			const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
 			return { label: e.getAttribute("aria-label") ?? e.textContent.trim(), x: r.x, right: r.right, y: r.y, bottom: r.bottom, width: r.width, height: r.height, reachable: hit === e || e.contains(hit) };
@@ -69,7 +69,7 @@ try {
 	}
 	await page.setViewport({ width: 375, height: 667, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 	await checkSidebarSwipes(page, check, origin, chatId);
-	await page.click('.lh-home-navigation button[aria-label="Open sidebar"]');
+	await page.click('.lh-home-navigation button[data-testid="open-sidebar"]');
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
 	await page.click('button[aria-label="Close sidebar"]');
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "true");
@@ -100,7 +100,7 @@ try {
 	check(await page.evaluate(() => [...document.querySelectorAll("summary")].filter(e => e.textContent.includes("Concepts app")).every(e => e.getBoundingClientRect().height === 0)), "Concepts setup is absent from phone composer");
 	check(await page.evaluate(() => [...document.querySelectorAll("nextjs-portal")].every(e => !e.shadowRoot?.querySelector('[data-nextjs-dev-tools-button]'))), "Next development indicator is disabled");
 	const before = await rect("[data-file-path-input]");
-	await page.click('button[aria-label="Open sidebar"]');
+	await page.click('button[data-testid="open-sidebar"]');
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
 	// Wait for the inherited desktop width transition if the regression is present.
 	await page.evaluate(async () => { await Promise.all(document.querySelector('aside[aria-hidden]').getAnimations().map(a => a.finished.catch(() => {}))); });
@@ -139,16 +139,16 @@ try {
 	// A stable opener box can still be covered by the moving session title
 	// during the closing animation. Wait until its centre actually receives taps.
 	await page.waitForFunction(() => {
-		const opener = document.querySelector('button[aria-label="Open sidebar"]');
+		const opener = document.querySelector('button[data-testid="open-sidebar"]');
 		const r = opener.getBoundingClientRect();
 		const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
 		return hit === opener || opener.contains(hit);
 	});
-	await page.locator('button[aria-label="Open sidebar"]').click();
+	await page.locator('button[data-testid="open-sidebar"]').click();
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
 	await page.click('button[aria-label="Close sidebar"]');
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getBoundingClientRect().width === 0);
-	await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Open sidebar");
+	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "open-sidebar");
 	check(true, "Dismissing navigation restores focus to its opener");
 	await page.type("[data-file-path-input]", "Mobile layout draft check");
 	await page.waitForFunction(() => getComputedStyle(document.body).position === "fixed");
@@ -164,7 +164,7 @@ try {
 	check(await gesture('[data-smoke-history]', "top", 30), "Focused history top edge cannot move the page");
 	check(await gesture('[data-smoke-history]', "bottom", -30), "Focused history bottom edge cannot move the page");
 	check(!await gesture('[data-smoke-history]', "middle", -30), "Focused history keeps native scrolling within its content");
-	check(await gesture('button[aria-label="Open sidebar"]', "top", 30), "Header gesture is contained while composing");
+	check(await gesture('button[data-testid="open-sidebar"]', "top", 30), "Header gesture is contained while composing");
 	await page.locator("[data-file-path-input]").fill("Mobile layout draft check\n" + "A line of working\n".repeat(25));
 	check(await gesture("[data-file-path-input]", "top", 30), "Composer top-edge gesture cannot move the page");
 	check(await gesture("[data-file-path-input]", "bottom", -30), "Composer bottom-edge gesture cannot move the page");

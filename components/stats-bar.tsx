@@ -8,12 +8,14 @@ import { MenuShell } from "@/components/menu-shell";
 import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { useOneMenu } from "@/components/one-menu";
+import { KeyboardToggle } from "@/components/keyboard-toggle";
+import { OPEN_USAGE_EVENT, publishPageMenu } from "@/components/page-menu";
 
 function UsagePanel({ children, anchorRef, onClose, closing, onClosed }: { children: ReactNode; anchorRef: RefObject<HTMLDivElement | null>; onClose: () => void; closing: boolean; onClosed: () => void }) {
 	const phone = usePhoneLayout();
 	if (phone) return <MenuShell anchorRef={anchorRef} testid="stats-detail" preferredSide="up" align="left"
 		closing={closing} onClosed={onClosed}
-		fitVisualViewport matchAnchorWidth onClose={onClose} phoneTriggerTestid="stats-summary"
+		fitVisualViewport matchAnchorWidth onClose={onClose} phoneTriggerTestid="page-menu-button"
 		menuClass="rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</MenuShell>;
 	return <div data-testid="stats-detail" className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</div>;
 }
@@ -134,6 +136,16 @@ export function StatsBar({
 	const providers = pricing?.subscriptionProviders ?? subscriptionLabels(turns.map((turn) => turn.model));
 	const cliBilled = turns.some((turn) => turn.model.startsWith(`${CLAUDE_CODE_PROVIDER}:`));
 	const costLabel = planCostLabel(pricedCount > 0 ? cost : null, cliBilled ? [...providers, "CLI"] : providers);
+	// The phone page menu (owner O1) shows Usage and opens this card.
+	const hasUsage = !!chatId || turns.length > 0;
+	const usageLabel = hasUsage ? `${contextLabel} · ${costLabel === "—" ? "cost not reported" : costLabel}` : null;
+	useEffect(() => { publishPageMenu({ usage: usageLabel }); }, [usageLabel]);
+	useEffect(() => () => publishPageMenu({ usage: null }), []);
+	useEffect(() => {
+		const onOpen = () => setOpen(true);
+		window.addEventListener(OPEN_USAGE_EVENT, onOpen);
+		return () => window.removeEventListener(OPEN_USAGE_EVENT, onOpen);
+	}, []);
 
 	return (
 		<div
@@ -246,6 +258,8 @@ export function StatsBar({
 			{dictationSlot && (
 				<div className="lh-dictation-slot flex min-w-0 flex-1 items-center justify-center">{dictationSlot}</div>
 			)}
+			{/* Beside dictation on touch screens (owner O6). */}
+			{dictationSlot && <KeyboardToggle />}
 			{/* The model + thinking control — one controller for the conversation
 			    agents (prober/teacher); the record's `turns` above still folds
 			    the ACTUAL models billed, regardless of what the picker says. */}

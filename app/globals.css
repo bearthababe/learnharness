@@ -416,13 +416,7 @@ body {
 		padding-inline: 16px;
 	}
 	.lh-home-navigation .lh-closed-toggle {
-		width: 44px;
-		height: 44px;
 		margin-right: 0;
-	}
-	.lh-home-navigation button {
-		width: 44px;
-		height: 44px;
 	}
 	.lh-home-toolbar {
 		left: 16px;
@@ -1235,11 +1229,6 @@ body {
 		height: 56px;
 		gap: 6px;
 		padding-inline: 6px 8px;
-	}
-	.lh-topbar .lh-closed-toggle,
-	.lh-topbar .lh-closed-toggle button {
-		width: 44px;
-		height: 44px;
 	}
 	.lh-session-title {
 		font-size: 17px;
@@ -2667,13 +2656,6 @@ body:has(.lh-graph-results, [data-testid="graph-node-card"]) .lh-resume {
 	.lh-header-chip, .lh-header-write, [data-testid="phase-chip"] {
 		font-size: 14.5px;
 	}
-	.lh-topbar .lh-closed-toggle,
-	.lh-topbar .lh-closed-toggle button,
-	.lh-home-navigation .lh-closed-toggle,
-	.lh-home-navigation .lh-closed-toggle button {
-		width: 44px;
-		height: 44px;
-	}
 	.lh-stats-bar {
 		font-size: 14px;
 	}
@@ -3960,4 +3942,289 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 		text-transform: none;
 	}
 	.lh-question-hide svg { width: 16px; height: 16px; }
+}
+
+/* ============================================================
+ * ROUND 12 — one design pass (owner O1–O6, R1–R10, section 3).
+ * Scales used below and in this round's components:
+ *   spacing  4 · 8 · 12 · 16 · 24 · 32 px (--lh-space-1…6)
+ *   type     13 (secondary) · 14 (controls) · 15 (touch controls)
+ *            · 16 (body, inputs) · 17–20 (titles); never below 13px on
+ *            phone or tablet.
+ *   targets  44px on phone and tablet (coarse pointer); 34–36px with a
+ *            mouse.
+ *   secondary controls: ONE pattern — a quiet pill (no outline, a soft
+ *            tint, muted text, chevron when it opens a menu), the same
+ *            in the composer row, the drawer footer, the job rows and
+ *            the tray.
+ * ============================================================ */
+:root {
+	--lh-space-1: 4px; --lh-space-2: 8px; --lh-space-3: 12px; --lh-space-4: 16px; --lh-space-5: 24px; --lh-space-6: 32px;
+	--lh-quiet-bg: color-mix(in oklab, var(--foreground) 6%, transparent);
+	--lh-quiet-bg-hover: color-mix(in oklab, var(--foreground) 11%, transparent);
+}
+
+/* ── Navigation chips (O4): Sessions, Home, More — labelled everywhere ── */
+:root .lh-nav-chip {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	width: auto;
+	height: 34px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--card);
+	color: var(--foreground);
+	font-size: 14px;
+	font-weight: 550;
+	line-height: 1;
+	white-space: nowrap;
+	text-decoration: none;
+	opacity: 1;
+	transition: background-color .15s, border-color .15s;
+}
+:root .lh-nav-chip:hover { background: var(--accent); }
+:root .lh-nav-chip svg { width: 16px; height: 16px; color: var(--muted-foreground); }
+/* Where you are: Home on Home is the current place, not a link away. */
+:root .lh-nav-chip[data-current] {
+	border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+	background: color-mix(in oklab, var(--primary) 14%, var(--card));
+}
+:root .lh-nav-chip[data-current] svg { color: var(--lh-brand-ink); }
+.lh-page-menu-button { display: none !important; }
+@media (pointer: coarse) {
+	:root .lh-nav-chip { height: 44px; padding: 0 14px; font-size: 15px; }
+}
+/* Phones: one row of tab-bar items — icon over a 13px label, 48px tall. */
+@media (max-width: 767px) {
+	:root .lh-nav-chip,
+	:root .lh-topbar .lh-header-chip,
+	:root .lh-topbar .lh-header-write {
+		flex-direction: column;
+		gap: 3px;
+		width: auto;
+		min-width: 52px;
+		height: 48px;
+		padding: 0 6px;
+		border-radius: 12px;
+		font-size: 13px;
+		font-weight: 600;
+	}
+	:root .lh-nav-chip svg, :root .lh-topbar .lh-header-chip svg, :root .lh-topbar .lh-header-write svg { width: 18px; height: 18px; }
+	:root .lh-topbar .lh-header-chip .lh-header-chip-label,
+	:root .lh-topbar .lh-header-write .lh-header-write-label {
+		position: static; width: auto; height: auto; overflow: visible; clip: auto;
+		font-size: 13px; line-height: 1; font-weight: 600; letter-spacing: 0;
+	}
+	.lh-page-menu-button { display: inline-flex !important; }
+	:root .lh-topbar { gap: 4px; padding-inline: 6px; }
+	:root .lh-topbar .lh-title-block { min-width: 0; flex: 1 1 auto; }
+	/* Home: Sessions + Home lead row 1; search after them; More at the end. */
+	:root .lh-graph-search { margin-left: 124px; margin-right: 60px; }
+	.lh-home-page-menu { position: absolute; top: 8px; right: 16px; }
+}
+:root .lh-waiting-badge { min-width: 20px; height: 20px; font-size: 13px; line-height: 20px; top: -7px; right: -7px; }
+:root .lh-closed-toggle { overflow: visible; }
+
+/* ── The phone page menu (O1) ── */
+.lh-page-menu { min-width: 280px; max-width: calc(100vw - 32px); }
+.lh-page-menu-row {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--lh-space-3);
+	width: 100%;
+	min-height: 52px;
+	padding: 6px var(--lh-space-3);
+	border-radius: 10px;
+	text-align: left;
+	font-size: 15px;
+}
+.lh-page-menu-row:hover, .lh-page-menu-row:focus-visible { background: var(--accent); }
+.lh-page-menu-label { color: var(--muted-foreground); font-size: 14px; }
+/* The model is named in full, wrapping — never "deepseek-…" (R1). */
+.lh-page-menu-value { min-width: 0; text-align: right; color: var(--foreground); font-weight: 550; overflow-wrap: anywhere; }
+.lh-page-menu-row svg { width: 16px; height: 16px; color: var(--muted-foreground); }
+@media (max-width: 767px) {
+	/* The row's model and Usage live in the page menu now; the controls
+	   stay mounted (and anchor their cards above the composer). */
+	:root .lh-stats-bar [data-testid="model-control"],
+	:root .lh-stats-bar .lh-usage {
+		position: absolute;
+		right: 12px;
+		bottom: 0;
+		visibility: hidden;
+		pointer-events: none;
+	}
+}
+/* Tablets and laptops keep the row, with the model named in full (R1). */
+@media (min-width: 768px) {
+	:root [data-testid="stats-model"] > span:first-child { max-width: none; overflow: visible; text-overflow: clip; white-space: nowrap; }
+}
+
+/* ── One pattern for secondary controls (R7) ── */
+:root .lh-quiet-control,
+:root .lh-stats-bar [data-testid="stats-summary"],
+:root .lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"]:not([class*="destructive"]),
+:root .lh-notebook-toggle,
+:root .lh-activity-action,
+:root .lh-tray-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 34px;
+	min-height: 0;
+	padding: 0 12px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--lh-quiet-bg);
+	box-shadow: none;
+	color: var(--muted-foreground);
+	font-size: 14px;
+	font-weight: 500;
+	text-decoration: none;
+	white-space: nowrap;
+}
+:root :is(.lh-quiet-control, .lh-stats-bar [data-testid="stats-summary"], .lh-notebook-toggle, .lh-activity-action, .lh-tray-toggle):hover,
+:root .lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"]:not([class*="destructive"]):hover {
+	background: var(--lh-quiet-bg-hover);
+	color: var(--foreground);
+}
+:root :is(.lh-quiet-control, .lh-notebook-toggle, .lh-activity-action, .lh-tray-toggle) svg { width: 16px; height: 16px; flex-shrink: 0; }
+:root .lh-notebook-toggle[aria-expanded="true"], :root .lh-keyboard-toggle[aria-pressed="true"] {
+	background: color-mix(in oklab, var(--primary) 16%, transparent);
+	color: var(--foreground);
+}
+/* The model and reasoning pair: one quiet pill, two halves. */
+:root [data-testid="model-control"] { border: 0; border-radius: 999px; background: var(--lh-quiet-bg); }
+:root [data-testid="stats-model"], :root [data-testid="stats-thinking"] {
+	height: 34px;
+	border: 0 !important;
+	background: transparent !important;
+	font-size: 14px;
+}
+:root [data-testid="stats-model"]:hover, :root [data-testid="stats-thinking"]:hover { background: var(--lh-quiet-bg-hover) !important; }
+:root .lh-stats-bar { font-size: 14px; }
+/* Touch: every secondary control is a full 44px target (R10). */
+@media (pointer: coarse) {
+	:root .lh-quiet-control,
+	:root .lh-stats-bar [data-testid="stats-summary"],
+	:root .lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"]:not([class*="destructive"]),
+	:root .lh-notebook-toggle,
+	:root .lh-activity-action,
+	:root .lh-tray-toggle,
+	:root [data-testid="stats-model"], :root [data-testid="stats-thinking"] {
+		height: 44px;
+		padding-inline: 14px;
+		font-size: 15px;
+	}
+}
+/* Hide keyboard (O6): touch screens only — no on-screen keyboard otherwise. */
+:root .lh-keyboard-toggle { display: none; }
+@media (pointer: coarse) { :root .lh-keyboard-toggle { display: inline-flex; } }
+
+/* ── The sessions drawer (O4, R2, R3, R10) ── */
+:root .lh-sessions-create-label:not(.lh-sessions-list-label) { display: block; }
+.lh-sessions-filter-row { display: flex; align-items: center; gap: var(--lh-space-2); margin: 0 12px 8px; }
+.lh-sessions-filter-row > .lh-sessions-filter { flex: 1; margin: 0; }
+.lh-sessions-filter-caption { flex: none; color: var(--muted-foreground); font-size: 13px; font-weight: 600; }
+@media (max-width: 767px) {
+	.lh-sessions-filter-row { margin: 0 16px 8px; }
+	:root .lh-sessions-create-label:not(.lh-sessions-list-label) { margin: 4px 16px 8px; font-size: 13px; }
+	:root .lh-sessions-content .lh-sessions-create { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* Create (cards that start something) vs filter (a segmented track). */
+:root .lh-sessions-create button { box-shadow: 0 1px 0 color-mix(in oklab, var(--foreground) 6%, transparent); }
+.lh-activity-bar { flex-wrap: wrap; row-gap: 4px; }
+/* Never a cut label: on a narrow sidebar Settings takes the next line. */
+:root .lh-activity-bar .lh-activity-header { flex: 1 1 auto; min-width: max-content; }
+:root .lh-activity-bar .lh-activity-header .truncate { overflow: visible; text-overflow: clip; }
+:root .lh-activity-bar .lh-settings-entry {
+	width: auto;
+	gap: 6px;
+	padding: 0 12px;
+	border-radius: 999px;
+	color: var(--muted-foreground);
+}
+:root .lh-activity-bar .lh-settings-entry span { font-size: 14px; }
+@media (pointer: coarse) {
+	:root .lh-activity-header,
+	:root .lh-activity-bar .lh-settings-entry,
+	:root .lh-sessions-create button,
+	:root .lh-sessions-filter button,
+	:root .lh-session-more,
+	:root .lh-sessions-close {
+		min-height: 44px;
+	}
+	:root .lh-activity-bar .lh-settings-entry span { font-size: 15px; }
+	:root .lh-session-more { min-width: 44px; }
+}
+
+/* ── Background jobs (O2, R4): the whole reason, Retry, Open session ── */
+:root .lh-activity-recent { display: flex; flex-shrink: 0; align-items: flex-start; gap: var(--lh-space-3); padding: var(--lh-space-2); border-radius: 10px; }
+.lh-activity-error {
+	display: block;
+	margin-top: 4px;
+	color: var(--foreground);
+	font-size: 13px;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+.lh-activity-actions { display: flex; flex-wrap: wrap; gap: var(--lh-space-2); margin-top: var(--lh-space-2); }
+:root .lh-activity-action { height: 32px; padding: 0 10px; font-size: 13.5px; }
+:root .lh-activity-action svg { width: 14px; height: 14px; }
+
+/* ── "Not sent" on a question (R8) ── */
+.lh-question-unsent { margin: var(--lh-space-2) var(--lh-space-2) 0; }
+
+/* ── "Show question" prominent option (O5): the earlier filled look ── */
+:root .lh-phone-reveal[data-style="prominent"] {
+	border-color: transparent;
+	background: var(--primary);
+	color: var(--primary-foreground);
+}
+
+/* ── The attached-page tray (R5): compact until reviewed ── */
+.lh-tray-head { display: flex; align-items: center; justify-content: space-between; gap: var(--lh-space-2); }
+:root .lh-tray-toggle { height: 30px; padding: 0 12px; font-size: 13.5px; }
+.lh-shared-writing:not([data-review]) [data-testid="shared-writing-images"] { padding-block: 4px; }
+.lh-shared-writing:not([data-review]) .lh-writing-img { width: 56px; height: 48px; }
+.lh-shared-writing:not([data-review]) .lh-writing-actions { min-height: 36px; }
+
+/* ── The Wheel (R6): readable, distinct labels; the hub shows the size ── */
+:root .hw-overlay[data-variant="wheel"] .hw-arc { width: 200px; height: 200px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton { width: 58px; height: 58px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc_pen { left: 71px; top: 3px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc_highlighter { left: 6px; top: 50px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc_eraser { left: 31px; top: 126px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arcUndo > .hw-iconButton { width: 56px; height: 56px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arcUndo > .hw-iconButton:first-child { left: 112px; top: 127px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arcUndo > .hw-iconButton:last-child { left: 137px; top: 51px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) .hw-wheelHub { left: 68px; top: 68px; width: 64px; height: 64px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arcInspector { right: 212px; }
+:root .hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arcInspector { left: 212px; right: auto; }
+:root .hw-ringLabel { font-size: 13px; }
+:root .hw-overlay[data-variant="wheel"] .hw-wheelSize { font-size: 13px; }
+
+/* ── Type floor on touch screens (section 3): no 11–12px secondary text ── */
+@media (pointer: coarse) {
+	:root :is(.text-xs, .text-\[9px\], .text-\[10px\], .text-\[11px\], .text-\[12px\]) { font-size: 13px; line-height: 1.4; }
+	:root :is(.lh-sessions-tools p, .lh-sessions-create-label,
+		.text-xs.uppercase, [data-testid="session-context-menu"] .text-xs, [data-testid^="phase-divider-"] > span:not([aria-hidden]),
+		.lh-graph-result-statement, .lh-activity-recent-meta, .lh-session-subtitle, .lh-settings-content :is(.text-\[11px\], .text-\[10px\]),
+		.lh-setup :is(.text-\[10px\], .text-\[11px\]), .lh-tool-arg, .lh-resume-label, .lh-resume-meta, .lh-tool-technical summary,
+		.lh-dock-block .uppercase.tracking-wide, .lh-model-detail, .hw-foldWheel span, .hw-arcInspector > p, .lh-reading-input[data-reading-claim="false"] > div:first-child,
+		.hw-toolNames > button, .lh-attempt-help, .lh-eyebrow, .lh-reading-fold-label, .lh-activity-open, .lh-compact-timer, .lh-compact-status,
+		.hw-notebookHeader h2, .hw-headerAction, .hw-notice, .hw-overlay, .hw-toolName, .hw-sizeChoice, .hw-inspectorTitle, .hw-sectionLabel,
+		.hw-pageMenu > button > span, .notebook-expression-number, .lh-input-label) {
+		font-size: 13px;
+	}
+}
+/* Tablet: the controls phones already enlarge. */
+@media (pointer: coarse) and (min-width: 768px) {
+	:root .lh-mode-switch > :is(button, a) { min-height: 44px; font-size: 14.5px; }
+	:root .lh-session-meta { font-size: 13.5px; }
 }

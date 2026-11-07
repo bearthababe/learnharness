@@ -8,6 +8,8 @@ import { ChainTableOverlay } from "../components/chain-table.tsx";
 import { MinimalHome } from "../components/minimal-home.tsx";
 import { ServerEventsProvider } from "../components/server-events.tsx";
 import type { GraphNode, SourceDirectory } from "../src/core/index.ts";
+// Browsers have `self`; Next's Link schedules prefetch through it (round 12: every bar has a Home link).
+(globalThis as unknown as { self?: unknown }).self ??= globalThis;
 const dom = parseHTML("<html><body></body></html>");
 Object.assign(globalThis, { window: dom.window, document: dom.document, Element: dom.window.Element, CustomEvent: dom.window.CustomEvent, IS_REACT_ACT_ENVIRONMENT: true });
 // linkedom does not implement native checkbox activation. Preserve click

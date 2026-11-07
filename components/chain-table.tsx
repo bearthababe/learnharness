@@ -314,7 +314,7 @@ export function ChainTableBody({
 			    chain table names nothing, so its bar carries counts + search +
 			    close only. Search + close carve out with lh-no-drag (the mask
 			    law: later in the DOM). */}
-			<TopBar>
+			<TopBar onHome={onClose}>
 				<span className="lh-chains-count min-w-0 flex-1 truncate text-xs text-muted-foreground">
 					{chains.length} {chains.length === 1 ? "chain" : "chains"} · {nodes.length} {nodes.length === 1 ? "node" : "nodes"}
 				</span>

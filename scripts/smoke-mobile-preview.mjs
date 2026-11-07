@@ -87,7 +87,7 @@ async function checkReload(page, destination) {
 	await page.locator(input).fill(draft);
 	assert.equal(await page.$eval(input, element => element.textContent), draft);
 	await page.evaluate(() => { window.__lhPreviewBeforeReload = true; });
-	await page.locator('button[aria-label="Open sidebar"]').click();
+	await page.locator('button[data-testid="open-sidebar"]').click();
 	await page.waitForSelector('[aria-label="Sessions"][role="dialog"]');
 	await page.locator('aside[aria-label="Sessions"] summary').filter(element => element.textContent.trim() === "Tools").click();
 	const [response] = await Promise.all([

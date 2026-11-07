@@ -13,6 +13,8 @@ import { useModelSetup, selectedModelUnavailable, openModelPicker, ZeroKeysPill 
 import { DictationBar, joinDictation, useDictation } from "@/components/dictation";
 import { useFieldCycle } from "@/components/field-cycle";
 import { SidebarToggle } from "@/components/sidebar";
+import { HomeButton } from "@/components/app-nav";
+import { PageMenuButton } from "@/components/page-menu";
 import { StatsBar } from "@/components/stats-bar";
 import { OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { PathInput } from "@/components/path-input";
@@ -29,12 +31,15 @@ import type { TurnUsage } from "@/src/core";
 export function Home({
 	initialConfigured,
 	rendering = true,
+	initialMode,
 }: {
 	initialConfigured: boolean;
 	/** GRAPH RENDERING off (owner, 2026-10-06): the home's main view is
 	 * the chains view, not the canvas. Read server-side per navigation —
 	 * changing the setting applies on the next visit home. */
 	rendering?: boolean;
+	/** "New session" from anywhere (owner O4): the mode it asked for. */
+	initialMode?: "teach" | "practice" | "drill";
 }) {
 	const router = useRouter();
 	const [topic, setTopic] = useState("");
@@ -94,7 +99,15 @@ export function Home({
 	 *  may carry proposition picks from the chain table (the chip above
 	 *  the composer opens the picker; the picks seed the opening prompt).
 	 *  Not enforcing any input format — the picks are a convenience. */
-	const [mode, setMode] = useState<"teach" | "practice" | "drill">("teach");
+	const [mode, setMode] = useState<"teach" | "practice" | "drill">(initialMode ?? "teach");
+	// A "New session" link (drawer, shortcut) can arrive while Home is
+	// already showing: take its mode and put the cursor in the box (not on
+	// touch screens, where focusing would pop the keyboard unasked).
+	useEffect(() => {
+		if (!initialMode) return;
+		setMode(initialMode);
+		if (!window.matchMedia?.("(pointer: coarse)").matches) topicInputRef.current?.focus({ preventScroll: true });
+	}, [initialMode]);
 	const [practiceProps, setPracticeProps] = useState<{ id: string; name: string; statement: string }[]>([]);
 	const [chainSelectOpen, setChainSelectOpen] = useState(false);
 	// The chain table is CONTROLLED off this id set (the lifted pick).
@@ -204,8 +217,14 @@ export function Home({
 			    div above, and the toggle's lh-no-drag subtracts from it (it is
 			    later in the tree, so the subtraction sticks). */}
 			<header className="lh-home-navigation pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 px-3 py-2">
-				<div className="pointer-events-auto">
+				<div className="pointer-events-auto flex items-center gap-2">
 					<SidebarToggle />
+					{/* The same pair as every bar; here Home is where you are. */}
+					<HomeButton current />
+				</div>
+				{/* Phones: the new-session model and reasoning (owner O1). */}
+				<div className="lh-home-page-menu pointer-events-auto ml-auto">
+					<PageMenuButton />
 				</div>
 			</header>
 

@@ -366,7 +366,7 @@ try {
 	assert.deepEqual((await (await fetch(`${origin}/api/chats/handwriting_teach/writing/${receipt.writing.id}/source`)).json()).journal, frozen);
 	console.log("PASS real IndexedDB Attach explanation reload, exact full source and same-page supersession without tutor input");
 	await page.setViewport({ width: 1400, height: 900, isMobile: true, hasTouch: true });
-	await page.locator('[aria-label="Open sidebar"]').click();
+	await page.locator('[data-testid="open-sidebar"]').click();
 	await page.locator('[data-testid="kind-filter-all"]').click();
 	const kept = await page.evaluate(() => ({ ink: localStorage.getItem("lh:handwriting:pages:v1:handwriting_teach:page_initial"), visibility: localStorage.getItem("lh:handwriting:open:handwriting_teach") }));
 	for (const id of ["handwriting_practice", "handwriting_drill"]) {

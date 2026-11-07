@@ -38,6 +38,7 @@ import {
 	type GraphSettings,
 } from "@/src/core";
 import { MenuShell } from "@/components/menu-shell";
+import { setRevealStyle, useRevealStyle } from "@/components/device-prefs";
 import { Hint } from "@/components/ui/hint";
 import { useAppearance } from "./appearance.tsx";
 import { FontMenuList } from "./model-menu";
@@ -332,7 +333,25 @@ export function AppearanceSection({
 					onCommit={(v) => onSectionChange({ ...appearance, mdRendering: { ...md, italicColor: v === "" ? null : v } })}
 				/>
 			</SettingsRow>
+			<RevealStyleRow />
 		</>
+	);
+}
+
+/** Owner O5: "Show question" quiet by default; the earlier filled look as
+ *  an option. Kept on this device (it is about this screen). */
+function RevealStyleRow() {
+	const style = useRevealStyle();
+	return (
+		<SettingsRow label="Show question button" hint="How strongly the button that opens a check stands out (phones). Stored on this device." testid="row-reveal-style">
+			<div className="lh-segmented" role="group" aria-label="Show question button">
+				{(["quiet", "prominent"] as const).map((option) => (
+					<button key={option} type="button" data-active={style === option} aria-pressed={style === option} data-testid={`reveal-style-${option}`} onClick={() => setRevealStyle(option)}>
+						{option === "quiet" ? "Quiet" : "Prominent"}
+					</button>
+				))}
+			</div>
+		</SettingsRow>
 	);
 }
 

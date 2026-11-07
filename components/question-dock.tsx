@@ -97,6 +97,8 @@ export interface QuestionDockProps {
 	/** Changes once when a device-kept draft is restored after mount: the
 	 *  form remounts to take it (round 11, B1). */
 	draftEpoch?: number;
+	/** The last answer was not sent (R8): why, in plain words. */
+	unsentReason?: string;
 	onSaveDraft?: (draft: QuestionFormDraft) => void;
 	/** Escape in a question field stops dictation (STT wave) — threaded
 	 *  from the page that owns the dictation hook. */
@@ -135,6 +137,7 @@ export function QuestionDock({
 	onSubmit,
 	initialDraft,
 	draftEpoch = 0,
+	unsentReason,
 	onSaveDraft,
 	onEscape,
 	phase = "probe",
@@ -193,6 +196,7 @@ export function QuestionDock({
 					phase={phase}
 					active={expanded}
 					onCollapse={onCollapse}
+					unsentReason={unsentReason}
 					onSubmit={onSubmit}
 					initialDraft={initialDraft}
 					onSaveDraft={onSaveDraft}
@@ -296,6 +300,7 @@ function QuestionDockForm({
 	phase = "probe",
 	active,
 	onCollapse,
+	unsentReason,
 	onSubmit,
 	initialDraft,
 	onSaveDraft,
@@ -596,6 +601,25 @@ function QuestionDockForm({
 				}
 				return;
 			}
+			// Typing never picks an answer (R9, round 12): a letter or digit
+			// pressed while focus sits on an answer row (or nowhere in
+			// particular) starts the reasoning instead. Focus moves into the
+			// thinking field during keydown, so the character lands there, and
+			// the spaces that follow type rather than toggle a row.
+			if (!typing && !modded && /^[\p{L}\p{N}]$/u.test(e.key) && thinkingRef.current && thinkingRef.current.getClientRects().length > 0 && (!t || t === document.body || t.closest?.("[data-kbdrow]") || rootRef.current?.contains(t))) {
+				const field = thinkingRef.current;
+				field.focus({ preventScroll: true });
+				const selection = window.getSelection();
+				if (selection && field.isContentEditable) {
+					const range = document.createRange();
+					range.selectNodeContents(field);
+					range.collapse(false);
+					selection.removeAllRanges();
+					selection.addRange(range);
+				}
+				setKbdIdx(null);
+				return;
+			}
 			// Keys from a typing surface keep their meaning (arrows move
 			// the caret, space types).
 			if (typing || modded) return;
@@ -648,6 +672,16 @@ function QuestionDockForm({
 
 	return (
 		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-notebook-question={toolCallId} data-notebook-channel={owner.channel} data-follow-up={followUpOpen ? "open" : "waiting"}>
+			{/* R8: the same honest note as every other send path — the answer
+			    is still here, one tap sends it again. */}
+			{unsentReason && <div role="status" data-testid="question-unsent" className="lh-unsent-notice lh-question-unsent">
+				<div className="lh-unsent-row" data-unsent-in-box="">
+					<span>{`Not sent — ${unsentReason}. Your answer is still here.`}</span>
+					<span className="lh-unsent-actions">
+						<Button variant="outline" size="xs" data-testid="question-send-again" disabled={!canSubmit} onClick={submit}>Send again</Button>
+					</span>
+				</div>
+			</div>}
 			{/* Question area — scrolls internally if very tall; the bottom row stays put.
 			    Capped by the measured column (--dock-max-h; the old fixed 55dvh cut
 			    long questions short — owner round, 2026-10-05). */}

@@ -154,6 +154,9 @@ export function SharedWritingPanel({ chatId, writing: all, busy, hideIds }: {
 	const hidden = new Set(hideIds ?? []);
 	const writing = hidden.size ? { ...all, pending: all.pending.filter((item) => !hidden.has(item.id)) } : all;
 	const [removeError, setRemoveError] = useState<string | null>(null);
+	// R5 (round 12): the tray rests compact — one line with small pages —
+	// so the lesson keeps its half while writing; Review shows them large.
+	const [review, setReview] = useState(false);
 	// Removing only takes the snapshot out of this message: the page stays
 	// in the notebook and can be attached again.
 	const remove = (id: string) => {
@@ -168,11 +171,14 @@ export function SharedWritingPanel({ chatId, writing: all, busy, hideIds }: {
 	// Nothing waiting and nothing wrong: no row at all (round 11). The
 	// Concepts app setup lives in the notebook's ⋯ menu.
 	if (writing.pending.length === 0 && !writing.error) return null;
-	return <section className="lh-shared-writing mb-2 rounded-lg border border-border bg-card px-3 py-2 text-xs" data-has-writing={writing.pending.length > 0 || (!!writing.error && !/failed to fetch|networkerror|load failed/i.test(writing.error))} aria-label="Shared writing">
+	return <section className="lh-shared-writing mb-2 rounded-lg border border-border bg-card px-3 py-2 text-xs" data-review={review || undefined} data-has-writing={writing.pending.length > 0 || (!!writing.error && !/failed to fetch|networkerror|load failed/i.test(writing.error))} aria-label="Shared writing">
 		{writing.pending.length > 0 && <>
-			<p className="font-medium">{writing.pending.length} {writing.pending.length === 1 ? "page" : "pages"} attached · not sent</p>
+			<div className="lh-tray-head">
+				<p className="font-medium">{writing.pending.length} {writing.pending.length === 1 ? "page" : "pages"} attached · not sent</p>
+				<button type="button" className="lh-tray-toggle" data-testid="shared-writing-review" aria-expanded={review} onClick={() => setReview((open) => !open)}>{review ? "Done" : "Review"}</button>
+			</div>
 			<SharedWritingImages chatId={chatId} writing={writing.pending} onRemove={busy ? undefined : remove} />
-			<p className="text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Goes with your next message. × takes it out; it stays in your notebook."}</p>
+			{(review || busy) && <p className="lh-tray-help text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Goes with your next message. × takes it out; it stays in your notebook."}</p>}
 			{removeError && <p role="alert" className="text-destructive">{removeError}</p>}
 		</>}
 		{writing.error && (/failed to fetch|networkerror|load failed/i.test(writing.error)

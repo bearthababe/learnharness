@@ -856,9 +856,11 @@ export class SessionModel {
 
 	/** The answer path (the dock): the answer IS the question call's tool
 	 *  result (fork 1), riding as its input event. */
-	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission" | "writingIds">): Promise<void> {
+	/** Resolves true once the server accepted the answer, false when it was
+	 *  not sent (the question comes back with its draft). */
+	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission" | "writingIds">): Promise<boolean> {
 		void tool;
-		return this.send({ type: "answer", toolCallId, answer: output, submission: fields?.submission, writingIds: fields?.writingIds }, undefined, questionKey).then(() => undefined);
+		return this.send({ type: "answer", toolCallId, answer: output, submission: fields?.submission, writingIds: fields?.writingIds }, undefined, questionKey).then((accepted) => accepted === true);
 	}
 
 	/** The dismissal path (owner design 2026-10-03, "A2"): the skipped

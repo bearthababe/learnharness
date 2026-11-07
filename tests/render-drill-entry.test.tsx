@@ -25,7 +25,7 @@ it("home and sidebar offer Drill alongside their existing launch choices", () =>
 	assert.match(home, /Practice<\/button>/);
 	assert.match(home, /Drill<\/button>/);
 	const { document } = parseHTML(render(<AppShell><span>Session content</span></AppShell>));
-	assert.match(document.querySelector('[data-testid="new-session"]')!.textContent!, /^Teaching/);
+	assert.match(document.querySelector('[data-testid="new-session"]')!.textContent!, /^Teach/);
 	assert.match(document.querySelector('[data-testid="new-session-practice"]')!.textContent!, /^Practice/);
 	assert.match(document.querySelector('[data-testid="new-session-drill"]')!.textContent!, /^Drill/);
 });

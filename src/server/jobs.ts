@@ -457,6 +457,59 @@ export function abortJob(jobId: string): AbortOutcome {
 	return { ok: true };
 }
 
+export type RetryOutcome =
+	| { ok: true; jobId: string }
+	| { ok: false; reason: "not_found" | "not_failed" | "already_retried" | "no_input" | "busy" | "unavailable" };
+
+/** What a job was dispatched with: its saved input, or (older jobs) the
+ *  tool call's arguments in the transcript. */
+function jobInput(job: JobRecord): unknown {
+	if (job.input !== undefined) return job.input;
+	const chat = stores.chatStore.getChat(job.chatId);
+	for (const message of chat?.messages ?? []) {
+		if ((message as { role?: string }).role !== "assistant") continue;
+		const content = (message as { content?: unknown }).content;
+		if (!Array.isArray(content)) continue;
+		for (const block of content as Array<{ type?: string; id?: string; arguments?: unknown }>) {
+			if (block.type === "toolCall" && block.id === job.toolCallId) return block.arguments;
+		}
+	}
+	return undefined;
+}
+
+/**
+ * RETRY (owner O2, round 12): a failed background job runs again, as it
+ * was dispatched — the same kind and input, as a new job of the same
+ * session, through the same runner. Its result reaches the lesson the way
+ * any job's result does (the wake pipeline). The failed record stays as
+ * history and points at its retry, so it is retried once from the panel.
+ * Refused while the failure's own notice is still on its way to the
+ * session, or when the chat is gone.
+ */
+export function retryJob(jobId: string): RetryOutcome {
+	const job = stores.jobStore.getJob(jobId);
+	if (!job || !stores.chatStore.getChat(job.chatId)) return { ok: false, reason: "not_found" };
+	if (job.status !== "error" || isJobLive(job.id)) return { ok: false, reason: "not_failed" };
+	if (job.retriedBy) return { ok: false, reason: "already_retried" };
+	if (job.delivery?.status === "pending") return { ok: false, reason: "busy" };
+	const input = jobInput(job);
+	if (input === undefined) return { ok: false, reason: "no_input" };
+	const respawn = state().respawn;
+	if (!respawn) return { ok: false, reason: "unavailable" };
+	const retry = stores.jobStore.createJob({
+		kind: job.kind,
+		chatId: job.chatId,
+		// Its own call id: the original tool call keeps its failed record.
+		toolCallId: `${job.toolCallId}~retry-${Date.now().toString(36)}`,
+		input,
+		retryOf: job.id,
+		activity: "retrying",
+	});
+	stores.jobStore.updateJob(job.id, { retriedBy: retry.id });
+	respawn(retry.id);
+	return { ok: true, jobId: retry.id };
+}
+
 function chatIdOf(steer: SteerMessage): string {
 	// The probe handoff carries its chat directly in the marker details (the
 	// job record would say it too, but the details are the cheap path).

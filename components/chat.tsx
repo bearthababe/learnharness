@@ -3,6 +3,7 @@ import { SharedWritingImages, SharedWritingPanel, useSharedWriting } from "@/com
 import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
 import { HandwritingNotebook } from "@/components/handwriting/notebook";
 import { HandwritingPagesContext } from "@/components/handwriting/pages-context";
+import { PageMenuButton } from "@/components/page-menu";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
 import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
 import type { SharedWriting } from "@/src/core";
@@ -718,9 +719,22 @@ export function Chat({
 	// server-matching first render; the epoch remounts the question form
 	// once so it picks the restored answer up.
 	const [storedDraftEpoch, setStoredDraftEpoch] = useState(0);
+	// R8 (round 12): a question whose answer was not sent comes back OPEN,
+	// with its answer and a "Not sent / Send again" note — never folded to
+	// its bar as if it had just arrived. The ids whose answer is on its way
+	// (or failed) are remembered here for the dock's arrival decision; the
+	// request number opens it when the failure is learned after arrival
+	// (or found in the device copy after a reload).
+	const returningQuestionIds = useRef(new Set<string>());
+	const [questionOpenRequest, setQuestionOpenRequest] = useState(0);
 	useLayoutEffect(() => {
 		if (restoreStoredQuestionDrafts()) setStoredDraftEpoch((epoch) => epoch + 1);
-	}, [restoreStoredQuestionDrafts]);
+		const key = pendingKeyRef.current;
+		if (key && questionDraft(key)?.unsent) {
+			returningQuestionIds.current.add(key);
+			setQuestionOpenRequest((n) => n + 1);
+		}
+	}, [restoreStoredQuestionDrafts, questionDraft]);
 	useLayoutEffect(() => {
 		// Different calls never share a draft; a failed submission of THIS
 		// call restores the reading channel alongside the form's snapshot.
@@ -1052,6 +1066,8 @@ export function Chat({
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
 	const lastErrorRef = useRef<string | null>(null);
 	if (error) lastErrorRef.current = error.message;
+	// R8: the open question's answer was not sent — the reason its own note gives.
+	const questionUnsentReason = pending && questionDraft(pending.key)?.unsent ? unsentReason(error?.message ?? lastErrorRef.current) : undefined;
 	// A connection error clears itself when the connection is back (not-sent
 	// messages keep their own note and Send again).
 	useEffect(() => {
@@ -1833,6 +1849,8 @@ export function Chat({
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
 					)}
 					{writingOn && <Button variant="outline" size="sm" className="lh-header-write shrink-0" onClick={() => handwriting.show(true)} data-testid="open-notebook" aria-label="Write"><PenLineIcon aria-hidden /><span className="lh-header-write-label">Write</span></Button>}
+					{/* Phones: model, reasoning and Usage live here (owner O1). */}
+					<PageMenuButton />
 				</TopBar>
 				{!notebookVisible && notebook.error && (friendlyNetworkError(notebook.error)
 					? <p role="status" className="lh-quiet-status px-3 py-1">Offline — your notebook working is kept and syncs when you're back.</p>
@@ -2151,7 +2169,7 @@ export function Chat({
 									</div>
 								</div>
 							)}
-							{error && !unsentShown.length && !(practiceUnsent && activeProblem) && (
+							{error && !unsentShown.length && !(practiceUnsent && activeProblem) && !(questionUnsentReason && pending) && (
 								<div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
 									<span>{friendlyProviderError(error.message) ?? friendlyNetworkError(error.message) ?? `Something went wrong: ${error.message}`}</span>
 									{retryable && (
@@ -2186,6 +2204,9 @@ export function Chat({
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.key)?.form : undefined}
 					questionDraftEpoch={storedDraftEpoch}
+					returningQuestionIds={returningQuestionIds}
+					questionOpenRequest={questionOpenRequest}
+					questionUnsentReason={questionUnsentReason}
 					onSaveQuestionDraft={(form) => { if (pending) saveQuestionDraft(pending.key, { form }); }}
 					practice={activeProblem}
 					compactionRunning={compacting || (hasSharedWriting && busy)}
@@ -2292,7 +2313,14 @@ export function Chat({
 						const images = reviewed ?? sharedWriting.pending, answer = reading && !fields?.submission ? { ...output, readingThinking: reading } : output;
 						if ((images.length || handwritingSubmission.hasAttempt()) && !output.dismissed) return handwritingSubmission.submit({ type: "answer", toolCallId, answer, ...fields, writingIds: images.map(image => image.id) }, images, `question:${toolCallId}`, { readingThinking: readingThinkingRef.current });
 						if (!handwritingSubmission.blocked()) {
+							returningQuestionIds.current.add(pending.key);
 							const result = await submitAnswer(pending.tool, toolCallId, answer, pending.key, fields);
+							if (!result) {
+								// Not sent (R8): kept with the draft, so the note and Send
+								// again survive a reload; the question reopens with it.
+								saveQuestionDraft(pending.key, { unsent: { at: Date.now() } });
+								setQuestionOpenRequest((n) => n + 1);
+							}
 							// Keyboard users carry on typing: focus returns to the composer
 							// once it is back (never on touch, where it would raise a keyboard).
 							if (pendingRef.current?.toolCallId !== toolCallId && window.matchMedia?.("(pointer: fine)").matches) {
@@ -2490,6 +2518,9 @@ function DockOverlay({
 	pending,
 	initialQuestionDraft,
 	questionDraftEpoch,
+	returningQuestionIds,
+	questionOpenRequest = 0,
+	questionUnsentReason,
 	onSaveQuestionDraft,
 	practice,
 	compactionRunning,
@@ -2526,6 +2557,13 @@ function DockOverlay({
 	initialQuestionDraft?: QuestionFormDraft;
 	/** Bumps when device-kept drafts are restored after mount (B1). */
 	questionDraftEpoch?: number;
+	/** Questions coming back after their answer was sent (R8): they arrive
+	 *  open and revealed, never as a fresh, folded arrival. */
+	returningQuestionIds?: React.RefObject<Set<string>>;
+	/** Bumps to open the pending question (its answer was not sent). */
+	questionOpenRequest?: number;
+	/** Set while the pending question's answer was not sent: the reason. */
+	questionUnsentReason?: string;
 	onSaveQuestionDraft: (draft: QuestionFormDraft) => void;
 	/** Compaction running for this chat (round 14) — the docks' submit
 	 *  affordance gate (the server's registry is the real one). */
@@ -2592,6 +2630,12 @@ function DockOverlay({
 	// learner reads the teaching first and opens the check when ready. Once
 	// revealed, the normal collapse machine rules apply untouched.
 	const [revealed, setRevealed] = useState(false);
+	// A not-sent answer reopens its question (R8), revealed and expanded.
+	useEffect(() => {
+		if (!questionOpenRequest || !pending) return;
+		setRevealed(true);
+		setExpanded(true);
+	}, [questionOpenRequest]); // the request number is the trigger; pending is read as it is now
 	const revealPending = requiresReveal && !revealed;
 
 	const pendingId = pending?.key ?? null;
@@ -2610,14 +2654,15 @@ function DockOverlay({
 	if (pendingId !== prevPendingIdRef.current) {
 		const wasQuestion = prevPendingIdRef.current !== null;
 		prevPendingIdRef.current = pendingId;
+		const returning = !!pendingId && !!returningQuestionIds?.current.has(pendingId);
 		if (pendingId && requiresReveal) {
-			const arrival = revealArrival(wasQuestion);
+			const arrival = returning ? { expanded: true, revealed: true } : revealArrival(wasQuestion);
 			setExpanded(arrival.expanded);
 			setRevealed(arrival.revealed);
 		} else if (pendingId) {
 			// Probe arrival (flicker round): open iff following at the bottom.
 			// Painted in THIS render — no stale-open frame, no after-paint flip.
-			setExpanded(probeArrivalExpanded(atBottomRef.current));
+			setExpanded(returning || probeArrivalExpanded(atBottomRef.current));
 		}
 	}
 
@@ -3028,6 +3073,7 @@ function DockOverlay({
 									onSubmit={onSubmitAnswer}
 									initialDraft={initialQuestionDraft}
 									draftEpoch={questionDraftEpoch}
+									unsentReason={questionUnsentReason}
 									onSaveDraft={onSaveQuestionDraft}
 									onEscape={dictationCancel}
 									dictationClaim={!revealPending}

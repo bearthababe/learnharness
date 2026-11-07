@@ -528,6 +528,10 @@ export interface QuestionFormDraft {
 export interface QuestionDraft {
 	form?: QuestionFormDraft;
 	readingThinking?: string;
+	/** The last answer to this question was not sent (R8, round 12): the
+	 *  question shows "Not sent / Send again" until it goes through. Kept
+	 *  with the draft, so it survives a reload. */
+	unsent?: { at: number };
 }
 
 /**

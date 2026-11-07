@@ -2,7 +2,7 @@
 
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ActivityIcon, BotIcon, ChevronDownIcon, ChevronRightIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
+import { ActivityIcon, BotIcon, ChevronDownIcon, ChevronRightIcon, FileTextIcon, PenToolIcon, PlayIcon, RotateCwIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CallUsage, JobKind, JobRecord } from "@/src/core";
 import { isModelsRefusal, isProviderKeyRefusal, subscriptionLabel, subscriptionLabels } from "@/src/core";
@@ -12,8 +12,15 @@ import { useServerEvent, useServerResync } from "@/components/server-events";
 /** A settled job in words: cancelled is not a failure. */
 function jobStatusText(job: { status: string; error?: string }): string {
 	if (job.status === "aborted" || job.status === "cancelled" || /\babort|cancel/i.test(job.error ?? "")) return "Cancelled";
-	if (job.status === "error") return `Failed${job.error ? ` — ${job.error}` : ""}`;
+	if (job.status === "error") return "Failed";
 	return "Finished";
+}
+
+/** A failed job's reason, readable in full (owner O2): no "Error:" noise,
+ *  no stack, whitespace folded — never cut to a fragment. */
+export function readableJobError(error: string): string {
+	const firstLines = error.split(/\n\s*at\s/)[0] ?? error;
+	return firstLines.replace(/^(?:\s*(?:error|failed|fatal)\s*[:—-]\s*)+/i, "").replace(/\s+/g, " ").trim() || "The job stopped without saying why.";
 }
 
 /**
@@ -84,6 +91,10 @@ export interface FeedRecentJob {
 	title: string;
 	updatedAt: string;
 	error?: string;
+	/** A failed job that can run again (owner O2). */
+	canRetry?: boolean;
+	/** Set once retried: the re-run's id. */
+	retriedBy?: string;
 }
 
 export interface ActivityFeed {
@@ -335,6 +346,8 @@ export function ActivitySection({ feed: feedProp, trailing }: { feed?: ActivityF
 	const recent = feed.recent ?? [];
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const refresh = ctx.refresh;
+	// Failures that can still be retried are what the header reports first.
+	const failedCount = recent.filter((job) => job.status === "error" && job.canRetry && jobStatusText(job) === "Failed").length;
 	const blobs = useMemo(() => toBlobs(feed), [feed]);
 	const [openBlob, setOpenBlob] = useState<string | null>(null); // detail, inline-expanded
 	const [abortStates, setAbortStates] = useState<Record<string, AbortState>>({});
@@ -348,6 +361,19 @@ export function ActivitySection({ feed: feedProp, trailing }: { feed?: ActivityF
 		return priced.length === 0 ? null : priced.reduce((a, c) => a + c, 0);
 	}, [blobs]);
 
+	// Retry (owner O2): a failed job runs again as it was dispatched.
+	const [retrying, setRetrying] = useState<Record<string, "pending" | "failed">>({});
+	const retry = useCallback(async (jobId: string) => {
+		setRetrying((s) => ({ ...s, [jobId]: "pending" }));
+		try {
+			const res = await fetch("/api/activity/retry", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: jobId }) });
+			if (!res.ok && res.status !== 409) throw new Error(String(res.status));
+			setRetrying((s) => { const { [jobId]: _done, ...rest } = s; return rest; });
+			refresh();
+		} catch {
+			setRetrying((s) => ({ ...s, [jobId]: "failed" }));
+		}
+	}, [refresh]);
 	const abort = useCallback(async (blob: ActivityBlob) => {
 		const { setAbortStates: set } = abortRef.current;
 		set((s) => ({ ...s, [blob.id]: "pending" }));
@@ -400,7 +426,7 @@ export function ActivitySection({ feed: feedProp, trailing }: { feed?: ActivityF
 				<span className="truncate">Background agents</span>
 				{blobs.length === 0 && (
 					<span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground/80">
-						{recent.length > 0 ? `${recent.length} recent` : "Idle"}
+						{failedCount > 0 ? `${failedCount} failed` : recent.length > 0 ? `${recent.length} recent` : "Idle"}
 						{recent.length > 0 && <ChevronDownIcon className={cn("size-3.5 transition-transform", historyOpen && "rotate-180")} aria-hidden />}
 					</span>
 				)}
@@ -416,19 +442,31 @@ export function ActivitySection({ feed: feedProp, trailing }: { feed?: ActivityF
 				<ul className="lh-activity-history" data-testid="activity-history" aria-label="Recent background jobs">
 					{recent.map((job) => {
 						const Icon = KIND_ICON[job.kind] ?? BotIcon;
+						const status = jobStatusText(job);
+						const failed = status === "Failed";
 						return (
-							<li key={job.id}>
-								<Link href={`/chat/${job.chatId}`} className="lh-activity-recent" data-testid="activity-recent" data-status={jobStatusText(job) === "Cancelled" ? "cancelled" : job.status} title={`${KIND_LABEL[job.kind] ?? "Sub-agent"} · ${job.title}${job.status === "error" && job.error ? `\n${job.error}` : ""}`}>
-									<Icon className="size-4 shrink-0" aria-hidden />
-									<span className="min-w-0 flex-1">
-										<span className="lh-activity-recent-title">{KIND_LABEL[job.kind] ?? "Sub-agent"} · {job.title}</span>
-										<span className="lh-activity-recent-meta" title={job.error}>
-											<span className="lh-activity-recent-status">{jobStatusText(job)}</span>
-											<span className="lh-activity-recent-when">· {settledAgo(job.updatedAt)}</span>
-										</span>
+							<li key={job.id} className="lh-activity-recent" data-status={status === "Cancelled" ? "cancelled" : job.status}>
+								<Icon className="size-4 shrink-0" aria-hidden />
+								<span className="min-w-0 flex-1">
+									<span className="lh-activity-recent-title">{KIND_LABEL[job.kind] ?? "Sub-agent"} · {job.title}</span>
+									<span className="lh-activity-recent-meta">
+										<span className="lh-activity-recent-status">{job.retriedBy ? "Failed · retried" : status}</span>
+										<span className="lh-activity-recent-when">· {settledAgo(job.updatedAt)}</span>
 									</span>
-									<span className="lh-activity-open" aria-hidden="true">Open<ChevronRightIcon className="size-3.5" /></span>
-								</Link>
+									{/* The whole reason, readable (owner O2): never cut to a fragment. */}
+									{failed && job.error && <span className="lh-activity-error" data-testid="activity-recent-error">{readableJobError(job.error)}</span>}
+									<span className="lh-activity-actions">
+										{failed && job.canRetry && (
+											<button type="button" className="lh-activity-action" data-testid="activity-retry" disabled={retrying[job.id] === "pending"} onClick={() => void retry(job.id)}>
+												<RotateCwIcon aria-hidden />{retrying[job.id] === "pending" ? "Retrying…" : "Retry"}
+											</button>
+										)}
+										<Link href={`/chat/${job.chatId}`} className="lh-activity-action" data-testid="activity-recent">
+											Open session<ChevronRightIcon aria-hidden />
+										</Link>
+									</span>
+									{retrying[job.id] === "failed" && <span role="alert" className="lh-activity-error">Couldn't start it again. Open the session and ask the tutor instead.</span>}
+								</span>
 							</li>
 						);
 					})}

@@ -73,7 +73,7 @@ export async function checkSidebarSwipes(page, check, origin, chatId) {
 		await page.goto(`${origin}/chat/${chatId}`, { waitUntil: "networkidle2" });
 		await page.waitForSelector('[data-file-path-input][contenteditable="true"]');
 		const conversationY = 180;
-		const opener = await page.$eval('button[aria-label="Open sidebar"]', element => { const rect = element.getBoundingClientRect(); return { x: rect.right - 5, y: rect.y + rect.height / 2 }; });
+		const opener = await page.$eval('button[data-testid="open-sidebar"]', element => { const rect = element.getBoundingClientRect(); return { x: rect.right - 5, y: rect.y + rect.height / 2 }; });
 		await send("touchStart", [point(opener.x, opener.y)]);
 		await finish();
 		await page.waitForFunction(() => document.querySelector('aside[aria-label="Sessions"]').getAttribute("aria-hidden") === "false");

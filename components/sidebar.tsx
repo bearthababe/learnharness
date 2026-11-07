@@ -7,7 +7,7 @@ import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import { forgetHandwritingOnDevice } from "@/components/handwriting/device";
 import type { ChatDeleteMode } from "@/src/core";
-import { BookOpenIcon, DumbbellIcon, HomeIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, DumbbellIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon, XIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -246,26 +246,29 @@ export function SidebarToggle() {
 	return (
 		<span
 			className={cn(
-				"sidebar-motion lh-no-drag relative flex h-9 shrink-0 overflow-hidden duration-200",
-				open ? "w-0 -mr-3" : "w-9 mr-0 lh-closed-toggle",
+				"sidebar-motion lh-no-drag relative flex shrink-0 items-center overflow-hidden duration-200",
+				open ? "w-0 -mr-3" : "w-auto mr-0 lh-closed-toggle",
 			)}
 		>
-			<Hint label="Open sidebar" action="toggle-sidebar" disabled={phone}>
+			<Hint label="Open sessions" action="toggle-sidebar" disabled={phone}>
 			<Button
 				variant="ghost"
 				size="icon"
-				aria-label="Open sidebar"
+				data-testid="open-sidebar"
+				aria-label="Open sessions"
 				aria-describedby={waiting > 0 ? "lh-waiting-description" : undefined}
 				title={waiting > 0 ? (waiting === 1 ? "1 session waiting for you" : `${waiting} sessions waiting for you`) : undefined}
 				aria-hidden={open}
 				tabIndex={open ? -1 : 0}
 				onClick={toggle}
-				className={cn("sidebar-motion relative duration-200", open ? "pointer-events-none opacity-0" : "opacity-100")}
+				className={cn("lh-nav-chip sidebar-motion relative duration-200", open ? "pointer-events-none opacity-0" : "opacity-100")}
 			>
 				{/* Owner, round 6: size-4, SAME as the close glyph — the toggle
 				    must not grow when the sidebar is closed (it did: size-5 here).
 				    The small look is the standard, both directions. */}
 				<PanelLeftOpenIcon className="size-4" />
+				{/* Labelled (owner O4): the list of sessions, not a bare icon. */}
+				<span className="lh-nav-chip-label">Sessions</span>
 				{/* Sessions waiting for an answer stay visible while the list is closed. */}
 				{waiting > 0 && <span className="lh-waiting-badge" aria-hidden="true" data-testid="sessions-waiting-badge">{waiting}</span>}
 				{waiting > 0 && <span id="lh-waiting-description" className="sr-only">{waiting === 1 ? "1 session is waiting for your answer" : `${waiting} sessions are waiting for your answer`}</span>}
@@ -456,7 +459,7 @@ function SessionsSidebar() {
 		sidebar.querySelector<HTMLButtonElement>('button[aria-label="Close sidebar"]')?.focus({ preventScroll: true });
 		return () => {
 			requestAnimationFrame(() => {
-				const opener = document.querySelector<HTMLButtonElement>('button[aria-label="Open sidebar"]');
+				const opener = document.querySelector<HTMLButtonElement>('button[data-testid="open-sidebar"]');
 				if ((document.activeElement === document.body || sidebar.contains(document.activeElement)) && opener?.getAttribute("aria-hidden") === "false") {
 					opener.focus({ preventScroll: true });
 				}
@@ -496,9 +499,10 @@ function SessionsSidebar() {
 	   sessionless draft view; the session is created only when the first
 	   message is sent (and that message becomes its title). Search: a
 	   client-side filter over the poll snapshot — no server round trip. */
-	const newSession = useCallback(() => {
+	const newSession = useCallback((mode: "teach" | "practice" | "drill" = "teach") => {
 		closePhone();
-		router.push("/chat/new");
+		// One place starts sessions (owner O4): Home, with this mode chosen.
+		router.push(`/?mode=${mode}`);
 	}, [router, closePhone]);
 
 	/* FUZZY (owner round 8, 2026-10-05): subsequence match ranked by
@@ -821,27 +825,21 @@ function SessionsSidebar() {
 				    practice carries its mode. */}
 				<div className="lh-sessions-create-label">New session</div>
 				<div className="lh-sessions-create">
-					{/* Phone (round 11): the row matches the start page's bar —
-					    Home first (the graph), then the three session types —
-					    so the sheet's header no longer needs its own Home. */}
-					<Link href="/" onClick={closePhone} className="lh-sessions-home" data-kind="home" data-testid="sessions-home" aria-label="Home">
-						<HomeIcon aria-hidden />
-					</Link>
 					<button
 						type="button"
 						data-testid="new-session"
 						data-kind="teach"
-						onClick={() => void newSession()}
+						onClick={() => newSession("teach")}
 					>
 						<BookOpenIcon aria-hidden />
-						Teaching
+						Teach
 						<span className="sr-only">create a new teaching session</span>
 					</button>
 					<button
 						type="button"
 						data-testid="new-session-practice"
 						data-kind="practice"
-						onClick={() => { closePhone(); router.push("/chat/new?mode=practice"); }}
+						onClick={() => newSession("practice")}
 					>
 						<DumbbellIcon aria-hidden />
 						Practice
@@ -851,7 +849,7 @@ function SessionsSidebar() {
 						type="button"
 						data-testid="new-session-drill"
 						data-kind="drill"
-						onClick={() => { closePhone(); router.push("/chat/new?mode=drill"); }}
+						onClick={() => newSession("drill")}
 					>
 						<TargetIcon aria-hidden />
 						Drill
@@ -941,6 +939,10 @@ function SessionsSidebar() {
 				    Practice / All — the real modes first, "All" as the escape
 				    hatch on the right, mirroring the create-buttons above.
 				    Persisted client-side. */}
+				{/* Filtering the list, captioned so it never reads as creating
+				    (owner O4): "Show" here, "New session" above. */}
+				<div className="lh-sessions-filter-row">
+				<span className="lh-sessions-filter-caption" aria-hidden="true">Show</span>
 				<div className="lh-segmented lh-sessions-filter" role="group" aria-label="Show sessions" data-testid="session-kind-filter">
 					{(["teach", "practice", "all"] as const).map((f) => (
 						<button
@@ -954,6 +956,7 @@ function SessionsSidebar() {
 							{f === "teach" ? "Teaching" : f === "all" ? "All" : "Practice"}
 						</button>
 					))}
+				</div>
 				</div>
 
 				{deletedNotice && <p role="status" data-testid="session-deleted-notice" className="lh-deleted-notice">{deletedNotice}</p>}
@@ -1019,10 +1022,11 @@ function SessionsSidebar() {
 									type="button"
 									onClick={() => openSettings()}
 									data-testid="settings-entry"
-									aria-label="Settings"
 									className="lh-footer-row lh-settings-entry"
 								>
 									<SettingsIcon className="size-4" />
+									{/* Labelled (owner O4): no icon-only navigation. */}
+									<span>Settings</span>
 								</button>
 							</Hint>
 						}

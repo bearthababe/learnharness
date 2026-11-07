@@ -91,7 +91,8 @@ export async function verifyNotebookMobile(browser, origin) {
 	assert.deepEqual((await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json()).lines, [{ id: "L1", latex: "p=F/A" }]);
 	await page.tap('[data-notebook-scroll] [aria-label="Select expression 2 on line 1"]');
 	assert.equal(await page.$eval('[data-notebook-scroll] [aria-label="Select expression 2 on line 1"]', e => e.getAttribute('aria-pressed')), 'true');
-	assert.equal(await page.$eval('.notebook-expression-number', e => getComputedStyle(e).fontSize), '10px');
+	// Round 12 design pass: no secondary text under 13px on touch screens.
+	assert.equal(await page.$eval('.notebook-expression-number', e => getComputedStyle(e).fontSize), '13px');
 	await page.tap('[data-notebook-scroll] [aria-label="Select line 1"]');
 	assert.equal(await page.$eval('[data-notebook-scroll] [aria-label="Select expression 2 on line 1"]', e => e.getAttribute('aria-pressed')), 'false');
 	const mic = '.notebook-panel [aria-label="Start dictation"]';
