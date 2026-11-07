@@ -47,11 +47,14 @@ describe("behind-the-scenes steps fold into one line per run", () => {
 		assert.doesNotMatch(html, /lookup/, "a folded run renders no body until opened");
 	});
 
-	it("the run holding the streaming tail opens", () => {
+	it("the run holding the streaming tail stays folded and says the tutor is working", () => {
 		const parts: Part[] = [{ type: "text", text: "Hi" }, { type: "reasoning", text: "…" }];
 		const out = groupTraceParts(parts, [<p key="h">Hi</p>, <p key="r">notes</p>], 1) as ReactElement[];
 		const group = out[1] as ReactElement<{ live: boolean }>;
 		assert.equal(group.props.live, true);
-		assert.match(renderToStaticMarkup(<>{out}</>), /notes/);
+		const html = renderToStaticMarkup(<>{out}</>);
+		assert.match(html, /Thinking…/);
+		assert.match(html, /lh-steps-pulse/);
+		assert.doesNotMatch(html, /notes/, "hidden by default, also while live");
 	});
 });

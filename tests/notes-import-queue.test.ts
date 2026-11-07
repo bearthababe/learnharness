@@ -93,14 +93,14 @@ it("an all-skipped selection publishes completion without validation errors or u
 	Object.defineProperty(oversized, "size", { value: Number.MAX_SAFE_INTEGER });
 	queue.append([file("config", "Vault/.git/config"), file(".draft.md", "Vault/.draft.md"), oversized]);
 	assert.equal(publications, 1);
-	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], completion: 1 });
+	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], done: [], completion: 1 });
 	await tick();
 	assert.deepEqual(paths, []);
 	assert.equal(publications, 1, "no asynchronous settlement for skipped files");
 	queue.append([file("notes.md")]);
 	await tick();
 	assert.deepEqual(paths, ["notes.md"]);
-	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], completion: 2 });
+	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], done: [{ filePath: "notes.md", ideas: 0, chains: 0 }], completion: 2 });
 	unsubscribe();
 });
 
@@ -111,11 +111,20 @@ it("an all-skipped append does not complete or disturb an active import", async 
 	queue.append([file("notes.md")]);
 	queue.append([file("config", "Vault/.git/config"), file(".draft.md", "Vault/.draft.md")]);
 	assert.equal(calls, 1);
-	assert.deepEqual(queue.getSnapshot(), { importing: true, errors: [], notices: [], completion: 0 });
+	assert.deepEqual(queue.getSnapshot(), { importing: true, errors: [], notices: [], done: [], completion: 0 });
 	resolve([success("notes.md")]);
 	await tick();
 	assert.equal(calls, 1);
-	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], completion: 1 });
+	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], done: [{ filePath: "notes.md", ideas: 0, chains: 0 }], completion: 1 });
+});
+
+it("finished files report what they added until dismissed", async () => {
+	const queue = createNotesImportQueue(async ([f]) => [{ ...success(f!.name), stats: { nodes: f!.name === "a.md" ? 2 : 3, chains: 1 } }]);
+	queue.append([file("a.md"), file("b.md")]);
+	await tick();
+	assert.deepEqual(queue.getSnapshot().done, [{ filePath: "a.md", ideas: 2, chains: 1 }, { filePath: "b.md", ideas: 3, chains: 1 }]);
+	queue.dismiss();
+	assert.deepEqual(queue.getSnapshot().done, []);
 });
 
 it("synchronous transport failures settle one wave once without reentrant pump recursion", async () => {

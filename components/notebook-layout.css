@@ -107,3 +107,10 @@ html[data-session-input-locked], html[data-session-input-locked] body { overflow
 	.notebook-panel > [data-notebook-scroll] { order: 1; }
 	.notebook-panel > .notebook-instruction-form { order: 2; border-top: 1px solid var(--border); }
 }
+/* The lines an instruction just added or changed glow, then settle. */
+.notebook-working-line[data-changed] { border-radius: 10px; animation: notebook-changed 2.2s ease-out; }
+@keyframes notebook-changed {
+	0%, 35% { background: color-mix(in oklab, var(--primary) 22%, transparent); box-shadow: inset 3px 0 0 var(--primary); }
+	100% { background: transparent; box-shadow: inset 3px 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .notebook-working-line[data-changed] { animation: none; box-shadow: inset 3px 0 0 var(--primary); } }

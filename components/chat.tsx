@@ -26,6 +26,7 @@ import { Message, MessageContent, MessageResponse } from "@/components/ai-elemen
 import { PathText } from "@/components/file-path-chip";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
 import { groupTraceParts } from "@/components/steps-group";
+import { answeredCardCount, followAnsweredCard } from "@/components/answer-follow";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { BrailleSpinner } from "@/components/braille-spinner";
 import { LiveToolCard } from "@/components/artifacts/live-tool-card";
@@ -77,7 +78,7 @@ import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, PenLineIc
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
-import { SessionMessageNavigation, scrollSessionTarget } from "@/components/session-navigation";
+import { SessionMessageNavigation } from "@/components/session-navigation";
 import { friendlyProviderError } from "@/components/friendly-error";
 import { useDeviceFeature } from "@/components/device-features";
 import { PracticeDock } from "@/components/practice-dock";
@@ -288,6 +289,8 @@ export function Chat({
 	const sharedWriting = useSharedWriting(chatId, nativeMessages);
 	const hasSharedWriting = sharedWriting.pending.length > 0;
 	const handwritingSubmission = useHandwritingSubmission(chatId, sharedWriting.refresh, send, sharedWriting.pending);
+	// Removing the last attached page clears its "attached · not sent" notice.
+	useEffect(() => { handwritingSubmission.attachment()?.reconcile(sharedWriting.pending); }, [handwritingSubmission, sharedWriting.pending]);
 
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
 	const workspaceRef = useRef<HTMLDivElement | null>(null);
@@ -309,39 +312,21 @@ export function Chat({
 	useSessionInputViewport(workspaceRef, notebookVisible);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
 	useMobileChatFocus(workspaceRef, scrollContextRef, !notebookVisible);
-	// After answering, keep the result in view: the new
-	// answered card settles near the top and the reply streams in below it
-	// (the scroll-down disc offers the rest) instead of pushing it away.
-	const pinAnswerRef = useRef(0);
-	useEffect(() => {
-		if (!pinAnswerRef.current) return;
-		if (Date.now() - pinAnswerRef.current > 15_000) { pinAnswerRef.current = 0; return; }
-		const scroller = scrollContextRef.current?.scrollRef.current;
-		const scope = workspaceRef.current;
-		if (!scroller || !scope) return;
-		if (!scroller.querySelector('[data-testid="answered-card"]')) return;
-		pinAnswerRef.current = 0;
-		// The optimistic card can be re-rendered as the record lands: look it
-		// up when scrolling, and only once it has real geometry.
-		let tries = 0;
-		const pin = () => {
-			const cards = scroller.querySelectorAll<HTMLElement>('[data-testid="answered-card"]');
-			const card = cards[cards.length - 1];
-			const box = card?.getBoundingClientRect();
-			if (!card || !card.isConnected || !box || box.height === 0) {
-				if (++tries < 10) setTimeout(pin, 80);
-				return;
-			}
-			// The card itself: its parent is the whole message (lesson text first).
-			scrollSessionTarget(card, scope, scrollContextRef.current);
-			// A downward programmatic scroll re-locks stick-to-bottom (its scroll
-			// handler reads it as the learner heading for the end), and the
-			// streaming reply would then drag the card away. Hold the escape
-			// once the scroll has been handled.
-			for (const delay of [30, 250, 800]) setTimeout(() => scrollContextRef.current?.stopScroll(), delay);
-		};
-		setTimeout(pin, 120);
-	}, [messages]);
+	// After answering, keep the result in view: the answered card comes to
+	// the top and the tutor's reply streams in beneath it (see answer-follow).
+	const answerFollowRef = useRef<(() => void) | null>(null);
+	useEffect(() => () => answerFollowRef.current?.(), []);
+	const followAnswer = useCallback((toolCallId: string) => {
+		answerFollowRef.current?.();
+		const scroller = () => scrollContextRef.current?.scrollRef.current ?? null;
+		answerFollowRef.current = followAnsweredCard({
+			scroller,
+			holdAutoFollow: () => scrollContextRef.current?.stopScroll(),
+			before: answeredCardCount(scroller()),
+			pending: () => pendingRef.current?.toolCallId === toolCallId,
+			release: () => { void scrollContextRef.current?.scrollToBottom(); },
+		});
+	}, []);
 	// The stick-to-bottom scroller re-pins when its CONTENT resizes, not when
 	// the viewport itself shrinks (the notebook or writing pane opening, a
 	// split loading). Keep a reader who was at the end at the end.
@@ -1819,7 +1804,7 @@ export function Chat({
 													}
 													case "reasoning":
 														return (
-															<Reasoning key={pi} isStreaming={status === "streaming" && isLastPart} defaultOpen={!(status === "streaming" && isLastPart)} className="lh-reasoning mb-2">
+															<Reasoning key={pi} isStreaming={status === "streaming" && isLastPart} open className="lh-reasoning mb-2">
 																<ReasoningTrigger />
 																<ReasoningContent>{part.text ?? ""}</ReasoningContent>
 															</Reasoning>
@@ -2042,7 +2027,7 @@ export function Chat({
 					onSubmitAnswer={async (output, toolCallId, fields, reviewed) => {
 						const pending = pendingRef.current;
 						if (!pending || pending.toolCallId !== toolCallId) return false;
-						pinAnswerRef.current = Date.now();
+						followAnswer(toolCallId);
 						// THE ANSWER IS THE QUESTION CALL'S TOOL RESULT (fork 1, owner
 						// 2026-09-26): one input event, one turn — the hook appends
 						// the optimistic graded result (the AnsweredCard shows at

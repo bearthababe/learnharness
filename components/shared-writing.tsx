@@ -173,7 +173,7 @@ export function SharedWritingPanel({ chatId, writing, busy }: {
 		</>}
 		{writing.error && <p role="alert" className="text-destructive">{writing.error} <button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Try again</button></p>}
 		<details className={`lh-concepts-setup ${writing.pending.length ? "mt-2" : ""}`}>
-			<summary className="cursor-pointer text-muted-foreground">Share from Concepts · setup & tools</summary>
+			<summary className="cursor-pointer text-muted-foreground">Send pages from the Concepts app · setup</summary>
 			<ol className="my-2 list-decimal space-y-1 pl-5">
 				<li>Create a Shortcut named <strong>Send to LearnHarness</strong> and enable <strong>Show in Share Sheet</strong>, accepting Images.</li>
 				<li>Add <strong>Get Contents of URL</strong> using this session’s URL. Set <strong>Method: POST</strong>, <strong>Request Body: File</strong>, with <strong>Shortcut Input</strong> as the file.</li>

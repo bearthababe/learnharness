@@ -19,6 +19,22 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 	const attached = notebookActivityDrafts(drafts.drafts, activity);
 	const hasWorking = attached.some(draft => draft.parts.some(part => part.kind === "working"));
 	const [menu, setMenu] = useState<"options" | "model" | "history" | "usage" | "review" | null>(null);
+	// After an instruction lands, the lines it added or changed glow briefly
+	// (never on first load), so the learner sees what moved.
+	const previousLines = useRef<Map<string, string> | null>(null);
+	const [changed, setChanged] = useState<ReadonlySet<string>>(() => new Set());
+	useEffect(() => {
+		const lines = view?.lines;
+		if (!lines) return;
+		const prior = previousLines.current;
+		previousLines.current = new Map(lines.map(line => [line.id, line.latex]));
+		if (!prior) return;
+		const ids = new Set(lines.filter(line => prior.get(line.id) !== line.latex).map(line => line.id));
+		if (ids.size === 0) return;
+		setChanged(ids);
+		const timer = window.setTimeout(() => setChanged(new Set()), 2200);
+		return () => window.clearTimeout(timer);
+	}, [view?.lines]);
 	const trigger = useRef<HTMLButtonElement>(null);
 	const applyWaiting = editing || inputLocked;
 	const modelLocked = !view || saving || applyWaiting || !!view.pending || speech.active;
@@ -124,7 +140,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 			</details>}
 		</form>
 		<div data-notebook-scroll="" className="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
-			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} expressionSelection={expressionSelection} onSelect={session.selectLine} onSelectExpression={session.selectExpression} />
+			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} expressionSelection={expressionSelection} onSelect={session.selectLine} onSelectExpression={session.selectExpression} changedIds={changed} />
 			{view?.lines.length === 0 && <p className="text-sm text-muted-foreground">Your working appears here.</p>}
 		</div>
 	</section>;

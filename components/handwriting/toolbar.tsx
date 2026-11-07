@@ -3,7 +3,7 @@
 // Corner arc selectively carried forward from c663dcecd22a. Drawing values and
 // the shared Pencil release-inside activation path belong to the notebook.
 import { useEffect, useState, type ButtonHTMLAttributes, type CSSProperties } from "react";
-import { EllipsisIcon, Undo2Icon, Redo2Icon, XIcon } from "lucide-react";
+import { EllipsisIcon, Minimize2Icon, Undo2Icon, Redo2Icon, XIcon } from "lucide-react";
 import { HANDWRITING_HIGHLIGHT_COLOUR } from "@/src/core";
 
 type Tool = "pen" | "highlighter" | "eraser";
@@ -34,6 +34,8 @@ function ToolGlyph({ tool, colour, dim }: { tool: Tool; colour: string; dim: boo
 	</svg>;
 }
 const FOLD_KEY = "lh:writing-wheel-folded";
+const isFoldedTitle = (variant: string, folded: boolean) => variant === "wheel" && folded;
+const COACH_KEY = "lh:writing-wheel-coached";
 export function HandwritingToolbar(p: Props) {
 	const [expanded, setExpanded] = useState(false), [pageOpen, setPageOpen] = useState(false);
 	const label = TOOLS.find(t => t.id === p.tool)!.label;
@@ -42,12 +44,32 @@ export function HandwritingToolbar(p: Props) {
 	// paper is all page; the hub keeps showing the current ink and unfolds it.
 	const [folded, setFolded] = useState(false);
 	useEffect(() => { try { setFolded(window.localStorage.getItem(FOLD_KEY) === "1"); } catch { /* default open */ } }, []);
+	// First sight of the wheel on this device: each tool's name shows beside
+	// it for a few seconds (and the hub always names the current tool).
+	const [coach, setCoach] = useState(false);
+	useEffect(() => {
+		if (variant !== "wheel") return;
+		let seen = true;
+		try { seen = window.localStorage.getItem(COACH_KEY) === "1"; window.localStorage.setItem(COACH_KEY, "1"); } catch { /* show once per view */ seen = false; }
+		if (seen) return;
+		setCoach(true);
+		const timer = window.setTimeout(() => setCoach(false), 6000);
+		return () => window.clearTimeout(timer);
+	}, [variant]);
+	// Escape closes the tool settings (one layer at a time).
+	useEffect(() => {
+		if (!expanded) return;
+		const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setExpanded(false); } };
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [expanded]);
 	const fold = (value: boolean) => {
 		setFolded(value); setExpanded(false);
 		try { window.localStorage.setItem(FOLD_KEY, value ? "1" : "0"); } catch { /* this view only */ }
 	};
 	const isFolded = variant === "wheel" && folded;
 	const current = p.sizes.find(item => item.value === p.size)?.name;
+	const hubTitle = isFoldedTitle(variant, folded) ? "Show writing tools" : `${label}${current ? ` · ${current}` : ""} — size and ink`;
 	return <div className="hw-overlay" role="toolbar" aria-label="Writing tools" data-testid="notebook-toolbar" data-variant={variant}>
 		<div className="hw-pageActions">
 			<button type="button" className="hw-pageTrigger" aria-label="Page options" aria-expanded={pageOpen} disabled={p.disabled} {...p.handlers("Page options", () => setPageOpen(v => !v))}><EllipsisIcon size={20} /><span>Page</span></button>
@@ -56,16 +78,20 @@ export function HandwritingToolbar(p: Props) {
 				<button type="button" aria-label="Clear" {...p.handlers("Clear", () => { p.clear(); setPageOpen(false); })}>Clear page<span>Undoable</span></button>
 			</div>}
 		</div>
-		<div className="hw-arc" data-folded={isFolded || undefined}>
+		<div className="hw-arc" data-folded={isFolded || undefined} data-coach={coach || undefined}>
 			<svg className="hw-arcTrack" viewBox="0 0 112 260" aria-hidden="true"><path d="M98 22C-7 58-7 193 98 235" /></svg>
-			{TOOLS.map(tool => <button key={tool.id} type="button" className={`hw-toolButton hw-arc_${tool.id}`} aria-label={tool.label} aria-pressed={p.tool === tool.id} disabled={p.disabled}
-				{...p.handlers(tool.label, () => { p.selectTool(tool.id); setExpanded(p.tool !== tool.id || !expanded); })}>
+			{TOOLS.map(tool => <button key={tool.id} type="button" className={`hw-toolButton hw-arc_${tool.id}`} aria-label={tool.label} title={tool.label} aria-pressed={p.tool === tool.id} disabled={p.disabled}
+				{...p.handlers(tool.label, () => { setCoach(false); p.selectTool(tool.id); setExpanded(variant === "wheel" ? false : p.tool !== tool.id || !expanded); })}>
 				<ToolGlyph tool={tool.id} colour={tool.id === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.colour} dim={p.dimPaper} /><span className="hw-toolName">{tool.label}</span>
 			</button>)}
-			{variant === "wheel" && <button type="button" className="hw-wheelHub" aria-label={isFolded ? "Show writing tools" : "Tool settings"} aria-expanded={isFolded ? false : expanded} disabled={p.disabled} {...p.handlers(isFolded ? "Show writing tools" : "Tool settings", () => { if (isFolded) fold(false); else setExpanded(v => !v); })}>
+			{variant === "wheel" && <button type="button" className="hw-wheelHub" title={hubTitle} aria-label={isFolded ? "Show writing tools" : "Tool settings"} aria-expanded={isFolded ? false : expanded} disabled={p.disabled} {...p.handlers(isFolded ? "Show writing tools" : "Tool settings", () => { if (isFolded) fold(false); else setExpanded(v => !v); })}>
 				<span className="hw-wheelSwatch" style={{ backgroundColor: p.tool === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.tool === "eraser" ? "transparent" : p.colour, filter: p.dimPaper ? "var(--lh-dim-paper-filter)" : undefined }} data-tool={p.tool} />
-				<span className="hw-wheelSize">{current ?? label}</span>
+				<span className="hw-wheelSize">{label}</span>
 			</button>}
+			{variant === "wheel" && coach && !folded && <div className="hw-wheelCoach" role="note" data-testid="wheel-coach">
+				<strong>Writing tools</strong>
+				<ul><li><b>Pen</b> top</li><li><b>Highlighter</b> left</li><li><b>Eraser</b> lower left</li><li><b>Undo · Redo</b> right</li><li><b>Centre</b> size and ink</li></ul>
+			</div>}
 			<div className="hw-arcUndo"><button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled || !p.canUndo} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} /></button><button type="button" className="hw-iconButton" aria-label="Redo" title="Redo" disabled={p.disabled || !p.canRedo} {...p.handlers("Redo", p.redo)}><Redo2Icon size={19} /></button></div>
 			{expanded && <div className="hw-arcInspector">
 				<div className="hw-inspectorTitle"><span>{label}</span><button type="button" aria-label="Close tool settings" {...p.handlers("Close tool settings", () => setExpanded(false))}><XIcon size={16} /></button></div>
@@ -76,7 +102,7 @@ export function HandwritingToolbar(p: Props) {
 				{p.tool === "pen" && <><div className="hw-sectionLabel">Ink</div><div role="group" aria-label="Pen colour" className="hw-colours">{p.colours.map(item => <button key={item.name} type="button" className="hw-colourChoice" aria-label={`${item.name} pen`} aria-pressed={p.colour === item.value} disabled={p.disabled}
 					{...p.handlers(`${item.name} pen`, () => { p.selectColour(item.value); setExpanded(false); })}><span style={{ backgroundColor: item.value, filter: p.dimPaper ? "var(--lh-dim-paper-filter)" : undefined }} /></button>)}</div></>}
 				<p>{variant === "wheel" ? "Tap the centre of the wheel to adjust." : "Tap the active tool to adjust."}</p>
-				{variant === "wheel" && <button type="button" className="hw-foldWheel" data-testid="fold-wheel" {...p.handlers("Fold the wheel", () => fold(true))}>Fold the wheel<span>More room to write</span></button>}
+				{variant === "wheel" && <button type="button" className="hw-foldWheel" data-testid="fold-wheel" {...p.handlers("Fold the wheel", () => fold(true))}><Minimize2Icon aria-hidden size={16} /><span>Fold the wheel</span></button>}
 			</div>}
 		</div>
 	</div>;

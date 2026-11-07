@@ -22,7 +22,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ListTreeIcon } from "lucide-react";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { GraphCostControl } from "@/components/graph-view.tsx";
-import { NotesImportControl, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
+import { NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import { Hint } from "@/components/ui/hint";
 import { useSidebar } from "@/components/sidebar";
@@ -177,6 +177,7 @@ export function MinimalHome({
 					<NotesImportControl importing={importing} onImportFiles={onImportFiles} />
 				</div>
 				<NotesImportErrors errors={notesImport.errors} onOpenSettings={() => openSettings("keys")} onDismiss={dismissNotesImportResults} />
+				<NotesImportDone done={notesImport.done} importing={notesImport.importing} onShowIdeas={() => { dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
 				<NotesImportNotices notices={notesImport.notices} />
 				{costs && costs.runs.length > 0 && <GraphCostControl costs={costs} />}
 			</div>

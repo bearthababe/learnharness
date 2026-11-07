@@ -8,8 +8,10 @@ function renderWorking(source: string): string | null {
 	catch { return null; /* Exact source remains the fallback. */ }
 }
 
-export function NotebookWorking({ lines, selectedLineId, expressionSelection, onSelect, onSelectExpression }: {
+export function NotebookWorking({ lines, selectedLineId, expressionSelection, onSelect, onSelectExpression, changedIds }: {
 	lines: readonly NotebookLine[];
+	/** Lines an instruction just added or changed: they glow briefly. */
+	changedIds?: ReadonlySet<string>;
 	selectedLineId?: string | null;
 	onSelect?: (id: string) => void;
 	expressionSelection?: NotebookExpressionSelection | null;
@@ -21,7 +23,7 @@ export function NotebookWorking({ lines, selectedLineId, expressionSelection, on
 			const rendered = expressions?.map(part => {
 				return { expression: renderWorking(part.text), relation: part.relationAfter ? katex.renderToString(part.relationAfter, { throwOnError: true, trust: false }) : "" };
 			});
-			if (expressions && rendered) return <li key={line.id} className="notebook-working-line flex min-w-0 items-center gap-2">
+			if (expressions && rendered) return <li key={line.id} data-changed={changedIds?.has(line.id) || undefined} className="notebook-working-line flex min-w-0 items-center gap-2">
 				{onSelect ? <button type="button" aria-label={`Select line ${index + 1}`} aria-pressed={selectedLineId === line.id && !expressionSelection} className="min-h-11 shrink-0 rounded px-2 text-xs text-muted-foreground hover:bg-accent aria-pressed:bg-accent" onClick={() => onSelect(line.id)}>{index + 1}.</button>
 					: <span className="shrink-0 px-2 text-xs text-muted-foreground">{index + 1}.</span>}
 				<span className="flex min-w-0 items-center overflow-x-auto py-1">{expressions.map((part, i) => {
@@ -37,7 +39,7 @@ export function NotebookWorking({ lines, selectedLineId, expressionSelection, on
 			const html = renderWorking(line.latex);
 			const content = <><span className="shrink-0 text-xs text-muted-foreground">{index + 1}.</span>
 				{html === null ? <code data-notebook-source="" className="whitespace-pre-wrap break-all">{line.latex}</code> : <span className="min-w-0 overflow-x-auto" dangerouslySetInnerHTML={{ __html: html }} />}</>;
-			return <li key={line.id}>{onSelect ? <button type="button" aria-label={`Select line ${index + 1}`} aria-pressed={selectedLineId === line.id}
+			return <li key={line.id} data-changed={changedIds?.has(line.id) || undefined} className="notebook-working-line">{onSelect ? <button type="button" aria-label={`Select line ${index + 1}`} aria-pressed={selectedLineId === line.id}
 				className="flex w-full items-baseline gap-3 rounded p-2 text-left hover:bg-accent aria-pressed:bg-accent" onClick={() => onSelect(line.id)}>{content}</button>
 				: <div className="flex items-baseline gap-3 p-2">{content}</div>}</li>;
 		})}

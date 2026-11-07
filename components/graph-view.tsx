@@ -64,7 +64,7 @@
  */
 
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { NotesImportControl, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
+import { NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
 import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon, XIcon } from "lucide-react";
@@ -1640,6 +1640,7 @@ export function GraphView({
 			</div>
 
 			<NotesImportErrors errors={notesImport.errors} onOpenSettings={() => openSettings("keys")} onDismiss={dismissNotesImportResults} />
+			<NotesImportDone done={notesImport.done} importing={importing} onShowIdeas={() => { dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
 			<NotesImportNotices notices={notesImport.notices} />
 			{/* Top-right tail (owner, 2026-09-20): the pipeline cost number —
 			    just a number, hover-highlighted, dropdown breakdown — then

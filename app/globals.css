@@ -3271,7 +3271,17 @@ button[role="switch"][aria-checked="true"] > span {
 }
 /* A thinking-only run: the run's own line is the heading, so the note
    reads straight away (the inner toggle returns while it streams). */
-.lh-steps[data-kind="thinking"]:not([data-live]) .lh-reasoning > button:first-child { display: none; }
+.lh-steps .lh-reasoning > button:first-child { display: none; }
+.lh-steps-pulse {
+	width: 7px;
+	height: 7px;
+	flex: none;
+	border-radius: 999px;
+	background: var(--primary);
+	animation: lh-steps-pulse 1.1s ease-in-out infinite;
+}
+@keyframes lh-steps-pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .lh-steps-pulse { animation: none; } }
 .lh-steps .lh-reasoning { margin-bottom: 6px; }
 .lh-steps-body .lh-reasoning [data-slot="collapsible-content"],
 .lh-steps-body .lh-reasoning > div {
@@ -3375,3 +3385,168 @@ button[role="switch"][aria-checked="true"] > span {
 }
 .hw-foldWheel span { color: var(--muted-foreground); font-size: 12.5px; }
 .hw-wheelSize { font-size: 11.5px; }
+
+/* Folded wheel keeps Undo and Redo beside its hub: a small pill. */
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] {
+	width: 168px;
+	height: 64px;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded]::before {
+	border-radius: 32px;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo {
+	display: contents;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo > .hw-iconButton:first-child { left: 6px; top: 8px; }
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo > .hw-iconButton:last-child { left: 114px; top: 8px; }
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] .hw-wheelHub {
+	left: 54px;
+	top: 2px;
+	border-color: var(--tool-edge);
+	background: color-mix(in srgb, var(--card) 80%, var(--foreground) 6%);
+}
+/* First sight: a short legend beside the wheel. */
+.hw-wheelCoach {
+	position: absolute;
+	top: 0;
+	right: 184px;
+	width: 200px;
+	padding: 10px 14px 12px;
+	border: 1px solid var(--tool-edge);
+	border-radius: 16px;
+	background: var(--card);
+	box-shadow: var(--tool-shadow);
+	color: var(--foreground);
+	font-size: 13.5px;
+	line-height: 1.35;
+	pointer-events: none;
+	animation: hw-hint-in .2s ease-out;
+}
+.hw-wheelCoach strong { display: block; margin-bottom: 6px; font-weight: 600; }
+.hw-wheelCoach li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; color: var(--muted-foreground); }
+.hw-wheelCoach li b { color: var(--foreground); font-weight: 500; }
+.hw-notebook[data-tools-side="left"] .hw-wheelCoach { right: auto; left: 184px; }
+/* The fold action: one clear line under the size and ink choices. */
+.hw-foldWheel {
+	justify-content: flex-start;
+	gap: 10px;
+	white-space: nowrap;
+	font-size: 13.5px;
+}
+.hw-foldWheel svg { flex: none; color: var(--muted-foreground); }
+.hw-arcInspector > p { font-size: 12px; }
+
+/* Import finished: what it added, and where to look. */
+.lh-import-done-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: min(24rem, calc(100vw - 32px));
+	padding: 12px 14px;
+	border: 1px solid color-mix(in oklab, var(--primary) 45%, var(--border));
+	border-radius: 14px;
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+	pointer-events: auto;
+	text-align: left;
+}
+.lh-import-done-line { font-size: 13.5px; color: var(--muted-foreground); }
+.lh-import-done-list { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.lh-import-done-list li { display: flex; justify-content: space-between; gap: 12px; }
+.lh-import-done-list li span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lh-import-done-list li span:last-child { flex: none; color: var(--muted-foreground); }
+.lh-import-done-panel button[data-testid="import-done-show"] {
+	border-color: var(--primary);
+	background: var(--primary);
+	color: var(--primary-foreground);
+}
+
+/* Phone question, decluttered (owner rulings 2 and 3: the reading step
+   stays, made calmer; the "why" stays close to the question).
+   Reading phase: "Show question" sits in the card's header row, so the
+   notes field gets the full width. After the reveal the notes card is one
+   quiet line (still editable), and the check's "why" field speaks through
+   its placeholder instead of a label row. */
+@media (max-width: 767px) {
+	.lh-reading-input { position: relative; }
+	.lh-reading-input:has(.lh-phone-reveal) > div:first-child {
+		display: flex;
+		align-items: center;
+		min-height: 40px;
+		padding-right: 156px;
+	}
+	.lh-reading-input .lh-compact-row:has(> .lh-phone-reveal) {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.lh-reading-input .lh-compact-row > .lh-phone-reveal {
+		position: absolute;
+		top: 4px;
+		right: 6px;
+		height: 40px;
+		min-height: 40px;
+	}
+	.lh-reading-input[data-reading-claim="false"] {
+		padding: 0 0 2px;
+		border-color: transparent;
+		background: transparent;
+	}
+	.lh-reading-input[data-reading-claim="false"] > div:first-child { display: none; }
+	.lh-reading-input[data-reading-claim="false"] .lh-compact-field { min-height: 44px; }
+	.lh-reading-input[data-reading-claim="false"] .lh-compact-field > :is(textarea, [data-file-path-input]) {
+		min-height: 42px;
+		padding-block: 9px;
+	}
+	[data-testid="thinking-field"] > .lh-input-label { display: none; }
+}
+
+/* Portrait tablets: the phase reads as a subtitle under the title (as on
+   phones), so the header keeps just Plan and Write beside it. */
+@media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
+	.lh-topbar [data-testid="phase-chip"] { display: none; }
+	.lh-session-title { line-height: 1.2; }
+	.lh-session-subtitle {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: 2px;
+		font-size: 13.5px;
+		line-height: 1.2;
+		color: var(--muted-foreground);
+		user-select: none;
+	}
+	.lh-session-subtitle::before {
+		content: "";
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--lh-kind, var(--lh-kind-teach));
+	}
+}
+
+/* Session controls recede (owner ruling 4's direction): model and thinking
+   read as quiet text with a chevron, not two bordered pills, so the task
+   above stays the strongest thing on screen. Same sizes and touch targets;
+   a soft fill on hover, focus and while open. */
+[data-testid="stats-model"], [data-testid="stats-thinking"] {
+	border-color: transparent !important;
+	background: transparent !important;
+	border-radius: 10px !important;
+}
+[data-testid="stats-model"] > span:first-child, [data-testid="stats-thinking"] > span:first-child {
+	color: color-mix(in oklab, var(--foreground) 78%, var(--background));
+}
+[data-testid="stats-thinking"] { position: relative; }
+[data-testid="stats-thinking"]::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 50%;
+	width: 1px;
+	height: 14px;
+	transform: translateY(-50%);
+	background: var(--border);
+}
+[data-testid="stats-model"]:is(:hover, :focus-visible, [aria-expanded="true"]),
+[data-testid="stats-thinking"]:is(:hover, :focus-visible, [aria-expanded="true"]) {
+	background: var(--accent) !important;
+}

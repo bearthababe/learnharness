@@ -1,6 +1,6 @@
 "use client";
 
-import { Children, Fragment, isValidElement, useEffect, useRef, useState, type ReactNode } from "react";
+import { Children, Fragment, isValidElement, useState, type ReactNode } from "react";
 import { ChevronRightIcon } from "lucide-react";
 import { artifactRenderers } from "@/components/artifacts";
 import { ToolCallCard, toolStepLabel } from "@/components/artifacts/tool-call-card";
@@ -16,27 +16,22 @@ export function isTracePart(part: Part): boolean {
 	return part.state !== "input-streaming" && artifactRenderers[part.type.slice("tool-".length)] === ToolCallCard;
 }
 
-function summary(parts: Part[]): { title: string; detail: string } {
+function summary(parts: Part[], live: boolean): { title: string; detail: string } {
 	const thinking = parts.filter((part) => part.type === "reasoning").length;
 	const tools = parts.filter((part) => part.type.startsWith("tool-"));
 	const labels = [...new Set(tools.map((part) => toolStepLabel(part.type.slice("tool-".length))))];
+	if (live) return { title: tools.length ? "Working…" : "Thinking…", detail: labels.at(-1) ?? "" };
 	if (tools.length === 0) return { title: "Tutor's thinking", detail: thinking > 1 ? `${thinking} notes` : "" };
 	const title = `${thinking ? "Thinking and " : ""}${tools.length} ${tools.length === 1 ? "step" : "steps"}`;
 	return { title, detail: labels.slice(0, 2).join(" · ") + (labels.length > 2 ? " …" : "") };
 }
 
-/** One quiet, collapsible line for a run of behind-the-scenes parts. Open
- *  while the run is live (the tutor is still working on it). */
+/** One quiet, collapsible line for a run of behind-the-scenes parts, folded
+ *  by default (also while the tutor works: the line says so and pulses).
+ *  Opening it shows the notes and steps directly, one level deep. */
 export function StepsGroup({ parts, live, children }: { parts: Part[]; live: boolean; children: ReactNode }) {
-	const [open, setOpen] = useState(live);
-	const wasLive = useRef(live);
-	useEffect(() => {
-		// Open while the tutor works on it; fold away once its answer begins.
-		if (live) setOpen(true);
-		else if (wasLive.current) setOpen(false);
-		wasLive.current = live;
-	}, [live]);
-	const { title, detail } = summary(parts);
+	const [open, setOpen] = useState(false);
+	const { title, detail } = summary(parts, live);
 	const thinkingOnly = parts.every((part) => part.type === "reasoning");
 	return (
 		<details
@@ -49,6 +44,7 @@ export function StepsGroup({ parts, live, children }: { parts: Part[]; live: boo
 		>
 			<summary className="lh-steps-summary">
 				<ChevronRightIcon className="lh-steps-chevron" aria-hidden />
+				{live && <span className="lh-steps-pulse" aria-hidden />}
 				<span className="lh-steps-title">{title}</span>
 				{detail && <span className="lh-steps-detail">{detail}</span>}
 			</summary>

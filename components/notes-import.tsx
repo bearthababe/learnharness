@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEv
 import { WaypointsIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { usePhoneLayout } from "./use-phone-viewport";
-import { createNotesImportQueue, EMPTY_IMPORT_QUEUE, notesPath } from "./notes-import-queue";
+import { createNotesImportQueue, EMPTY_IMPORT_QUEUE, notesPath, type ImportDone } from "./notes-import-queue";
 
 export { MAX_IMPORT_BYTES } from "@/lib/notes-import-limits.ts";
 export { notesPath } from "./notes-import-queue";
@@ -79,7 +79,7 @@ export function useNotesImport(callbacks: { onStart?: () => void; onFinish?: () 
 		}
 	}, [snapshot.completion]);
 	return {
-		errors: snapshot.errors, notices: snapshot.notices, importing: snapshot.importing,
+		errors: snapshot.errors, notices: snapshot.notices, done: snapshot.done, importing: snapshot.importing,
 		onImportFiles: (files: FileList | null) => {
 			if (!files || files.length === 0) return;
 			latest.current.onStart?.();
@@ -152,6 +152,25 @@ export function NotesImportErrors({ errors, onOpenSettings, onDismiss }: { error
 			<div className="lh-import-error-actions">
 				{auth && onOpenSettings && <button type="button" data-testid="import-error-settings" onClick={onOpenSettings}>Open provider settings</button>}
 				{onDismiss && <button type="button" data-testid="import-error-dismiss" onClick={onDismiss}>Dismiss</button>}
+			</div>
+		</div>
+	);
+}
+/** A finished import says what it added and offers the way to look:
+ *  "Imported notes.md · 2 new ideas", Show ideas, Dismiss. */
+export function NotesImportDone({ done, importing, onShowIdeas, onDismiss }: { done: readonly ImportDone[]; importing: boolean; onShowIdeas?: () => void; onDismiss?: () => void }) {
+	if (done.length === 0 || importing) return null;
+	const total = done.reduce((sum, item) => sum + item.ideas, 0);
+	const name = (filePath: string) => filePath.split("/").pop() ?? filePath;
+	const ideas = (n: number) => `${n} new ${n === 1 ? "idea" : "ideas"}`;
+	return (
+		<div className="lh-import-done-panel" role="status" data-testid="import-done-panel">
+			<div className="lh-import-error-title">{done.length === 1 ? `Imported ${name(done[0]!.filePath)}` : `Imported ${done.length} files`}</div>
+			<p className="lh-import-done-line">{done.length === 1 ? `${ideas(total)} in your graph${done[0]!.chains ? ` · ${done[0]!.chains} ${done[0]!.chains === 1 ? "chain" : "chains"}` : ""}.` : `${ideas(total)} in your graph.`}</p>
+			{done.length > 1 && <ul className="lh-import-done-list">{done.slice(0, 5).map((item) => <li key={item.filePath}><span>{name(item.filePath)}</span><span>{ideas(item.ideas)}</span></li>)}</ul>}
+			<div className="lh-import-error-actions">
+				{onShowIdeas && <button type="button" data-testid="import-done-show" onClick={onShowIdeas}>Show ideas</button>}
+				{onDismiss && <button type="button" data-testid="import-done-dismiss" onClick={onDismiss}>Dismiss</button>}
 			</div>
 		</div>
 	);
