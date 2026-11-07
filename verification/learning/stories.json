@@ -121,6 +121,19 @@
       "expectations": [], "claims": ["mobile browser checks cover input plumbing, not assessment of interpreted work"]
     },
     {
+      "id": "LJ-NOTEBOOK", "title": "Keep continuing mathematical working in a notebook",
+      "learnerGoal": "As a learner, my mathematical working lives in a notebook beside the conversation, spans several questions and topics, and I can share a snapshot of it with the tutor.",
+      "sources": ["GLOSSARY Notebook", "VISION §7 inputs and devices"],
+      "acceptance": {
+        "happy": ["Working written for one question is still in the notebook for the next; sharing a snapshot gives the tutor that working without moving it into the conversation."],
+        "alternative": ["The learner refers to a numbered line or selected expression when asking the tutor about a step."],
+        "failureOrReturn": ["Reopening the session keeps the notebook working; a failed snapshot share keeps the working and reports the failure."]
+      },
+      "dependencies": ["LJ-INPUTS"], "tickets": [], "availability": "available", "availabilityBasis": "components/notebook-*.tsx, src/server/notebook.ts, app/api/chats/[id]/notebook",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": ["tests/notebook-flow.test.ts", "docs/notebook-mobile-verification.md"] },
+      "expectations": [], "claims": ["device routing (canvas on tablet, equation notebook on phone) is a settings choice, not a separate story"]
+    },
+    {
       "id": "LJ-PRACTICE", "title": "Practise with graduated help after a wrong answer",
       "learnerGoal": "As a learner, when my practice answer is wrong I get the smallest useful help and keep working until I solve it or choose to stop, and the record shows that I needed help.",
       "sources": ["VISION §4 rules 4 and 5", "GLOSSARY Learner evidence"],
@@ -282,8 +295,8 @@
         "failureOrReturn": ["A visited plan node or encountered proposition is never reported as a passed check."]
       },
       "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "partial", "availabilityBasis": "practice from picked graph propositions exists; no distinct check activity or shared evidence history",
-      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] },
-      "expectations": ["section 2, goal 2"], "claims": ["requires approved assessment expectations; visited is not mastery", "mechanics await D-5"]
+      "automation": "blocked", "verification": { "scenarios": [], "supporting": [] },
+      "expectations": ["section 2, goal 2"], "claims": ["requires approved assessment expectations; visited is not mastery", "blocked on D-5"]
     },
     {
       "id": "LJ-REPAIR", "title": "Repair a confirmed understanding gap through Teaching",
