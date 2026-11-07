@@ -1,12 +1,20 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIcon, BotIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
+import Link from "next/link";
+import { ActivityIcon, BotIcon, ChevronDownIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CallUsage, JobKind, JobRecord } from "@/src/core";
 import { isModelsRefusal, isProviderKeyRefusal, subscriptionLabel, subscriptionLabels } from "@/src/core";
 import { formatTokens, planCostLabel } from "@/components/usage-format";
 import { useServerEvent, useServerResync } from "@/components/server-events";
+
+/** A settled job in words: cancelled is not a failure. */
+function jobStatusText(job: { status: string; error?: string }): string {
+	if (job.status === "aborted" || job.status === "cancelled" || /\babort|cancel/i.test(job.error ?? "")) return "Cancelled";
+	if (job.status === "error") return `Failed${job.error ? ` — ${job.error}` : ""}`;
+	return "Finished";
+}
 
 /**
  * THE BACKGROUND-AGENTS SECTION (owner, sidebar round — the successor of
@@ -67,9 +75,22 @@ export interface FeedExtraction {
 	startedAt: number;
 }
 
+/** A settled background job (server-joined title), newest first. */
+export interface FeedRecentJob {
+	id: string;
+	kind: JobKind;
+	status: JobRecord["status"];
+	chatId: string;
+	title: string;
+	updatedAt: string;
+	error?: string;
+}
+
 export interface ActivityFeed {
 	jobs: FeedJob[];
 	extractions: FeedExtraction[];
+	/** Recently settled jobs; absent on older payloads. */
+	recent?: FeedRecentJob[];
 }
 
 const EMPTY_FEED: ActivityFeed = { jobs: [], extractions: [] };
@@ -109,7 +130,7 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
 				if (res.ok) {
 					const data = (await res.json()) as Partial<ActivityFeed>;
 					if (alive)
-						setFeed({ jobs: data.jobs ?? [], extractions: data.extractions ?? [] });
+						setFeed({ jobs: data.jobs ?? [], extractions: data.extractions ?? [], recent: data.recent ?? [] });
 				}
 			} catch {
 				// transport blip: keep the last feed, announce again next event
@@ -288,9 +309,29 @@ const KIND_ICON: Record<JobKind, typeof SearchIcon> = {
 /** Abort states per blob id: pending (fired) / failed (backend absent). */
 type AbortState = "pending" | "failed";
 
+const KIND_LABEL: Record<JobKind, string> = {
+	research: "Researcher",
+	demo: "Demo builder",
+	visual: "Figure maker",
+	pdf: "PDF reader",
+};
+
+/** "just now" / "5m ago" / "3h ago" / "2d ago" / ISO date. */
+function settledAgo(iso: string, now = Date.now()): string {
+	const min = Math.floor((now - new Date(iso).getTime()) / 60_000);
+	if (!(min >= 1)) return "just now";
+	if (min < 60) return `${min}m ago`;
+	const h = Math.floor(min / 60);
+	if (h < 24) return `${h}h ago`;
+	const d = Math.floor(h / 24);
+	return d < 7 ? `${d}d ago` : iso.slice(0, 10);
+}
+
 export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 	const ctx = useContext(ActivityContext);
 	const feed = feedProp ?? ctx.feed;
+	const recent = feed.recent ?? [];
+	const [historyOpen, setHistoryOpen] = useState(false);
 	const refresh = ctx.refresh;
 	const blobs = useMemo(() => toBlobs(feed), [feed]);
 	const [openBlob, setOpenBlob] = useState<string | null>(null); // detail, inline-expanded
@@ -344,16 +385,49 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 	// rows match the session rows' hover. Empty means empty: the header sits
 	// alone (the cost span is population, not decoration).
 	return (
-		<section data-testid="activity-section" className="border-t border-border px-3 pb-3 pt-2">
-			<div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-widest text-muted-foreground/70">
-				<ActivityIcon className="size-3" />
+		<section data-testid="activity-section" className="lh-activity-section border-t border-border px-3 pb-2 pt-2">
+			<button
+				type="button"
+				className="lh-activity-header flex w-full items-center gap-2 px-2 py-1 text-left text-sm text-muted-foreground"
+				aria-expanded={recent.length > 0 ? historyOpen : undefined}
+				data-testid="activity-history-toggle"
+				onClick={() => { if (recent.length > 0) setHistoryOpen((v) => !v); }}
+			>
+				<ActivityIcon className="size-4" />
 				Background agents
+				{blobs.length === 0 && (
+					<span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground/80">
+						{recent.length > 0 ? `Idle · ${recent.length} recent` : "Idle"}
+						{recent.length > 0 && <ChevronDownIcon className={cn("size-3.5 transition-transform", historyOpen && "rotate-180")} aria-hidden />}
+					</span>
+				)}
 				{blobs.length > 0 && (
 					<span className="ml-auto tabular-nums" data-testid="activity-total-cost" title="Total running cost (inferred)">
 						{planCostLabel(totalCost, subscriptionLabels(blobs.map((blob) => blob.model)))}
 				</span>
 				)}
-			</div>
+			</button>
+			{historyOpen && recent.length > 0 && (
+				<ul className="lh-activity-history" data-testid="activity-history" aria-label="Recent background jobs">
+					{recent.map((job) => {
+						const Icon = KIND_ICON[job.kind] ?? BotIcon;
+						return (
+							<li key={job.id}>
+								<Link href={`/chat/${job.chatId}`} className="lh-activity-recent" data-testid="activity-recent" data-status={jobStatusText(job) === "Cancelled" ? "cancelled" : job.status} title={`${KIND_LABEL[job.kind] ?? "Sub-agent"} · ${job.title}${job.status === "error" && job.error ? `\n${job.error}` : ""}`}>
+									<Icon className="size-4 shrink-0" aria-hidden />
+									<span className="min-w-0 flex-1">
+										<span className="lh-activity-recent-title">{KIND_LABEL[job.kind] ?? "Sub-agent"} · {job.title}</span>
+										<span className="lh-activity-recent-meta" title={job.error}>
+											<span className="lh-activity-recent-status">{jobStatusText(job)}</span>
+											<span className="lh-activity-recent-when">· {settledAgo(job.updatedAt)}</span>
+										</span>
+									</span>
+								</Link>
+							</li>
+						);
+					})}
+				</ul>
+			)}
 			{blobs.length > 0 && (
 				<div className="flex max-h-[40dvh] flex-col gap-1 overflow-y-auto">
 					{blobs.map((blob) => (

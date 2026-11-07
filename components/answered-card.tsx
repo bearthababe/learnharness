@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronRightIcon } from "lucide-react";
 import { ConfidenceRail } from "@/components/confidence-rail";
 import { GlyphMark } from "@/components/ui/glyph-mark";
 import { ThinkingBlock } from "@/components/thinking-block";
@@ -213,9 +214,12 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 					<button
 						type="button"
 						onClick={() => setWhyOpen((v) => !v)}
-						className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+						aria-expanded={whyOpen}
+						data-testid="tucked-explanation-toggle"
+						className="lh-why-toggle"
 					>
-						{whyOpen ? "Hide why" : "Why"}
+						<ChevronRightIcon aria-hidden className="lh-why-chevron" />
+						{whyOpen ? "Hide explanation" : "Show explanation"}
 					</button>
 					{whyOpen && (
 						<div className="mt-1.5 rounded-lg bg-muted py-2 text-sm text-foreground/50">

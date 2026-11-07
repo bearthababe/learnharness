@@ -8,7 +8,7 @@ import { MalformedQuestion } from "@/components/malformed-question";
 import { dictationCheckpoint, finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
 import { CompactLearningInput } from "@/components/compact-learning-input";
-import { CornerDownLeftIcon } from "lucide-react";
+import { ArrowUpIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
 import { useHandwritingEditor } from "./handwriting/submission";
@@ -45,6 +45,7 @@ import {
 	type SharedWriting,
 } from "@/src/core";
 import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-rail";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
 import type { NotebookSession } from "./notebook-session";
 import { useNotebookQuestionDraft } from "./notebook-question-draft";
 
@@ -420,6 +421,13 @@ function QuestionDockForm({
 			? text.trim().length > 0 || explanationHasContent(owned.draft?.parts ?? []) || hasSharedWriting
 			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0);
 
+	// Phones take the check in two steps (owner ruling 3): pick an answer,
+	// then confidence and "why" appear beneath it. Anything already given
+	// (a draft, attached writing) keeps them open.
+	// Phones show a short "why" prompt so it never truncates.
+	const phone = usePhoneLayout();
+	const followUpOpen = qd.mode === "text" || sel.dontKnow || sel.otherSelected || sel.selected.size > 0 || thinking.trim().length > 0 || hasSharedWriting || !!transfer?.hasAttempt();
+
 	const submit = () => {
 		if (sending.current || compactionRunning || notebook?.getSnapshot().sendBlocked || transfer?.blocked() || (!canSubmit && !isDictationActive())) return;
 		sending.current = true;
@@ -620,12 +628,12 @@ function QuestionDockForm({
 	}, [kbdIdx]);
 
 	return (
-		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-notebook-question={toolCallId} data-notebook-channel={owner.channel}>
+		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-notebook-question={toolCallId} data-notebook-channel={owner.channel} data-follow-up={followUpOpen ? "open" : "waiting"}>
 			{/* Question area — scrolls internally if very tall; the bottom row stays put.
 			    Capped by the measured column (--dock-max-h; the old fixed 55dvh cut
 			    long questions short — owner round, 2026-10-05). */}
 			<div data-dock-scroll-area="" data-session-find-root="" className="max-h-[var(--dock-max-h,55dvh)] overflow-y-auto px-4 pt-3">
-				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+				<div className="lh-eyebrow mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					{toolName === "probe"
 						? "Probe"
 						: toolName === "recall"
@@ -639,7 +647,7 @@ function QuestionDockForm({
 											: "Question"}
 					{qd.mode === "multi-select" && " · select all that apply"}
 				</div>
-				<div className="mb-3 font-medium">
+				<div className="lh-question-text mb-3 font-medium">
 					<ToolContentResponse>{qd.question}</ToolContentResponse>
 				</div>
 				{qd.context && (
@@ -661,14 +669,14 @@ function QuestionDockForm({
 									data-kbdrow={i}
 									onClick={() => toggle(i)}
 									className={cn(
-										"flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
+										"lh-option flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
 										isSel ? "border-primary bg-accent" : "hover:bg-accent/50",
 										i === kbdIdx && !isSel && "ring-1 ring-border bg-accent/40",
 									)}
 								>
 									<span
 										className={cn(
-											"mt-0.5 flex size-4 shrink-0 items-center justify-center border",
+											"lh-option-mark mt-0.5 flex size-4 shrink-0 items-center justify-center border",
 											qd.mode === "multi-select" ? "rounded-sm" : "rounded-full",
 											isSel ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40",
 										)}
@@ -709,14 +717,14 @@ function QuestionDockForm({
 								className={cn(
 									// Option-row layout + radio circle (owner); the dashed
 									// outline stays — this is the deliberate non-answer.
-									"flex items-start gap-3 rounded-lg border border-dashed px-3 py-2 text-left text-sm outline-none transition-colors",
+									"lh-option lh-option-dontknow flex items-start gap-3 rounded-lg border border-dashed px-3 py-2 text-left text-sm outline-none transition-colors",
 									sel.dontKnow ? "border-primary text-foreground" : "text-muted-foreground",
 									kbdIdx === optionCount && !sel.dontKnow && "ring-1 ring-border bg-accent/40",
 								)}
 							>
 								<span
 									className={cn(
-										"mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
+										"lh-option-mark mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
 										sel.dontKnow
 											? "border-primary bg-primary text-primary-foreground"
 											: "border-muted-foreground/40",
@@ -736,14 +744,14 @@ function QuestionDockForm({
 								data-kbdrow={optionCount}
 								onClick={selectOther}
 								className={cn(
-									"flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
+									"lh-option flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
 									sel.otherSelected ? "border-primary bg-accent" : "border-dashed hover:bg-accent/50",
 									kbdIdx === optionCount && !sel.otherSelected && "ring-1 ring-border bg-accent/40",
 								)}
 							>
 								<span
 									className={cn(
-										"mt-0.5 flex size-4 shrink-0 items-center justify-center border",
+										"lh-option-mark mt-0.5 flex size-4 shrink-0 items-center justify-center border",
 										qd.mode === "multi-select" ? "rounded-sm" : "rounded-full",
 										sel.otherSelected
 											? "border-primary bg-primary text-primary-foreground"
@@ -899,8 +907,9 @@ function QuestionDockForm({
 			    send. Select modes get "Your thinking" (Enter makes a newline — it
 			    is for dumping, soon dictated; the button submits); text mode
 			    keeps "Your answer" with Enter-to-submit. */}
+			{!followUpOpen && <p className="lh-question-pick-hint" data-testid="question-pick-hint" data-confidence={kind === "quiz" || undefined}>{kind === "quiz" ? "Pick an answer — then say how sure you are, and why." : selectMode === "multi-select" ? "Pick your answers — then say why." : "Pick an answer — then say why."}</p>}
 			<form
-				className="border-t border-border/60 p-1.5"
+				className="lh-question-form border-t border-border/60 p-1.5"
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit();
@@ -968,7 +977,7 @@ function QuestionDockForm({
 									submit();
 								}
 							}}
-							placeholder="Why this answer? Whatever comes to mind."
+							placeholder={phone ? "Why this answer?" : "Why this answer? Whatever comes to mind."}
 							className={cn(
 								"field-sizing-content lh-input max-h-48 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground/70",
 								// Phase-scaled prominence: teaching invites depth,
@@ -988,7 +997,7 @@ function QuestionDockForm({
 							aria-label="Submit answer"
 							className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 						>
-							<span className="lh-wide-submit-label">Submit answer</span><CornerDownLeftIcon className="lh-phone-submit-icon" size={20} />
+							<span className="lh-wide-submit-label">Submit answer</span><ArrowUpIcon className="lh-phone-submit-icon" size={20} />
 						</Button>
 					</div>
 				</div>

@@ -4,9 +4,9 @@
  * Keyboard shortcuts (shortcut wave A, 2026-09-17) — the single document-level
  * keydown listener. Owns the pieces that belong to no surface in particular:
  *
- * - Tab is DEAD: browser tab-focus navigation is abandoned by owner decision
- *   (2026-09-17). Tab is suppressed everywhere (preventDefault, no-op) and
- *   Shift+Tab cycles the thinking level instead.
+ * - Tab follows the browser's focus order, with two app refinements: from
+ *   nowhere it lands in the surface's first text field, and between several
+ *   text fields it cycles them (see field-cycle.ts). Shift+Tab is native.
  * - Esc is a layered dismiss: topmost popover first (popovers stopPropagation
  *   on their own Esc — usePopoverDismiss + ModelControl), then dictation
  *   CANCEL (discard the transcript, owner 2026-09-17 round 3), then abort of
@@ -64,15 +64,19 @@ export function KeyboardShortcuts() {
 			// the default action runs after dispatch, so suppressing it here
 			// works from any focus.
 			if (e.key === "Tab") {
-				e.preventDefault();
-				if (e.shiftKey) window.dispatchEvent(new CustomEvent("lh:kbd-cycle-thinking"));
-				// Plain Tab cycles the active surface's text fields (owner,
-				// keyboard round 2026-10-06) — forward-only, wrapping; each
-				// composer-bearing page answers with its own chain. The quiz
-				// dock's rows↔thinking claim stops propagation at document
+				// Tab keeps the browser's focus order except where the app has
+				// something better: from nowhere it lands in the surface's
+				// first text field, and between several text fields it cycles
+				// them. A surface claims the key by cancelling the cycle event;
+				// unclaimed (one field, a focused control, an open modal),
+				// Tab moves on normally so every control stays reachable. The
+				// quiz dock's rows↔thinking claim stops propagation at document
 				// level, so a claimed Tab never reaches this dispatch.
-				else if (!e.metaKey && !e.ctrlKey && !e.altKey)
-					window.dispatchEvent(new CustomEvent("lh:kbd-cycle-fields"));
+				if (e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+				if (document.querySelector('[aria-modal="true"]')) return;
+				const cycle = new CustomEvent("lh:kbd-cycle-fields", { cancelable: true });
+				window.dispatchEvent(cycle);
+				if (cycle.defaultPrevented) e.preventDefault();
 				return;
 			}
 
@@ -143,6 +147,21 @@ export function KeyboardShortcuts() {
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [cheatOpen]);
+
+	// Focus rings follow how focus moved: Tab navigation shows them, any
+	// pointer press hides them again — so a clicked control never lights up
+	// later just because other keys (quiz arrows, typing) were pressed.
+	useEffect(() => {
+		const root = document.documentElement;
+		const onKey = (e: KeyboardEvent) => { if (e.key === "Tab") root.dataset.focusSource = "keyboard"; };
+		const onPointer = () => { delete root.dataset.focusSource; };
+		window.addEventListener("keydown", onKey, true);
+		window.addEventListener("pointerdown", onPointer, true);
+		return () => {
+			window.removeEventListener("keydown", onKey, true);
+			window.removeEventListener("pointerdown", onPointer, true);
+		};
+	}, []);
 
 	return <CheatSheet open={cheatOpen} onClose={() => setCheatOpen(false)} />;
 }

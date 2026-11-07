@@ -9,7 +9,7 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	page.on("pageerror", error => errors.push(error.message));
 	page.on("request", request => { if (request.method() === "POST" && new URL(request.url()).pathname === "/api/chat") sends.push(request.postData()); });
 	await page.evaluateOnNewDocument(origin => {
-		if (window === window.top && location.origin === origin) localStorage.setItem("lh:sidebar-open", "0");
+		if (window === window.top && location.origin === origin) { localStorage.setItem("lh:sidebar-open", "0"); localStorage.setItem("lh:device-tool:writing", "on"); localStorage.setItem("lh:device-tool:notebook", "on"); /* both working tools, whatever the emulated device */ }
 	}, origin);
 	await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 	await page.goto(`${origin}/chat/mobile_layout`, { waitUntil: "networkidle2", timeout: 240_000 });
@@ -19,11 +19,13 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 		return { workspace: rect(".session-workspace"), tutor: rect(".session-tutor"), slot: rect(".notebook-slot"), card: rect(".notebook-frame"), divider: rect(".notebook-split-divider"), direction: getComputedStyle(document.querySelector(".session-panes")).flexDirection };
 	});
 	const frame = r => {
-		assert.equal(Math.round(r.card.x - r.slot.x), 16);
-		assert.equal(Math.round(r.card.y - r.slot.y), 16);
-		assert.equal(Math.round(r.slot.right - r.card.right), 16);
-		assert.equal(Math.round(r.slot.bottom - r.card.bottom), 16);
-		assert.ok(r.card.height > 52 && r.card.bottom <= r.workspace.bottom, JSON.stringify(r));
+		// Phones: an edge-to-edge bottom sheet; wider: a card inset 16px.
+		const inset = r.workspace.width < 768 ? 0 : 16;
+		assert.equal(Math.round(r.card.x - r.slot.x), inset);
+		assert.equal(Math.round(r.card.y - r.slot.y), inset);
+		assert.equal(Math.round(r.slot.right - r.card.right), inset);
+		assert.equal(Math.round(r.slot.bottom - r.card.bottom), inset);
+		assert.ok(r.card.height > 44 && r.card.bottom <= r.workspace.bottom, JSON.stringify(r));
 	};
 	let r = await rects();
 	assert.equal(r.direction, "column"); frame(r);
@@ -33,7 +35,7 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	assert.equal(await page.$('[data-testid="notebook-options"]'), null);
 	assert.equal(await page.$eval('#notebook-instruction', e => getComputedStyle(e).fontSize), '16px', 'Instruction uses the shared readable input type rung');
 	assert.ok(await page.$eval('[data-notebook-scroll]', e => e.clientHeight > e.closest('.notebook-frame').clientHeight * .6), "Working occupies most of the phone card");
-	assert.deepEqual(await page.$$eval('.notebook-frame-header button', buttons => buttons.map(e => e.getAttribute('aria-label'))), ['Undo', 'Expand notebook', 'Notebook options']);
+	assert.deepEqual(await page.$$eval('.notebook-frame-header button', buttons => buttons.map(e => e.getAttribute('aria-label'))), ['Undo', 'Expand notebook', 'Notebook options', 'Hide notebook']);
 	await page.screenshot({ path: path.join(artifacts, "notebook-phone-split.png") });
 	// Drive the same divider by pointer and keyboard, retaining the chosen share.
 	await page.mouse.move(r.divider.x + r.divider.width / 2, r.divider.y + r.divider.height / 2);

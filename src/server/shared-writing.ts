@@ -36,6 +36,17 @@ export async function sharedWritingResponse(request: Request, chatId: string, im
 			return Response.json({ pending: pendingSharedWriting(snapshot, chat.messages), pageAttachments: pageAttachments(snapshot) }, { headers: { "Cache-Control": "no-store" } });
 		} catch { return captureError(503, "capture_unavailable", "Couldn’t read saved snapshots."); }
 	}
+	if (request.method === "DELETE" && imageId) {
+		// Remove from the next message only: the image and the editable page
+		// stay saved; a sent snapshot is history and cannot be removed.
+		try {
+			const pending = pendingSharedWriting(stores.sharedWritingStore.readSnapshot(chatId), chat.messages).some(writing => writing.id === imageId);
+			if (!pending) return captureError(409, "not_pending", "This snapshot was already sent or removed.");
+			stores.sharedWritingStore.dismiss(chatId, imageId);
+			emit("writing-changed", { chatId });
+			return new Response(null, { status: 204 });
+		} catch { return captureError(503, "capture_unavailable", "Couldn’t update attachments. Try again."); }
+	}
 	if (request.method !== "POST" || imageId) return new Response(null, { status: 405 });
 	const multipart = request.headers.get("Content-Type")?.startsWith("multipart/form-data;") ?? false;
 	const reader = request.body?.getReader();

@@ -54,6 +54,16 @@ export class HandwritingAttachment {
 	}
 	noticeEntries() { return [...this.notices.keys()].map(pageId => ({ pageId, ...this.notice(pageId)! })); }
 	report(pageId: string, kind: NoticeKind) { this.update(pageId, kind); }
+	/** A page taken out of the next message (or sent) is no longer "attached ·
+	 *  not sent": drop attachment notices for pages with nothing pending. */
+	reconcile(pending: readonly SharedWriting[]) {
+		const pages = new Set(pending.flatMap(item => item.notebook ? [item.notebook.pageId] : []));
+		let changed = false;
+		for (const [pageId, notice] of this.notices) {
+			if ((notice.kind === "attached" || notice.kind === "updated" || notice.kind === "unchanged" || notice.kind === "superseded") && !pages.has(pageId) && !this.flights.has(pageId)) { this.notices.delete(pageId); changed = true; }
+		}
+		if (changed && !this.disposed) this.deps.changed();
+	}
 	busy(pageId: string) { return this.flights.has(pageId); }
 	hasCapture(pageId: string) { return this.captures.has(pageId); }
 	private running(pageId: string) { return flightsFor(this.deps.device, this.chatId).get(pageId); }

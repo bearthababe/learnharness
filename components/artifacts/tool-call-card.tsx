@@ -2,6 +2,7 @@
 
 import { ChevronRight } from "lucide-react";
 import type { ArtifactPartProps } from "@/src/core";
+import { useSessionTitle } from "@/components/session-titles";
 
 /**
  * The generic tool-call card (sources v1, 2026-09-19): a quiet, collapsed
@@ -42,6 +43,44 @@ function headlineArg(tool: string, input: unknown): string {
 	return "";
 }
 
+/** What the tutor did, in the learner's words; unknown tools keep their
+ *  own name. The raw name and arguments stay in the expanded view. */
+const TOOL_LABEL: Record<string, string> = {
+	read: "Read a file",
+	ls: "Listed a folder",
+	find: "Searched for files",
+	grep: "Searched file contents",
+	show_image: "Looked at an image",
+	list_sessions: "Looked up your sessions",
+	list_propositions: "Looked up ideas from a session",
+};
+
+/** The learner-facing name of a lookup step (shared with step summaries). */
+export function toolStepLabel(tool: string): string {
+	return TOOL_LABEL[tool] ?? tool;
+}
+
+/** The collapsed line's subject: file paths and search patterns read as
+ *  given; opaque record ids (the propositions' session) stay in the
+ *  expanded input instead of the summary. */
+function summaryArg(tool: string, arg: string): string {
+	return tool === "list_propositions" ? "" : arg;
+}
+
+/** The learner-facing reading of a tool result: record ids, birth and
+ *  last-active timestamps are bookkeeping for the tutor, so the readable
+ *  view drops them (the raw text stays under Technical details). Pure. */
+export function readableToolOutput(text: string): string {
+	return text
+		.split("\n")
+		.map((line) => line
+			.replace(/\s+—\s+id:\s*\S+/g, "")
+			.replace(/,\s*(born|last active)\s+[^,)]+/g, "")
+			.replace(/\s*\(as of [^)]+\)/g, "")
+			.trimEnd())
+		.join("\n");
+}
+
 /** Render a tool result body: plain strings verbatim, image-bearing read
  *  results show their text + an attachment note (the image itself is the
  *  model's — the learner sees only that it happened). */
@@ -67,30 +106,25 @@ export function ToolCallCard({ part }: ArtifactPartProps) {
 	const arg = headlineArg(tool, p.input);
 	const out = outputText(p.output);
 	const failed = p.state === "output-error" || typeof p.errorText === "string";
+	// A propositions lookup names its session by title, so repeated steps
+	// stay distinguishable without exposing record ids.
+	const sessionId = tool === "list_propositions" ? arg : undefined;
+	const sessionTitle = useSessionTitle(sessionId || undefined);
+	const subject = sessionTitle ?? summaryArg(tool, arg);
 	return (
 		<details
 			data-testid="tool-call-card"
 			data-tool={tool}
 			className="group my-1 w-full max-w-2xl select-none"
 		>
-			<summary className="flex cursor-pointer list-none items-center gap-2 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
-				<span className={`font-medium uppercase tracking-wide ${failed ? "text-red-500" : ""}`}>
-					{tool}
+			<summary className="lh-tool-summary flex cursor-pointer list-none items-center gap-2 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
+				<span className={`lh-tool-label ${failed ? "text-red-500" : ""}`}>
+					{TOOL_LABEL[tool] ?? tool}{failed ? " — failed" : ""}
 				</span>
-				{arg && <span className="truncate">{arg}</span>}
+				{subject && <span className={sessionTitle ? "lh-tool-subject truncate" : "lh-tool-arg truncate"}>{subject}</span>}
 				<ChevronRight className="size-3 shrink-0 opacity-50 transition-transform group-open:rotate-90" />
 			</summary>
-			<div className="mt-2 space-y-2 rounded-xl border bg-card p-3 text-xs">
-				{p.input != null && (
-					<div>
-						<div className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">
-							Input
-						</div>
-						<pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
-							{JSON.stringify(p.input, null, 2)}
-						</pre>
-					</div>
-				)}
+			<div className="lh-tool-body mt-2 space-y-2 rounded-xl border bg-card p-3 text-xs">
 				{typeof p.errorText === "string" ? (
 					<div>
 						<div className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">
@@ -105,14 +139,34 @@ export function ToolCallCard({ part }: ArtifactPartProps) {
 						<div className="mb-1 font-medium uppercase tracking-wide text-muted-foreground">
 							Output
 						</div>
-						<pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
-							{out}
-						</pre>
+						{/* The result first, as readable text; raw call data stays below. */}
+						<div className="lh-tool-output max-h-64 overflow-auto whitespace-pre-wrap break-words">
+							{readableToolOutput(out)}
+						</div>
 					</div>
 				) : (
 					p.state !== "output-available" && (
 						<div className="text-muted-foreground italic">running…</div>
 					)
+				)}
+				{p.input != null && (
+					<details className="lh-tool-technical">
+						<summary className="cursor-pointer text-muted-foreground">Technical details</summary>
+						<div className="mb-1 mt-2 font-medium uppercase tracking-wide text-muted-foreground">
+							Input
+						</div>
+						<pre className="max-h-32 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
+							{JSON.stringify(p.input, null, 2)}
+						</pre>
+						{out != null && out !== readableToolOutput(out) && <>
+							<div className="mb-1 mt-2 font-medium uppercase tracking-wide text-muted-foreground">
+								Raw output
+							</div>
+							<pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed">
+								{out}
+							</pre>
+						</>}
+					</details>
 				)}
 			</div>
 		</details>

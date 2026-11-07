@@ -59,9 +59,9 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 /** The pickers' slot identity — same roster language as the Agent
  *  section's slot rows. */
 const SLOT_META: Record<ModelSlotName, { label: string; roster: string }> = {
-	strong: { label: "Strong", roster: "Prober, teacher" },
-	cheap: { label: "Cheap", roster: "Researcher, demo builder, extractor, auditor" },
-	vision: { label: "Vision", roster: "Visual maker + PDF reader" },
+	strong: { label: "Main tutor", roster: "Teaches you and checks what you already know" },
+	cheap: { label: "Helpers", roster: "Research, demos, extraction and grading; a cheaper model works well" },
+	vision: { label: "Images & PDFs", roster: "Draws figures and reads PDFs; needs a model that reads images" },
 };
 const SLOT_ORDER: readonly ModelSlotName[] = ["strong", "cheap", "vision"];
 
@@ -448,7 +448,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 
 	return createPortal(
 		<div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-background/80"
+			className="lh-dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-background/80"
 			data-testid="setup-backdrop"
 			{...backdropDismiss}
 		>
@@ -457,11 +457,11 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 				aria-modal="true"
 				aria-label="Set up your models"
 				data-testid="setup-dialog"
-				className="settings-dialog-pop flex max-h-[85vh] w-[640px] max-w-[90vw] flex-col overflow-hidden rounded-md border border-border bg-card shadow-xl"
+				className="lh-setup settings-dialog-pop flex max-h-[85vh] w-[640px] max-w-[90vw] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl"
 				onClick={(e) => e.stopPropagation()}
 			>
 				<header className="flex h-15 shrink-0 items-center gap-3 border-b border-border px-5">
-					<h2 className="font-title text-2xl tracking-tight">Set up your models</h2>
+					<h2 className="lh-settings-title">Set up your models</h2>
 					<Hint label="Close" binding="escape" side="left">
 <button
 						type="button"
@@ -487,7 +487,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 				) : (
 					<div className="flex flex-col gap-4 overflow-y-auto px-6 py-5" data-testid="setup-stage-pickers">
 						<p className="text-xs text-muted-foreground">
-							Pick the model for each tier. All three are required before chats can start.
+							Pick a main model first; use it for every role or choose cheaper or image-reading models for the others. All three roles are needed before chats can start.
 						</p>
 						{SLOT_ORDER.map((slot) => {
 							const entry = picked[slot];
@@ -611,6 +611,33 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 											)}
 										</div>
 									</div>
+									{slot === "strong" && entry && (() => {
+										// One choice instead of three: reuse the main model for the
+										// other roles (vision only when the model reads images).
+										const meta = catalog?.models.find((m) => m.id === entry.id && m.provider === entry.provider);
+										const reads = !!meta?.input.includes("image") || entry.provider === CUSTOM_PROVIDER.id;
+										const same = (other: typeof entry | undefined) => !!other && other.id === entry.id && other.provider === entry.provider;
+										if (same(picked.cheap) && (!reads || same(picked.vision))) return null;
+										return (
+											<button
+												type="button"
+												data-testid="setup-use-for-all"
+												className="lh-setup-use-all"
+												onClick={() => {
+													editedSlots.current.add("cheap");
+													if (reads) editedSlots.current.add("vision");
+													setPicked((prev) => ({ ...prev, cheap: entry, ...(reads ? { vision: entry } : {}) }));
+													setLevels((prev) => ({
+														...prev,
+														cheap: populateLevel(prev.cheap, meta?.supportedLevels ?? []),
+														...(reads ? { vision: populateLevel(prev.vision, meta?.supportedLevels ?? []) } : {}),
+													}));
+												}}
+											>
+												Use {prettyModel(entry.id)} for {reads ? "all three roles" : "the helpers too"}
+											</button>
+										);
+									})()}
 								</div>
 							);
 						})}
@@ -620,7 +647,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 								data-testid="setup-save"
 								disabled={!allPicked || saving}
 								onClick={() => void save()}
-								className="rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
+								className="lh-setup-save rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
 							>
 								{saving ? "Saving…" : "Save models"}
 							</button>

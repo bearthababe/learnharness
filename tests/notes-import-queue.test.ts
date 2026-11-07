@@ -46,7 +46,7 @@ it("unsupported-only directories are never sent; picker .DS_Store is ignored and
 	queue.append([file(".DS_Store", "Root/.DS_Store"), file("a.png", "Root/Images/a.png"), file("notes.md", "Root/Sub/notes.md"), file("bad.txt", "../bad.txt")]);
 	await tick();
 	assert.deepEqual(paths, ["Root/Sub/notes.md"]);
-	assert.deepEqual(queue.getSnapshot().errors, ["Root/Images/a.png: Unsupported format or unsafe relative path.", "../bad.txt: Unsupported format or unsafe relative path."]);
+	assert.deepEqual(queue.getSnapshot().errors, ["Root/Images/a.png: This file type can't be imported. Use Markdown (.md), text (.txt) or PDF.", "../bad.txt: This file's location can't be read safely. Move it into a plain folder and try again."]);
 });
 
 it("folder picks skip dot-directories such as .obsidian/ silently, even when the chosen root itself is hidden", async () => {
@@ -81,7 +81,7 @@ it("individual file picks still import hidden notes and report unsupported dotfi
 	queue.append([file(".draft.md"), file(".summary.txt"), file(".DS_Store")]);
 	await tick();
 	assert.deepEqual(paths, [".draft.md", ".summary.txt"]);
-	assert.deepEqual(queue.getSnapshot().errors, [".DS_Store: Unsupported format or unsafe relative path."]);
+	assert.deepEqual(queue.getSnapshot().errors, [".DS_Store: This file type can't be imported. Use Markdown (.md), text (.txt) or PDF."]);
 });
 
 it("an all-skipped selection publishes completion without validation errors or uploads and allows later work", async () => {
@@ -93,14 +93,14 @@ it("an all-skipped selection publishes completion without validation errors or u
 	Object.defineProperty(oversized, "size", { value: Number.MAX_SAFE_INTEGER });
 	queue.append([file("config", "Vault/.git/config"), file(".draft.md", "Vault/.draft.md"), oversized]);
 	assert.equal(publications, 1);
-	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], completion: 1 });
+	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], done: [], completion: 1 });
 	await tick();
 	assert.deepEqual(paths, []);
 	assert.equal(publications, 1, "no asynchronous settlement for skipped files");
 	queue.append([file("notes.md")]);
 	await tick();
 	assert.deepEqual(paths, ["notes.md"]);
-	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], completion: 2 });
+	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], done: [{ filePath: "notes.md", ideas: 0, chains: 0 }], completion: 2 });
 	unsubscribe();
 });
 
@@ -111,11 +111,20 @@ it("an all-skipped append does not complete or disturb an active import", async 
 	queue.append([file("notes.md")]);
 	queue.append([file("config", "Vault/.git/config"), file(".draft.md", "Vault/.draft.md")]);
 	assert.equal(calls, 1);
-	assert.deepEqual(queue.getSnapshot(), { importing: true, errors: [], notices: [], completion: 0 });
+	assert.deepEqual(queue.getSnapshot(), { importing: true, errors: [], notices: [], done: [], completion: 0 });
 	resolve([success("notes.md")]);
 	await tick();
 	assert.equal(calls, 1);
-	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], completion: 1 });
+	assert.deepEqual(queue.getSnapshot(), { importing: false, errors: [], notices: [], done: [{ filePath: "notes.md", ideas: 0, chains: 0 }], completion: 1 });
+});
+
+it("finished files report what they added until dismissed", async () => {
+	const queue = createNotesImportQueue(async ([f]) => [{ ...success(f!.name), stats: { nodes: f!.name === "a.md" ? 2 : 3, chains: 1 } }]);
+	queue.append([file("a.md"), file("b.md")]);
+	await tick();
+	assert.deepEqual(queue.getSnapshot().done, [{ filePath: "a.md", ideas: 2, chains: 1 }, { filePath: "b.md", ideas: 3, chains: 1 }]);
+	queue.dismiss();
+	assert.deepEqual(queue.getSnapshot().done, []);
 });
 
 it("synchronous transport failures settle one wave once without reentrant pump recursion", async () => {

@@ -51,9 +51,11 @@ describe("the ⌘B chain — keypress → binding → action → event", () => {
 	});
 });
 
-describe("the thinking pill suffix — ⇧⇥ via the registry", () => {
-	it("shift+tab uses the platform's modifier label and maps to cycle-thinking", () => {
-		assert.equal(actionForBinding("shift+tab"), "cycle-thinking");
+describe("the thinking pill suffix — Mod+. via the registry", () => {
+	it("mod+. maps to cycle-thinking; Shift+Tab stays with the browser's focus order", () => {
+		assert.equal(actionForBinding("mod+."), "cycle-thinking");
+		assert.ok(!actionForBinding("shift+tab"), "reverse Tab is never a hidden setting change");
+		assert.ok(formatBinding("mod+.").endsWith("."));
 		assert.equal(formatBinding("shift+tab"), IS_MAC ? "⇧⇥" : "Shift+⇥");
 	});
 });

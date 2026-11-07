@@ -1,13 +1,13 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import { forgetHandwritingOnDevice } from "@/components/handwriting/device";
 import type { ChatDeleteMode } from "@/src/core";
-import { DumbbellIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, RotateCwIcon, SearchIcon, SettingsIcon } from "lucide-react";
+import { BookOpenIcon, DumbbellIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -25,6 +25,7 @@ import { kbdEventForAction } from "@/src/core";
 import { notifySettingsSaved } from "@/components/settings-signal";
 import { usePhoneViewport } from "@/components/use-phone-viewport";
 import { bindSidebarSwipe } from "@/components/sidebar-swipe";
+import { publishWaitingCount, useWaitingCount } from "@/components/sessions-summary";
 
 /**
  * Desktop navigation sits inline and retains its open preference. On phones
@@ -87,12 +88,32 @@ declare global {
 	}
 }
 
-const SidebarContext = createContext<{ open: boolean; phone: boolean; toggle: () => void; closePhone: () => void }>({
+const SidebarContext = createContext<{ open: boolean; phone: boolean; drawer: boolean; toggle: () => void; closePhone: () => void }>({
 	open: false,
 	phone: false,
+	drawer: false,
 	toggle: () => {},
 	closePhone: () => {},
 });
+
+/** Portrait tablets: the sessions list is an overlay drawer, closed by
+ *  default, so the lesson keeps the full width. Wider screens keep the
+ *  inline sidebar and its remembered preference. */
+const DRAWER_MEDIA = "(min-width: 768px) and (max-width: 1023px)";
+function subscribeDrawer(update: () => void) {
+	const media = window.matchMedia?.(DRAWER_MEDIA);
+	media?.addEventListener("change", update);
+	return () => media?.removeEventListener("change", update);
+}
+/** Read synchronously while rendering: during hydration the store still
+ *  reports its server value, and a tablet must never flash the inline
+ *  sidebar open (the width change unpins the conversation from its end). */
+function drawerNow() {
+	return typeof window !== "undefined" && (window.matchMedia?.(DRAWER_MEDIA).matches ?? false) && !(window.matchMedia?.("(max-width: 767px)").matches ?? false);
+}
+function useDrawerLayout() {
+	return useSyncExternalStore(subscribeDrawer, () => window.matchMedia?.(DRAWER_MEDIA).matches ?? false, () => false);
+}
 
 export function useSidebar() {
 	return useContext(SidebarContext);
@@ -112,8 +133,10 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	const [narrow, setNarrow] = useState(false);
 	const [mounted, setMounted] = useState(false);
 	const phone = usePhoneViewport();
+	const drawer = useDrawerLayout() && !phone;
 	const [phoneOpen, setPhoneOpen] = useState(false);
-	const closePhone = useCallback(() => setPhoneOpen(false), []);
+	const [drawerOpen, setDrawerOpen] = useState(false);
+	const closePhone = useCallback(() => { setPhoneOpen(false); setDrawerOpen(false); }, []);
 	const pathname = usePathname();
 	useEffect(() => { closePhone(); }, [pathname, phone, closePhone]);
 
@@ -163,6 +186,10 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 			setPhoneOpen((value) => !value);
 			return;
 		}
+		if (drawer) {
+			setDrawerOpen((value) => !value);
+			return;
+		}
 		// Opening while narrow (auto-closed, or the user's own closed-at-
 		// narrow): ask the shell to widen to the threshold — the resize
 		// listener flips `narrow` and the sidebar appears. The preference
@@ -178,7 +205,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 			localStorage.setItem(STORAGE_KEY, v ? "0" : "1");
 			return !v;
 		});
-	}, [narrow, open, phone]);
+	}, [narrow, open, phone, drawer]);
 
 	// ⌘B: the global shortcut dispatches kbdEventForAction("toggle-sidebar")
 	// and the context answers on exactly that name — the shared spelling
@@ -194,9 +221,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	}, [toggle]);
 
 	return (
-		<SidebarContext.Provider value={{ open: phone ? phoneOpen : open && !narrow, phone, toggle, closePhone }}>
+		<SidebarContext.Provider value={{ open: phone ? phoneOpen : drawer || drawerNow() ? drawerOpen : open && !narrow, phone, drawer, toggle, closePhone }}>
 			{/* transitions gated on mount: no slide-in flash on page load */}
-			<div className={cn("lh-app-shell flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")}>{children}</div>
+			<div className={cn("lh-app-shell flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")} data-drawer={drawer || undefined} data-drawer-open={(drawer && drawerOpen) || undefined}>{children}</div>
 		</SidebarContext.Provider>
 	);
 }
@@ -215,6 +242,7 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
  *  no popping in either direction. */
 export function SidebarToggle() {
 	const { open, phone, toggle } = useSidebar();
+	const waiting = useWaitingCount();
 	return (
 		<span
 			className={cn(
@@ -227,15 +255,20 @@ export function SidebarToggle() {
 				variant="ghost"
 				size="icon"
 				aria-label="Open sidebar"
+				aria-describedby={waiting > 0 ? "lh-waiting-description" : undefined}
+				title={waiting > 0 ? (waiting === 1 ? "1 session waiting for you" : `${waiting} sessions waiting for you`) : undefined}
 				aria-hidden={open}
 				tabIndex={open ? -1 : 0}
 				onClick={toggle}
-				className={cn("sidebar-motion duration-200", open ? "pointer-events-none opacity-0" : "opacity-100")}
+				className={cn("sidebar-motion relative duration-200", open ? "pointer-events-none opacity-0" : "opacity-100")}
 			>
 				{/* Owner, round 6: size-4, SAME as the close glyph — the toggle
 				    must not grow when the sidebar is closed (it did: size-5 here).
 				    The small look is the standard, both directions. */}
 				<PanelLeftOpenIcon className="size-4" />
+				{/* Sessions waiting for an answer stay visible while the list is closed. */}
+				{waiting > 0 && <span className="lh-waiting-badge" aria-hidden="true" data-testid="sessions-waiting-badge">{waiting}</span>}
+				{waiting > 0 && <span id="lh-waiting-description" className="sr-only">{waiting === 1 ? "1 session is waiting for your answer" : `${waiting} sessions are waiting for your answer`}</span>}
 			</Button>
 			</Hint>
 		</span>
@@ -316,6 +349,8 @@ export function SessionRow({
 	/** Right-click opens the context menu (wave 6: Rename / Delete). */
 	onContextMenu?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
+	const kind = chat.kind === "practice" ? (chat.practiceMode === "drill" ? "drill" : "practice") : "teach";
+	const state = chat.busy || chat.compacting ? "working" : chat.pendingQuestion || (kind !== "teach" && chat.pendingProblem) ? "waiting" : "idle";
 	return (
 		<button
 			type="button"
@@ -323,30 +358,35 @@ export function SessionRow({
 			onContextMenu={onContextMenu}
 			aria-current={active ? "page" : undefined}
 			data-testid={kbdSelected ? "session-row-kbd" : "session-row"}
+			data-kind={kind}
+			data-state={state}
 			className={cn(
-				"lh-session-row relative mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent",
+				"lh-session-row relative mb-0.5 flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent/60",
 				active && "bg-accent",
 				kbdSelected && !active && "bg-accent/60 ring-1 ring-border",
 			)}
 		>
-			<SessionStatus busy={chat.busy || chat.compacting} />
-			<span className="min-w-0 flex-1">
-				{/* Titles are the learner's/teacher's WORDS — Source Sans 3, the
-				    same voice the words were typed in (every input is lh-prose);
-				    the meta line below stays JetBrains Mono (machine data). One
-				    rule, finally applied to the picker too (owner, typography
-				    round): mono = chrome, Source Sans = human words. */}
-				<span className="lh-session-name block truncate font-prose text-(length:--lh-prose-size)">{chat.title}</span>
-				<span className="lh-session-meta block text-xs text-muted-foreground">{sessionMeta(chat)}</span>
+			{/* Kind tile: what sort of session this is, at a glance (teaching /
+			    practice / drill each keep one quiet hue). While a turn runs the
+			    tile carries the spinner instead — motion means work. */}
+			<span className="lh-kind-tile" data-kind={kind} {...(kind === "practice" ? { role: "img", "aria-label": "Practice session" } : {})}>
+				{chat.busy || chat.compacting ? (
+					<SessionStatus busy />
+				) : kind === "drill" ? (
+					<TargetIcon aria-hidden />
+				) : kind === "practice" ? (
+					<DumbbellIcon aria-hidden />
+				) : (
+					<BookOpenIcon aria-hidden />
+				)}
 			</span>
-			{/* The dumbbell rides the FAR RIGHT (owner round 6, 2026-10-05) —
-			    was left of the name; right-aligned keeps the titles flush with
-			    the teaching rows and reads cleaner. */}
-			{chat.kind === "practice" && chat.practiceMode === "drill" ? (
-				<span className="shrink-0 text-xs text-muted-foreground/70">Drill</span>
-			) : (chat.kind ?? "teach") === "practice" && (
-				<DumbbellIcon className="size-3.5 shrink-0 text-muted-foreground/70" aria-label="Practice session" />
-			)}
+			<span className="min-w-0 flex-1">
+				<span className="lh-session-name block truncate">{chat.title}</span>
+				<span className="lh-session-meta block truncate">
+					{sessionMeta(chat)}
+					{kind === "drill" && <span className="sr-only">Drill</span>}
+				</span>
+			</span>
 		</button>
 	);
 }
@@ -408,7 +448,7 @@ export type SessionKindFilter = "teach" | "all" | "practice";
 const KIND_FILTER_KEY = "lh:session-kind-filter";
 
 function SessionsSidebar() {
-	const { open, phone, toggle, closePhone } = useSidebar();
+	const { open, phone, drawer, toggle, closePhone } = useSidebar();
 	const sidebarRef = useRef<HTMLElement>(null);
 	useEffect(() => {
 		if (!phone || !open) return;
@@ -424,6 +464,9 @@ function SessionsSidebar() {
 		};
 	}, [phone, open]);
 	const [chats, setChats] = useState<ChatListItem[] | null>(null);
+	useEffect(() => {
+		publishWaitingCount((chats ?? []).filter((c) => c.pendingQuestion || ((c.kind ?? "teach") === "practice" && c.pendingProblem)).length);
+	}, [chats]);
 	const [query, setQuery] = useState("");
 	const [kindFilter, setKindFilter] = useState<SessionKindFilter>("all");
 	useEffect(() => {
@@ -646,9 +689,18 @@ function SessionsSidebar() {
 	// drafts die with it, no orphan bubbles), and announce the graph
 	// revision so the graph view refetches (deletion is the one writer
 	// the status poll can't see — no run ever transitions some→none).
+	// A short confirmation after a delete ("Deleted “…”"), then it fades.
+	const [deletedNotice, setDeletedNotice] = useState<string | null>(null);
+	useEffect(() => {
+		if (!deletedNotice) return;
+		const timer = window.setTimeout(() => setDeletedNotice(null), 4000);
+		return () => window.clearTimeout(timer);
+	}, [deletedNotice]);
 	const onDeleted = useCallback(
 		(id: string, _mode: ChatDeleteMode, graphRevision: number) => {
 			forgetHandwritingOnDevice(id);
+			const title = chatsRef.current?.find((c) => c.id === id)?.title;
+			setDeletedNotice(title ? `Deleted “${title}”` : "Session deleted");
 			setDeleting(null);
 			setChats((prev) => (prev ? prev.filter((c) => c.id !== id) : prev));
 			if (pathname === `/chat/${id}`) router.push("/");
@@ -681,6 +733,9 @@ function SessionsSidebar() {
 		// Opening + navigation refetch; while open, the events channel owns
 		// freshness (S6) — no interval, nothing standing.
 	}, [open, pathname, refresh]);
+	// One load even while closed: the closed-list button shows how many
+	// sessions wait for an answer (the events channel keeps it current).
+	useEffect(() => { void refresh(); }, [refresh]);
 
 	return (
 		<aside
@@ -692,6 +747,7 @@ function SessionsSidebar() {
 			aria-modal={phone && open ? true : undefined}
 			aria-label="Sessions"
 			onKeyDown={(event) => {
+				if (drawer && open && event.key === "Escape") { event.preventDefault(); event.stopPropagation(); toggle(); return; }
 				if (!phone || !open || !sidebarRef.current?.contains(event.target as Node)) return;
 				if (event.key === "Escape") {
 					event.preventDefault(); event.stopPropagation(); closePhone();
@@ -703,12 +759,12 @@ function SessionsSidebar() {
 				}
 			}}
 		>
-			<div className="lh-sessions-content flex h-full w-72 flex-col border-r bg-background">
+			<div className="lh-sessions-content flex h-full w-72 flex-col border-r">
 				{/* LH wordmark — the owner's header; close toggle sits at the edge.
 				    Merged chrome (2026-09-17): in Electron this band is the
 				    window's drag surface and starts after the traffic lights
 				    (.lh-lights-gutter); in the browser those classes are inert. */}
-				<div className="lh-sessions-header lh-drag lh-lights-gutter flex items-center justify-between px-4 py-3">
+				<div className="lh-sessions-header lh-drag lh-lights-gutter flex items-center gap-2 px-3">
 					{/* The owner's mark (2026-09-17) replaces the "LH" text — still the
 					    home link, still vertically centered by the band's items-center.
 					    The 92px .lh-lights-gutter keeps it clear of the traffic lights
@@ -735,6 +791,7 @@ function SessionsSidebar() {
 							<span className="lh-phone-home-label hidden">Home</span>
 						</Link>
 					</Hint>
+					<span className="lh-wordmark" aria-hidden="true">LearnHarness</span>
 					<h2 className="lh-sessions-title hidden">Sessions</h2>
 					<Hint label="Close sidebar" action="toggle-sidebar" disabled={phone}>
 						<Button
@@ -754,41 +811,42 @@ function SessionsSidebar() {
 				    half/half row): full-width rows read cleaner and give the
 				    labels room; teaching keeps the original draft route,
 				    practice carries its mode. */}
-				<div className="lh-sessions-create mx-3 mb-2 flex flex-col gap-1.5">
+				<div className="lh-sessions-create-label">New session</div>
+				<div className="lh-sessions-create">
 					<button
 						type="button"
 						data-testid="new-session"
+						data-kind="teach"
 						onClick={() => void newSession()}
-						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 					>
-						<PlusIcon className="size-3" />
+						<BookOpenIcon aria-hidden />
 						Teaching
 						<span className="sr-only">create a new teaching session</span>
 					</button>
 					<button
 						type="button"
 						data-testid="new-session-practice"
+						data-kind="practice"
 						onClick={() => { closePhone(); router.push("/chat/new?mode=practice"); }}
-						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 					>
-						<DumbbellIcon className="size-3" />
+						<DumbbellIcon aria-hidden />
 						Practice
 						<span className="sr-only">create a new practice session</span>
 					</button>
 					<button
 						type="button"
 						data-testid="new-session-drill"
+						data-kind="drill"
 						onClick={() => { closePhone(); router.push("/chat/new?mode=drill"); }}
-						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 					>
-						<DumbbellIcon className="size-3" />
+						<TargetIcon aria-hidden />
 						Drill
 						<span className="sr-only">create a new drill</span>
 					</button>
 				</div>
 
-				<div className="lh-sessions-search mx-3 mb-2 flex items-center gap-2">
-					<span className="lh-sessions-search-label text-xs uppercase tracking-widest text-muted-foreground/70">Sessions</span>
+				<div className="lh-sessions-create-label lh-sessions-list-label">Sessions</div>
+				<div className="lh-sessions-search">
 					<Hint label="Search sessions" action="sessions-search" side="bottom" disabled={phone}>
 					<span className="relative flex-1">
 						<Input
@@ -840,11 +898,11 @@ function SessionsSidebar() {
 									e.currentTarget.blur();
 								}
 							}}
-							placeholder={phone ? "Search sessions" : "Search…"}
+							placeholder="Search sessions"
 							aria-label="Search sessions"
-							className="h-6 rounded-sm border-border bg-background pl-6 text-xs placeholder:text-muted-foreground/60"
+							className="lh-sessions-search-input"
 						/>
-						<SearchIcon className="pointer-events-none absolute left-1.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/70" />
+						<SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 					</span>
 					</Hint>
 				</div>
@@ -856,30 +914,27 @@ function SessionsSidebar() {
 				    Practice / All — the real modes first, "All" as the escape
 				    hatch on the right, mirroring the create-buttons above.
 				    Persisted client-side. */}
-				<div className="mx-3 flex items-center gap-0.5 rounded-md border border-border/60 bg-background p-0.5" data-testid="session-kind-filter">
+				<div className="lh-segmented lh-sessions-filter" role="group" aria-label="Show sessions" data-testid="session-kind-filter">
 					{(["teach", "practice", "all"] as const).map((f) => (
 						<button
 							key={f}
 							type="button"
 							data-testid={`kind-filter-${f}`}
 							onClick={() => setFilter(f)}
-							className={cn(
-								"flex-1 rounded-sm px-2 py-1 text-[11px] uppercase tracking-wider transition-colors",
-								kindFilter === f
-									? "bg-accent text-foreground"
-									: "text-muted-foreground hover:text-foreground",
-							)}
+							aria-pressed={kindFilter === f}
+							data-active={kindFilter === f}
 						>
 							{f === "teach" ? "Teaching" : f === "all" ? "All" : "Practice"}
 						</button>
 					))}
 				</div>
 
-				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+				{deletedNotice && <p role="status" data-testid="session-deleted-notice" className="lh-deleted-notice">{deletedNotice}</p>}
+				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 pt-1">
 					{shown === null ? (
-						<div className="px-2 py-4 text-xs text-muted-foreground">Loading…</div>
+						<div className="px-2 py-4 text-sm text-muted-foreground">Loading…</div>
 					) : shown.length === 0 ? (
-						<div className="px-2 py-4 text-xs text-muted-foreground">
+						<div className="px-2 py-4 text-sm text-muted-foreground">
 							{query.trim() ? "No sessions match." : "No sessions yet."}
 						</div>
 					) : (
@@ -892,18 +947,33 @@ function SessionsSidebar() {
 									onCancel={() => setRenamingId(null)}
 								/>
 							) : (
-								<SessionRow
-									key={c.id}
-									chat={c}
-									active={pathname === `/chat/${c.id}`}
-									kbdSelected={i === kbdIndex}
-									onOpen={() => {
-										setKbdIndex(null);
-										closePhone();
-										router.push(`/chat/${c.id}`);
-									}}
-									onContextMenu={(e) => openContext(e, c)}
-								/>
+								<div key={c.id} className="lh-session-item" data-menu-open={ctxChatId === c.id || undefined}>
+									<SessionRow
+										chat={c}
+										active={pathname === `/chat/${c.id}`}
+										kbdSelected={i === kbdIndex}
+										onOpen={() => {
+											setKbdIndex(null);
+											closePhone();
+											router.push(`/chat/${c.id}`);
+										}}
+										onContextMenu={(e) => openContext(e, c)}
+									/>
+									<button
+										type="button"
+										className="lh-session-more"
+										data-testid="session-more"
+										aria-label={`Actions for ${c.title}`}
+										aria-haspopup="menu"
+										aria-expanded={ctxChatId === c.id}
+										onClick={(e) => {
+											if (ctxChatId === c.id) setCtxChatId(null);
+											else openContext(e, c);
+										}}
+									>
+										<MoreHorizontalIcon aria-hidden />
+									</button>
+								</div>
 							),
 						)
 					)}
@@ -919,15 +989,15 @@ function SessionsSidebar() {
 					{/* Settings entry (settings-app wave): same row language as
 					    New session — quiet, bottom-pinned, opens the centered
 					    dialog (also mod+, in the keyboard registry). */}
-					<div className="lh-sessions-footer px-3 pb-3 pt-1">
+					<div className="lh-sessions-footer">
 						<Hint label="Settings" action="open-settings" side="right" disabled={phone}>
 							<button
 								type="button"
 								onClick={() => openSettings()}
 								data-testid="settings-entry"
-								className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+								className="lh-footer-row"
 							>
-								<SettingsIcon className="size-3" />
+								<SettingsIcon className="size-4" />
 								Settings
 							</button>
 						</Hint>
@@ -951,7 +1021,7 @@ function SessionsSidebar() {
 						anchorRef={ctxAnchorRef}
 						testid="session-context-menu"
 						preferredSide="down"
-						menuClass="flex w-52 flex-col gap-0.5 rounded-xl border bg-card p-2 text-xs shadow-xl"
+						menuClass="lh-menu flex w-60 flex-col gap-0.5 rounded-2xl border bg-popover p-1.5 text-sm shadow-xl"
 					>
 						{/* The two management actions first, then the extraction block
 						    (owner refinement round, 2026-09-24): Rename/Delete stay at the
@@ -966,7 +1036,7 @@ function SessionsSidebar() {
 								setRenamingId(ctxChatId);
 								setCtxChatId(null);
 							}}
-							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
+							className="lh-menu-item flex items-center rounded-lg px-3 py-2 text-left text-foreground transition-colors hover:bg-accent"
 						>
 							Rename
 						</button>
@@ -988,7 +1058,7 @@ function SessionsSidebar() {
 								a.click();
 								a.remove();
 							}}
-							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
+							className="lh-menu-item flex items-center rounded-lg px-3 py-2 text-left text-foreground transition-colors hover:bg-accent"
 						>
 							Export as Markdown…
 						</button>
@@ -1000,7 +1070,7 @@ function SessionsSidebar() {
 								if (target) setDeleting(target);
 								setCtxChatId(null);
 							}}
-							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
+							className="lh-menu-item flex items-center rounded-lg px-3 py-2 text-left text-destructive transition-colors hover:bg-accent"
 						>
 							Delete…
 						</button>
@@ -1022,7 +1092,7 @@ function SessionsSidebar() {
 
 /** The app frame: sidebar inline + content. Rendered once in the root layout. */
 export function AppShell({ children }: { children: React.ReactNode }) {
-	const { phone, open } = useSidebar();
+	const { phone, open, drawer, toggle } = useSidebar();
 	const pathname = usePathname();
 	// Throwaway whole-shell comparison: its navigation is the subject of the trial.
 	if (process.env.NODE_ENV !== "production" && pathname.startsWith("/prototype/mobile-ui")) return <>{children}</>;
@@ -1030,6 +1100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 		<SettingsDialogProvider>
 			<SessionsSidebar />
 			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open}>{children}</FilePathDropZone>
+			{drawer && open && <div className="lh-drawer-scrim" aria-hidden="true" data-testid="sessions-drawer-scrim" onClick={toggle} />}
 			{/* The single document-level keydown listener (keyboard wave A) —
 			    after the content in the tree, but it's window-level so order only
 			    matters for the events it dispatches, never for DOM priority. */}

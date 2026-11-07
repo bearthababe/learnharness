@@ -59,7 +59,7 @@ describe("DeleteSessionDialog — the node-dialog shape (owner flow rework 2026-
 		assert.equal(html, "");
 	});
 
-	it("red mono title 'Delete session?' (abort-turn look), the session name below in mono at normal size, no code-block chrome", () => {
+	it("plain dialog title 'Delete session?', the session name below in the reading face, no code-block chrome", () => {
 		const html = renderToStaticMarkup(
 			<DeleteSessionBody
 				chat={{ id: "c1", title: "Orbital mechanics" }}
@@ -73,11 +73,11 @@ describe("DeleteSessionDialog — the node-dialog shape (owner flow rework 2026-
 		);
 		assert.match(html, /Delete session\?/);
 		const title = html.match(/<h2[^>]*>/)?.[0] ?? "";
-		assert.match(title, /text-sm font-semibold text-destructive/); // red, abort-turn look (owner, 2026-10-13)
+		assert.match(title, /text-lg font-semibold text-foreground/); // the destructive colour stays on the action
 		assert.ok(!title.includes("font-title"), "no serif display title");
-		// the name: mono, normal text-sm size (owner, 2026-10-13), NO bg-muted code-block chrome
+		// the name: the learner's words in the reading face, NO bg-muted code-block chrome
 		const name = html.match(/data-testid="session-name-code"[^>]*>/)?.[0] ?? "";
-		assert.match(name, /font-mono text-sm/);
+		assert.match(name, /font-prose text-base/);
 		assert.ok(!name.includes("bg-muted"), "no code-block chrome");
 		assert.match(html, /data-testid="session-name-code"[^>]*>Orbital mechanics</);
 	});
@@ -106,7 +106,7 @@ describe("DeleteSessionDialog — the node-dialog shape (owner flow rework 2026-
 		assert.ok(!html.includes("delete-option-nodes"));
 	});
 
-	it("bottom row matches the node dialog: quiet Cancel + destructive-red Delete", () => {
+	it("bottom row: secondary Cancel + solid destructive Delete", () => {
 		const html = renderToStaticMarkup(
 			<DeleteSessionBody
 				chat={{ id: "c1", title: "Orbital mechanics" }}
@@ -120,7 +120,7 @@ describe("DeleteSessionDialog — the node-dialog shape (owner flow rework 2026-
 		);
 		assert.match(html, /data-testid="delete-cancel"[^>]*>Cancel</);
 		const del = html.match(/data-testid="delete-confirm"[^>]*>/)?.[0] ?? "";
-		assert.match(del, /border-destructive\/50/);
+		assert.match(del, /bg-\[#c94545\] [^"]*text-white/);
 		assert.match(html, /data-testid="delete-confirm"[^>]*>Deleting…</); // busy label on Delete
 		// the checkbox survives a busy render (disabled, not unmounted)
 		assert.match(html, /data-testid="delete-traces-checkbox"[^>]*disabled=""/);

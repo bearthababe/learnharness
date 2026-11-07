@@ -124,6 +124,8 @@ export function useChatSession({ chatId, initialMessages, initialError, initiall
 	const adoptRecord = useCallback((record: LhMessage[]) => model.adoptRecord(record), [model]);
 	const stop = useCallback(() => model.stop(), [model]);
 	const clearError = useCallback(() => model.clearError(), [model]);
+	const discardUnsentText = useCallback((text: string) => model.discardUnsentText(text), [model]);
+	const discardUnsentThinking = useCallback((problemCallId: string, text: string) => model.discardUnsentThinking(problemCallId, text), [model]);
 	const resumeStream = useCallback(() => void model.resumeStream(), [model]);
 
 	return {
@@ -146,6 +148,8 @@ export function useChatSession({ chatId, initialMessages, initialError, initiall
 		adoptRecord,
 		stop,
 		clearError,
+		discardUnsentText,
+		discardUnsentThinking,
 		resumeStream,
 		setReattachSettled,
 	};

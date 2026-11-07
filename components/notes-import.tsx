@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEv
 import { WaypointsIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { usePhoneLayout } from "./use-phone-viewport";
-import { createNotesImportQueue, EMPTY_IMPORT_QUEUE, notesPath } from "./notes-import-queue";
+import { createNotesImportQueue, EMPTY_IMPORT_QUEUE, notesPath, type ImportDone } from "./notes-import-queue";
 
 export { MAX_IMPORT_BYTES } from "@/lib/notes-import-limits.ts";
 export { notesPath } from "./notes-import-queue";
@@ -65,6 +65,8 @@ export async function postNotesImport(files: readonly File[]): Promise<NotesImpo
 // Client module singleton: shared by both home views and successive selections.
 // SSR never appends Files, and uses the immutable empty server snapshot.
 const pageImportQueue = createNotesImportQueue(postNotesImport);
+/** Dismiss the page's settled import errors and notices. */
+export function dismissNotesImportResults() { pageImportQueue.dismiss(); }
 export function useNotesImport(callbacks: { onStart?: () => void; onFinish?: () => void } = {}) {
 	const snapshot = useSyncExternalStore(pageImportQueue.subscribe, pageImportQueue.getSnapshot, () => EMPTY_IMPORT_QUEUE);
 	const latest = useRef(callbacks);
@@ -77,7 +79,7 @@ export function useNotesImport(callbacks: { onStart?: () => void; onFinish?: () 
 		}
 	}, [snapshot.completion]);
 	return {
-		errors: snapshot.errors, notices: snapshot.notices, importing: snapshot.importing,
+		errors: snapshot.errors, notices: snapshot.notices, done: snapshot.done, importing: snapshot.importing,
 		onImportFiles: (files: FileList | null) => {
 			if (!files || files.length === 0) return;
 			latest.current.onStart?.();
@@ -122,8 +124,77 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	);
 }
 
-export function NotesImportErrors({ errors }: { errors: readonly string[] }) {
-	return <>{errors.map((error, i) => <p key={i} role="alert" className="max-w-full whitespace-pre-wrap break-words text-xs text-red-400">{error}</p>)}</>;
+/** A raw provider failure ("file: 401: {json}") reads as a sentence with a
+ *  next step; anything else is shown as the server worded it. Pure. */
+const SLOT_NAMES: Record<string, string> = { cheap: "Helpers", strong: "Main tutor", vision: "Images & PDFs" };
+export function friendlyImportError(error: string): string {
+	// A configuration code rides on its own line ("code — detail — …"): say
+	// what to do instead of showing the code.
+	const [first = "", codeLine] = error.split("\n");
+	if (codeLine) {
+		const [code, ...details] = codeLine.split(" — ");
+		const said = first.replace(/[.!?]?\s*$/, "");
+		if (code === "models_not_configured") {
+			const slots = (details[0] ?? "").split(", ").filter(Boolean).map((slot) => SLOT_NAMES[slot] ?? slot);
+			return `${said}. Choose ${slots.length ? `models for ${slots.join(", ")}` : "your models"} in Settings → Agent, then import again.`;
+		}
+		if (code === "provider_key_missing") {
+			const provider = details.find((d) => !d.includes(",") && !/^[A-Z0-9_]+$/.test(d) && !SLOT_NAMES[d]);
+			return `${said}. Add ${provider ? `your ${provider} key` : "the provider key"} in Settings → Providers, then import again.`;
+		}
+		return first;
+	}
+	const m = /^(.+?): (\d{3}): (\{[\s\S]*\})$/.exec(error);
+	if (!m) return error;
+	let detail = "";
+	try { const parsed = JSON.parse(m[3]!) as { message?: unknown; error?: unknown }; detail = String(parsed.message ?? parsed.error ?? ""); } catch { /* keep the status alone */ }
+	const status = Number(m[2]);
+	const hint = status === 401 || status === 403
+		? "The model provider refused the request; check its key in Settings → Providers."
+		: "The model provider returned an error; try again in a moment.";
+	return `${m[1]} couldn't be imported. ${hint} (${status}${detail ? ` · ${detail}` : ""})`;
+}
+/** Failed imports as one contained panel: what failed, in a sentence, with
+ *  the fix one tap away (provider settings) and a way to dismiss. Without
+ *  handlers it renders the plain lines alone. */
+export function NotesImportErrors({ errors, onOpenSettings, onDismiss }: { errors: readonly string[]; onOpenSettings?: (section: "keys" | "agent") => void; onDismiss?: () => void }) {
+	if (errors.length === 0) return null;
+	const lines = errors.map((error, i) => <p key={i} role="alert" className="lh-import-error max-w-full whitespace-pre-wrap break-words text-xs text-red-400">{friendlyImportError(error)}</p>);
+	if (!onOpenSettings && !onDismiss) return <>{lines}</>;
+	// The fix lives where the error says: model roles under Agent, keys
+	// under Providers.
+	const models = errors.some((error) => /\nmodels_not_configured/.test(error));
+	const auth = !models && errors.some((error) => /: 40[13]: |\nprovider_key_missing/.test(error));
+	return (
+		<div className="lh-import-error-panel" data-testid="import-error-panel">
+			<div className="lh-import-error-title">{errors.length === 1 ? "Import didn't finish" : `${errors.length} imports didn't finish`}</div>
+			{lines}
+			<div className="lh-import-error-actions">
+				{models && onOpenSettings && <button type="button" data-testid="import-error-settings" onClick={() => onOpenSettings("agent")}>Open model settings</button>}
+				{auth && onOpenSettings && <button type="button" data-testid="import-error-settings" onClick={() => onOpenSettings("keys")}>Open provider settings</button>}
+				{onDismiss && <button type="button" data-testid="import-error-dismiss" onClick={onDismiss}>Dismiss</button>}
+			</div>
+		</div>
+	);
+}
+/** A finished import says what it added and offers the way to look:
+ *  "Imported notes.md · 2 new ideas", Show ideas, Dismiss. */
+export function NotesImportDone({ done, importing, onShowIdeas, onDismiss }: { done: readonly ImportDone[]; importing: boolean; onShowIdeas?: () => void; onDismiss?: () => void }) {
+	if (done.length === 0 || importing) return null;
+	const total = done.reduce((sum, item) => sum + item.ideas, 0);
+	const name = (filePath: string) => filePath.split("/").pop() ?? filePath;
+	const ideas = (n: number) => `${n} new ${n === 1 ? "idea" : "ideas"}`;
+	return (
+		<div className="lh-import-done-panel" role="status" data-testid="import-done-panel">
+			<div className="lh-import-error-title">{done.length === 1 ? `Imported ${name(done[0]!.filePath)}` : `Imported ${done.length} files`}</div>
+			<p className="lh-import-done-line">{done.length === 1 ? `${ideas(total)} in your graph${done[0]!.chains ? ` · ${done[0]!.chains} ${done[0]!.chains === 1 ? "chain" : "chains"}` : ""}.` : `${ideas(total)} in your graph.`}</p>
+			{done.length > 1 && <ul className="lh-import-done-list">{done.slice(0, 5).map((item) => <li key={item.filePath}><span>{name(item.filePath)}</span><span>{ideas(item.ideas)}</span></li>)}</ul>}
+			<div className="lh-import-error-actions">
+				{onShowIdeas && <button type="button" data-testid="import-done-show" onClick={onShowIdeas}>Show ideas</button>}
+				{onDismiss && <button type="button" data-testid="import-done-dismiss" onClick={onDismiss}>Dismiss</button>}
+			</div>
+		</div>
+	);
 }
 export function NotesImportNotices({ notices }: { notices: readonly string[] }) {
 	return <>{notices.map((notice, i) => <p key={i} role="status" className="max-w-full whitespace-pre-wrap break-words text-xs text-muted-foreground">{notice}</p>)}</>;

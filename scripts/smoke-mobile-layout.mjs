@@ -97,7 +97,7 @@ try {
 	const micSelector = await page.$('[data-testid="compact-dictation-toggle"]') ? '[data-testid="compact-dictation-toggle"]' : '[data-testid="dictation-toggle"]';
 	const mic = await rect(micSelector);
 	check(mic.width >= 44 && mic.height >= 44 && mic.x >= 0 && mic.right <= 375 && mic.y >= 0 && mic.bottom <= 667, "Dictation has a visible 44px touch target inside phone viewport");
-	check(await page.evaluate(() => [...document.querySelectorAll("summary")].filter(e => e.textContent.includes("Share from Concepts")).every(e => e.getBoundingClientRect().height === 0)), "Concepts setup is absent from phone composer");
+	check(await page.evaluate(() => [...document.querySelectorAll("summary")].filter(e => e.textContent.includes("Concepts app")).every(e => e.getBoundingClientRect().height === 0)), "Concepts setup is absent from phone composer");
 	check(await page.evaluate(() => [...document.querySelectorAll("nextjs-portal")].every(e => !e.shadowRoot?.querySelector('[data-nextjs-dev-tools-button]'))), "Next development indicator is disabled");
 	const before = await rect("[data-file-path-input]");
 	await page.click('button[aria-label="Open sidebar"]');

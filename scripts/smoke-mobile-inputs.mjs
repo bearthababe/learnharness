@@ -190,6 +190,7 @@ try {
 	await page.evaluateOnNewDocument(() => {
 		if (window !== window.top) return;
 		localStorage.setItem("lh:sidebar-open", "0");
+		localStorage.setItem("lh:device-tool:writing", "on"); localStorage.setItem("lh:device-tool:notebook", "on"); // both working tools, whatever the emulated device
 		// Keep the real graph/worklet/audio. Only emulate Safari's paused state
 		// between runs; a resumed graph must produce actual PCM again.
 		const NativeAudioContext = window.AudioContext;
@@ -430,7 +431,7 @@ try {
 	await page.click(mic);
 	await page.waitForSelector('.lh-compact-error');
 	await page.waitForSelector('[data-testid="composer"] [aria-label="Start dictation"]');
-	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /Dictation needs a Deepgram key.*Settings/);
+	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /add a Deepgram speech key.*Settings/);
 	await page.click('.lh-compact-error button');
 	await page.waitForSelector('[data-testid="settings-dialog"]');
 	await page.waitForSelector('[data-testid="key-deepgram_api_key-input"]');
@@ -907,7 +908,7 @@ try {
 		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Card dismissal restores lesson interaction");
 		await assertReading("Usage dismissal");
 		await page.focus(input);
-		await page.click('.lh-phone-plan');
+		await page.click('[data-testid="plan-chip"]'); // phones open Plan from the header (the composer row no longer repeats it)
 		await page.waitForSelector('[data-testid="plan-popup"]');
 		await fitPanel('[data-testid="plan-popup"]');
 		assert.match(await page.$eval('[data-testid="plan-popup"]', e => e.textContent), /Pressure and area/);
@@ -1201,7 +1202,7 @@ try {
 		delete visualViewport.height; delete visualViewport.offsetTop;
 		visualViewport.dispatchEvent(new Event("resize"));
 	});
-	await page.click('.lh-phone-plan');
+	await page.click('[data-testid="plan-chip"]'); // phones open Plan from the header (the composer row no longer repeats it)
 	await page.waitForSelector('[data-testid="plan-popup-dialog"]');
 	const fullPlan = await visibleBounds('[data-testid="plan-popup"]');
 	assert.equal(fullPlan.top, 0);
@@ -1333,11 +1334,15 @@ try {
 	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-attempt-review"]'));
 	await page.goto(`${origin}/chat/mobile_selection`, { waitUntil: "networkidle2" });
 	await page.click('[data-testid="reading-thinking-field"] [data-testid="teach-check-reveal"]');
-	await page.waitForSelector('[data-testid="thinking-field"] [data-file-path-input]', { visible: true });
+	// Phones take a check in two steps (owner ruling 3): pick first, then
+	// confidence and "why" open beneath the choices.
+	await page.waitForSelector('[data-testid="question-pick-hint"]', { visible: true });
+	assert.equal(await page.$('[data-testid="thinking-field"] [data-file-path-input]').then(e => e?.isVisible()), false, "Before a choice, the why field waits");
 	await page.locator('[role="radio"]').filter(button => button.textContent.includes("Halve the area")).click();
+	await page.waitForSelector('[data-testid="thinking-field"] [data-file-path-input]', { visible: true });
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "The force stays the same.");
 	assert.ok(await page.$('[data-testid="confidence-slider"]'), "Selection questions retain confidence");
-	await page.click('.lh-phone-plan');
+	await page.click('[data-testid="plan-chip"]'); // phones open Plan from the header (the composer row no longer repeats it)
 	await page.waitForSelector('[data-testid="plan-popup"]');
 	await page.keyboard.press("Escape");
 	assert.equal(await page.$eval('[data-testid="thinking-field"] [data-file-path-input]', e => e.textContent), "The force stays the same.", "Real Plan dismissal preserves the question draft");

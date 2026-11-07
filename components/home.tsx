@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CornerDownLeftIcon, DumbbellIcon } from "lucide-react";
+import { ArrowUpIcon, BookOpenIcon, DumbbellIcon, TargetIcon } from "lucide-react";
+import { CompactLearningInput } from "@/components/compact-learning-input";
+import { ResumeStrip } from "@/components/resume-strip";
 import { GraphView } from "@/components/graph-view";
 import { MinimalHome } from "@/components/minimal-home";
 import { SetupDialog } from "@/components/setup-dialog";
@@ -220,6 +222,25 @@ export function Home({
 					    send consumes it). Practice mode with nothing picked
 					    shows the pick HINT so the affordance is discoverable;
 					    teaching mode with nothing picked renders nothing. */}
+					{configured && <ResumeStrip />}
+					<div className="lh-mode-row">
+						<div className="lh-segmented lh-mode-switch" role="group" aria-label="Session type" data-testid="home-mode-switch">
+								{(["teach", "practice", "drill"] as const).map((m) => (
+									<button
+										key={m}
+										type="button"
+										data-testid={`home-mode-${m}`}
+										data-kind={m}
+										data-active={mode === m}
+										aria-pressed={mode === m}
+										onClick={() => setMode(m)}
+									>
+										{m === "teach" ? <BookOpenIcon aria-hidden="true" /> : m === "drill" ? <TargetIcon aria-hidden="true" /> : <DumbbellIcon aria-hidden="true" />}
+										{m === "teach" ? "Teach" : m === "drill" ? "Drill" : "Practice"}
+									</button>
+								))}
+							</div>
+					</div>
 					<ComposerActions
 						picker={(practiceProps.length > 0 || mode === "practice") && (
 							<NodePickerControl
@@ -236,7 +257,7 @@ export function Home({
 									type="button"
 									data-testid="setup-cta"
 									onClick={() => setSetupOpen(true)}
-									className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
+									className="lh-setup-cta cursor-pointer"
 								>
 									Set up your models
 								</button>
@@ -246,13 +267,13 @@ export function Home({
 					{startError && <p role="alert" className="mb-2 text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
 					<form
 						data-attachment-composer=""
-						className="flex items-end gap-1.5 rounded-2xl border bg-card p-1.5 shadow-lg"
+						className="lh-composer-shell lh-compact-row flex items-end gap-1.5 rounded-2xl border bg-card p-1.5 shadow-lg"
 					onSubmit={(e) => {
 						e.preventDefault();
 						void start();
 					}}
 				>
-					<PathInput
+					<CompactLearningInput dictation={dictation}><PathInput
 						ref={topicInputRef}
 						value={topic}
 						onValueChange={(value) => {
@@ -278,7 +299,7 @@ export function Home({
 						placeholder={mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
 						autoFocus
 						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
-					/>
+					/></CompactLearningInput>
 					<AttachFilesButton editorRef={topicInputRef} />
 					{/* No tooltip on the start square — the ↵ glyph is the
 					    affordance (owner, subtlety round 2026-09-25). */}
@@ -286,9 +307,9 @@ export function Home({
 						type="submit"
 						aria-label="Start session"
 						disabled={(!topic.trim() && !dictation.active) || busy}
-						className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-40"
+						className="lh-send-button flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-40"
 					>
-						<CornerDownLeftIcon className="size-5" />
+						<ArrowUpIcon className="size-5" />
 					</button>
 					</form>
 					{/* Same as the chat view's under-composer stats bar (owner) — no
@@ -298,27 +319,7 @@ export function Home({
 					<StatsBar
 						dictationSlot={<DictationBar dictation={dictation} />}
 						turns={[] as TurnUsage[]}
-						leadingSlot={
-							<div className="flex items-center gap-0.5 rounded-md border border-border/60 bg-background p-0.5" data-testid="home-mode-switch">
-								{(["teach", "practice", "drill"] as const).map((m) => (
-									<button
-										key={m}
-										type="button"
-										data-testid={`home-mode-${m}`}
-										onClick={() => setMode(m)}
-										className={
-											"flex items-center gap-1 rounded-sm px-2 py-0.5 text-[11px] uppercase tracking-wider transition-colors " +
-											(mode === m
-												? "bg-accent text-foreground"
-												: "text-muted-foreground hover:text-foreground")
-										}
-									>
-										{m !== "teach" ? <DumbbellIcon aria-hidden="true" className="size-3" /> : null}
-										{m === "teach" ? "Teach" : m === "drill" ? "Drill" : "Practice"}
-									</button>
-								))}
-							</div>
-						}
+						compactInput
 					/>
 				</div>
 			</div>

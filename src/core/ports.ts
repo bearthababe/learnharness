@@ -41,6 +41,8 @@ export interface SharedWritingStore {
 	putNotebook(chatId: string, capture: NotebookCapture): NotebookCaptureReceipt;
 	readSource(chatId: string, id: string): NotebookSource | null;
 	readSnapshot(chatId: string): WritingSnapshot;
+	/** Take a pending snapshot out of the next message (kept on disk). */
+	dismiss(chatId: string, id: string): void;
 	deleteChat(chatId: string): void;
 }
 

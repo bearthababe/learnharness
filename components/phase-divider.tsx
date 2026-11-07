@@ -38,6 +38,11 @@ const CHIP_LABEL: Record<Phase3, string> = {
  *  tooltip, not selectable, not interactive in any way — no pointer events
  *  at all, so it is part of the drag surface instead of a carved-out
  *  target. */
+/** The learner-facing phase label ("Probing" / "Planning" / "Teaching"). */
+export function phaseLabel(phase: Phase3): string {
+	return CHIP_LABEL[phase];
+}
+
 export function PhaseChip({ phase }: { phase: Phase3 }) {
 	return (
 		<span

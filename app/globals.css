@@ -28,83 +28,57 @@
 	outline: none;
 }
 
-/* Palette (owner's hexes): main #141414, raised #1C1C1C, edges #434343.
-   Mono chrome = JetBrains Mono; prose = Source Sans 3; titles = CMU Serif. */
-:root {
+/* Palette — warm ink. One accent hue (iris) carries action, selection and
+   focus; three quiet kind hues tell teaching / practice / drill apart; the
+   semantic greens/ambers/reds are reserved for outcomes. Surfaces step up
+   in small, even increments so depth reads without heavy borders. */
+:root,
+.dark {
 	color-scheme: dark;
-	--radius: 8px;
-	--background: #141414;
-	--foreground: #e6e6e6;
-	--card: #1c1c1c;
-	--card-foreground: #e6e6e6;
-	--popover: #1c1c1c;
-	--popover-foreground: #e6e6e6;
-	--primary: #e6e6e6;
-	--primary-foreground: #141414;
-	--secondary: #1c1c1c;
-	--secondary-foreground: #e6e6e6;
-	--muted: #1c1c1c;
-	--muted-foreground: #8d8d8d;
-	--accent: #2a2a2a;
-	--accent-foreground: #e6e6e6;
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: #434343;
-	--input: #434343;
-	--ring: #8d8d8d;
+	--radius: 10px;
+	--background: #131218;
+	--foreground: #eceaf2;
+	--card: #1b1a21;
+	--card-foreground: #eceaf2;
+	--popover: #201f27;
+	--popover-foreground: #eceaf2;
+	--primary: #8577f5;
+	--primary-foreground: #ffffff;
+	--secondary: #1b1a21;
+	--secondary-foreground: #eceaf2;
+	--muted: #1e1d24;
+	--muted-foreground: #a29fae;
+	--accent: #292831;
+	--accent-foreground: #f4f3f8;
+	--destructive: #f07a7a;
+	--border: #312f39;
+	--input: #3b3944;
+	--ring: #8577f5;
+	/* Accent ink: the iris tuned for text/icons on the dark surfaces. */
+	--lh-brand-ink: #b4abff;
+	--lh-brand-soft: color-mix(in oklab, #8577f5 18%, transparent);
+	--lh-success: #5fd39a;
+	--lh-success-soft: color-mix(in oklab, #5fd39a 16%, transparent);
+	--lh-warning: #f2b766;
+	--lh-warning-soft: color-mix(in oklab, #f2b766 16%, transparent);
+	--lh-danger-soft: color-mix(in oklab, #f07a7a 16%, transparent);
+	--lh-kind-teach: #a99dff;
+	--lh-kind-practice: #57cdbd;
+	--lh-kind-drill: #f2b766;
+	--lh-shadow-pop: 0 1px 0 rgb(255 255 255 / .04) inset, 0 12px 32px -8px rgb(0 0 0 / .55), 0 2px 6px rgb(0 0 0 / .3);
+	--lh-shadow-dock: 0 1px 0 rgb(255 255 255 / .05) inset, 0 10px 30px -10px rgb(0 0 0 / .6);
 	/* Writing stays white in storage; its on-screen paper follows the theme. */
 	--lh-dim-paper-filter: invert(1) hue-rotate(180deg) contrast(.65) brightness(1.3);
-	--lh-writing-image-filter: none;
-	/* Emphasis inks default to the REGULAR TEXT COLOR (owner ruling,
-	   appearance wave 2026-09-26 — the old #ee928c/#6fa9d6 factory
-	   emphasis colors are gone). Explicit overrides land via the
-	   appearance settings vars. */
-	--lh-ink-strong: var(--foreground);
-	--lh-ink-italic: var(--foreground);
-	/* THE READING SIZE = the ladder's 16px rung (--text-lg). Can't be
-	   var()-linked: @theme inline inlines literals into utilities without
-	   emitting runtime vars — so this is the one documented duplication:
-	   change one, change both. (owner, typography round 4: snapped from
-	   the reskin's hand-tuned 16.5 to the ladder's 16.) */
-	--lh-prose-size: 16px;
-	--lh-prose-leading: 1.5;
-	/* Markdown heading weight (appearance settings; 900 = the Black cut). */
-	--lh-heading-weight: 900;
-}
-
-/* The app is always dark (<html class="dark">); mirror the same values so
-   the block stays coherent under Tailwind's variant. */
-.dark {
 	--lh-writing-image-filter: var(--lh-dim-paper-filter);
-	--background: #141414;
-	--foreground: #e6e6e6;
-	--card: #1c1c1c;
-	--card-foreground: #e6e6e6;
-	--popover: #1c1c1c;
-	--popover-foreground: #e6e6e6;
-	--primary: #e6e6e6;
-	--primary-foreground: #141414;
-	--secondary: #1c1c1c;
-	--secondary-foreground: #e6e6e6;
-	--muted: #1c1c1c;
-	--muted-foreground: #8d8d8d;
-	--accent: #2a2a2a;
-	--accent-foreground: #e6e6e6;
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: #434343;
-	--input: #434343;
-	--ring: #8d8d8d;
-	/* Same emphasis ruling as the block above: unset = text color. */
+	/* Emphasis inks default to the regular text colour; appearance
+	   settings may override them. */
 	--lh-ink-strong: var(--foreground);
 	--lh-ink-italic: var(--foreground);
-	/* THE READING SIZE = the ladder's 16px rung (--text-lg). Can't be
-	   var()-linked: @theme inline inlines literals into utilities without
-	   emitting runtime vars — so this is the one documented duplication:
-	   change one, change both. (owner, typography round 4: snapped from
-	   the reskin's hand-tuned 16.5 to the ladder's 16.) */
+	/* The reading size (= --text-lg). Appearance settings override it. */
 	--lh-prose-size: 16px;
-	--lh-prose-leading: 1.5;
-	/* Markdown heading weight (appearance settings; 900 = the Black cut). */
-	--lh-heading-weight: 900;
+	--lh-prose-leading: 1.6;
+	/* Markdown heading weight (appearance settings). */
+	--lh-heading-weight: 700;
 }
 
 /* CMU Serif bold (titles) — bundled local file, no CDN dependency. */
@@ -123,7 +97,7 @@
 	   fonts: `font-mono`/`font-sans` utilities would otherwise fall to the
 	   SYSTEM stacks — a fourth font the app never chose — and streamdown's
 	   code-block chrome + mermaid-error + demo-card all use them. */
-	--font-ui: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
+	--font-ui: var(--font-sans3), ui-sans-serif, system-ui, sans-serif;
 	--font-prose: var(--font-sans3), ui-sans-serif, system-ui, sans-serif;
 	--font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
 	--font-sans: var(--font-sans3), ui-sans-serif, system-ui, sans-serif;
@@ -140,26 +114,27 @@
 	   toggle write a runtime --font-title no consumer ever read (owner, fix
 	   wave: toggle looked dead). Non-inline emits :root { --font-title: … }
 	   and the utility reads var(--font-title) — appearance overrides win. */
-	--text-xs: 11px;
+	--text-xs: 12px;
 	--text-xs--line-height: 1.4;
-	--text-sm: 12.5px;
-	--text-sm--line-height: 1.4;
-	--text-base: 14px;
-	--text-base--line-height: 1.45;
+	--text-sm: 13.5px;
+	--text-sm--line-height: 1.45;
+	--text-base: 15px;
+	--text-base--line-height: 1.5;
 	--text-lg: 16px;
-	--text-lg--line-height: 1.45;
+	--text-lg--line-height: 1.5;
 	--text-xl: 20px;
-	--text-xl--line-height: 1.4;
-	--text-2xl: 25px;
+	--text-xl--line-height: 1.35;
+	--text-2xl: 24px;
 	--text-2xl--line-height: 1.3;
-	--text-3xl: 32px;
+	--text-3xl: 28px;
 	--text-3xl--line-height: 1.25;
 	/* Radii ladder — 4/8/12/16 multiples of the 4px base. */
-	--radius-sm: 4px;
-	--radius-md: 8px;
-	--radius-lg: 12px;
-	--radius-xl: 16px;
-	--radius: 8px;
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 14px;
+	--radius-xl: 18px;
+	--radius-2xl: 22px;
+	--radius: 10px;
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
@@ -255,27 +230,31 @@ body {
 	.lh-sessions-header {
 		display: grid;
 		grid-template-columns: 1fr auto 1fr;
-		min-height: 60px;
-		padding: 8px 16px;
+		height: 60px;
+		padding: 8px 12px;
+	}
+	.lh-sessions-header .lh-wordmark {
+		display: none;
 	}
 	.lh-sessions-header a {
 		justify-self: start;
 		width: auto;
 		min-height: 44px;
-		gap: 7px;
-		font-size: 15px;
+		gap: 8px;
+		padding-inline: 6px;
+		font-size: 16px;
 		color: var(--color-muted-foreground);
 	}
 	.lh-sessions-header a svg {
-		width: 20px;
-		height: 20px;
+		width: 22px;
+		height: 22px;
 	}
 	.lh-sessions-title {
 		display: block;
-		font-size: 21px;
-		font-weight: 600;
+		font-size: 18px;
+		font-weight: 650;
 		line-height: 1.2;
-		letter-spacing: -.02em;
+		letter-spacing: -.01em;
 	}
 	.lh-phone-home-label, .lh-phone-close-label {
 		display: inline;
@@ -284,117 +263,84 @@ body {
 		justify-self: end;
 		width: auto;
 		min-width: 44px;
-		padding-inline: 4px;
+		padding-inline: 8px;
 		font-size: 16px;
-		font-weight: 500;
+		font-weight: 600;
+		color: var(--lh-brand-ink);
 	}
-	.lh-desktop-close-icon, .lh-sessions-search-label {
+	.lh-desktop-close-icon {
 		display: none;
 	}
+	.lh-sessions-create-label {
+		margin: 6px 16px 8px;
+	}
 	.lh-sessions-create {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 8px;
-		margin: 0 16px 12px;
+		margin: 0 16px 14px;
 	}
 	.lh-sessions-create button {
-		justify-content: center;
-		gap: 5px;
-		padding: 8px;
-		border: 1px solid var(--color-border);
-		border-radius: 12px;
-		background: var(--color-card);
-		color: var(--color-foreground);
+		min-height: 48px;
 		font-size: 15px;
-		font-weight: 500;
-		text-transform: none;
-		letter-spacing: normal;
-		white-space: nowrap;
-	}
-	.lh-sessions-create svg {
-		width: 15px;
-		height: 15px;
-		flex-shrink: 0;
 	}
 	.lh-sessions-search {
-		margin: 0 16px 12px;
+		margin: 0 16px 10px;
 	}
-	.lh-sessions-search input {
+	.lh-sessions-search input.lh-sessions-search-input {
 		height: 44px;
-		padding-left: 36px;
-		border-radius: 12px;
-		background: var(--color-card);
+		font-size: 16px;
 	}
-	.lh-sessions-search svg {
-		left: 12px;
-		width: 16px;
-		height: 16px;
+	.lh-sessions-filter {
+		margin: 0 16px 8px;
 	}
-	.lh-sessions-content [data-testid="session-kind-filter"] {
-		margin-inline: 16px;
-		padding: 3px;
-		border: 0;
-		border-radius: 12px;
-		background: var(--color-card);
-	}
-	.lh-sessions-content [data-testid="session-kind-filter"] button {
-		border-radius: 9px;
-		font-size: 14px;
-		font-weight: 500;
-		text-transform: none;
-		letter-spacing: normal;
+	.lh-sessions-filter button {
+		min-height: 38px;
+		font-size: 14.5px;
 	}
 	.lh-sessions-content > [data-testid="session-list"] {
 		min-height: 6rem;
-		padding: 8px 12px;
+		padding: 4px 8px 8px;
 	}
 	.lh-session-row {
-		min-height: 64px;
-		margin-bottom: 3px;
-		padding: 10px 12px;
-		border-radius: 12px;
+		min-height: 60px;
+		gap: 12px;
+		padding: 9px 10px;
+		border-radius: 14px;
+	}
+	.lh-session-row .lh-kind-tile {
+		width: 34px;
+		height: 34px;
+		border-radius: 10px;
+	}
+	.lh-session-row .lh-kind-tile svg {
+		width: 17px;
+		height: 17px;
 	}
 	.lh-session-name {
-		font-size: 17px;
-		font-weight: 500;
-		line-height: 23px;
+		font-size: 16.5px;
+		line-height: 22px;
 	}
 	.lh-session-meta {
-		margin-top: 2px;
-		font-size: 13px;
+		margin-top: 1px;
+		font-size: 13.5px;
 		line-height: 18px;
 	}
 	.lh-sessions-content > [data-testid="activity-section"] {
-		padding: 10px 16px 4px;
+		padding: 6px 12px 0;
 	}
-	.lh-sessions-content > [data-testid="activity-section"] > div:first-child {
-		margin-bottom: 0;
-		font-size: 13px;
-		line-height: 20px;
-		text-transform: none;
-		letter-spacing: normal;
+	.lh-activity-header {
+		min-height: 44px;
+		font-size: 15px;
 	}
 	.lh-sessions-footer {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		align-items: start;
-		gap: 8px;
-		padding: 4px 16px 8px;
+		padding: 0 12px 8px;
 	}
-	.lh-sessions-footer [data-testid="settings-entry"], .lh-sessions-tools summary {
-		font-size: 16px;
-		font-weight: 500;
+	.lh-sessions-footer .lh-footer-row {
+		min-height: 44px;
+		font-size: 15px;
+	}
+	.lh-sessions-tools summary {
+		font-size: 15px;
 		line-height: 28px;
-		text-transform: none;
-		letter-spacing: normal;
-	}
-	.lh-sessions-footer [data-testid="settings-entry"] {
-		width: 100%;
-		gap: 8px;
-	}
-	.lh-sessions-footer [data-testid="settings-entry"] svg {
-		width: 16px;
-		height: 16px;
 	}
 	.lh-sessions-tools {
 		margin-top: 0;
@@ -536,7 +482,8 @@ body {
    font takes it, and CMU (a single 700 face) snaps to its nearest
    available weight — the same rendering it already had. */
 .font-title {
-	font-weight: 900;
+	font-weight: 650;
+	letter-spacing: -0.01em;
 }
 
 .lh-prose :where(strong, b) {
@@ -899,7 +846,7 @@ body {
    session-name-serif toggle overrides this var at runtime, so the
    .font-title utility must read it through var(), not carry a baked copy. */
 @theme {
-	--font-title: "lh-cmu", serif;
+	--font-title: var(--font-prose);
 }
 
 /* Card enter (owner round, 2026-10-05): the transcript cards' one-shot
@@ -936,4 +883,2846 @@ body {
 	background-color: var(--accent);
 	outline: 1px solid var(--border);
 	border-radius: 0.25rem;
+}
+
+/* ============================================================
+ * Shell & navigation (whole-app redesign, 2026-11)
+ * One calm frame: a quiet sidebar, the work in the middle. Kind hues
+ * (teach / practice / drill) appear only as small tiles and icons.
+ * ============================================================ */
+:root {
+	--lh-sidebar: #17161d;
+}
+.lh-sessions-content {
+	background: var(--lh-sidebar);
+	border-color: var(--border);
+	font-family: var(--font-prose);
+}
+.lh-sessions-header {
+	height: 60px;
+	flex-shrink: 0;
+}
+.lh-wordmark {
+	font-size: 15px;
+	font-weight: 650;
+	letter-spacing: -.01em;
+	color: var(--foreground);
+	pointer-events: none;
+	user-select: none;
+}
+.lh-sessions-close {
+	margin-left: auto;
+	color: var(--muted-foreground);
+}
+.lh-sessions-create-label {
+	margin: 4px 16px 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--muted-foreground);
+}
+.lh-sessions-create {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 6px;
+	margin: 0 12px 14px;
+}
+.lh-sessions-create button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 36px;
+	padding: 0 6px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--card);
+	color: var(--foreground);
+	font-size: 13.5px;
+	font-weight: 550;
+	white-space: nowrap;
+	transition: background-color .15s, border-color .15s;
+}
+.lh-sessions-create button:hover {
+	background: var(--accent);
+	border-color: color-mix(in oklab, var(--border) 60%, var(--muted-foreground));
+}
+.lh-sessions-create button svg {
+	width: 15px;
+	height: 15px;
+	flex-shrink: 0;
+}
+[data-kind="teach"] { --lh-kind: var(--lh-kind-teach); }
+[data-kind="practice"] { --lh-kind: var(--lh-kind-practice); }
+[data-kind="drill"] { --lh-kind: var(--lh-kind-drill); }
+.lh-sessions-create button svg, .lh-kind-tile {
+	color: var(--lh-kind, var(--muted-foreground));
+}
+.lh-sessions-search {
+	position: relative;
+	margin: 0 12px 8px;
+}
+.lh-sessions-search > span {
+	display: block;
+}
+@media (max-width: 767px) {
+	.lh-sessions-list-label {
+		display: none;
+	}
+}
+.lh-sessions-search input.lh-sessions-search-input {
+	height: 36px;
+	padding-left: 34px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--card);
+	font-size: 14px;
+	box-shadow: none;
+}
+.lh-sessions-search input.lh-sessions-search-input:focus {
+	border-color: color-mix(in oklab, var(--primary) 70%, transparent);
+	background: var(--background);
+}
+.lh-sessions-search input::placeholder {
+	color: var(--muted-foreground);
+	opacity: .8;
+}
+
+/* Segmented control: one shared look for every few-way switch. */
+.lh-segmented {
+	display: flex;
+	align-items: stretch;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 11px;
+	background: color-mix(in oklab, var(--card) 70%, black);
+	border: 1px solid var(--border);
+}
+.lh-segmented > :is(button, a) {
+	display: inline-flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 28px;
+	padding: 0 10px;
+	border-radius: 8px;
+	color: var(--muted-foreground);
+	font-size: 13px;
+	font-weight: 550;
+	letter-spacing: 0;
+	text-transform: none;
+	white-space: nowrap;
+	transition: background-color .15s, color .15s;
+}
+.lh-segmented > :is(button, a):hover {
+	color: var(--foreground);
+}
+.lh-segmented > :is(button, a)[data-active="true"] {
+	background: var(--accent);
+	color: var(--foreground);
+	box-shadow: 0 1px 2px rgb(0 0 0 / .35), 0 0 0 1px rgb(255 255 255 / .04) inset;
+}
+.lh-segmented > :is(button, a) svg {
+	width: 14px;
+	height: 14px;
+}
+.lh-sessions-filter {
+	margin: 0 12px 6px;
+}
+
+.lh-session-row {
+	min-height: 52px;
+}
+.lh-kind-tile {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 30px;
+	height: 30px;
+	border-radius: 9px;
+	background: color-mix(in oklab, var(--lh-kind, var(--muted-foreground)) 15%, transparent);
+}
+.lh-kind-tile svg {
+	width: 15px;
+	height: 15px;
+}
+.lh-kind-tile [data-testid="braille-spinner"] {
+	color: var(--foreground);
+}
+.lh-session-name {
+	font-size: 14.5px;
+	font-weight: 500;
+	line-height: 20px;
+	color: var(--foreground);
+}
+.lh-session-meta {
+	margin-top: 1px;
+	font-size: 12.5px;
+	line-height: 17px;
+	color: var(--muted-foreground);
+}
+.lh-session-row[data-state="waiting"] .lh-session-meta {
+	color: var(--lh-brand-ink);
+}
+.lh-session-row[data-state="working"] .lh-session-meta {
+	color: var(--foreground);
+}
+.lh-session-row[aria-current="page"] {
+	background: var(--accent);
+}
+.lh-session-row[aria-current="page"]::before {
+	content: "";
+	position: absolute;
+	left: -6px;
+	top: 14px;
+	bottom: 14px;
+	width: 3px;
+	border-radius: 3px;
+	background: var(--primary);
+}
+.lh-activity-section {
+	border-color: var(--border);
+}
+.lh-activity-header {
+	min-height: 36px;
+	border-radius: 8px;
+}
+.lh-sessions-footer {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 0 12px 10px;
+}
+.lh-footer-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 36px;
+	padding: 0 8px;
+	border-radius: 8px;
+	color: var(--muted-foreground);
+	font-size: 14px;
+	transition: background-color .15s, color .15s;
+}
+.lh-footer-row:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+
+/* Session header: the title leads; chips are small, sentence-case, and
+   give way first when space runs out. */
+.lh-topbar {
+	background: var(--background);
+	border-color: var(--border);
+}
+.lh-session-title {
+	font-size: 19px;
+	line-height: 1.3;
+	font-weight: 650;
+	letter-spacing: -.012em;
+}
+.lh-header-chip {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--card);
+	color: var(--foreground);
+	font-size: 13.5px;
+	font-weight: 550;
+	cursor: pointer;
+	transition: background-color .15s, border-color .15s;
+}
+.lh-header-chip:hover {
+	background: var(--accent);
+}
+.lh-header-chip svg {
+	width: 15px;
+	height: 15px;
+	color: var(--lh-brand-ink);
+}
+[data-testid="phase-chip"] {
+	gap: 6px;
+	font-size: 13px;
+	font-weight: 500;
+	letter-spacing: 0;
+	text-transform: none;
+	color: var(--muted-foreground);
+}
+[data-testid="phase-chip"]:not(.lh-phase-tag)::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--lh-kind-teach);
+	opacity: .9;
+}
+.lh-phase-tag svg {
+	color: var(--lh-kind);
+}
+.lh-header-write {
+	height: 32px;
+	gap: 6px;
+	padding: 0 12px;
+	border-radius: 999px;
+	border-color: var(--border);
+	background: var(--card);
+	font-size: 13.5px;
+	font-weight: 550;
+}
+.lh-header-write svg {
+	width: 15px;
+	height: 15px;
+}
+
+@media (max-width: 767px) {
+	.lh-topbar {
+		height: 56px;
+		gap: 6px;
+		padding-inline: 6px 8px;
+	}
+	.lh-topbar .lh-closed-toggle,
+	.lh-topbar .lh-closed-toggle button {
+		width: 44px;
+		height: 44px;
+	}
+	.lh-session-title {
+		font-size: 17px;
+		font-weight: 650;
+	}
+	.lh-topbar [data-testid="phase-chip"] {
+		display: none;
+	}
+	.lh-header-chip {
+		width: 40px;
+		height: 40px;
+		padding: 0;
+		justify-content: center;
+	}
+	.lh-header-chip-label, .lh-header-write-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+	.lh-header-write {
+		width: 40px;
+		height: 40px;
+		padding: 0;
+	}
+	.lh-header-chip svg, .lh-header-write svg {
+		width: 18px;
+		height: 18px;
+	}
+}
+
+/* ============================================================
+ * The dock: one rounded composer, quiet controls beneath it.
+ * ============================================================ */
+[data-attachment-composer] {
+	border-color: color-mix(in oklab, var(--border) 80%, var(--muted-foreground) 20%);
+	border-radius: 20px;
+	background: var(--card);
+	box-shadow: var(--lh-shadow-dock);
+	transition: border-color .15s, box-shadow .15s;
+}
+[data-attachment-composer]:focus-within {
+	border-color: color-mix(in oklab, var(--primary) 55%, var(--border));
+	box-shadow: var(--lh-shadow-dock), 0 0 0 3px color-mix(in oklab, var(--primary) 14%, transparent);
+}
+.lh-send-button {
+	box-shadow: 0 1px 2px rgb(0 0 0 / .35);
+}
+.lh-send-button:disabled {
+	background: var(--accent);
+	color: var(--muted-foreground);
+	opacity: 1;
+}
+[data-testid="attach-files"] {
+	color: var(--muted-foreground);
+}
+
+/* Stats row: small, muted, evenly spaced. */
+.lh-stats-bar {
+	gap: 8px;
+	padding-top: 10px;
+	font-size: 12.5px;
+	color: var(--muted-foreground);
+}
+.lh-stats-bar [data-testid="stats-summary"] {
+	min-height: 30px;
+	padding: 0 8px;
+	border-radius: 8px;
+	font-variant-numeric: tabular-nums;
+}
+.lh-stats-bar [data-testid="stats-summary"]:hover {
+	background: var(--accent);
+}
+[data-testid="model-control"] {
+	gap: 0 !important;
+}
+[data-testid="stats-model"], [data-testid="stats-thinking"] {
+	height: 30px;
+	padding-inline: 11px !important;
+	border-color: var(--border) !important;
+	background: var(--card) !important;
+	box-shadow: none !important;
+	backdrop-filter: none !important;
+	font-size: 12.5px;
+	color: var(--muted-foreground);
+}
+[data-testid="stats-model"] > span:first-child, [data-testid="stats-thinking"] > span:first-child {
+	color: var(--foreground);
+}
+[data-testid="stats-model"] {
+	border-radius: 999px 0 0 999px !important;
+}
+[data-testid="stats-thinking"] {
+	border-radius: 0 999px 999px 0 !important;
+	border-left-width: 0 !important;
+}
+[data-testid="stats-model"]:hover, [data-testid="stats-thinking"]:hover {
+	background: var(--accent) !important;
+}
+.lh-stats-bar .lh-dictation-slot > :only-child[data-testid="dictation-toggle"],
+.lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"]:not([class*="destructive"]) {
+	width: auto;
+	height: 30px;
+	padding: 0 14px;
+	border-radius: 999px;
+	border-color: var(--border);
+	background: var(--card);
+	box-shadow: none;
+	backdrop-filter: none;
+	color: var(--muted-foreground);
+	font-size: 12.5px;
+}
+.lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"]:not([class*="destructive"]):hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-mode-switch {
+	flex-shrink: 0;
+}
+.lh-mode-switch > :is(button, a) {
+	min-height: 26px;
+	padding-inline: 10px;
+	font-size: 12.5px;
+}
+.lh-mode-switch > :is(button, a)[data-active="true"] svg {
+	color: var(--lh-kind);
+}
+
+/* Concepts sharing is a setup aid, not part of every reply: a quiet
+   disclosure line until writing actually arrives. */
+.lh-shared-writing[data-has-writing="false"] {
+	margin-bottom: 6px;
+	padding: 0 6px;
+	border: 0;
+	background: none;
+	font-size: 12px;
+}
+.lh-shared-writing[data-has-writing="false"] summary {
+	width: fit-content;
+	list-style-position: inside;
+	opacity: .75;
+}
+
+@media (max-width: 767px) {
+	/* Phone composer: one pill holds text, mic, attach and send. */
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]) > .lh-compact-field {
+		border-color: transparent;
+		background: transparent;
+	}
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]) > .lh-compact-field:focus-within {
+		border-color: transparent;
+	}
+	[data-attachment-composer] {
+		border-radius: 24px;
+	}
+	.lh-compact-row > button.lh-send-button {
+		border-radius: 999px;
+		margin: 0 3px 5px 0;
+	}
+	.lh-compact-stats {
+		gap: 4px;
+		padding-top: 6px;
+	}
+	.lh-compact-stats [data-testid="stats-model"], .lh-compact-stats [data-testid="stats-thinking"] {
+		height: 36px;
+		min-height: 36px !important;
+	}
+	.lh-compact-stats .lh-phone-plan, .lh-compact-stats [data-testid="stats-summary"] {
+		font-size: 13.5px;
+		color: var(--muted-foreground);
+	}
+	.lh-mode-switch > :is(button, a) {
+		min-height: 36px;
+		font-size: 13.5px;
+	}
+}
+
+/* Mode choice sits above the composer: choose, then type. */
+.lh-mode-row {
+	display: flex;
+	justify-content: center;
+	margin-bottom: 10px;
+	pointer-events: auto;
+}
+.lh-mode-row .lh-segmented {
+	width: auto;
+}
+
+/* Empty states: an inviting title, one line of guidance. */
+.lh-empty-state {
+	gap: 14px;
+}
+.lh-empty-state h3 {
+	font-family: var(--font-prose);
+	font-size: 24px;
+	line-height: 1.25;
+	font-weight: 650;
+	letter-spacing: -.015em;
+	color: var(--foreground);
+}
+.lh-empty-state p {
+	max-width: 30rem;
+	margin-inline: auto;
+	font-size: 15.5px;
+	line-height: 1.5;
+}
+.lh-empty-state .space-y-1 > :not(:first-child) {
+	margin-top: 8px;
+}
+.lh-empty-icon {
+	width: 52px;
+	height: 52px;
+	border-radius: 16px;
+}
+.lh-empty-icon svg {
+	width: 24px;
+	height: 24px;
+}
+@media (max-width: 767px) {
+	.lh-empty-state h3 { font-size: 22px; }
+	.lh-topbar div:has(> [data-testid="coverage-ring"]) { display: none; }
+	/* Attach leads the phone composer, as in most messaging apps. */
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]):has([data-testid="attach-files"]) {
+		grid-template-columns: auto minmax(0, 1fr) auto;
+	}
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]) > :has([data-testid="attach-files"]),
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]) > [data-testid="attach-files"] {
+		order: -1;
+	}
+}
+
+/* ============================================================
+ * Learning activities: questions, options, problems.
+ * The question is the loudest thing on screen; choices are large,
+ * calm targets; the chosen one is unmistakable.
+ * ============================================================ */
+.text-xs.uppercase {
+	font-size: 11.5px;
+	font-weight: 600;
+	letter-spacing: .07em;
+}
+.lh-eyebrow {
+	color: var(--lh-brand-ink);
+}
+.lh-question-text {
+	font-family: var(--font-prose);
+	font-size: 17px;
+	line-height: 1.45;
+	font-weight: 600;
+	letter-spacing: -.005em;
+}
+.lh-option {
+	min-height: 46px;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 14px;
+	border-radius: 12px;
+	border-color: var(--border);
+	background: color-mix(in oklab, var(--background) 55%, var(--card));
+	font-family: var(--font-prose);
+	font-size: 15.5px;
+	line-height: 1.4;
+	transition: background-color .15s, border-color .15s, box-shadow .15s;
+}
+.lh-option:hover {
+	border-color: color-mix(in oklab, var(--border) 50%, var(--muted-foreground));
+	background: var(--accent);
+}
+.lh-option[aria-checked="true"], .lh-option[aria-pressed="true"] {
+	border-color: var(--primary);
+	background: var(--lh-brand-soft);
+	box-shadow: 0 0 0 1px var(--primary) inset;
+}
+.lh-option-dontknow {
+	background: transparent;
+	color: var(--muted-foreground);
+}
+.lh-option-mark {
+	width: 20px;
+	height: 20px;
+	margin-top: 0;
+	border-width: 1.5px;
+	border-color: color-mix(in oklab, var(--muted-foreground) 65%, transparent);
+}
+.lh-option-mark.rounded-sm {
+	border-radius: 6px;
+}
+.lh-option[aria-checked="true"] .lh-option-mark, .lh-option[aria-pressed="true"] .lh-option-mark {
+	border-color: var(--primary);
+	background: var(--primary);
+	color: #fff;
+}
+.lh-option-mark .size-1\.5 {
+	width: 8px;
+	height: 8px;
+}
+
+/* ============================================================
+ * Settings: a calm two-pane panel on wide screens; a drill-in list
+ * of sections on phones.
+ * ============================================================ */
+[data-testid="settings-backdrop"] {
+	background: rgb(8 7 12 / .72);
+	backdrop-filter: blur(6px);
+}
+.lh-settings {
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+	font-family: var(--font-prose);
+}
+.lh-settings-title {
+	font-size: 18px;
+	font-weight: 650;
+	letter-spacing: -.01em;
+}
+.lh-settings-nav {
+	background: color-mix(in oklab, var(--popover) 70%, black);
+	padding: 10px 8px;
+}
+.lh-settings-nav-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-height: 40px;
+	padding: 6px 10px;
+	border-radius: 10px;
+	color: var(--muted-foreground);
+	text-align: left;
+	transition: background-color .15s, color .15s;
+}
+.lh-settings-nav-item:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-settings-nav-item[aria-current="true"] {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-settings-nav-icon {
+	display: grid;
+	place-items: center;
+	width: 22px;
+	flex-shrink: 0;
+}
+.lh-settings-nav-icon svg {
+	width: 17px;
+	height: 17px;
+}
+.lh-settings-nav-item[aria-current="true"] .lh-settings-nav-icon svg {
+	color: var(--lh-brand-ink);
+}
+.lh-settings-nav-label {
+	display: block;
+	font-size: 14.5px;
+	font-weight: 550;
+}
+.lh-settings-nav-blurb, .lh-settings-nav-chevron {
+	display: none;
+}
+.lh-settings-section {
+	max-width: 44rem;
+	padding: 24px 32px 32px;
+}
+.lh-settings-section-title {
+	font-size: 22px;
+	font-weight: 650;
+	letter-spacing: -.015em;
+	color: var(--foreground);
+}
+.lh-settings-content [data-testid] > p.text-xs.uppercase,
+.lh-settings-content p.text-xs.uppercase {
+	color: var(--muted-foreground);
+}
+.lh-settings-content :is(button, input, select).h-7 {
+	height: 32px;
+	border-radius: 8px;
+	font-size: 13px;
+	padding-inline: 10px;
+}
+.lh-settings-content input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+	border-radius: 8px;
+}
+.lh-settings-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	min-height: 44px;
+	margin-left: -8px;
+	padding-right: 8px;
+	color: var(--lh-brand-ink);
+	font-size: 16px;
+}
+.lh-settings-back svg {
+	width: 22px;
+	height: 22px;
+}
+
+/* Settings below 840px wide: one column that drills into a section (the
+   list first, then the section with a Back link). Phones show it as a
+   full-screen sheet; portrait tablets as a centred card. */
+.lh-settings[data-phone-view] > div {
+	flex-direction: column;
+}
+.lh-settings[data-phone-view] .lh-settings-header {
+	display: grid;
+	grid-template-columns: 1fr auto 1fr;
+	padding-inline: 12px;
+}
+.lh-settings[data-phone-view] .lh-settings-header > .lh-settings-title {
+	grid-column: 2;
+	justify-self: center;
+	font-size: 17px;
+}
+.lh-settings[data-phone-view] .lh-settings-header > .lh-settings-back {
+	grid-column: 1;
+	justify-self: start;
+}
+.lh-settings[data-phone-view] .lh-settings-header > :last-child {
+	grid-column: 3;
+	justify-self: end;
+}
+.lh-settings[data-phone-view] .lh-settings-close {
+	width: 44px;
+	height: 44px;
+}
+.lh-settings[data-phone-view] .lh-settings-nav {
+	flex: 1;
+	gap: 0;
+	width: auto;
+	max-height: max-content;
+	margin: 16px;
+	padding: 4px 0;
+	align-self: stretch;
+	border: 1px solid var(--border);
+	border-radius: 16px;
+	background: var(--card);
+}
+.lh-settings[data-phone-view] .lh-settings-nav[hidden], .lh-settings[data-phone-view] .lh-settings-content[hidden] {
+	display: none;
+}
+.lh-settings[data-phone-view] .lh-settings-nav-item {
+	min-height: 60px;
+	gap: 14px;
+	padding: 8px 14px;
+	border-radius: 0;
+	color: var(--foreground);
+}
+.lh-settings[data-phone-view] .lh-settings-nav-item + .lh-settings-nav-item {
+	border-top: 1px solid var(--border);
+}
+.lh-settings[data-phone-view] .lh-settings-nav-icon svg {
+	width: 20px;
+	height: 20px;
+	color: var(--lh-brand-ink);
+}
+.lh-settings[data-phone-view] .lh-settings-nav-label {
+	font-size: 16.5px;
+	font-weight: 500;
+}
+.lh-settings[data-phone-view] .lh-settings-nav-blurb {
+	display: block;
+	margin-top: 1px;
+	font-size: 13.5px;
+	color: var(--muted-foreground);
+}
+.lh-settings[data-phone-view] .lh-settings-nav-chevron {
+	display: block;
+	width: 18px;
+	height: 18px;
+	color: var(--muted-foreground);
+}
+.lh-settings[data-phone-view] .lh-settings-section {
+	padding: 16px 20px 32px;
+}
+.lh-settings[data-phone-view] .lh-settings-section > .lh-settings-section-title {
+	display: none;
+}
+@media (min-width: 768px) {
+	.lh-settings[data-phone-view] {
+		width: min(600px, 92vw);
+		height: min(760px, 86vh);
+	}
+}
+@media (max-width: 767px) {
+	[data-testid="settings-backdrop"] {
+		align-items: stretch;
+		backdrop-filter: none;
+	}
+	.lh-settings {
+		width: 100%;
+		max-width: none;
+		height: var(--lh-phone-height, 100dvh);
+		max-height: none;
+		border: 0;
+		border-radius: 0;
+		padding-top: env(safe-area-inset-top, 0px);
+		padding-bottom: env(safe-area-inset-bottom, 0px);
+		background: var(--background);
+	}
+	.lh-settings-header {
+		height: 56px;
+	}
+	.lh-settings-section {
+		padding: 16px 16px 32px;
+	}
+}
+
+/* ============================================================
+ * Menus, dialogs, tables — one popover language.
+ * ============================================================ */
+.lh-menu, [data-testid="session-context-menu"], [data-testid="attachment-popup"], [data-testid="model-menu"], [data-testid="stats-detail"], [data-testid="coverage-ring-popover"] {
+	background: var(--popover);
+	border-color: var(--border);
+	box-shadow: var(--lh-shadow-pop);
+}
+[data-testid="session-context-menu"] {
+	font-size: 14px;
+}
+.lh-menu-item {
+	min-height: 38px;
+}
+[data-testid="session-context-menu"] .text-xs {
+	font-size: 12.5px;
+}
+.lh-dialog-backdrop {
+	background: rgb(8 7 12 / .72);
+	backdrop-filter: blur(6px);
+}
+.lh-dialog {
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+}
+.lh-dialog p.text-sm {
+	font-size: 14.5px;
+	line-height: 1.5;
+}
+
+/* Chains table: readable rows, quiet headers. */
+[data-testid="chain-table"] {
+	font-family: var(--font-prose);
+}
+[data-testid="chain-table"] .text-xs {
+	font-size: 13.5px;
+}
+[data-testid="chain-table"] [data-chain-nav-row] {
+	min-height: 36px;
+}
+[data-testid="chain-table"] [data-chain-nav-row]:hover {
+	background: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+@media (max-width: 767px) {
+	[data-testid="chain-table"] .text-xs {
+		font-size: 14.5px;
+	}
+	[data-testid="chain-table"] [data-chain-nav-row] {
+		min-height: 44px;
+	}
+}
+
+/* Transcript: learner turns read as the learner's voice; dividers stay quiet. */
+[data-testid="user-message"] {
+	border-radius: 14px;
+}
+[data-testid^="phase-divider-"] > span:not([aria-hidden]) {
+	padding: 3px 10px;
+	border-color: var(--border);
+	background: var(--background);
+	color: var(--muted-foreground);
+	font-size: 11px;
+}
+.lh-column .lh-prose {
+	letter-spacing: .002em;
+}
+
+/* First run: one welcoming line, one obvious next step. */
+.lh-graph-empty-icon {
+	display: grid;
+	place-items: center;
+	width: 56px;
+	height: 56px;
+	border-radius: 18px;
+	background: var(--lh-brand-soft);
+	color: var(--lh-brand-ink);
+}
+.lh-graph-empty-icon svg {
+	width: 26px;
+	height: 26px;
+}
+.lh-graph-empty-title {
+	font-size: 24px;
+	font-weight: 650;
+	letter-spacing: -.015em;
+	color: var(--foreground);
+}
+.lh-graph-empty-body {
+	font-family: var(--font-prose);
+	font-size: 15.5px;
+	line-height: 1.5;
+}
+.lh-graph-empty-body p + p {
+	font-size: 14px;
+	opacity: .85;
+}
+.lh-setup-cta {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 40px;
+	padding: 0 18px;
+	border-radius: 999px;
+	background: var(--primary);
+	color: var(--primary-foreground);
+	font-family: var(--font-prose);
+	font-size: 14.5px;
+	font-weight: 600;
+	box-shadow: 0 6px 20px -6px color-mix(in oklab, var(--primary) 70%, transparent);
+	transition: filter .15s;
+}
+.lh-setup-cta:hover {
+	filter: brightness(1.08);
+}
+@media (max-width: 767px) {
+	.lh-setup-cta { min-height: 44px; }
+	.lh-graph-empty-title { font-size: 22px; }
+}
+
+/* Session actions: a visible ⋯ on every row (always on touch, on hover or
+   focus with a pointer), opening the same menu as right-click. */
+.lh-session-item {
+	position: relative;
+}
+.lh-session-more {
+	position: absolute;
+	top: 50%;
+	right: 6px;
+	display: grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 8px;
+	color: var(--muted-foreground);
+	opacity: 0;
+	transform: translateY(-50%);
+	transition: opacity .15s, background-color .15s;
+}
+.lh-session-more svg {
+	width: 17px;
+	height: 17px;
+}
+.lh-session-item:hover .lh-session-more,
+.lh-session-item:focus-within .lh-session-more,
+.lh-session-item[data-menu-open] .lh-session-more {
+	opacity: 1;
+}
+.lh-session-more:hover, .lh-session-item[data-menu-open] .lh-session-more {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-session-item:hover .lh-session-row, .lh-session-item[data-menu-open] .lh-session-row {
+	padding-right: 40px;
+}
+@media (pointer: coarse), (max-width: 767px) {
+	.lh-session-more {
+		opacity: 1;
+		width: 44px;
+		height: 44px;
+		right: 2px;
+	}
+	.lh-session-row {
+		padding-right: 46px !important;
+	}
+}
+
+/* The phone question reveal says what it does. */
+.lh-phone-reveal-label {
+	font-size: 14.5px;
+	font-weight: 600;
+}
+@media (max-width: 767px) {
+	.lh-compact-row > .lh-phone-reveal {
+		gap: 2px;
+		width: auto !important;
+		padding: 0 10px 0 14px;
+		border-radius: 999px;
+	}
+}
+
+/* A disabled paperclip (browser builds attach only in the desktop app)
+   explains itself by hover on wide screens; touch screens never see the
+   reason, so they don't get the dead control either. */
+@media (pointer: coarse), (max-width: 767px) {
+	form:is([data-testid="composer"], [data-attachment-composer]) > div:has(> [data-testid="attach-files"][aria-disabled="true"]) {
+		display: none;
+	}
+	form.lh-compact-row:is([data-testid="composer"], [data-attachment-composer]):has([data-testid="attach-files"][aria-disabled="true"]) {
+		grid-template-columns: minmax(0, 1fr) auto;
+		padding-left: 6px;
+	}
+	/* Chains: touch-sized expanders and checkboxes. */
+	[data-testid="chain-table"] button:has(> svg.size-3),
+	[data-testid="chain-table"] button:has(> svg.size-3\.5) {
+		min-width: 36px;
+		min-height: 36px;
+	}
+	[data-testid="chain-table"] input[type="checkbox"] {
+		width: 20px;
+		height: 20px;
+	}
+}
+
+/* Graph search lists its matches; a pick centres the node and opens its card. */
+.lh-graph-results {
+	max-height: min(320px, 50dvh);
+	margin-top: 4px;
+	padding: 4px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	border-top: 1px solid var(--border);
+	font-family: var(--font-prose);
+}
+.lh-graph-results button {
+	display: block;
+	width: 100%;
+	padding: 7px 8px;
+	border-radius: 8px;
+	text-align: left;
+	transition: background-color .15s;
+}
+.lh-graph-results button:hover, .lh-graph-results button:focus-visible {
+	background: var(--accent);
+}
+.lh-graph-result-name {
+	display: block;
+	font-size: 13.5px;
+	font-weight: 550;
+	color: var(--foreground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lh-graph-result-statement {
+	display: -webkit-box;
+	margin-top: 1px;
+	overflow: hidden;
+	font-size: 12.5px;
+	line-height: 1.35;
+	color: var(--muted-foreground);
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+}
+.lh-node-card {
+	padding-right: 44px;
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+	font-family: var(--font-prose);
+}
+.lh-node-card-name {
+	font-size: 15.5px;
+	font-weight: 650;
+}
+.lh-node-card-statement {
+	font-size: 14px;
+	line-height: 1.5;
+}
+.lh-node-card-close {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	display: grid;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 10px;
+	color: var(--muted-foreground);
+}
+.lh-node-card-close:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-node-card-close svg {
+	width: 16px;
+	height: 16px;
+}
+@media (max-width: 767px) {
+	.lh-graph-results button {
+		min-height: 44px;
+		padding: 9px 10px;
+	}
+	.lh-graph-result-name { font-size: 15px; }
+	.lh-graph-result-statement { font-size: 13.5px; }
+	.lh-node-card-close { width: 44px; height: 44px; top: 2px; right: 2px; }
+}
+
+/* Keyboard hints mean nothing to a finger. */
+@media (pointer: coarse) {
+	.lh-question-submit > span[aria-hidden] {
+		visibility: hidden;
+	}
+}
+
+[data-testid="attachment-popup"] {
+	border-color: var(--border);
+	border-radius: 12px;
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+}
+[data-testid="attachment-popup"][role="status"] {
+	padding: 10px 12px;
+	font-family: var(--font-prose);
+	font-size: 13.5px;
+	line-height: 1.45;
+	color: var(--foreground);
+}
+[data-testid="attachment-popup"] [role="menuitem"] {
+	min-height: 34px;
+	padding-inline: 10px;
+	font-size: 14px;
+}
+
+.lh-import-error {
+	max-width: min(24rem, 100%);
+	font-family: var(--font-prose);
+	font-size: 13px;
+	line-height: 1.45;
+	text-align: right;
+	color: var(--destructive);
+}
+
+/* Background agents: the header opens a short history of settled jobs. */
+.lh-activity-header:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.lh-activity-history {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 40dvh;
+	margin-top: 2px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+.lh-activity-recent {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 44px;
+	padding: 6px 8px;
+	border-radius: 10px;
+	color: var(--muted-foreground);
+	transition: background-color .15s;
+}
+.lh-activity-recent:hover {
+	background: var(--accent);
+}
+.lh-activity-recent-title {
+	display: block;
+	overflow: hidden;
+	color: var(--foreground);
+	font-size: 13.5px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lh-activity-recent-meta {
+	display: block;
+	overflow: hidden;
+	font-size: 12.5px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lh-activity-recent[data-status="error"] .lh-activity-recent-meta {
+	color: var(--destructive);
+}
+.lh-activity-recent[data-status="error"] > svg {
+	color: var(--destructive);
+}
+@media (max-width: 767px) {
+	.lh-activity-recent { min-height: 52px; }
+	.lh-activity-recent-title { font-size: 15px; }
+	.lh-activity-recent-meta { font-size: 13.5px; }
+}
+
+/* Title block: the session name, and on phones its phase or mode beneath. */
+.lh-title-block {
+	display: flex;
+	min-width: 1rem;
+	flex-direction: column;
+	flex-shrink: 1;
+	justify-content: center;
+}
+.lh-title-block {
+	margin-inline: -6px;
+}
+.lh-title-block > .lh-session-title {
+	max-width: 100%;
+	margin-inline: 0;
+}
+.lh-title-block > .lh-session-subtitle {
+	padding-inline: 6px;
+}
+.lh-session-subtitle {
+	display: none;
+}
+@media (max-width: 767px) {
+	.lh-session-title {
+		line-height: 1.2;
+	}
+	.lh-session-subtitle {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		margin-top: 1px;
+		font-size: 12.5px;
+		line-height: 1.2;
+		color: var(--muted-foreground);
+		user-select: none;
+	}
+	.lh-session-subtitle::before {
+		content: "";
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--lh-kind, var(--lh-kind-teach));
+	}
+	.lh-topbar .lh-session-title {
+		-webkit-user-select: none;
+		user-select: none;
+	}
+
+	/* Chains header: search takes the room; the counts step aside. */
+	.lh-chains-count {
+		display: none;
+	}
+	.lh-chains-search {
+		flex: 1;
+		min-width: 0;
+	}
+	.lh-chains-search input {
+		width: 100%;
+		height: 40px;
+		font-size: 16px;
+	}
+	[data-testid="chain-table-close"] {
+		width: 40px;
+		height: 40px;
+	}
+
+	/* Phone questions: every option stays in view above the confidence row. */
+	.lh-option {
+		min-height: 44px;
+		padding: 8px 12px;
+		font-size: 15px;
+	}
+	[data-testid="question-dock"] [role="radiogroup"], [data-testid="question-dock"] [role="group"] {
+		gap: 6px;
+	}
+	.lh-option-dontknow {
+		min-height: 40px;
+	}
+	.lh-question-text {
+		font-size: 16px;
+		margin-bottom: 10px;
+	}
+}
+
+/* Keyboard focus (only after Tab navigation; see keyboard-shortcuts.tsx). */
+html[data-focus-source="keyboard"] :is(button, a[href], summary, select, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [role="radio"], [role="checkbox"], [role="switch"], [tabindex="0"]):focus-visible {
+	outline: 2px solid color-mix(in oklab, var(--primary) 85%, white);
+	outline-offset: 2px;
+}
+html[data-focus-source="keyboard"] :is(input, textarea, [contenteditable="true"]):focus-visible {
+	outline: 2px solid color-mix(in oklab, var(--primary) 70%, transparent);
+	outline-offset: 1px;
+}
+html[data-focus-source="keyboard"] [data-attachment-composer] :is(textarea, [contenteditable="true"], [data-file-path-input]):focus-visible {
+	outline: none;
+}
+
+/* The transcript's copy of the active problem points to the dock. */
+.lh-problem-card[data-active] {
+	padding: 10px 14px;
+	border-style: dashed;
+	background: transparent;
+}
+.lh-problem-card[data-active] .lh-prose {
+	display: -webkit-box;
+	overflow: hidden;
+	color: var(--muted-foreground);
+	-webkit-line-clamp: 1;
+	-webkit-box-orient: vertical;
+}
+.lh-problem-active-note {
+	color: var(--lh-brand-ink);
+	text-transform: none;
+	letter-spacing: 0;
+	font-weight: 500;
+}
+
+/* Settings content: readable sizes for every row, touch-sized actions. */
+.lh-settings-content .text-xs {
+	font-size: 13px;
+}
+.lh-settings-content .font-ui.text-xs {
+	font-size: 15px;
+}
+.lh-settings-content :is(.text-\[11px\], .text-\[10px\]) {
+	font-size: 12.5px;
+}
+.lh-settings-content [data-slot="button"] {
+	min-height: 32px;
+	padding-inline: 12px;
+	border-radius: 8px;
+	font-size: 13px;
+}
+.lh-settings-row-label > .text-xs {
+	margin-top: 2px;
+	line-height: 1.4;
+}
+@media (max-width: 767px) {
+	.lh-settings-content [data-slot="button"] {
+		min-height: 40px;
+	}
+	.lh-settings-row {
+		flex-wrap: wrap;
+		row-gap: 8px;
+	}
+	.lh-settings-row > .lh-settings-row-label {
+		flex: 1 1 11rem;
+	}
+	.lh-settings-content :is(button, input, select).h-7 {
+		height: 38px;
+	}
+}
+
+/* Guidance that names an input method matches the device. */
+.lh-copy-touch {
+	display: none;
+}
+@media (pointer: coarse), (max-width: 767px) {
+	.lh-copy-pointer { display: none; }
+	.lh-copy-touch { display: block; }
+}
+
+/* Portrait tablets: sessions slide over the lesson instead of squeezing it. */
+@media (min-width: 768px) and (max-width: 1023px) {
+	.lh-app-shell[data-drawer] .lh-sessions-panel {
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		z-index: 50;
+		height: 100dvh;
+	}
+	.lh-app-shell[data-drawer-open] .lh-sessions-panel {
+		width: 320px;
+		box-shadow: 0 0 0 1px var(--border), 24px 0 48px -12px rgb(0 0 0 / .6);
+	}
+	.lh-app-shell[data-drawer] .lh-sessions-content {
+		width: 320px;
+	}
+	.lh-drawer-scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		background: rgb(8 7 12 / .55);
+		animation: chrome-fade-in .2s ease-out;
+	}
+}
+
+/* A narrow tutor pane (notebook and writing open beside it) gets the
+   compact header and a wrapping stats row, whatever the window width. */
+.session-tutor {
+	container: session-tutor / inline-size;
+}
+@media (min-width: 768px) {
+@container session-tutor (max-width: 600px) {
+	.lh-topbar {
+		gap: 6px;
+	}
+	.lh-topbar [data-testid="phase-chip"] {
+		display: none;
+	}
+	.lh-session-subtitle {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		margin-top: 1px;
+		font-size: 12.5px;
+		line-height: 1.2;
+		color: var(--muted-foreground);
+	}
+	.lh-header-chip, .lh-header-write {
+		width: 34px;
+		padding: 0;
+		justify-content: center;
+	}
+	.lh-header-chip-label, .lh-header-write-label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+	.lh-stats-bar {
+		flex-wrap: wrap;
+		row-gap: 6px;
+	}
+}
+}
+
+/* First-run model setup: the same calm panel as Settings. */
+.lh-setup {
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+	font-family: var(--font-prose);
+}
+.lh-setup .text-xs {
+	font-size: 13px;
+	line-height: 1.45;
+}
+.lh-setup .font-ui.text-sm {
+	font-size: 15.5px;
+	font-weight: 600;
+}
+.lh-setup :is(.text-\[10px\], .text-\[11px\]) {
+	font-size: 11.5px;
+}
+.lh-setup :is(button, input).h-7 {
+	height: 34px;
+	border-radius: 8px;
+	font-size: 13.5px;
+}
+.lh-setup button.rounded-sm {
+	border-radius: 8px;
+}
+[data-lh-menu] {
+	max-width: calc(100vw - 24px);
+}
+@media (max-width: 767px) {
+	.lh-setup {
+		width: 100%;
+		max-width: none;
+		height: var(--lh-phone-height, 100dvh);
+		max-height: none;
+		border: 0;
+		border-radius: 0;
+		background: var(--background);
+	}
+	.lh-setup :is(button, input).h-7 {
+		height: 42px;
+		font-size: 15px;
+	}
+	.lh-setup > header {
+		height: 56px;
+	}
+}
+
+/* Tool traces read as quiet sentences, not system logs. */
+.lh-tool-summary {
+	min-height: 28px;
+	font-size: 13px;
+}
+.lh-tool-label {
+	font-weight: 500;
+	color: var(--muted-foreground);
+}
+.lh-tool-arg {
+	font-family: var(--font-mono);
+	font-size: 12px;
+	opacity: .8;
+}
+.lh-tool-subject {
+	color: var(--foreground);
+	opacity: .85;
+}
+
+/* Home: a short way back into the sessions worth resuming (phones and
+   portrait tablets; the wide sidebar already lists them). */
+.lh-resume {
+	margin-bottom: 12px;
+	pointer-events: auto;
+}
+.lh-resume-label {
+	margin: 0 4px 6px;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--muted-foreground);
+}
+.lh-resume-row {
+	display: flex;
+	gap: 8px;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scroll-snap-type: x mandatory;
+	scrollbar-width: none;
+	padding-bottom: 2px;
+}
+.lh-resume-row::-webkit-scrollbar {
+	display: none;
+}
+.lh-resume-card {
+	display: flex;
+	flex: 0 0 min(78%, 300px);
+	align-items: center;
+	gap: 10px;
+	min-height: 56px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: color-mix(in oklab, var(--card) 92%, transparent);
+	backdrop-filter: blur(8px);
+	scroll-snap-align: start;
+	transition: background-color .15s, border-color .15s;
+}
+.lh-resume-card:hover {
+	background: var(--accent);
+}
+.lh-resume-card[data-waiting] {
+	border-color: color-mix(in oklab, var(--primary) 45%, var(--border));
+}
+.lh-resume-title {
+	display: block;
+	overflow: hidden;
+	color: var(--foreground);
+	font-size: 14.5px;
+	font-weight: 550;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.lh-resume-meta {
+	display: block;
+	font-size: 12.5px;
+	color: var(--muted-foreground);
+}
+.lh-resume-card[data-waiting] .lh-resume-meta {
+	color: var(--lh-brand-ink);
+}
+.lh-resume-chevron {
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+	color: var(--muted-foreground);
+}
+@media (min-width: 1024px) {
+	.lh-resume { display: none; }
+}
+@media (min-width: 768px) and (max-width: 1023px) {
+	.lh-resume-card { flex-basis: calc((100% - 16px) / 3); }
+}
+.lh-setup-use-all {
+	align-self: flex-start;
+	min-height: 34px;
+	margin-top: 4px;
+	padding: 0 14px;
+	border: 1px solid color-mix(in oklab, var(--primary) 45%, var(--border));
+	border-radius: 999px;
+	background: var(--lh-brand-soft);
+	color: var(--lh-brand-ink);
+	font-size: 13.5px;
+	font-weight: 550;
+}
+.lh-setup-use-all:hover {
+	background: color-mix(in oklab, var(--primary) 26%, transparent);
+}
+.lh-setup button.lh-setup-save {
+	min-height: 40px;
+	padding: 0 20px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--primary);
+	color: var(--primary-foreground);
+	font-size: 14.5px;
+	font-weight: 600;
+}
+.lh-setup button.lh-setup-save:disabled {
+	background: var(--accent);
+	color: var(--muted-foreground);
+	opacity: 1;
+}
+@media (max-width: 767px) {
+	.lh-setup-use-all { min-height: 44px; }
+	.lh-setup button.lh-setup-save { min-height: 48px; width: 100%; }
+}
+
+/* Touch screens of any width: footer and settings controls reach 40px+. */
+@media (pointer: coarse) {
+	[data-testid="stats-model"], [data-testid="stats-thinking"] {
+		height: 40px;
+		min-height: 40px !important;
+	}
+	.lh-stats-bar [data-testid="stats-summary"],
+	.lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"] {
+		min-height: 40px;
+		height: 40px;
+	}
+	.lh-settings-content [data-slot="button"], .lh-settings-content :is(button, input, select).h-7 {
+		min-height: 40px;
+		height: auto;
+	}
+	.lh-header-chip, .lh-header-write {
+		height: 40px;
+	}
+	.lh-mode-switch > :is(button, a) {
+		min-height: 36px;
+	}
+}
+
+/* Reading measure: about 70–80 characters per line on wide screens. */
+@media (min-width: 768px) {
+	.lh-column {
+		max-width: 44rem;
+	}
+	.lh-stats-bar {
+		font-size: 13px;
+	}
+	[data-testid="stats-model"], [data-testid="stats-thinking"] {
+		font-size: 13px;
+	}
+}
+
+.lh-waiting-badge {
+	position: absolute;
+	top: 1px;
+	right: 0;
+	display: grid;
+	place-items: center;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	border-radius: 999px;
+	background: var(--primary);
+	color: var(--primary-foreground);
+	font-size: 10.5px;
+	font-weight: 700;
+	line-height: 1;
+	box-shadow: 0 0 0 2px var(--background);
+}
+
+/* Phones: the composer hint fits its field. */
+@media (max-width: 767px) {
+	[data-testid="composer"] [data-file-path-input][data-empty="true"][data-placeholder="Ask, answer, or steer the lesson…"]::before {
+		content: "Message your tutor…";
+	}
+}
+.lh-setup button.h-7 > span:first-child, .lh-settings-content button.h-7 > span:first-child {
+	text-align: left;
+}
+
+/* Graph search results float over the graph instead of pushing the
+   toolbar; home's resume strip steps aside while search or a node card
+   is open. */
+.lh-graph-search {
+	position: relative;
+	z-index: 30;
+}
+.lh-graph-results {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 40;
+	width: max(100%, 20rem);
+	max-width: calc(100vw - 24px);
+	margin-top: 0;
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+}
+body:has(.lh-graph-results, [data-testid="graph-node-card"]) .lh-resume {
+	display: none;
+}
+@media (max-width: 767px) {
+	.lh-graph-results {
+		left: 0;
+		width: auto;
+	}
+}
+
+/* Chains on phones: names get the room (they wrap), the date column steps
+   aside, and the ideas count stays. */
+@media (max-width: 767px) {
+	[data-testid="chain-table"] .w-20.shrink-0 {
+		display: none;
+	}
+	[data-testid="chain-table"] [data-chain-nav-row] .truncate {
+		overflow: visible;
+		white-space: normal;
+		text-overflow: clip;
+		overflow-wrap: anywhere;
+	}
+	[data-testid="chain-table"] .w-14.shrink-0 {
+		width: 3rem;
+	}
+}
+.lh-source-chip {
+	padding: 1px 7px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+}
+
+/* Tablet type scale: a touch larger everywhere it's read at arm's length. */
+@media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
+	.lh-column .lh-prose, .lh-column [data-testid="user-message"] {
+		font-size: calc(var(--lh-prose-size) + 1px);
+	}
+	.lh-session-title {
+		font-size: 20px;
+	}
+	.lh-header-chip, .lh-header-write, [data-testid="phase-chip"] {
+		font-size: 14.5px;
+	}
+	.lh-topbar .lh-closed-toggle,
+	.lh-topbar .lh-closed-toggle button,
+	.lh-home-navigation .lh-closed-toggle,
+	.lh-home-navigation .lh-closed-toggle button {
+		width: 44px;
+		height: 44px;
+	}
+	.lh-stats-bar {
+		font-size: 14px;
+	}
+	.lh-question-text {
+		font-size: 18px;
+	}
+	.lh-option {
+		font-size: 16.5px;
+		min-height: 50px;
+	}
+	.lh-resume-row {
+		mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
+	}
+}
+
+/* Laptop chrome: slightly larger labels and composer chips. */
+@media (min-width: 1024px) {
+	.lh-header-chip, .lh-header-write {
+		height: 34px;
+		font-size: 14px;
+	}
+	[data-testid="phase-chip"] {
+		font-size: 13.5px;
+	}
+	[data-testid="stats-model"], [data-testid="stats-thinking"],
+	.lh-stats-bar [data-testid="stats-summary"],
+	.lh-stats-bar .lh-dictation-slot button[data-testid="dictation-toggle"] {
+		height: 32px;
+		font-size: 13.5px;
+	}
+	.lh-session-meta {
+		font-size: 13px;
+	}
+	.lh-session-name {
+		font-size: 15px;
+	}
+}
+
+/* Phones: the fade above the dock is a hint, not a curtain; the dock sits
+   closer to the screen edge, most of all beside the notebook. */
+@media (max-width: 767px) {
+	.lh-dock-fade {
+		height: 28px;
+	}
+	.lh-dock-block {
+		padding-bottom: 8px;
+	}
+	.session-panes[data-notebook-open="true"] .lh-dock-fade {
+		height: 12px;
+	}
+	.session-panes[data-notebook-open="true"] .lh-compact-stats {
+		padding-top: 2px;
+	}
+}
+
+/* The Concepts sharing setup belongs to handwriting: it shows only while
+   the writing surface is open (pending shared writing always shows: it is
+   saved work awaiting send). */
+.session-workspace:not(.hw-workspace) .lh-shared-writing[data-has-writing="false"] {
+	display: none;
+}
+
+/* Phone notebook: while it is open the composer's tool row steps aside
+   (model, usage and plan return when the notebook closes), so the lesson
+   above keeps more of its half; the notebook's own toolbar closes it. */
+@media (max-width: 767px) {
+	.session-panes[data-notebook-open="true"] .lh-compact-stats {
+		display: none;
+	}
+}
+.notebook-frame-header [data-testid="notebook-close"] svg {
+	width: 18px;
+	height: 18px;
+}
+
+/* ============================================================
+ * Tablet as its own device (portrait iPad class: 768–1023px, touch).
+ * ============================================================ */
+
+/* Writing surface: a titled page with readable, touch-sized actions; one
+   obvious primary action (attach the page to the answer). */
+.hw-notebookHeader {
+	min-height: 56px;
+	gap: 4px;
+	padding: 6px 10px;
+}
+.hw-notebookHeader h2 {
+	font-size: 15px;
+	font-weight: 650;
+	color: var(--foreground);
+	font-family: var(--font-prose);
+}
+.hw-headerAction {
+	gap: 6px;
+	height: 40px;
+	padding-inline: 12px;
+	border-radius: 10px;
+	color: var(--foreground);
+	font-family: var(--font-prose);
+	font-size: 13.5px;
+	font-weight: 550;
+}
+.hw-headerAction svg {
+	width: 16px;
+	height: 16px;
+}
+.hw-notebookHeader [data-testid="notebook-attach"] {
+	order: 10;
+	margin-left: 4px;
+	padding-inline: 14px;
+	border-radius: 999px;
+	background: var(--primary);
+	color: var(--primary-foreground);
+}
+.hw-notebookHeader [data-testid="notebook-attach"]:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--primary) 88%, white);
+	color: var(--primary-foreground);
+}
+.hw-notebookHeader [data-testid="notebook-options-toggle"] {
+	order: 9;
+}
+@media (pointer: coarse) {
+	.hw-headerAction { height: 44px; }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
+	/* Reading as a page: ~65–75 characters a line, airy leading, real margins. */
+	.lh-column {
+		max-width: 40rem;
+	}
+	.lh-column .lh-prose, .lh-column [data-testid="user-message"] {
+		font-size: calc(var(--lh-prose-size) + 2px);
+		line-height: 1.55;
+	}
+
+	/* Writing beside the question: the page gets most of the height, and
+	   the lesson pane above keeps only what answering needs. */
+	/* While writing, voice stays (Dictate); model and usage step aside. */
+	.hw-workspace .lh-stats-bar [data-testid="model-control"],
+	.hw-workspace .lh-stats-bar .lh-usage,
+	.hw-workspace .lh-dock-fade {
+		display: none;
+	}
+	.hw-workspace .lh-stats-bar {
+		padding-top: 6px;
+	}
+	.hw-workspace .lh-dock-block {
+		padding-bottom: 10px;
+	}
+
+	/* Chrome stays out of the reading area: the tool row below the composer
+	   is a quiet, right-weighted cluster with icon-sized controls. */
+	.lh-stats-bar .lh-usage-numbers {
+		display: none;
+	}
+	.lh-stats-bar .lh-phone-usage-label {
+		display: inline;
+	}
+	.lh-stats-bar .lh-dictation-slot {
+		flex: 0 0 auto;
+		margin-left: auto;
+	}
+	.lh-stats-bar {
+		justify-content: flex-end;
+		gap: 6px;
+	}
+	.lh-stats-bar [data-testid="stats-summary"] {
+		order: 2;
+	}
+
+	/* Sessions open as a floating sheet beside the page (not an edge-to-edge
+	   phone menu): inset, rounded, with the page dimmed behind it. */
+	.lh-app-shell[data-drawer-open] .lh-sessions-panel {
+		top: 12px;
+		bottom: 12px;
+		left: 12px;
+		height: auto;
+		border-radius: 20px;
+		box-shadow: 0 0 0 1px var(--border), 0 24px 64px -12px rgb(0 0 0 / .7);
+	}
+	.lh-app-shell[data-drawer] .lh-sessions-content {
+		border-right: 0;
+		border-radius: 20px;
+	}
+}
+
+/* Switches: a visible track in both states, the accent when on. */
+button[role="switch"] {
+	width: 40px;
+	height: 24px;
+	border-color: var(--input);
+	background: color-mix(in oklab, var(--accent) 80%, var(--muted-foreground) 20%);
+}
+button[role="switch"][aria-checked="true"] {
+	border-color: var(--primary);
+	background: var(--primary);
+}
+button[role="switch"] > span {
+	top: 3px;
+	width: 16px;
+	height: 16px;
+	translate: 3px 0;
+}
+button[role="switch"][aria-checked="false"] > span {
+	background: var(--muted-foreground);
+}
+button[role="switch"][aria-checked="true"] > span {
+	translate: 19px 0;
+	background: #fff;
+	color: var(--primary);
+}
+@media (pointer: coarse) {
+	button[role="switch"] {
+		width: 48px;
+		height: 28px;
+	}
+	button[role="switch"] > span {
+		top: 4px;
+		width: 18px;
+		height: 18px;
+		translate: 4px 0;
+	}
+	button[role="switch"][aria-checked="true"] > span {
+		translate: 24px 0;
+	}
+}
+
+/* "Write" beside the composer: the canvas opens from where the hands are. */
+.lh-dock-write {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--card);
+	color: var(--foreground);
+	font-size: 13px;
+	font-weight: 550;
+}
+.lh-dock-write svg {
+	width: 15px;
+	height: 15px;
+	color: var(--lh-brand-ink);
+}
+.lh-dock-write:hover {
+	background: var(--accent);
+}
+@media (pointer: coarse) {
+	.lh-dock-write {
+		height: 40px;
+		padding: 0 14px;
+		font-size: 14px;
+	}
+}
+@media (max-width: 767px) {
+	.lh-dock-write { display: none; }
+}
+
+/* Import failures: one contained, readable panel with its fix. */
+.lh-import-error-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: min(24rem, calc(100vw - 32px));
+	padding: 12px 14px;
+	border: 1px solid color-mix(in oklab, var(--destructive) 40%, var(--border));
+	border-radius: 14px;
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+	pointer-events: auto;
+	text-align: left;
+}
+.lh-import-error-title {
+	font-family: var(--font-prose);
+	font-size: 14.5px;
+	font-weight: 650;
+	color: var(--foreground);
+}
+.lh-import-error-panel .lh-import-error {
+	max-width: none;
+	text-align: left;
+	color: var(--muted-foreground);
+}
+.lh-import-error-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 4px;
+}
+.lh-import-error-actions button {
+	min-height: 36px;
+	padding: 0 14px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--card);
+	font-size: 13.5px;
+	font-weight: 550;
+}
+.lh-import-error-actions button[data-testid="import-error-settings"] {
+	border-color: var(--primary);
+	background: var(--primary);
+	color: var(--primary-foreground);
+}
+@media (pointer: coarse) {
+	.lh-import-error-actions button { min-height: 44px; }
+}
+.lh-tool-body {
+	max-width: 40rem;
+	font-family: var(--font-prose);
+}
+.lh-tool-output {
+	font-size: 13.5px;
+	line-height: 1.5;
+	color: var(--foreground);
+}
+.lh-tool-technical summary {
+	min-height: 28px;
+	font-size: 12.5px;
+}
+
+/* Usage: one label on phones and tablets (the numbers live in the panel);
+   laptops have the room to show context and cost at a glance. */
+.lh-stats-bar .lh-usage-numbers {
+	display: none;
+}
+.lh-stats-bar .lh-phone-usage-label {
+	display: inline;
+}
+@media (min-width: 1024px) {
+	.lh-stats-bar [data-known] .lh-usage-numbers {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.lh-stats-bar [data-known] .lh-phone-usage-label {
+		display: none;
+	}
+}
+
+/* Tablets and laptops: a shorter fade above the dock, so a short lesson
+   rests close to its task (the transcript reserves the drawn height). */
+@media (min-width: 768px) {
+	.lh-dock-fade {
+		height: 44px;
+	}
+}
+@media (max-width: 767px) {
+	/* The header carries Plan; the composer row keeps notebook, model, usage. */
+	.lh-stats-bar.lh-compact-stats .lh-phone-plan {
+		display: none;
+	}
+	.lh-compact-stats [data-testid="stats-model"], .lh-compact-stats [data-testid="stats-thinking"] {
+		height: 44px;
+		min-height: 44px !important;
+	}
+}
+
+/* Left-handed writing: the palette mirrors to the left edge; the page
+   menu moves to the right so the two never collide. */
+.hw-notebook[data-tools-side="left"] .hw-arc {
+	right: auto;
+	left: 8px;
+	transform: scaleX(-1);
+}
+.hw-notebook[data-tools-side="left"] .hw-arc > .hw-toolButton,
+.hw-notebook[data-tools-side="left"] .hw-arcUndo,
+.hw-notebook[data-tools-side="left"] .hw-arcInspector {
+	transform: scaleX(-1);
+}
+.hw-notebook[data-tools-side="left"] .hw-pageActions {
+	left: auto;
+	right: 12px;
+}
+.hw-notebook[data-tools-side="left"] .hw-pageMenu {
+	left: auto;
+	right: 0;
+}
+
+/* The dock card already shows the active problem, so its transcript copy
+   steps aside on every device (the problem is read once, beside the work). */
+.lh-problem-card[data-active] {
+	display: none;
+}
+
+/* Usage panel (wide layouts): opens from its button's left edge so it never
+   runs off the screen. */
+.lh-usage > [data-testid="stats-detail"] {
+	left: 0;
+	--tw-translate-x: 0;
+	translate: none;
+	transform: none;
+}
+
+/* Phones: Plan is labelled (a caption under its icon) without taking the
+   title's width: one 44px square, like a tab-bar item. */
+@media (max-width: 767px) {
+	.lh-topbar .lh-header-chip {
+		flex-direction: column;
+		gap: 2px;
+		width: 46px;
+		height: 44px;
+		padding: 0;
+		border-radius: 12px;
+	}
+	.lh-topbar .lh-header-chip .lh-header-chip-label {
+		position: static;
+		width: auto;
+		height: auto;
+		overflow: visible;
+		clip: auto;
+		font-size: 11px;
+		line-height: 1;
+		font-weight: 600;
+		letter-spacing: .01em;
+	}
+	.lh-topbar .lh-header-chip svg {
+		width: 17px;
+		height: 17px;
+	}
+}
+
+/* Every device: a short lesson rests on the dock (like a message thread),
+   so the task reads straight on from what led to it, while the composer
+   itself never moves. Empty space, if any, sits quietly above. */
+.lh-column > :first-child {
+	margin-top: auto;
+}
+
+/* The step rule before a problem that the dock card shows has nothing
+   left to divide. */
+[data-lh-separator]:has(+ .lh-problem-card[data-active]),
+[data-lh-separator]:last-child {
+	display: none;
+}
+
+/* Background jobs: one line each (the full name and reason on hover or
+   long-press), so the list stays short and every status stays in view. */
+.lh-activity-recent-title {
+	display: block;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+/* The status may truncate; when it settled never does. */
+.lh-activity-recent-meta { display: flex; gap: 4px; min-width: 0; white-space: nowrap; }
+.lh-activity-recent-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lh-activity-recent-when { flex: none; }
+.lh-activity-recent {
+	align-items: flex-start;
+	padding-block: 8px;
+}
+.lh-activity-recent > svg {
+	margin-top: 2px;
+}
+
+
+/* First-run setup: a touch-sized close. */
+.lh-setup > header button:last-child {
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	border-radius: 999px;
+}
+
+/* Phones with the notebook open: a one-line composer above it, so the
+   lesson and the working both keep more of their halves. */
+@media (max-width: 767px) {
+	.session-panes[data-notebook-open="true"] .lh-compact-field {
+		min-height: 44px;
+	}
+	.session-panes[data-notebook-open="true"] .lh-compact-field > :is(textarea, [data-file-path-input]) {
+		min-height: 42px;
+		padding-block: 9px;
+	}
+	.session-panes[data-notebook-open="true"] .lh-compact-row > button.lh-send-button {
+		width: 38px;
+		height: 38px;
+		margin-bottom: 3px;
+	}
+	.session-panes[data-notebook-open="true"] .lh-dock-block {
+		padding-bottom: 4px;
+	}
+}
+
+/* ============================================================
+ * Writing tools as a wheel (default): one compact disc docked in the
+ * page's upper corner. Tools and undo/redo sit on the ring, the hub shows
+ * the current ink and size and opens its settings.
+ * ============================================================ */
+.hw-overlay[data-variant="wheel"] .hw-arc {
+	top: 10px;
+	right: 10px;
+	width: 172px;
+	height: 172px;
+	transform: none;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border: 1px solid var(--tool-edge);
+	border-radius: 50%;
+	background: var(--tool-surface);
+	box-shadow: var(--tool-shadow);
+	pointer-events: auto;
+}
+.hw-overlay[data-variant="wheel"] .hw-arcTrack {
+	display: none;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton {
+	width: 50px;
+	height: 50px;
+	gap: 0;
+	padding: 0;
+	border-radius: 50%;
+	border-color: transparent;
+	background: transparent;
+	box-shadow: none;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton .hw-toolName {
+	display: none;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton .hw-toolGlyph {
+	width: 24px;
+	height: 30px;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton[aria-pressed="true"] {
+	background: var(--accent);
+	border-color: color-mix(in srgb, var(--foreground) 45%, transparent);
+	color: var(--foreground);
+}
+/* Ring positions (centre 86,86; radius 58; 50px buttons). */
+.hw-overlay[data-variant="wheel"] .hw-arc_pen { left: 61px; top: 3px; right: auto; }
+.hw-overlay[data-variant="wheel"] .hw-arc_highlighter { left: 6px; top: 43px; right: auto; }
+.hw-overlay[data-variant="wheel"] .hw-arc_eraser { left: 27px; top: 108px; right: auto; }
+.hw-overlay[data-variant="wheel"] .hw-arcUndo {
+	display: contents;
+}
+.hw-overlay[data-variant="wheel"] .hw-arcUndo > .hw-iconButton {
+	position: absolute;
+	width: 48px;
+	height: 48px;
+	pointer-events: auto;
+	background: transparent;
+}
+.hw-overlay[data-variant="wheel"] .hw-arcUndo > .hw-iconButton:first-child { left: 96px; top: 109px; }
+.hw-overlay[data-variant="wheel"] .hw-arcUndo > .hw-iconButton:last-child { left: 117px; top: 44px; }
+.hw-wheelHub {
+	position: absolute;
+	left: 56px;
+	top: 56px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 3px;
+	width: 60px;
+	height: 60px;
+	border: 1px solid var(--tool-edge);
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--card) 80%, var(--foreground) 6%);
+	pointer-events: auto;
+}
+.hw-wheelHub[aria-expanded="true"] {
+	border-color: var(--primary);
+}
+.hw-wheelSwatch {
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 1px #ffffff40;
+}
+.hw-wheelSwatch[data-tool="eraser"] {
+	border: 2px dashed var(--muted-foreground);
+}
+.hw-wheelSize {
+	max-width: 52px;
+	overflow: hidden;
+	color: var(--muted-foreground);
+	font-family: var(--font-prose);
+	font-size: 10.5px;
+	line-height: 1;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.hw-overlay[data-variant="wheel"] .hw-arcInspector {
+	top: 0;
+	right: 184px;
+}
+/* Left-handed: the wheel docks in the upper-left corner, unmirrored. */
+.hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arc {
+	left: 10px;
+	right: auto;
+	transform: none;
+}
+.hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton,
+.hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arcUndo,
+.hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arcInspector {
+	transform: none;
+}
+.hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arcInspector {
+	right: auto;
+	left: 184px;
+}
+
+/* Behind-the-scenes work (thinking notes, lookups) folds into one quiet
+   line per run; the lesson's own content stays in the flow. */
+.lh-steps {
+	margin: 2px 0 6px;
+	max-width: 40rem;
+}
+.lh-steps-summary {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 32px;
+	max-width: 100%;
+	padding: 2px 10px 2px 6px;
+	margin-left: -6px;
+	border-radius: 999px;
+	cursor: pointer;
+	list-style: none;
+	font-size: 13px;
+	color: var(--muted-foreground);
+	user-select: none;
+}
+.lh-steps-summary::-webkit-details-marker { display: none; }
+.lh-steps-summary:hover { background: color-mix(in oklab, var(--muted) 70%, transparent); }
+.lh-steps-summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.lh-steps-chevron {
+	width: 14px;
+	height: 14px;
+	flex: none;
+	opacity: .6;
+	transition: transform .15s ease;
+}
+.lh-steps[open] > .lh-steps-summary .lh-steps-chevron { transform: rotate(90deg); }
+.lh-steps-title { font-weight: 500; white-space: nowrap; }
+.lh-steps-detail {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: .8;
+}
+.lh-steps-detail::before { content: "· "; }
+.lh-steps-body {
+	margin: 4px 0 4px 6px;
+	padding-left: 14px;
+	border-left: 2px solid color-mix(in oklab, var(--border) 80%, transparent);
+}
+.lh-steps-body > * + * { margin-top: 2px; }
+@media (pointer: coarse) {
+	.lh-steps-summary { min-height: 40px; }
+}
+/* A thinking-only run: the run's own line is the heading, so the note
+   reads straight away (the inner toggle returns while it streams). */
+.lh-steps .lh-reasoning > button:first-child { display: none; }
+.lh-steps-pulse {
+	width: 7px;
+	height: 7px;
+	flex: none;
+	border-radius: 999px;
+	background: var(--primary);
+	animation: lh-steps-pulse 1.1s ease-in-out infinite;
+}
+@keyframes lh-steps-pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .lh-steps-pulse { animation: none; } }
+.lh-steps .lh-reasoning { margin-bottom: 6px; }
+.lh-steps-body .lh-reasoning [data-slot="collapsible-content"],
+.lh-steps-body .lh-reasoning > div {
+	font-size: 14px;
+	line-height: 1.55;
+	color: var(--muted-foreground);
+}
+
+/* Attached pages: a remove (×) on each one, touch-sized, over its corner. */
+.lh-writing-thumb { padding-top: 6px; padding-right: 6px; }
+.lh-writing-remove {
+	position: absolute;
+	top: -4px;
+	right: -4px;
+	z-index: 1;
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: var(--card);
+	color: var(--foreground);
+	box-shadow: var(--lh-shadow-sm, 0 1px 3px #0005);
+}
+.lh-writing-remove::after { content: ""; position: absolute; inset: -6px; }
+.lh-writing-remove svg { width: 15px; height: 15px; }
+.lh-writing-remove:hover { background: var(--accent); }
+
+/* Phones: recent background jobs scroll in a shorter box, so the session
+   list above stays in view. */
+@media (max-width: 767px) {
+	.lh-activity-history { max-height: 30dvh; }
+}
+
+/* Portrait tablets: card eyebrows and step lines read at arm's length. */
+@media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
+	.lh-column .uppercase.tracking-wide,
+	.lh-dock-block .uppercase.tracking-wide { font-size: 12.5px; }
+	.lh-steps-summary { font-size: 14.5px; }
+}
+
+/* A finger on the page: a short, quiet note that the pen writes. */
+.hw-fingerHint {
+	position: absolute;
+	left: 50%;
+	bottom: 20px;
+	z-index: 6;
+	transform: translateX(-50%);
+	padding: 8px 14px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--popover) 92%, transparent);
+	border: 1px solid var(--border);
+	color: var(--foreground);
+	font-size: 14px;
+	white-space: nowrap;
+	box-shadow: var(--lh-shadow-md, 0 6px 20px #0006);
+	pointer-events: none;
+	animation: hw-hint-in .18s ease-out;
+}
+@keyframes hw-hint-in { from { opacity: 0; transform: translate(-50%, 6px); } }
+
+/* Model picker: the price, provider and context read as scannable
+   details, a step below the model name rather than faint footnotes. */
+.lh-model-menu .text-muted-foreground {
+	color: color-mix(in oklab, var(--foreground) 68%, var(--card));
+}
+.lh-model-detail {
+	font-size: 12.5px;
+	margin-top: 1px;
+}
+
+/* Folded wheel: just the hub (current ink and size); tap it to unfold. */
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] {
+	width: 64px;
+	height: 64px;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-toolButton,
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo {
+	display: none;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] .hw-wheelHub {
+	left: 2px;
+	top: 2px;
+	border-color: transparent;
+	background: transparent;
+}
+.hw-foldWheel {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+	min-height: 44px;
+	margin-top: 6px;
+	padding: 0 10px;
+	border-top: 1px solid var(--tool-edge);
+	color: var(--foreground);
+	font-size: 14px;
+	text-align: left;
+}
+.hw-foldWheel span { color: var(--muted-foreground); font-size: 12.5px; }
+.hw-wheelSize { font-size: 11.5px; }
+
+/* Folded wheel keeps Undo and Redo beside its hub: a small pill. */
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] {
+	width: 168px;
+	height: 64px;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded]::before {
+	border-radius: 32px;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo {
+	display: contents;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo > .hw-iconButton:first-child { left: 6px; top: 8px; }
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo > .hw-iconButton:last-child { left: 114px; top: 8px; }
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] .hw-wheelHub {
+	left: 54px;
+	top: 2px;
+	border-color: var(--tool-edge);
+	background: color-mix(in srgb, var(--card) 80%, var(--foreground) 6%);
+}
+/* First sight: a short legend beside the wheel. */
+.hw-wheelCoach {
+	position: absolute;
+	top: 0;
+	right: 184px;
+	width: 200px;
+	padding: 10px 14px 12px;
+	border: 1px solid var(--tool-edge);
+	border-radius: 16px;
+	background: var(--card);
+	box-shadow: var(--tool-shadow);
+	color: var(--foreground);
+	font-size: 13.5px;
+	line-height: 1.35;
+	pointer-events: none;
+	animation: hw-hint-in .2s ease-out;
+}
+.hw-wheelCoach strong { display: block; margin-bottom: 6px; font-weight: 600; }
+.hw-wheelCoach li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; color: var(--muted-foreground); }
+.hw-wheelCoach li b { color: var(--foreground); font-weight: 500; }
+.hw-notebook[data-tools-side="left"] .hw-wheelCoach { right: auto; left: 184px; }
+/* The fold action: one clear line under the size and ink choices. */
+.hw-foldWheel {
+	justify-content: flex-start;
+	gap: 10px;
+	white-space: nowrap;
+	font-size: 13.5px;
+}
+.hw-foldWheel svg { flex: none; color: var(--muted-foreground); }
+.hw-arcInspector > p { font-size: 12px; }
+
+/* Import finished: what it added, and where to look. */
+.lh-import-done-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: min(24rem, calc(100vw - 32px));
+	padding: 12px 14px;
+	border: 1px solid color-mix(in oklab, var(--primary) 45%, var(--border));
+	border-radius: 14px;
+	background: var(--popover);
+	box-shadow: var(--lh-shadow-pop);
+	pointer-events: auto;
+	text-align: left;
+}
+.lh-import-done-line { font-size: 13.5px; color: var(--muted-foreground); }
+.lh-import-done-list { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.lh-import-done-list li { display: flex; justify-content: space-between; gap: 12px; }
+.lh-import-done-list li span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lh-import-done-list li span:last-child { flex: none; color: var(--muted-foreground); }
+.lh-import-done-panel button[data-testid="import-done-show"] {
+	border-color: var(--primary);
+	background: var(--primary);
+	color: var(--primary-foreground);
+}
+
+/* Phone question, decluttered (owner rulings 2 and 3: the reading step
+   stays, made calmer; the "why" stays close to the question).
+   Reading phase: "Show question" sits in the card's header row, so the
+   notes field gets the full width. After the reveal the notes card is one
+   quiet line (still editable), and the check's "why" field speaks through
+   its placeholder instead of a label row. */
+@media (max-width: 767px) {
+	.lh-reading-input { position: relative; }
+	.lh-reading-input:has(.lh-phone-reveal) > div:first-child {
+		display: flex;
+		align-items: center;
+		min-height: 40px;
+		padding-right: 156px;
+	}
+	.lh-reading-input .lh-compact-row:has(> .lh-phone-reveal) {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.lh-reading-input .lh-compact-row > .lh-phone-reveal {
+		position: absolute;
+		top: 4px;
+		right: 6px;
+		height: 40px;
+		min-height: 40px;
+	}
+	.lh-reading-input[data-reading-claim="false"] {
+		padding: 0 0 2px;
+		border-color: transparent;
+		background: transparent;
+	}
+	.lh-reading-input[data-reading-claim="false"] > div:first-child { padding: 2px 6px 4px; font-size: 11.5px; }
+	.lh-reading-input[data-reading-claim="false"] .lh-compact-field { min-height: 44px; }
+	.lh-reading-input[data-reading-claim="false"] .lh-compact-field > :is(textarea, [data-file-path-input]) {
+		min-height: 42px;
+		padding-block: 9px;
+	}
+	[data-testid="thinking-field"] > .lh-input-label { display: none; }
+}
+
+/* Tablets and laptops: the phase reads as a subtitle under the title (as
+   on phones), so every header keeps just Plan and Write beside it. */
+@media (min-width: 768px) {
+	.lh-topbar [data-testid="phase-chip"] { display: none; }
+	.lh-session-title { line-height: 1.2; }
+	.lh-session-subtitle {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-top: 2px;
+		font-size: 13.5px;
+		line-height: 1.2;
+		color: var(--muted-foreground);
+		user-select: none;
+	}
+	.lh-session-subtitle::before {
+		content: "";
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--lh-kind, var(--lh-kind-teach));
+	}
+}
+
+/* Session controls recede (owner ruling 4's direction): model and thinking
+   read as quiet text with a chevron, not two bordered pills, so the task
+   above stays the strongest thing on screen. Same sizes and touch targets;
+   a soft fill on hover, focus and while open. */
+[data-testid="stats-model"], [data-testid="stats-thinking"] {
+	border-color: transparent !important;
+	background: transparent !important;
+	border-radius: 10px !important;
+}
+[data-testid="stats-model"] > span:first-child, [data-testid="stats-thinking"] > span:first-child {
+	color: color-mix(in oklab, var(--foreground) 78%, var(--background));
+}
+[data-testid="stats-thinking"] { position: relative; }
+[data-testid="stats-thinking"]::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 50%;
+	width: 1px;
+	height: 14px;
+	transform: translateY(-50%);
+	background: var(--border);
+}
+[data-testid="stats-model"]:is(:hover, :focus-visible, [aria-expanded="true"]),
+[data-testid="stats-thinking"]:is(:hover, :focus-visible, [aria-expanded="true"]) {
+	background: var(--accent) !important;
+}
+
+/* A message that was not sent: back in the box, with the way to send it. */
+.lh-unsent-notice {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 12px;
+	padding: 10px 12px;
+	border: 1px solid color-mix(in oklab, var(--lh-warn, #e0a33a) 45%, var(--border));
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--lh-warn, #e0a33a) 10%, var(--card));
+	font-size: 14px;
+	color: var(--foreground);
+}
+.lh-unsent-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.lh-unsent-notice { flex-direction: column; align-items: stretch; }
+.lh-unsent-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.lh-unsent-row + .lh-unsent-row { padding-top: 8px; border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent); }
+.lh-unsent-quote {
+	flex-basis: 100%;
+	margin: 0;
+	padding: 6px 10px;
+	border-left: 3px solid color-mix(in oklab, var(--lh-warn, #e0a33a) 60%, var(--border));
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--background) 60%, transparent);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	display: -webkit-box;
+	-webkit-line-clamp: 4;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+@media (pointer: coarse) { .lh-unsent-actions button { min-height: 40px; } }
+
+/* Wheel settings name the tools (touch has no hover): a segmented row. */
+.hw-toolNames {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 2px;
+	margin: 2px 0 8px;
+	padding: 2px;
+	border-radius: 10px;
+	background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+.hw-toolNames > button {
+	min-height: 40px;
+	padding: 0 4px;
+	border-radius: 8px;
+	font-size: 12.5px;
+	color: var(--muted-foreground);
+	white-space: nowrap;
+}
+.hw-toolNames > button[aria-pressed="true"] {
+	background: var(--card);
+	color: var(--foreground);
+	box-shadow: 0 1px 2px #0004;
+}
+.hw-overlay[data-variant="wheel"] .hw-arcInspector { width: 236px; }
+.hw-wheelSize { max-width: 56px; font-size: 11px; letter-spacing: -.01em; }
+
+/* The answered check's explanation toggle: a clear, touch-sized control. */
+.lh-why-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 32px;
+	margin-left: -6px;
+	padding: 0 10px 0 4px;
+	border-radius: 999px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--muted-foreground);
+}
+.lh-why-toggle:focus-visible { background: var(--accent); color: var(--foreground); }
+@media (hover: hover) { .lh-why-toggle:hover { background: var(--accent); color: var(--foreground); } }
+.lh-why-chevron { width: 15px; height: 15px; transition: transform .15s ease; }
+.lh-why-toggle[aria-expanded="true"] .lh-why-chevron { transform: rotate(90deg); }
+@media (pointer: coarse) { .lh-why-toggle { min-height: 44px; } }
+
+/* After a delete: a short confirmation above the session list. */
+.lh-deleted-notice {
+	margin: 4px 12px 2px;
+	padding: 6px 10px;
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--muted) 80%, transparent);
+	font-size: 13px;
+	color: var(--muted-foreground);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	animation: hw-hint-in .18s ease-out;
+}
+
+/* Phone checks in two steps (owner ruling 3): the question and its choices
+   first; once an answer is picked, confidence and "why" open beneath it,
+   right by the question. */
+.lh-question-pick-hint { display: none; }
+@media (max-width: 767px) {
+	[data-testid="question-dock"][data-follow-up="waiting"] :is(.lh-question-confidence, .lh-question-form) { display: none; }
+	/* The hint holds the follow-up's room, so picking never grows the card. */
+	[data-testid="question-dock"][data-follow-up="waiting"] .lh-question-pick-hint {
+		display: flex;
+		align-items: center;
+		min-height: 67px;
+		padding: 10px 16px 14px;
+		border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+		font-size: 13.5px;
+		color: var(--muted-foreground);
+	}
+	[data-testid="question-dock"][data-follow-up="open"] :is(.lh-question-confidence, .lh-question-form) {
+		animation: lh-follow-up-in .22s ease-out;
+	}
+	@keyframes lh-follow-up-in { from { opacity: 0; transform: translateY(6px); } }
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-testid="question-dock"][data-follow-up="open"] :is(.lh-question-confidence, .lh-question-form) { animation: none; }
+}
+
+/* An answer whose delivery is not confirmed yet: readable, calm, kept. */
+.lh-attempt-review {
+	margin-top: 6px;
+	padding: 10px 12px;
+	border: 1px solid color-mix(in oklab, var(--lh-warn, #e0a33a) 40%, var(--border));
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--lh-warn, #e0a33a) 7%, var(--card));
+	font-size: 13.5px;
+}
+.lh-attempt-label { font-weight: 600; color: var(--foreground); }
+.lh-attempt-summary { margin-top: 2px; color: var(--foreground); overflow-wrap: anywhere; }
+.lh-attempt-help { margin-top: 4px; color: var(--muted-foreground); font-size: 12.5px; }
+
+/* The ring's tool name: a pill beside the tool just chosen or held. */
+.hw-ringName {
+	position: absolute;
+	right: calc(100% + 8px);
+	z-index: 3;
+	padding: 5px 12px;
+	border: 1px solid var(--tool-edge);
+	border-radius: 999px;
+	background: var(--card);
+	box-shadow: var(--tool-shadow);
+	color: var(--foreground);
+	font-size: 14px;
+	font-weight: 500;
+	white-space: nowrap;
+	pointer-events: none;
+	animation: hw-hint-in .15s ease-out;
+}
+.hw-ringName_pen { top: 12px; }
+.hw-ringName_highlighter { top: 52px; }
+.hw-ringName_eraser { top: 117px; }
+.hw-notebook[data-tools-side="left"] .hw-ringName { right: auto; left: calc(100% + 8px); }
+
+/* Touch: the session filters are full touch targets. */
+@media (pointer: coarse) {
+	.lh-sessions-filter button { min-height: 44px; }
+}
+/* Phones: the jump-to-latest disc sits at the right edge, clear of the
+   lines being read. */
+@media (max-width: 767px) {
+	.lh-jump-down {
+		left: auto !important;
+		right: 12px;
+		translate: none !important;
+		--tw-translate-x: 0 !important;
+		transform: none !important;
+	}
+}
+
+@media (max-width: 767px) {
+	[data-testid="question-dock"][data-follow-up="waiting"] .lh-question-pick-hint[data-confidence] { min-height: 107px; }
 }

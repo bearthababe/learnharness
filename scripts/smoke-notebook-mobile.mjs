@@ -22,6 +22,7 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.evaluateOnNewDocument(() => {
 		if (window !== window.top) return;
 		localStorage.setItem("lh:sidebar-open", "0");
+		localStorage.setItem("lh:device-tool:writing", "on"); localStorage.setItem("lh:device-tool:notebook", "on"); // both working tools, whatever the emulated device
 		const d = window.notebookSmoke = { time: 10, captures: 0, sockets: [], closes: 0, sends: [] };
 		const fetch = window.fetch.bind(window);
 		window.fetch = (url, init) => {
@@ -58,6 +59,11 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.goto(`${origin}/chat/mobile_other`, { waitUntil: "networkidle2", timeout: 240_000 });
 	assert.equal(await page.$('[aria-label="Working attached"]'), null);
 	const tutor = '[data-testid="composer"] [data-file-path-input]';
+	// Unsent drafts are kept per session, so an earlier check's draft in this
+	// session returns with the page; start this check from an empty composer.
+	await page.waitForFunction(() => !document.querySelector("[data-tutor-draft-loading]"));
+	await page.focus(tutor); await page.keyboard.down("Control"); await page.keyboard.press("KeyA"); await page.keyboard.up("Control"); await page.keyboard.press("Backspace");
+	await page.waitForFunction(selector => document.querySelector(selector)?.textContent === "", {}, tutor);
 	await page.type(tutor, "My explanation before working.");
 	await page.locator('button[data-input-owner="notebook"][aria-expanded]').click();
 	await page.waitForSelector("#notebook-instruction", { visible: true });
@@ -185,7 +191,9 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.waitForSelector('.notebook-notice summary');
 	await page.reload({ waitUntil: 'networkidle2' });
 	await page.waitForSelector('.notebook-notice summary');
-	await page.click('[aria-label="Close notebook"]');
+	// The phone split keeps its own close in the notebook toolbar (the
+	// composer's tool row steps aside while the notebook is open).
+	await page.click('[data-testid="notebook-close"]');
 	await page.waitForFunction(() => document.querySelector('.notebook-slot').hidden);
 	assert.ok(await page.$('[aria-label="Working attached"]'));
 	const readClose = () => fetch(`${origin}/api/chats/mobile_notebook_close/notebook`).then(response => response.json());

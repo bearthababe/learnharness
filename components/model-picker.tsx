@@ -349,7 +349,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
 					preferredSide="up"
-					menuClass="flex w-[22rem] flex-col rounded-xl border bg-card p-2 text-xs shadow-xl"
+					menuClass="lh-model-menu flex w-[24rem] flex-col rounded-xl border bg-card p-2 text-[13.5px] shadow-xl"
 				>
 					{modelMenu}
 				</MenuShell>

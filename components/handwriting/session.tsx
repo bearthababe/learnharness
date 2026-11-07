@@ -56,9 +56,15 @@ export function useHandwritingSession(chatId: string) {
 }
 
 /** Accepted adjustable context/notebook split; phones retain Write/Chat. */
+/** Portrait tablets give the page most of the height (writing is the task
+ *  there); elsewhere the split starts even. */
+function initialWritingShare(): number {
+	return typeof window !== "undefined" && window.matchMedia?.("(min-width: 768px) and (max-width: 1023px) and (pointer: coarse)").matches ? 46 : 50;
+}
+
 export function HandwritingSplit({ hidden, canResize }: { hidden: boolean; canResize: () => boolean }) {
-	const [share, setShare] = useState(50), [wide, setWide] = useState(false), [max, setMax] = useState(65);
-	const divider = useRef<HTMLDivElement>(null), value = useRef(50), drag = useRef<number | null>(null);
+	const [share, setShare] = useState(initialWritingShare), [wide, setWide] = useState(false), [max, setMax] = useState(65);
+	const divider = useRef<HTMLDivElement>(null), value = useRef(initialWritingShare()), drag = useRef<number | null>(null);
 	function resize(element: HTMLElement, next: number) {
 		const layout = element.parentElement!, wide = getComputedStyle(layout).flexDirection === "row";
 		const extent = wide ? layout.clientWidth : layout.clientHeight;
