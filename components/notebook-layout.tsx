@@ -25,8 +25,12 @@ const HINT_KEY = "lh:notebook-split-hint-seen";
 // resizes it, that size is remembered for every later opening.
 const DEFAULT_ROW = 60;
 const BOUNDS = { row: [30, 65], column: [25, 78] } as const;
+/** Headroom above each working line for its term-address tags (R4, round
+ *  13: tags above the maths, never mistaken for exponents). Kept in step
+ *  with `.notebook-expression { padding-top }` in globals.css. */
+const TERM_TAG_HEADROOM_PX = 20;
 /** The notebook's height for two lines of working, plus the grip. */
-const TWO_LINES_PX = 236 + 20;
+const TWO_LINES_PX = 236 + 20 + 2 * TERM_TAG_HEADROOM_PX;
 /** A tap on the stacked grip swaps between these two tutor shares. */
 const FOCUS_SHARES = { lesson: 72, working: 40 } as const;
 type Shares = { row: number; column: number | null };
