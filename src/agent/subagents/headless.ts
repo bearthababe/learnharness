@@ -137,6 +137,9 @@ export function browserServiceSpawnEnv(
 	env: Record<string, string | undefined>,
 ): Record<string, string | undefined> {
 	const out: Record<string, string | undefined> = { ...env };
+	for (const name of Object.keys(out)) {
+		if (/KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i.test(name) || ["LH_PROFILE_DIR", "LH_DATA_DIR", "LH_AUTH_FILE", "LH_LOCAL_SERVICE_CONFIG", "NODE_OPTIONS", "NODE_PATH"].includes(name)) delete out[name];
+	}
 	delete out.ELECTRON_RUN_AS_NODE;
 	delete out.LH_DEV_URL;
 	// The artifact renderer is not an authorized app API client.

@@ -84,6 +84,13 @@ files:
   # Main-process ID-token signature verification (no bundled OAuth implementation).
   - node_modules/jose/**/*
 extraResources:
+  - from: electron
+    to: .
+    filter:
+      - local-service.cjs
+      - local-service-protocol.cjs
+      - local-service-ingress.cjs
+      - deployment-profile.cjs
   # Attribution/license for the bounded local Pi cutoff-selector port.
   - from: docs/compaction-accounting.md
     to: licenses/pi-compaction.md

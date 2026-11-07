@@ -22,6 +22,19 @@ const copyTree = (from, to) => {
 
 const exists = (p) => fs.existsSync(p);
 
+const requiredServerFiles = path.join(STANDALONE, ".next", "required-server-files.json");
+if (exists(requiredServerFiles)) {
+	const buildId = fs.readFileSync(path.join(STANDALONE, ".next", "BUILD_ID"), "utf8").trim();
+	const built = buildId.match(/^([a-f0-9]{40})-([a-f0-9]{64})$/);
+	if (built) {
+		const { buildIdentity } = await import("../electron/deployment-build.cjs");
+		const current = buildIdentity(ROOT);
+		if (built[1] !== current.revision || built[2] !== current.sourceHash) throw new Error("Sources changed since next build; rebuild before curating the deployment payload");
+		const build = { revision: built[1], sourceHash: built[2], buildId };
+		fs.writeFileSync(path.join(STANDALONE, "deployment-build.json"), JSON.stringify(build) + "\n");
+	}
+}
+
 if (!exists(path.join(STANDALONE, "server.js"))) {
 	console.error("[build-server] .next/standalone/server.js missing — run `next build` first (output: 'standalone').");
 	process.exit(1);

@@ -2,8 +2,10 @@ import { readFileSync } from "node:fs";
 import type { NextConfig } from "next";
 import { MAX_IMPORT_BODY_BYTES } from "./lib/notes-import-limits.ts";
 import { filterInstrumentationTrace } from "./scripts/filter-instrumentation-trace.mjs";
+import { buildIdentity } from "./electron/deployment-build.cjs";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string; homepage: string };
+const deploymentBuild = buildIdentity(process.cwd());
 
 const nextConfig: NextConfig = {
 	// Tailnet-only development preview; retain validation for other hosts.
@@ -11,6 +13,7 @@ const nextConfig: NextConfig = {
 	devIndicators: false,
 	// Public build metadata only; no new runtime Electron version API.
 	env: { LH_VERSION: pkg.version, LH_HOMEPAGE: pkg.homepage },
+	generateBuildId: async () => `${deploymentBuild.revision}-${deploymentBuild.sourceHash}`,
 	// Leave multipart headroom above the 25 MiB file allowance. This is a
 	// proxy buffer, not a rejection gate: the import route also bounds reads,
 	// validates actual file bytes and handles incomplete multipart bodies.

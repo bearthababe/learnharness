@@ -61,3 +61,4 @@ export * from "./custom-provider.ts";
 export { customProviderGet, customProviderMutation } from "./custom-provider-http.ts";
 export { submitNotebookSteer } from "./notebook-steer.ts";
 export { handwritingResponse, handwritingPagesResponse } from "./handwriting.ts";
+export { runtimeStatus } from "./runtime-status.ts";

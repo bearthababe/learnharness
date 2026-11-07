@@ -40,6 +40,7 @@ ipcRenderer.on("lh:open-settings", (_event, section) => {
 
 contextBridge.exposeInMainWorld("lh", {
 	platform: process.platform,
+	...(process.argv?.includes("--lh-local-service") ? { localService: true } : {}),
 	// Resolve only a renderer-supplied, OS-backed File. No filesystem API,
 	// uploads, copies, or DOM File IPC to main; sandbox/isolation stay on.
 	getPathForFile: (file) => webUtils.getPathForFile(file),
@@ -89,9 +90,9 @@ contextBridge.exposeInMainWorld("lh", {
 		ipcRenderer.on("lh:update-status", listener);
 		return () => ipcRenderer.removeListener("lh:update-status", listener);
 	},
-	installUpdate: () => ipcRenderer.send("lh:update-install"),
+	installUpdate: () => { if (!process.argv?.includes("--lh-local-service")) ipcRenderer.send("lh:update-install"); },
 	getUpdateState: () => ipcRenderer.invoke("lh:update:get"),
-	checkForUpdates: () => ipcRenderer.invoke("lh:update:check"),
+	checkForUpdates: () => process.argv?.includes("--lh-local-service") ? Promise.resolve() : ipcRenderer.invoke("lh:update:check"),
 	onOpenSettings: (cb) => {
 		openSettingsListener = cb;
 		if (pendingOpenSettings !== null) {

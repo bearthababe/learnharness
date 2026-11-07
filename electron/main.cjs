@@ -38,6 +38,10 @@ const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
+const deploymentModule = name => require(path.join(app.isPackaged ? process.resourcesPath : __dirname, name));
+const localServiceFile = process.argv.find(argument => argument.startsWith("--local-service="))?.slice("--local-service=".length) || process.env.LH_LOCAL_SERVICE_CONFIG;
+let localServiceConfiguration = null;
+let existingNativeOwner = false;
 
 // Mirrors SIDEBAR_AUTOCLOSE in components/sidebar.tsx — keep in sync (the
 // renderer owns the number; this is the IPC widen target).
@@ -77,6 +81,12 @@ function serverEntry() {
 // instance of this very binary, and before the LH_DEV_URL redirect — the
 // helper owns no user data at all.
 if (process.argv.includes("--browser-service")) {
+	if (process.env.LH_BROWSER_SERVICE_DATA_DIR) {
+		const { inspectPath, privateDirectory } = deploymentModule("deployment-profile.cjs");
+		const directory = inspectPath(process.env.LH_BROWSER_SERVICE_DATA_DIR);
+		privateDirectory(directory);
+		app.setPath("userData", directory);
+	}
 	const { waitForBrowserService } = require("./browser-service-readiness.cjs");
 	// Own the helper's entire startup lifetime, including the readiness wait.
 	const lifetime = new AbortController();
@@ -110,6 +120,36 @@ if (process.argv.includes("--browser-service")) {
 		}
 	})();
 } else {
+	if (localServiceFile) {
+		try {
+			if (process.platform !== "linux" || !app.isPackaged || process.env.LH_DEV_URL || process.env.LH_DATA_DIR || process.env.LH_AUTH_FILE || process.env.LH_DESKTOP_SERVER || process.env.LH_DESKTOP_API_SECRET) throw new Error("Conflicting local-service shell configuration");
+			const { readConfiguration, profileIdentity } = deploymentModule("local-service-protocol.cjs");
+			const { inspectPath, privateDirectory } = deploymentModule("deployment-profile.cjs");
+			localServiceConfiguration = readConfiguration(localServiceFile);
+			if (process.env.LH_PROFILE_DIR && profileIdentity(process.env.LH_PROFILE_DIR) !== localServiceConfiguration.profileId) throw new Error("Shell profile does not match service");
+			const cache = inspectPath(`${localServiceConfiguration.profileRoot}-shell`);
+			privateDirectory(cache);
+			app.setPath("userData", cache);
+		} catch {
+			console.error("Local-service shell configuration refused.");
+			app.exit(1);
+		}
+	} else if (process.platform === "linux" && process.env.LH_PROFILE_DIR && !process.env.LH_DEV_URL) {
+		console.error("A managed Linux profile requires --local-service=FILE; refusing a second desktop backend.");
+		app.exit(1);
+	}
+	if (process.platform === "linux" && app.isPackaged && !localServiceFile && !process.env.LH_DEV_URL) {
+		const { acquireCredentialFiles, isCredentialConflict } = deploymentModule("deployment-profile.cjs");
+		try {
+			const owner = acquireCredentialFiles(app.getPath("userData"));
+			process.once("exit", () => {
+				try { owner.release(); } catch { process.stderr.write("Native credential ownership release requires inspection.\n"); }
+			});
+		} catch (error) {
+			if (isCredentialConflict(error, app.getPath("userData"))) existingNativeOwner = true;
+			else { console.error("Private Linux shell refused a profile writer conflict before browser-cache initialization."); app.exit(1); }
+		}
+	}
 	// Dev shell (LH_DEV_URL) runs BESIDE the packaged app, not instead of it:
 	// its own userData so (a) the single-instance lock — checked below — doesn't
 	// silently kill it, and (b) it never reads/writes the real app's
@@ -121,17 +161,32 @@ if (process.argv.includes("--browser-service")) {
 	// The whole normal boot — lock included — lives in this else: a helper is
 	// a SECOND instance of this very binary on purpose (the running app owns
 	// the lock), so it must never reach this check.
-	if (!app.requestSingleInstanceLock()) {
-		app.quit();
-	} else {
-		app.on("second-instance", () => {
-			const win = BrowserWindow.getAllWindows()[0];
-			if (win) {
-				if (win.isMinimized()) win.restore();
-				win.focus();
-			}
+	const claimInstance = () => {
+		if (!app.requestSingleInstanceLock()) {
+			app.quit();
+		} else if (existingNativeOwner) {
+			console.error("Private Linux native owner has no matching shell instance; refusing a second writer.");
+			app.exit(1);
+		} else {
+			app.on("second-instance", () => {
+				const win = BrowserWindow.getAllWindows()[0];
+				if (win) {
+					if (win.isMinimized()) win.restore();
+					win.focus();
+				}
+			});
+			main().catch(() => { console.error("LearnHarness startup refused; verify service identity and configuration."); app.exit(1); });
+		}
+	};
+	if (localServiceConfiguration) {
+		const { attachService } = deploymentModule("local-service-protocol.cjs");
+		const build = JSON.parse(fs.readFileSync(path.join(path.dirname(serverEntry()), "deployment-build.json"), "utf8"));
+		attachService(localServiceFile, build, process.env.LH_PROFILE_DIR).then(() => claimInstance()).catch(() => {
+			console.error("Local-service identity refused before shell instance attachment.");
+			app.exit(1);
 		});
-		main();
+	} else {
+		claimInstance();
 	}
 }
 
@@ -317,7 +372,7 @@ function createWindow(url) {
 			contextIsolation: true,
 			sandbox: true,
 			nodeIntegration: false,
-			...(process.env.LH_DEV_URL ? { additionalArguments: ["--lh-web-subscriptions"] } : {}),
+			...(process.env.LH_DEV_URL || localServiceConfiguration ? { additionalArguments: ["--lh-web-subscriptions", ...(localServiceConfiguration ? ["--lh-local-service"] : [])] } : {}),
 			preload: path.join(__dirname, "preload.cjs"),
 		},
 		// Live-resize + first-paint flash (owner, 2026-09-17): during a resize
@@ -474,6 +529,7 @@ function automaticUpdatesEnabled() {
 }
 
 function checkForUpdates({ manual = false } = {}) {
+	if (localServiceConfiguration) return;
 	if (!autoUpdater) return;
 	if (!manual && !automaticUpdatesEnabled()) {
 		log("auto-update: automatic check skipped (turned off in Settings)");
@@ -495,6 +551,7 @@ function checkForUpdates({ manual = false } = {}) {
 }
 
 function installUpdateNow() {
+	if (localServiceConfiguration) return;
 	// Kill the server BEFORE the quit-and-install (see block comment).
 	try {
 		killServer();
@@ -505,6 +562,10 @@ function installUpdateNow() {
 }
 
 function setupAutoUpdater() {
+	if (localServiceConfiguration) {
+		reportUpdateStatus("disabled");
+		return;
+	}
 	if (!app.isPackaged) {
 		log("auto-update: dev build — updater disabled");
 		reportUpdateStatus("disabled");
@@ -589,7 +650,7 @@ function installMenu() {
 			submenu: [
 				{ role: "about" },
 				// Manual checks report their result in Settings → General.
-				{ label: "Check for Updates…", click: () => checkForUpdatesFromMenu() },
+				...(!localServiceConfiguration ? [{ label: "Check for Updates…", click: () => checkForUpdatesFromMenu() }] : []),
 				{ type: "separator" },
 				{ role: "hide" },
 				{ role: "hideOthers" },
@@ -651,8 +712,18 @@ async function main() {
 	// spawn, no packaging, full HMR. The rest of this shell still applies
 	// (guards, menu, single instance).
 	const devUrl = process.env.LH_DEV_URL;
-	const url = devUrl ?? `http://127.0.0.1:${await freePort()}`;
-	if (!devUrl) {
+	const url = localServiceConfiguration?.origin ?? devUrl ?? `http://127.0.0.1:${await freePort()}`;
+	if (localServiceConfiguration) {
+		const { attachService, controlRequest } = deploymentModule("local-service-protocol.cjs");
+		const build = JSON.parse(fs.readFileSync(path.join(path.dirname(serverEntry()), "deployment-build.json"), "utf8"));
+		localServiceConfiguration = await attachService(localServiceFile, build, process.env.LH_PROFILE_DIR);
+		const { ticket } = await controlRequest(localServiceConfiguration, { op: "admit", origin: url });
+		const response = await fetch(`${url}/__local/session`, { method: "POST", headers: { origin: url, "Content-Type": "application/json" }, body: JSON.stringify({ ticket }), signal: AbortSignal.timeout(5000), redirect: "error" });
+		const cookie = response.headers.get("set-cookie")?.match(/^lh-local-session=([a-f0-9]{64});/);
+		if (response.status !== 204 || !cookie) throw new Error("Service admission failed");
+		await session.defaultSession.cookies.set({ url, name: "lh-local-session", value: cookie[1], httpOnly: true, sameSite: "strict", path: "/" });
+		log(`attached local service: ${build.revision}`);
+	} else if (!devUrl) {
 		desktopAPISecret = randomBytes(32).toString("hex");
 		const ownedOrigin = new URL(url).origin;
 		// All URLs, not only /api: remove the header again on external redirects.
@@ -706,8 +777,8 @@ async function main() {
 	// The dev shell has no browser tabs. Only a one-use action on its own
 	// Next server may be resolved here; never accept an arbitrary external URL.
 	ipcMain.handle("lh:subscriptions:web-browser", async (event, action) => {
-		if (!devUrl || !trustedAppWindows.has(BrowserWindow.fromWebContents(event.sender)) || !trustedSender(event, new URL(url).origin, BrowserWindow)) throw new Error("Untrusted development request.");
-		await openWebSubscriptionBrowser(action, new URL(url).origin, { openExternal: (target) => shell.openExternal(target) });
+		if ((!devUrl && !localServiceConfiguration) || !trustedAppWindows.has(BrowserWindow.fromWebContents(event.sender)) || !trustedSender(event, new URL(url).origin, BrowserWindow)) throw new Error("Untrusted development request.");
+		await openWebSubscriptionBrowser(action, new URL(url).origin, { ...(localServiceConfiguration ? { cookies: session.defaultSession.cookies } : {}), openExternal: (target) => shell.openExternal(target) });
 	});
 
 	ipcMain.handle("lh:attachment:pick", (event, mode) => pickAttachmentPath(event, mode, {

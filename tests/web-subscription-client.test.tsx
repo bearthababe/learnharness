@@ -97,3 +97,36 @@ test("desktop-dev opener accepts only local action IDs, does not follow redirect
 	for (const target of ["file:///private/fixture", "http://unrelated.invalid", "https://user:pass@unrelated.invalid"]) await assert.rejects(openWebSubscriptionBrowser(action, "http://localhost:3000", { ...options, fetch: async () => new Response(null, { status: 303, headers: { Location: target } }) }));
 	assert.equal(opened.length, 1);
 });
+
+test("attached shell resolves an action with only its admitted service cookie and never follows the provider redirect", async () => {
+	const opened: string[] = [];
+	const sessionValue = "a".repeat(64);
+	let requests = 0;
+	await openWebSubscriptionBrowser(action, "http://127.0.0.1:3810", {
+		cookies: { get: async (filter: { url: string; name: string }) => {
+			assert.deepEqual(filter, { url: `http://127.0.0.1:3810${action}`, name: "lh-local-session" });
+			return [{ value: sessionValue }];
+		} },
+		fetch: async (target: URL, init: RequestInit) => {
+			requests++;
+			assert.equal(target.href, `http://127.0.0.1:3810${action}`);
+			assert.equal(init.redirect, "manual");
+			assert.equal(init.credentials, "omit");
+			assert.deepEqual(Object.fromEntries(new Headers(init.headers)), { cookie: `lh-local-session=${sessionValue}`, origin: target.origin, "x-learnharness-subscriptions": "1" });
+			return new Response(null, { status: 303, headers: { location: "https://provider.invalid/authorize" } });
+		},
+		openExternal: async (target: string) => { opened.push(target); },
+	});
+	assert.equal(requests, 1);
+	assert.deepEqual(opened, ["https://provider.invalid/authorize"]);
+});
+
+test("attached shell refuses missing, ambiguous or malformed admission before resolving an action", async () => {
+	for (const values of [[], [{ value: "a".repeat(64) }, { value: "b".repeat(64) }], [{ value: "bad\r\ncookie" }]]) {
+		await assert.rejects(openWebSubscriptionBrowser(action, "http://127.0.0.1:3810", {
+			cookies: { get: async () => values },
+			fetch: async () => { assert.fail("Unauthenticated action must not be sent"); },
+			openExternal: async () => { assert.fail("Unauthenticated action must not open a page"); },
+		}), /admitted service session/);
+	}
+});

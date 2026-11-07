@@ -20,6 +20,7 @@
 		"test:mobile": "node scripts/run-mobile-checks.mjs",
 		"test:workflow": "node --test tests/workflow/ticket-workflow.test.mjs",
 		"test:learning": "node --test tests/verification/*.test.mjs",
+		"test:deployment": "node --test --test-concurrency=1 tests/deployment/*.test.mjs",
 		"verify:learning": "node scripts/verify-learning.mjs",
 		"test:workflow:browser": "node scripts/prove-ticket-previews.mjs",
 		"lint": "eslint .",
