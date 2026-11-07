@@ -34,7 +34,8 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	assert.ok(r.slot.y >= r.tutor.bottom);
 	// Round 12 (owner O3): with no saved size the stacked notebook opens
 	// about two lines of working tall (header, two lines, instruction).
-	assert.ok(r.slot.height > 200 && r.slot.height < 290, `two-line notebook: ${JSON.stringify(r.slot)}`);
+	// Round 13 (R4): each line carries 20px of term-tag headroom (290px here).
+	assert.ok(r.slot.height > 240 && r.slot.height < 330, `two-line notebook: ${JSON.stringify(r.slot)}`);
 	const twoLines = await page.$eval('[role="separator"]', e => e.getAttribute("aria-valuenow"));
 	assert.ok(await page.$('[data-testid="notebook-grip-hint"]'), "the grip explains itself on first use");
 	assert.equal(await page.$('.notebook-panel select'), null);
