@@ -42,6 +42,7 @@
     { "source": "VISION", "locator": "§8", "behavior": "Background reflection producing improvement proposals", "disposition": "deferred", "reason": "Vision assigns triggers, trials and adoption to later scoped design; adoption is owner-controlled, not a learner workflow yet." },
     { "source": "VISION", "locator": "§9", "behavior": "Complete backup and restoration", "disposition": "story", "stories": ["LJ-BACKUP"] },
     { "source": "GLOSSARY", "locator": "Knowledge graph", "behavior": "Graph records encountered subject content with origins, not mastery", "disposition": "story", "stories": ["LJ-GRAPH"] },
+    { "source": "GLOSSARY", "locator": "Notebook; Notebook line; Numbered expression; Selected expression; Relation chain", "behavior": "Continuing notebook working distinct from the conversation, addressable lines and expressions, snapshots shared with the tutor", "disposition": "story", "stories": ["LJ-NOTEBOOK"] },
     { "source": "GLOSSARY", "locator": "Learner evidence; Drill; Delayed review", "behavior": "Term distinctions", "disposition": "story", "stories": ["LJ-RECORDS", "LJ-DRILL", "LJ-REVIEW"] },
     { "source": "I15", "locator": "Questions to resolve", "behavior": "Moving between activities; revisiting earlier learning in teaching", "disposition": "story", "stories": ["LJ-MOVE-ACTIVITIES", "LJ-DRILL-PRESCRIBED"] },
     { "source": "I49", "locator": "stories 1–16", "items": [1, 16], "behavior": "Continuing learning and honest evidence", "disposition": "story", "stories": ["LJ-RECORDS"] },
