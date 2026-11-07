@@ -120,7 +120,8 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.waitForFunction(() => !document.querySelector(".session-workspace").inert);
 	const savedDraft = await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json();
 	assert.equal(savedDraft.snapshots.length, 1);
-	assert.equal(await page.$eval('[aria-label="Working attached"]', e => e.getAttribute('role') === 'img' && !!e.closest('[data-testid="stats-bar"]') && !e.closest('button')), true);
+	// Round 13 (owner P2): the mark travels with the Notebook toggle — the page bar on phones, the row below the input elsewhere.
+	assert.equal(await page.$eval('[aria-label="Working attached"]', e => e.getAttribute('role') === 'img' && !!e.closest(innerWidth < 768 ? '.lh-topbar' : '[data-testid="stats-bar"]') && !e.closest('button')), true);
 	assert.equal(await page.$('[data-snapshot-id]'), null, 'No inline snapshot previews');
 	await openNotebookMenu(page, "Review attached working");
 	assert.equal(await page.$$eval('[data-snapshot-id]', nodes => nodes.length), 1);

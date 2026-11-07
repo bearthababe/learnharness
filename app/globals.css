@@ -4269,6 +4269,12 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 		font-size: 13px; font-weight: 600;
 	}
 	:root .lh-topbar .lh-notebook-toggle svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+	/* "Working attached" rides on the chip's corner, like the Sessions count. */
+	:root .lh-topbar span:has(> .lh-notebook-toggle) { position: relative; }
+	:root .lh-topbar .lh-notebook-toggle + [aria-label="Working attached"] {
+		position: absolute; top: -6px; right: -6px; display: inline-flex; align-items: center; justify-content: center;
+		width: 20px; height: 20px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); pointer-events: none;
+	}
 	:root .lh-topbar .lh-notebook-toggle[aria-expanded="true"] { border-color: color-mix(in oklab, var(--primary) 45%, var(--border)); background: color-mix(in oklab, var(--primary) 14%, var(--card)); }
 }
 
@@ -4329,11 +4335,13 @@ html[data-answer-follow] .lh-jump-down { display: none; }
    behind "Back to lesson". */
 .lh-question-back { display: none; }
 @media (max-width: 767px) {
+	/* The visible area, as the app shell measures it: the keyboard never
+	   covers the question screen. */
 	:root .lh-dock-overlay[data-question-open] {
-		position: fixed; inset: 0; z-index: 45; right: 0 !important;
+		position: fixed; inset: auto 0 auto 0; top: var(--lh-phone-top, 0px); height: var(--lh-phone-height, 100dvh); z-index: 45; right: 0 !important;
 		display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
 		background: var(--background); pointer-events: auto;
-		padding-top: env(safe-area-inset-top);
+		padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
 	}
 	:root .lh-dock-overlay[data-question-open] .lh-dock-fade { display: none; }
 	/* The whole screen scrolls as one page: the dock's in-place height

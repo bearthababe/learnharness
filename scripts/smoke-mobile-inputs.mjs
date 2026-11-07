@@ -1184,10 +1184,12 @@ try {
 	assert.equal(await page.$('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]'), null, "Secondary reading input must not imply that it owns speech after reveal");
 	await checkPhoneInput('[data-testid="answer-field"]');
 	await fill(answer, "Answer draft.");
-	// Wheel the actual history rather than invoking the dock's state machine.
-	await scrollBack();
+	// Round 13 (owner P7): on phones an open question owns the screen, so the
+	// lesson is not scrolled behind it; "Back to lesson" folds it to its bar.
+	assert.equal(await page.$eval('.lh-dock-overlay', e => e.hasAttribute("data-question-open") && getComputedStyle(e).position === "fixed"), true, "The open question owns the phone screen");
+	await page.click('[data-testid="question-back"]');
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { visible: true });
-	assert.ok(await page.$eval(answer, e => e.checkVisibility()), "A revealed question keeps its answer input visible when history scrolling collapses the question");
+	assert.ok(await page.$eval(answer, e => e.checkVisibility()), "A revealed question keeps its answer input visible when Back to lesson folds the question");
 	assert.equal(await page.$eval(answer, e => e.textContent), "Answer draft.");
 	await page.click('[data-testid="question-dock-bar"]');
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { hidden: true });
