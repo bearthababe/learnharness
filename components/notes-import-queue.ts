@@ -76,7 +76,9 @@ export function createNotesImportQueue(post: (files: readonly File[]) => Promise
 				const index = sequence++;
 				const path = notesPath(file);
 				if (file.webkitRelativePath && hiddenInFolder(file)) continue;
-				if (!IMPORT_EXTENSIONS.test(path) || !validNotesPath(path, file.name)) failures.set(index, `${path}: Unsupported format or unsafe relative path.`);
+				// Say which cause applies, and what does work.
+				if (!IMPORT_EXTENSIONS.test(path)) failures.set(index, `${path}: This file type can't be imported. Use Markdown (.md), text (.txt) or PDF.`);
+				else if (!validNotesPath(path, file.name)) failures.set(index, `${path}: This file's location can't be read safely. Move it into a plain folder and try again.`);
 				else if (file.size > MAX_IMPORT_BYTES) failures.set(index, `${path}: Too big. Max 25 MB.`);
 				else pending.push({ file, index });
 			}

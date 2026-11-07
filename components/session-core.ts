@@ -981,6 +981,19 @@ export class SessionModel {
 		this.setError(null);
 	}
 
+	/** A practice/drill working that was not acknowledged stays in its box:
+	 *  drop its local "sent" card. Returns whether one was removed. */
+	discardUnsentThinking(problemCallId: string, text: string): boolean {
+		const index = this.tail.findLastIndex((message) => {
+			const marker = message as { role?: string; customType?: string; id?: unknown; details?: { problemCallId?: string; text?: string } };
+			return marker.role === "custom" && marker.customType === "practice-thinking" && typeof marker.id === "string" && marker.id.startsWith("c_") &&
+				marker.details?.problemCallId === problemCallId && (marker.details?.text ?? "") === text;
+		});
+		if (index < 0) return false;
+		this.mutate(() => { this.tail = this.tail.filter((_, i) => i !== index); });
+		return true;
+	}
+
 	/** A text send that was not acknowledged goes back to the composer: drop
 	 *  its local optimistic bubble (never a canonical record message), and
 	 *  the failure banner with it. Returns whether a bubble was removed. */

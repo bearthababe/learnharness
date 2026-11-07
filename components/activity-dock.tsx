@@ -9,6 +9,13 @@ import { isModelsRefusal, isProviderKeyRefusal, subscriptionLabel, subscriptionL
 import { formatTokens, planCostLabel } from "@/components/usage-format";
 import { useServerEvent, useServerResync } from "@/components/server-events";
 
+/** A settled job in words: cancelled is not a failure. */
+function jobStatusText(job: { status: string; error?: string }): string {
+	if (job.status === "aborted" || job.status === "cancelled" || /\babort|cancel/i.test(job.error ?? "")) return "Cancelled";
+	if (job.status === "error") return `Failed${job.error ? ` — ${job.error}` : ""}`;
+	return "Finished";
+}
+
 /**
  * THE BACKGROUND-AGENTS SECTION (owner, sidebar round — the successor of
  * the retired bottom-right floating dock): the bottom strip of the LEFT
@@ -406,12 +413,13 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 						const Icon = KIND_ICON[job.kind] ?? BotIcon;
 						return (
 							<li key={job.id}>
-								<Link href={`/chat/${job.chatId}`} className="lh-activity-recent" data-testid="activity-recent" data-status={job.status} title={`${KIND_LABEL[job.kind] ?? "Sub-agent"} · ${job.title}${job.status === "error" && job.error ? `\n${job.error}` : ""}`}>
+								<Link href={`/chat/${job.chatId}`} className="lh-activity-recent" data-testid="activity-recent" data-status={jobStatusText(job) === "Cancelled" ? "cancelled" : job.status} title={`${KIND_LABEL[job.kind] ?? "Sub-agent"} · ${job.title}${job.status === "error" && job.error ? `\n${job.error}` : ""}`}>
 									<Icon className="size-4 shrink-0" aria-hidden />
 									<span className="min-w-0 flex-1">
 										<span className="lh-activity-recent-title">{KIND_LABEL[job.kind] ?? "Sub-agent"} · {job.title}</span>
 										<span className="lh-activity-recent-meta" title={job.error}>
-											{job.status === "error" ? `Failed${job.error ? ` — ${job.error}` : ""}` : "Finished"} · {settledAgo(job.updatedAt)}
+											<span className="lh-activity-recent-status">{jobStatusText(job)}</span>
+											<span className="lh-activity-recent-when">· {settledAgo(job.updatedAt)}</span>
 										</span>
 									</span>
 								</Link>

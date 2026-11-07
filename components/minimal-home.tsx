@@ -184,7 +184,7 @@ export function MinimalHome({
 					</div>
 					<NotesImportControl importing={importing} onImportFiles={onImportFiles} />
 				</div>
-				<NotesImportErrors errors={notesImport.errors} onOpenSettings={() => openSettings("keys")} onDismiss={dismissNotesImportResults} />
+				<NotesImportErrors errors={notesImport.errors} onOpenSettings={(section) => openSettings(section)} onDismiss={dismissNotesImportResults} />
 				<NotesImportDone done={notesImport.done} importing={notesImport.importing} onShowIdeas={() => { setIdeasQuery(notesImport.done.length ? sourceFileLabel(notesImport.done[0]!.filePath) : undefined); dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
 				<NotesImportNotices notices={notesImport.notices} />
 				{costs && costs.runs.length > 0 && <GraphCostControl costs={costs} />}

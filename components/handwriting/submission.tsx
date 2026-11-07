@@ -107,12 +107,36 @@ export function useHandwritingEditor(targetKey: string, read: () => EditorSnapsh
 	return bridge;
 }
 
+/** What was sent, in the learner's own words (never the wire format). */
+export function describeAttempt(input: ChatInput): string {
+	if (input.type === "text") return input.text.trim() ? `“${input.text.trim()}”` : "Your attached pages";
+	if (input.type === "thinking") return input.text.trim() ? `Your working: “${input.text.trim()}”` : "Your working";
+	if (input.type === "answer") {
+		const answer = input.answer;
+		const chosen = answer.dontKnow ? "I don't know" : [...answer.answers.map((option) => option.label), answer.other?.trim() ? `Other: ${answer.other.trim()}` : ""].filter(Boolean).join(", ");
+		const parts = [answer.questionText ? `Your answer to “${answer.questionText}”` : "Your answer", chosen || answer.text?.trim() || ""].filter(Boolean);
+		const why = (answer.thinking ?? answer.note)?.trim();
+		return `${parts.join(": ")}${why ? ` — why: “${why}”` : ""}`;
+	}
+	return "Your last answer";
+}
+function describeDraft(editor: EditorSnapshot): string {
+	const fields = editor as { text?: unknown; thinking?: unknown; other?: unknown; readingThinking?: unknown };
+	const text = [fields.text, fields.thinking, fields.other, fields.readingThinking].find((value) => typeof value === "string" && value.trim()) as string | undefined;
+	return text ? `“${text.trim()}”` : "Your choices and working";
+}
+
 export function HandwritingDeliveryNotice({ bridge, activeTarget }: { bridge: Bridge; activeTarget?: string }) {
 	const model = bridge.model, attempt = model?.attempt;
 	return <div className="text-xs" data-testid="handwriting-delivery">
 		{bridge.attachment()?.noticeEntries().map(({ pageId, text, refresh }) => <p role="status" key={pageId}>{text}{refresh && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.refreshReview().catch(() => {})}>Refresh review</button>}</p>)}
 		{model?.notice && <p role="status">{model.notice}</p>}
-		{attempt && <div data-testid="handwriting-attempt-review"><p>Original answer · delivery unconfirmed</p><pre className="max-h-48 overflow-auto whitespace-pre-wrap">{JSON.stringify(attempt.input, null, 2)}</pre><SharedWritingImages chatId={attempt.chatId} writing={attempt.imageVersions.map(image => ({ id: image.writingId }))} /><p>Later edits are not part of this answer.</p></div>}
-		{model?.savedDrafts().filter(draft => draft.targetKey !== activeTarget && !bridge.field(draft.targetKey)).map(draft => <div key={draft.draftId}><p>This draft belongs to an earlier question.</p><pre className="max-h-48 overflow-auto whitespace-pre-wrap">{JSON.stringify(draft.editor, null, 2)}</pre></div>)}
+		{attempt && <div data-testid="handwriting-attempt-review" className="lh-attempt-review">
+			<p className="lh-attempt-label">Not confirmed yet</p>
+			<p className="lh-attempt-summary">{describeAttempt(attempt.input)}</p>
+			<SharedWritingImages chatId={attempt.chatId} writing={attempt.imageVersions.map(image => ({ id: image.writingId }))} />
+			<p className="lh-attempt-help">Press Send to check: it sends only if it didn’t arrive, never twice. Later edits are not part of this answer.</p>
+		</div>}
+		{model?.savedDrafts().filter(draft => draft.targetKey !== activeTarget && !bridge.field(draft.targetKey)).map(draft => <div key={draft.draftId} className="lh-attempt-review"><p className="lh-attempt-label">Saved from an earlier question</p><p className="lh-attempt-summary">{describeDraft(draft.editor)}</p></div>)}
 	</div>;
 }

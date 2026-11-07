@@ -136,7 +136,7 @@ export function friendlyImportError(error: string): string {
 		const said = first.replace(/[.!?]?\s*$/, "");
 		if (code === "models_not_configured") {
 			const slots = (details[0] ?? "").split(", ").filter(Boolean).map((slot) => SLOT_NAMES[slot] ?? slot);
-			return `${said}. Choose ${slots.length ? `models for ${slots.join(", ")}` : "your models"} in Settings → Models, then import again.`;
+			return `${said}. Choose ${slots.length ? `models for ${slots.join(", ")}` : "your models"} in Settings → Agent, then import again.`;
 		}
 		if (code === "provider_key_missing") {
 			const provider = details.find((d) => !d.includes(",") && !/^[A-Z0-9_]+$/.test(d) && !SLOT_NAMES[d]);
@@ -157,17 +157,21 @@ export function friendlyImportError(error: string): string {
 /** Failed imports as one contained panel: what failed, in a sentence, with
  *  the fix one tap away (provider settings) and a way to dismiss. Without
  *  handlers it renders the plain lines alone. */
-export function NotesImportErrors({ errors, onOpenSettings, onDismiss }: { errors: readonly string[]; onOpenSettings?: () => void; onDismiss?: () => void }) {
+export function NotesImportErrors({ errors, onOpenSettings, onDismiss }: { errors: readonly string[]; onOpenSettings?: (section: "keys" | "agent") => void; onDismiss?: () => void }) {
 	if (errors.length === 0) return null;
 	const lines = errors.map((error, i) => <p key={i} role="alert" className="lh-import-error max-w-full whitespace-pre-wrap break-words text-xs text-red-400">{friendlyImportError(error)}</p>);
 	if (!onOpenSettings && !onDismiss) return <>{lines}</>;
-	const auth = errors.some((error) => /: 40[13]: |\n(models_not_configured|provider_key_missing)/.test(error));
+	// The fix lives where the error says: model roles under Agent, keys
+	// under Providers.
+	const models = errors.some((error) => /\nmodels_not_configured/.test(error));
+	const auth = !models && errors.some((error) => /: 40[13]: |\nprovider_key_missing/.test(error));
 	return (
 		<div className="lh-import-error-panel" data-testid="import-error-panel">
 			<div className="lh-import-error-title">{errors.length === 1 ? "Import didn't finish" : `${errors.length} imports didn't finish`}</div>
 			{lines}
 			<div className="lh-import-error-actions">
-				{auth && onOpenSettings && <button type="button" data-testid="import-error-settings" onClick={onOpenSettings}>Open provider settings</button>}
+				{models && onOpenSettings && <button type="button" data-testid="import-error-settings" onClick={() => onOpenSettings("agent")}>Open model settings</button>}
+				{auth && onOpenSettings && <button type="button" data-testid="import-error-settings" onClick={() => onOpenSettings("keys")}>Open provider settings</button>}
 				{onDismiss && <button type="button" data-testid="import-error-dismiss" onClick={onDismiss}>Dismiss</button>}
 			</div>
 		</div>

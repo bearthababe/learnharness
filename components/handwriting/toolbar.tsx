@@ -2,7 +2,7 @@
 
 // Corner arc selectively carried forward from c663dcecd22a. Drawing values and
 // the shared Pencil release-inside activation path belong to the notebook.
-import { useEffect, useState, type ButtonHTMLAttributes, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties } from "react";
 import { EllipsisIcon, Minimize2Icon, Undo2Icon, Redo2Icon, XIcon } from "lucide-react";
 import { HANDWRITING_HIGHLIGHT_COLOUR } from "@/src/core";
 
@@ -73,6 +73,16 @@ export function HandwritingToolbar(p: Props) {
 		document.addEventListener("pointerdown", onDown, true);
 		return () => { document.removeEventListener("keydown", onKey, true); document.removeEventListener("pointerdown", onDown, true); };
 	}, [pageOpen]);
+	// The ring names its tools by touch: choosing one, or pressing and
+	// holding one, shows its name beside the ring for a moment.
+	const [nameHint, setNameHint] = useState<Tool | null>(null);
+	const nameTimer = useRef<number | undefined>(undefined);
+	const showName = (tool: Tool, ms: number) => {
+		setNameHint(tool);
+		window.clearTimeout(nameTimer.current);
+		nameTimer.current = window.setTimeout(() => setNameHint(null), ms);
+	};
+	useEffect(() => () => window.clearTimeout(nameTimer.current), []);
 	// Escape closes the tool settings (one layer at a time).
 	useEffect(() => {
 		if (!expanded) return;
@@ -95,9 +105,13 @@ export function HandwritingToolbar(p: Props) {
 				<button type="button" aria-label="Clear" {...p.handlers("Clear", () => { p.clear(); setPageOpen(false); })}>Clear page<span>Undoable</span></button>
 			</div>}
 		</div>
-		<div className="hw-arc" data-folded={isFolded || undefined} data-coach={coach || undefined}>
+		<div className="hw-arc" data-folded={isFolded || undefined} data-coach={coach || undefined}
+			onPointerDownCapture={variant === "wheel" ? (event) => { const tool = (event.target as Element).closest?.("[data-ring-tool]")?.getAttribute("data-ring-tool") as Tool | null; if (tool) showName(tool, 60_000); } : undefined}
+			onPointerUpCapture={variant === "wheel" ? () => { if (nameHint) showName(nameHint, 1800); } : undefined}
+			onPointerCancelCapture={variant === "wheel" ? () => setNameHint(null) : undefined}>
+			{variant === "wheel" && nameHint && !isFolded && <span className={`hw-ringName hw-ringName_${nameHint}`} role="status" data-testid="ring-tool-name">{TOOLS.find(t => t.id === nameHint)!.label}</span>}
 			<svg className="hw-arcTrack" viewBox="0 0 112 260" aria-hidden="true"><path d="M98 22C-7 58-7 193 98 235" /></svg>
-			{TOOLS.map(tool => <button key={tool.id} type="button" className={`hw-toolButton hw-arc_${tool.id}`} aria-label={tool.label} title={tool.label} aria-pressed={p.tool === tool.id} disabled={p.disabled}
+			{TOOLS.map(tool => <button key={tool.id} type="button" data-ring-tool={tool.id} className={`hw-toolButton hw-arc_${tool.id}`} aria-label={tool.label} title={tool.label} aria-pressed={p.tool === tool.id} disabled={p.disabled}
 				{...p.handlers(tool.label, () => { if (coach) { setCoach(false); try { window.localStorage.setItem(COACH_KEY, "1"); } catch { /* this view only */ } } p.selectTool(tool.id); setExpanded(variant === "wheel" ? false : p.tool !== tool.id || !expanded); })}>
 				<ToolGlyph tool={tool.id} colour={tool.id === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.colour} dim={p.dimPaper} /><span className="hw-toolName">{tool.label}</span>
 			</button>)}

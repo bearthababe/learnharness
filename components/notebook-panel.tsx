@@ -119,6 +119,11 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 			{viewControls && <button type="button" aria-label="Hide notebook" title="Hide notebook" data-testid="notebook-close" onClick={viewControls.close}><XIcon /></button>}
 		</header>
 		<form className="notebook-instruction-form" onSubmit={(event) => { event.preventDefault(); apply(); }}>
+			{/* Say what Apply will change when a line or term is picked. */}
+			{cursorLineId && view?.lines.some(line => line.id === cursorLineId) && <p className="notebook-scope" data-testid="notebook-scope">
+				<span>{expressionSelection ? `Applies to term ${expressionSelection.number} on line ${view.lines.findIndex(line => line.id === expressionSelection.lineId) + 1}` : `Applies at line ${view.lines.findIndex(line => line.id === cursorLineId) + 1}`}</span>
+				<button type="button" aria-label="Clear selection" onClick={() => session.clearSelection()}><XIcon /></button>
+			</p>}
 			<div className="notebook-input-row">
 			<CompactLearningInput dictation={!dictation?.active || speech.destination === "notebook" ? dictation : undefined}>
 			<textarea id="notebook-instruction" aria-label="Notebook instruction" placeholder="Notebook instruction" value={draftText} rows={1}

@@ -3053,12 +3053,16 @@ button[role="switch"][aria-checked="true"] > span {
 
 /* Background jobs: one line each (the full name and reason on hover or
    long-press), so the list stays short and every status stays in view. */
-.lh-activity-recent-title, .lh-activity-recent-meta {
+.lh-activity-recent-title {
 	display: block;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
+/* The status may truncate; when it settled never does. */
+.lh-activity-recent-meta { display: flex; gap: 4px; min-width: 0; white-space: nowrap; }
+.lh-activity-recent-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lh-activity-recent-when { flex: none; }
 .lh-activity-recent {
 	align-items: flex-start;
 	padding-block: 8px;
@@ -3564,7 +3568,24 @@ button[role="switch"][aria-checked="true"] > span {
 	font-size: 14px;
 	color: var(--foreground);
 }
-.lh-unsent-actions { display: flex; gap: 6px; }
+.lh-unsent-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.lh-unsent-notice { flex-direction: column; align-items: stretch; }
+.lh-unsent-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.lh-unsent-row + .lh-unsent-row { padding-top: 8px; border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent); }
+.lh-unsent-quote {
+	flex-basis: 100%;
+	margin: 0;
+	padding: 6px 10px;
+	border-left: 3px solid color-mix(in oklab, var(--lh-warn, #e0a33a) 60%, var(--border));
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--background) 60%, transparent);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	display: -webkit-box;
+	-webkit-line-clamp: 4;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
 @media (pointer: coarse) { .lh-unsent-actions button { min-height: 40px; } }
 
 /* Wheel settings name the tools (touch has no hover): a segmented row. */
@@ -3606,7 +3627,8 @@ button[role="switch"][aria-checked="true"] > span {
 	font-weight: 500;
 	color: var(--muted-foreground);
 }
-.lh-why-toggle:hover, .lh-why-toggle:focus-visible { background: var(--accent); color: var(--foreground); }
+.lh-why-toggle:focus-visible { background: var(--accent); color: var(--foreground); }
+@media (hover: hover) { .lh-why-toggle:hover { background: var(--accent); color: var(--foreground); } }
 .lh-why-chevron { width: 15px; height: 15px; transition: transform .15s ease; }
 .lh-why-toggle[aria-expanded="true"] .lh-why-chevron { transform: rotate(90deg); }
 @media (pointer: coarse) { .lh-why-toggle { min-height: 44px; } }
@@ -3631,8 +3653,11 @@ button[role="switch"][aria-checked="true"] > span {
 .lh-question-pick-hint { display: none; }
 @media (max-width: 767px) {
 	[data-testid="question-dock"][data-follow-up="waiting"] :is(.lh-question-confidence, .lh-question-form) { display: none; }
+	/* The hint holds the follow-up's room, so picking never grows the card. */
 	[data-testid="question-dock"][data-follow-up="waiting"] .lh-question-pick-hint {
-		display: block;
+		display: flex;
+		align-items: center;
+		min-height: 67px;
 		padding: 10px 16px 14px;
 		border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
 		font-size: 13.5px;
@@ -3645,4 +3670,59 @@ button[role="switch"][aria-checked="true"] > span {
 }
 @media (prefers-reduced-motion: reduce) {
 	[data-testid="question-dock"][data-follow-up="open"] :is(.lh-question-confidence, .lh-question-form) { animation: none; }
+}
+
+/* An answer whose delivery is not confirmed yet: readable, calm, kept. */
+.lh-attempt-review {
+	margin-top: 6px;
+	padding: 10px 12px;
+	border: 1px solid color-mix(in oklab, var(--lh-warn, #e0a33a) 40%, var(--border));
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--lh-warn, #e0a33a) 7%, var(--card));
+	font-size: 13.5px;
+}
+.lh-attempt-label { font-weight: 600; color: var(--foreground); }
+.lh-attempt-summary { margin-top: 2px; color: var(--foreground); overflow-wrap: anywhere; }
+.lh-attempt-help { margin-top: 4px; color: var(--muted-foreground); font-size: 12.5px; }
+
+/* The ring's tool name: a pill beside the tool just chosen or held. */
+.hw-ringName {
+	position: absolute;
+	right: calc(100% + 8px);
+	z-index: 3;
+	padding: 5px 12px;
+	border: 1px solid var(--tool-edge);
+	border-radius: 999px;
+	background: var(--card);
+	box-shadow: var(--tool-shadow);
+	color: var(--foreground);
+	font-size: 14px;
+	font-weight: 500;
+	white-space: nowrap;
+	pointer-events: none;
+	animation: hw-hint-in .15s ease-out;
+}
+.hw-ringName_pen { top: 12px; }
+.hw-ringName_highlighter { top: 52px; }
+.hw-ringName_eraser { top: 117px; }
+.hw-notebook[data-tools-side="left"] .hw-ringName { right: auto; left: calc(100% + 8px); }
+
+/* Touch: the session filters are full touch targets. */
+@media (pointer: coarse) {
+	.lh-sessions-filter button { min-height: 44px; }
+}
+/* Phones: the jump-to-latest disc sits at the right edge, clear of the
+   lines being read. */
+@media (max-width: 767px) {
+	.lh-jump-down {
+		left: auto !important;
+		right: 12px;
+		translate: none !important;
+		--tw-translate-x: 0 !important;
+		transform: none !important;
+	}
+}
+
+@media (max-width: 767px) {
+	[data-testid="question-dock"][data-follow-up="waiting"] .lh-question-pick-hint[data-confidence] { min-height: 107px; }
 }

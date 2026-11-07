@@ -1645,7 +1645,7 @@ export function GraphView({
 				/>
 			</div>
 
-			<NotesImportErrors errors={notesImport.errors} onOpenSettings={() => openSettings("keys")} onDismiss={dismissNotesImportResults} />
+			<NotesImportErrors errors={notesImport.errors} onOpenSettings={(section) => openSettings(section)} onDismiss={dismissNotesImportResults} />
 			<NotesImportDone done={notesImport.done} importing={importing} onShowIdeas={() => { setIdeasQuery(notesImport.done.length ? sourceFileLabel(notesImport.done[0]!.filePath) : undefined); dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
 			<NotesImportNotices notices={notesImport.notices} />
 			{/* Top-right tail (owner, 2026-09-20): the pipeline cost number —

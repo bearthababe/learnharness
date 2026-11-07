@@ -46,7 +46,7 @@ it("unsupported-only directories are never sent; picker .DS_Store is ignored and
 	queue.append([file(".DS_Store", "Root/.DS_Store"), file("a.png", "Root/Images/a.png"), file("notes.md", "Root/Sub/notes.md"), file("bad.txt", "../bad.txt")]);
 	await tick();
 	assert.deepEqual(paths, ["Root/Sub/notes.md"]);
-	assert.deepEqual(queue.getSnapshot().errors, ["Root/Images/a.png: Unsupported format or unsafe relative path.", "../bad.txt: Unsupported format or unsafe relative path."]);
+	assert.deepEqual(queue.getSnapshot().errors, ["Root/Images/a.png: This file type can't be imported. Use Markdown (.md), text (.txt) or PDF.", "../bad.txt: This file's location can't be read safely. Move it into a plain folder and try again."]);
 });
 
 it("folder picks skip dot-directories such as .obsidian/ silently, even when the chosen root itself is hidden", async () => {
@@ -81,7 +81,7 @@ it("individual file picks still import hidden notes and report unsupported dotfi
 	queue.append([file(".draft.md"), file(".summary.txt"), file(".DS_Store")]);
 	await tick();
 	assert.deepEqual(paths, [".draft.md", ".summary.txt"]);
-	assert.deepEqual(queue.getSnapshot().errors, [".DS_Store: Unsupported format or unsafe relative path."]);
+	assert.deepEqual(queue.getSnapshot().errors, [".DS_Store: This file type can't be imported. Use Markdown (.md), text (.txt) or PDF."]);
 });
 
 it("an all-skipped selection publishes completion without validation errors or uploads and allows later work", async () => {

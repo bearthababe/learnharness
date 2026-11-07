@@ -907,7 +907,7 @@ function QuestionDockForm({
 			    send. Select modes get "Your thinking" (Enter makes a newline — it
 			    is for dumping, soon dictated; the button submits); text mode
 			    keeps "Your answer" with Enter-to-submit. */}
-			{!followUpOpen && <p className="lh-question-pick-hint" data-testid="question-pick-hint">Pick an answer — then say how sure you are, and why.</p>}
+			{!followUpOpen && <p className="lh-question-pick-hint" data-testid="question-pick-hint" data-confidence={kind === "quiz" || undefined}>{kind === "quiz" ? "Pick an answer — then say how sure you are, and why." : selectMode === "multi-select" ? "Pick your answers — then say why." : "Pick an answer — then say why."}</p>}
 			<form
 				className="lh-question-form border-t border-border/60 p-1.5"
 				onSubmit={(e) => {

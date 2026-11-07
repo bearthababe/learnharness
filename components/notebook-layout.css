@@ -114,3 +114,8 @@ html[data-session-input-locked], html[data-session-input-locked] body { overflow
 	100% { background: transparent; box-shadow: inset 3px 0 0 transparent; }
 }
 @media (prefers-reduced-motion: reduce) { .notebook-working-line[data-changed] { animation: none; box-shadow: inset 3px 0 0 var(--primary); } }
+/* What Apply will change, when a line or term is picked. */
+.notebook-scope { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 4px 4px 8px; font-size: var(--text-sm); color: var(--muted-foreground); }
+.notebook-scope button { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 8px; }
+.notebook-scope button:is(:hover, :focus-visible) { background: var(--accent); color: var(--foreground); }
+.notebook-scope svg { width: 15px; height: 15px; }

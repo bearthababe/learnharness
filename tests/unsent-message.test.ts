@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { SessionModel } from "../components/session-core.ts";
-import { deliveredIn, friendlyNetworkError } from "../components/unsent-message.ts";
+import { deliveredIn, friendlyNetworkError, listUnsent, putUnsent, removeUnsent } from "../components/unsent-message.ts";
 import { newUserMessage } from "../src/core/native-messages.ts";
 
 it("a send that is never acknowledged leaves no 'sent' bubble behind once its text goes back to the composer", async () => {
@@ -35,4 +35,24 @@ it("network failures read in plain words", () => {
 	assert.match(friendlyNetworkError("Failed to fetch") ?? "", /couldn't be reached/);
 	assert.match(friendlyNetworkError("NetworkError when attempting to fetch resource.") ?? "", /couldn't be reached/);
 	assert.equal(friendlyNetworkError("A turn is already running — try again in a moment."), null);
+});
+
+it("each unsent message keeps its own copy: a newer draft never replaces an older failed one", () => {
+	const store = new Map<string, string>();
+	const previous = (globalThis as { localStorage?: unknown }).localStorage;
+	(globalThis as { localStorage?: unknown }).localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) };
+	try {
+		putUnsent("chat_race", { id: "a", text: "Draft A", at: 1 });
+		putUnsent("chat_race", { id: "b", text: "Draft B", at: 2 });
+		assert.deepEqual(listUnsent("chat_race").map((entry) => entry.text), ["Draft A", "Draft B"]);
+		removeUnsent("chat_race", "b"); // B was acknowledged
+		assert.deepEqual(listUnsent("chat_race").map((entry) => entry.text), ["Draft A"], "A survives B's success");
+		removeUnsent("chat_race", "a");
+		assert.equal(store.has("lh:unsent:chat_race"), false);
+		// A copy written by the previous build (one object) still reads.
+		store.set("lh:unsent:chat_old", JSON.stringify({ text: "Old draft", at: 3 }));
+		assert.deepEqual(listUnsent("chat_old").map((entry) => entry.text), ["Old draft"]);
+	} finally {
+		(globalThis as { localStorage?: unknown }).localStorage = previous;
+	}
 });

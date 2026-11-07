@@ -144,11 +144,15 @@ function SharedWritingViewer({ chatId, writing, label, initialDecision = false, 
 	</dialog>;
 }
 
-export function SharedWritingPanel({ chatId, writing, busy }: {
+export function SharedWritingPanel({ chatId, writing: all, busy, hideIds }: {
 	chatId: string;
 	writing: ReturnType<typeof useSharedWriting>;
 	busy: boolean;
+	/** Pages already shown with an unconfirmed answer: not listed twice. */
+	hideIds?: readonly string[];
 }) {
+	const hidden = new Set(hideIds ?? []);
+	const writing = hidden.size ? { ...all, pending: all.pending.filter((item) => !hidden.has(item.id)) } : all;
 	const [uploadUrl, setUploadUrl] = useState("");
 	const [copied, setCopied] = useState(false);
 	const [removeError, setRemoveError] = useState<string | null>(null);

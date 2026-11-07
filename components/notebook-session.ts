@@ -235,6 +235,8 @@ export function createNotebookSession(chatId: string, fetcher: typeof fetch = fe
 		subscribe(listener: () => void) { observe(); listeners.add(listener); return () => { listeners.delete(listener); }; },
 		dispatch, refresh, settle,
 		selectLine(cursorLineId: string) { if (state.view?.lines.some(line => line.id === cursorLineId)) publish({ cursorLineId, expressionSelection: null }); },
+		/** Back to the whole notebook: no line or term picked. */
+		clearSelection() { publish({ cursorLineId: null, expressionSelection: null }); },
 		selectExpression(lineId: string, number: number) {
 			const line = state.view?.lines.find(line => line.id === lineId);
 			const expression = line && notebookExpressions(line.latex)?.find(part => part.number === number);

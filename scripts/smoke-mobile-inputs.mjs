@@ -431,7 +431,7 @@ try {
 	await page.click(mic);
 	await page.waitForSelector('.lh-compact-error');
 	await page.waitForSelector('[data-testid="composer"] [aria-label="Start dictation"]');
-	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /add a Deepgram speech key in Settings.*Settings/);
+	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /add a Deepgram speech key.*Settings/);
 	await page.click('.lh-compact-error button');
 	await page.waitForSelector('[data-testid="settings-dialog"]');
 	await page.waitForSelector('[data-testid="key-deepgram_api_key-input"]');
