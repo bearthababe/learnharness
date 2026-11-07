@@ -4331,17 +4331,17 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	color: var(--muted-foreground); font-size: 13px; line-height: 20px; pointer-events: none;
 }
 
-/* P7 (phones): an open question owns the whole screen; the lesson waits
-   behind "Back to lesson". */
+/* P7 (phones): an open question owns the screen below the page bar — the
+   whole lesson area, with no lesson in view — and the lesson waits behind
+   "Back to lesson". The bar stays, so Sessions, Home, Notebook, Plan and
+   More remain one tap away (an open notebook stays beside the question, so
+   working can still be attached). */
 .lh-question-back { display: none; }
 @media (max-width: 767px) {
-	/* The visible area, as the app shell measures it: the keyboard never
-	   covers the question screen. */
 	:root .lh-dock-overlay[data-question-open] {
-		position: fixed; inset: auto 0 auto 0; top: var(--lh-phone-top, 0px); height: var(--lh-phone-height, 100dvh); z-index: 45; right: 0 !important;
+		position: absolute; inset: 0; z-index: 45; right: 0 !important;
 		display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain;
 		background: var(--background); pointer-events: auto;
-		padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
 	}
 	:root .lh-dock-overlay[data-question-open] .lh-dock-fade { display: none; }
 	/* The whole screen scrolls as one page: the dock's in-place height

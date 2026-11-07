@@ -2734,7 +2734,7 @@ function DockOverlay({
 
 	const blockRef = useRef<HTMLDivElement>(null);
 	const overlayRef = useRef<HTMLDivElement>(null);
-	// Phones (P7): the open question is one scrolling screen. A focused field
+	// Phones (P7): the open question is one scrolling page. A focused field
 	// is brought fully into view there, below the sticky "Back to lesson" and
 	// above the keyboard — focusing an editor scrolls only its caret, which can
 	// leave the field's lower edge cut off. Wider screens never scroll here.
@@ -2747,7 +2747,7 @@ function DockOverlay({
 			cancelAnimationFrame(frame);
 			frame = requestAnimationFrame(() => {
 				const active = document.activeElement;
-				if (!(active instanceof HTMLElement) || !overlay.contains(active) || getComputedStyle(overlay).position !== "fixed") return;
+				if (!(active instanceof HTMLElement) || !overlay.contains(active) || getComputedStyle(overlay).overflowY !== "auto") return;
 				const field = active.closest<HTMLElement>(".lh-compact-field") ?? active;
 				const box = field.getBoundingClientRect(), view = overlay.getBoundingClientRect();
 				const top = view.top + (overlay.querySelector<HTMLElement>(".lh-question-back")?.offsetHeight ?? 0) + 8;
@@ -3067,8 +3067,8 @@ function DockOverlay({
 	const questionOpen = !!pending && expanded && !revealPending;
 	return (
 		<div ref={overlayRef} className="lh-dock-overlay pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }} data-question-open={questionOpen || undefined}>
-			{/* Phones (owner P7): an open question owns the whole screen — the CSS
-			    keys on data-question-open; "Back to lesson", first on that screen,
+			{/* Phones (owner P7): an open question owns the lesson area below the
+			    page bar — the CSS keys on data-question-open; "Back to lesson", first there,
 			    folds it to its bar with every pick and word kept. Hidden on wider
 			    screens, where the lesson and the question share the view. */}
 			{questionOpen && <div className="lh-question-back">
