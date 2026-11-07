@@ -13,21 +13,24 @@ import { useOneMenu } from "@/components/one-menu";
  * opens the same model, reasoning and Usage cards. Tablets and laptops
  * keep the row; the button is phone-only (CSS).
  */
-type PageMenuState = { model: string | null; level: string | null; usage: string | null };
-let state: PageMenuState = { model: null, level: null, usage: null };
+type PageMenuState = { model: string | null; level: string | null; usage: string | null; write: boolean };
+let state: PageMenuState = { model: null, level: null, usage: null, write: false };
 const listeners = new Set<() => void>();
 function subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
 
 /** The model control and the stats bar publish what the menu shows. */
 export function publishPageMenu(next: Partial<PageMenuState>) {
 	const merged = { ...state, ...next };
-	if (merged.model === state.model && merged.level === state.level && merged.usage === state.usage) return;
+	if (merged.model === state.model && merged.level === state.level && merged.usage === state.usage && merged.write === state.write) return;
 	state = merged;
 	for (const listener of listeners) listener();
 }
 
 export const OPEN_THINKING_EVENT = "lh:open-thinking-picker";
 export const OPEN_USAGE_EVENT = "lh:open-usage";
+/** Round 13: on phones the optional drawing canvas (Write) opens from More,
+ *  so the page bar keeps one row of five at every phone width. */
+export const OPEN_WRITE_EVENT = "lh:open-writing";
 
 export function PageMenuButton() {
 	const values = useSyncExternalStore(subscribe, () => state, () => state);
@@ -40,6 +43,7 @@ export function PageMenuButton() {
 		requestAnimationFrame(open);
 	};
 	const rows: { id: string; label: string; value: string; open: () => void }[] = [
+		...(values.write ? [{ id: "write", label: "Write", value: "Drawing canvas", open: () => window.dispatchEvent(new CustomEvent(OPEN_WRITE_EVENT)) }] : []),
 		{ id: "model", label: "Model", value: values.model ?? "—", open: () => window.dispatchEvent(new CustomEvent("lh:kbd-open-model-picker")) },
 		{ id: "reasoning", label: "Reasoning", value: values.level ?? "—", open: () => window.dispatchEvent(new CustomEvent(OPEN_THINKING_EVENT)) },
 		...(values.usage ? [{ id: "usage", label: "Usage", value: values.usage, open: () => window.dispatchEvent(new CustomEvent(OPEN_USAGE_EVENT)) }] : []),

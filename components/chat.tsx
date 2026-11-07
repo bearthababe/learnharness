@@ -3,7 +3,7 @@ import { SharedWritingImages, SharedWritingPanel, useSharedWriting } from "@/com
 import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
 import { HandwritingNotebook } from "@/components/handwriting/notebook";
 import { HandwritingPagesContext } from "@/components/handwriting/pages-context";
-import { PageMenuButton } from "@/components/page-menu";
+import { OPEN_WRITE_EVENT, PageMenuButton, publishPageMenu } from "@/components/page-menu";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
 import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
@@ -336,6 +336,15 @@ export function Chat({
 	// Switching the canvas off closes it (its pages stay saved).
 	useEffect(() => {
 		if (!writingOn && handwriting.open) handwriting.show(false);
+	}, [writingOn, handwriting]);
+	// Phones (round 13): when the canvas is switched on, Write is a row in
+	// More, so the page bar stays one row; wider screens keep the Write chip.
+	useEffect(() => {
+		if (!writingOn) return;
+		publishPageMenu({ write: true });
+		const open = () => handwriting.show(true);
+		window.addEventListener(OPEN_WRITE_EVENT, open);
+		return () => { publishPageMenu({ write: false }); window.removeEventListener(OPEN_WRITE_EVENT, open); };
 	}, [writingOn, handwriting]);
 	const notebookLayout = useNotebookLayout(notebookVisible);
 	const notebookSpeech = useSyncExternalStore(notebook.session.speech.subscribe, notebook.session.speech.getSnapshot, notebook.session.speech.getSnapshot);

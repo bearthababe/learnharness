@@ -4430,6 +4430,20 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	/* The flexible gap between Home and the right-hand group may close to
 	   nothing, so the phone toolbar is always one row. */
 	:root .lh-topbar > .flex-1[aria-hidden="true"] { min-width: 0; }
+	/* The optional drawing canvas opens from More on phones (one row of five). */
+	:root .lh-topbar .lh-header-write { display: none; }
+}
+/* Narrow phones (under 360px): the same five, a little tighter, still one
+   row — and Home's bar the same, so Home keeps one size and place. */
+@media (max-width: 359px) {
+	:root :is(.lh-topbar, .lh-home-navigation) { padding-inline: 8px; column-gap: 4px; }
+	:root .lh-home-navigation > div:first-child { column-gap: 4px; }
+	:root .lh-nav-chip, :root .lh-topbar :is(.lh-header-chip, .lh-notebook-toggle) { min-width: 46px; padding: 0 4px; font-size: 12px; }
+	:root :is(.lh-nav-chip, .lh-topbar .lh-header-chip, .lh-topbar .lh-notebook-toggle) :is(.lh-nav-chip-label, .lh-header-chip-label, .lh-notebook-toggle-label) { font-size: 12px; }
+	:root .lh-graph-search { margin-left: 112px; margin-right: 54px; }
+	:root .lh-home-page-menu { right: 8px; }
+	/* The mode line gets two fixed lines here (the same in every mode). */
+	:root .lh-mode-hint { height: 36px; line-height: 18px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 	/* Home's first row matches the bar items' 48px; its actions share their corners. */
 	:root .lh-graph-search input { height: 48px; }
 	:root .lh-home-toolbar :is(.lh-graph-chains, .lh-graph-import, .lh-graph-chains button, .lh-graph-import button),
