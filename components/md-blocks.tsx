@@ -386,7 +386,7 @@ export function MarkdownTable(props: ComponentProps<"table"> & ExtraProps) {
 				// offset, so it straddled the top outline). 4px inset, z above the
 				// cells it hovers over; the scroll container stays under it (the
 				// corner is fixed to the wrapper, not the scrolling table).
-				className="absolute top-1 right-1 z-10"
+				className="lh-table-copy absolute top-1 right-1 z-10"
 				label="Copy table"
 				getText={() => (ref.current ? tableDataToMarkdown(extractTableDataFromElement(ref.current)) : "")}
 			/>

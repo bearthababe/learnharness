@@ -1264,13 +1264,16 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 }
 
 /* Touch screens: small text controls keep a finger-sized target — the
-   history's fold rows, the graph's cost chip and the copy corners of
-   tables and code (always visible on touch, where no hover reveals them). */
+   history's fold rows, the graph's cost chip and the copy corners. Tables
+   and code show theirs (no hover reveals it on touch); a table's sits on a
+   slim row above it, so it never covers a heading cell. */
 @media (pointer: coarse) {
 	.lh-fold-toggle { min-height: 40px; }
 	.lh-graph-cost { min-width: 44px; min-height: 44px; padding-inline: 10px; font-size: 13.5px; }
-	.lh-copy-corner { position: relative; width: 36px; height: 36px; opacity: .8; }
+	.lh-copy-corner { position: relative; width: 36px; height: 36px; }
 	.lh-copy-corner::after { content: ""; position: absolute; inset: -4px; }
+	:is([data-testid="md-table"], [data-testid="md-code"]) .lh-copy-corner { opacity: .8; }
+	[data-testid="md-table"] > .lh-table-copy { position: static; display: flex; justify-content: flex-end; margin-bottom: 2px; }
 }
 
 /* Keyboard-and-mouse screens name the coverage pie too: [◔ Graph], beside
