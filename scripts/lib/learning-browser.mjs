@@ -14,10 +14,23 @@ import { handleChatRequest, stores } from "@/src/server";
 import { createProberAgent, createTeacherAgent } from "@/src/agent/teacher-agent";
 import { probeDoneTool } from "@/src/agent/tools/probe";
 import { planTools } from "@/src/agent/tools/plan";
+import { createPracticeAgent } from "@/src/agent/teacher-agent";
 export async function POST(req: Request) {
  const body = await req.clone().json();
  const input = JSON.stringify(body.input);
  const faux = createFauxCore({});
+ const record = stores.chatStore.getChat(body.chatId);
+ if (record?.kind === "practice") {
+  const responses = [];
+  if (input.includes("zz-prove-it-practise")) responses.push(fauxAssistantMessage([fauxToolCall("problem", { statement: "zz-prove-it-problem: Convert 250 L to cubic metres.", mode: "recall", modelSolution: "zz-prove-it-solution: 250 L × (1 m³ / 1000 L) = 0.25 m³." })], { stopReason: "toolUse" }));
+  else if (input.includes("zz-prove-it-wrong")) responses.push(fauxAssistantMessage([fauxText("zz-prove-it-hint: Which way must the ratio point so that litres cancel?")]));
+  else if (input.includes("zz-prove-it-corrected")) {
+   responses.push(fauxAssistantMessage([fauxToolCall("conclude", { outcome: "solvedWithHints", verdict: "zz-prove-it-verdict: correct after a hint about the ratio direction.", rung: "R2", missClass: "execution", retest: false })], { stopReason: "toolUse" }));
+   responses.push(fauxAssistantMessage([fauxText("zz-prove-it-concluded: Your corrected work is saved as helped success.")]));
+  } else responses.push(fauxAssistantMessage([fauxText("zz-prove-it-discussed: We can talk about it before the next problem.")]));
+  faux.setResponses(responses);
+  return handleChatRequest(req, opts => createPracticeAgent({ chatId: body.chatId, chatStore: stores.chatStore }, { ...opts, engine: { model: faux.getModel(), streamFn: faux.streamSimple } }));
+ }
  let text = "zz-prove-it-probe: What can you already explain about the goal?";
  let tool;
  if (input.includes("zz-prove-it-floor")) {
@@ -26,6 +39,9 @@ export async function POST(req: Request) {
  } else if (input.includes("zz-prove-it-plan")) {
   tool = fauxToolCall("plan_init", { mermaid: "graph TD\\n prerequisite[Prerequisite] --> goal[Goal]" });
   text = "zz-prove-it-planned: Here is the route toward your goal.";
+ } else if (input.includes("zz-prove-it-revise")) {
+  tool = fauxToolCall("plan_init", { mermaid: "graph TD\\n prerequisite[Prerequisite] --> bridge[Bridge idea] --> goal[Goal]" });
+  text = "zz-prove-it-revised: The route now includes the bridge you asked about.";
  } else if (input.includes("zz-prove-it-teach")) text = "zz-prove-it-teaching: Explain your reasoning in your own words.";
  else if (input.includes("zz-prove-it-uncertain")) text = "zz-prove-it-feedback: Let us revisit your assumption; try explaining the first step.";
  else if (input.includes("zz-prove-it-retry")) text = "zz-prove-it-retried: Your revised reasoning is recorded, not marked as mastery.";
@@ -47,7 +63,10 @@ export async function learningBrowser(root, run) {
 	const fixture = path.join(run, "fixture");
 	const errors = [];
 	const save = (name, value) => fs.writeFile(path.join(run, name), JSON.stringify(value, null, 2) + "\n");
-	const snapshot = async name => {
+	let sequence = 0;
+	const snapshot = async label => {
+		// Ordered, filesystem-safe names; scenarios never overwrite each other's evidence.
+		const name = `${String(++sequence).padStart(3, "0")}-${label.replace(/[^\w.-]+/g, "-").slice(0, 80)}`;
 		const response = await fetch(`${origin}/api/chats/${chatId}`);
 		assert.equal(response.status, 200);
 		const record = await response.json();
@@ -79,7 +98,7 @@ export async function learningBrowser(root, run) {
 			cwd: fixture, env: { PATH: process.env.PATH, LANG: "C.UTF-8", HOME: home, XDG_CONFIG_HOME: path.join(home, ".config"), LH_DATA_DIR: path.join(fixture, "data"), LH_AUTH_FILE: path.join(fixture, "auth.json"), OPENROUTER_API_KEY: "scripted-test-only", NEXT_TELEMETRY_DISABLED: "1" }, stdio: ["ignore", "pipe", "pipe"],
 		});
 		captureOutput(server, path.join(run, "server.log"), false);
-		const instance = { url: origin, pid: server.pid, identity: execFileSync("ps", ["-p", String(server.pid), "-o", "lstart="], { encoding: "utf8" }).trim(), fixture, provider: "faux", externalModelRequests: 0, injectedTools: ["probe_done", "plan_init"], handoff: "successful tool result; automatic wake deliberately not exercised" };
+		const instance = { url: origin, pid: server.pid, identity: execFileSync("ps", ["-p", String(server.pid), "-o", "lstart="], { encoding: "utf8" }).trim(), fixture, provider: "faux", externalModelRequests: 0, injectedTools: ["probe_done", "plan_init", "practice problem/conclude"], handoff: "successful tool result; automatic wake deliberately not exercised" };
 		await save("instance.json", instance);
 		let ready = false;
 		for (let attempt = 0; attempt < 120; attempt++) {
@@ -95,20 +114,41 @@ export async function learningBrowser(root, run) {
 		page.on("pageerror", error => errors.push(error.message));
 		await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 		await page.evaluateOnNewDocument(() => localStorage.setItem("lh:sidebar-open", "0"));
-		const creation = await fetch(`${origin}/api/chats`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "zz-prove-it-learning-goal" }) });
-		assert.equal(creation.status, 200);
-		chatId = (await creation.json()).id;
-		assert.ok(chatId);
-		await page.goto(`${origin}/chat/${chatId}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
-		await snapshot("before-goal");
+		const sessions = new Map();
+		// Settled: the client shows no running turn, and either the composer or the practice dock owns input.
+		const idle = () => page.waitForFunction(() => !document.body.innerText.includes("THINKING…")
+			&& (document.querySelector('[data-testid="composer"] [aria-label="Send"][disabled]') || document.querySelector('[data-testid="next-problem-button"]') || document.querySelector('[data-testid="practice-send"]')), { timeout: 120_000 });
+		// One synthetic learner session per key; switching navigates the same browser to it.
+		const session = async (key, body = { title: "zz-prove-it-learning-goal" }) => {
+			if (!sessions.has(key)) {
+				const creation = await fetch(`${origin}/api/chats`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+				assert.equal(creation.status, 200);
+				const id = (await creation.json()).id;
+				assert.ok(id);
+				sessions.set(key, id);
+				chatId = id;
+				await page.goto(`${origin}/chat/${chatId}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+				await snapshot(`${key}-created`);
+			} else if (chatId !== sessions.get(key)) {
+				chatId = sessions.get(key);
+				await page.goto(`${origin}/chat/${chatId}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+			}
+			await idle();
+			return chatId;
+		};
 		const send = async (text, expected) => {
 			const before = await snapshot(`before-${text}`);
-			await page.waitForSelector('[data-testid="composer"] [data-file-path-input]', { timeout: 120_000 });
-			await page.waitForSelector('[data-testid="composer"] [aria-label="Send"][disabled]', { timeout: 120_000 });
-			await page.click('[data-testid="composer"] [data-file-path-input]');
+			const practice = await page.$('[data-testid="practice-dock"]');
+			const field = practice ? '[data-testid="practice-thinking-field"] [data-file-path-input]' : '[data-testid="composer"] [data-file-path-input]';
+			const submit = practice ? '[data-testid="practice-send"]' : '[data-testid="composer"] [aria-label="Send"]';
+			await page.waitForSelector(field, { visible: true, timeout: 120_000 });
+			await page.waitForFunction(selector => !document.querySelector(selector)?.closest("[inert]"), { timeout: 120_000 }, field);
+			await page.waitForSelector(`${submit}[disabled]`, { timeout: 120_000 });
+			await page.click(field);
 			await page.keyboard.type(text);
-			await page.waitForSelector('[data-testid="composer"] [aria-label="Send"]:not([disabled])', { timeout: 30_000 });
-			await page.click('[data-testid="composer"] [aria-label="Send"]');
+			assert.equal(await page.$eval(field, element => element.value ?? element.textContent), text, "Typing reaches the visible learner field");
+			await page.waitForSelector(`${submit}:not([disabled])`, { timeout: 30_000 });
+			await page.click(submit);
 			for (let attempt = 0; attempt < 120; attempt++) {
 				const record = await (await fetch(`${origin}/api/chats/${chatId}`)).json();
 				if (!record.turnInFlight && JSON.stringify(record.messages).includes(expected)) break;
@@ -117,31 +157,51 @@ export async function learningBrowser(root, run) {
 			}
 			if (expected === "zz-prove-it-handoff") await page.waitForFunction(() => document.querySelector('[data-testid="phase-chip"]')?.textContent?.toLowerCase().includes("planning"), { timeout: 120_000 });
 			else await page.waitForFunction(value => document.body.innerText.includes(value), { timeout: 120_000 }, expected);
-			await page.waitForSelector('[data-testid="composer"] [aria-label="Send"][disabled]', { timeout: 120_000 });
+			await idle();
 			const after = await snapshot(text);
 			assert.ok(after.messages.length > before.messages.length, "Sending must change persisted history");
 			assert.ok(JSON.stringify(after.messages).includes(text));
 			assert.deepEqual(errors, [], "Client exceptions during learning journey");
 			return after;
 		};
+		const visibleText = () => page.evaluate(() => document.body.innerText);
 		return {
-			send, snapshot,
-			async visibleHistory() {
-				for (const text of ["zz-prove-it-goal", "zz-prove-it-feedback", "zz-prove-it-uncertain", "zz-prove-it-retried"]) {
+			send, snapshot, session, visibleText,
+			sessionId: key => sessions.get(key),
+			async list() {
+				const response = await fetch(`${origin}/api/chats`);
+				assert.equal(response.status, 200);
+				const listing = await response.json();
+				await save(`listing-${Date.now()}.json`, listing);
+				return listing;
+			},
+			async visibleHistory(texts = ["zz-prove-it-goal", "zz-prove-it-feedback", "zz-prove-it-uncertain", "zz-prove-it-retried"], nodes = ["prerequisite", "goal"], name = "reopened-plan") {
+				for (const text of texts) {
 					await page.waitForFunction(value => document.body.innerText.includes(value), { timeout: 30_000 }, text);
 				}
+				if (!nodes.length) return;
+				await idle();
+				await page.waitForSelector('[data-testid="plan-chip"]', { visible: true, timeout: 30_000 });
 				await page.click('[data-testid="plan-chip"]');
-				for (const id of ["prerequisite", "goal"]) await page.waitForSelector(`[data-testid="plan-popup"] [data-testid="plan-node-${id}"]`, { visible: true });
-				await page.screenshot({ path: path.join(run, "reopened-plan.png"), fullPage: true });
+				for (const id of nodes) await page.waitForSelector(`[data-testid="plan-popup"] [data-testid="plan-node-${id}"]`, { visible: true });
+				const shown = await page.$$eval('[data-testid="plan-popup"] [data-testid^="plan-node-"]', elements => elements.map(element => element.getAttribute("data-testid").slice("plan-node-".length)));
+				await page.screenshot({ path: path.join(run, `${name}.png`), fullPage: true });
 				await page.click('[data-testid="plan-popup-close"]');
+				return shown;
 			},
-			async reopen() {
+			async reopen(waitFor = "zz-prove-it-retried") {
 				await page.close();
 				page = await browser.newPage();
 				await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 				page.on("pageerror", error => errors.push(error.message));
 				await page.goto(`${origin}/chat/${chatId}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
-				await page.waitForFunction(() => document.body.innerText.includes("zz-prove-it-retried"));
+				await page.waitForFunction(value => document.body.innerText.includes(value), { timeout: 120_000 }, waitFor);
+				await idle();
+			},
+			nextProblemOffered: async () => Boolean(await page.$('[data-testid="next-problem-button"]')) && !(await page.$('[data-testid="practice-dock"]')),
+			async practiceDock() {
+				await page.waitForSelector('[data-testid="practice-dock"]', { timeout: 120_000 });
+				return page.$eval('[data-testid="practice-dock"]', element => ({ problem: element.getAttribute("data-problem"), text: element.innerText }));
 			},
 			async close() {
 				await browser.close().finally(() => processes.close());

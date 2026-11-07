@@ -23,3 +23,10 @@ Feature: A bounded learning journey through the real application
     Then earlier work and the plan remain accessible
     When the learner continues the conversation
     Then the continuation is saved without losing earlier work
+
+  @LJ-PLAN-REVISE
+  Scenario: A learner-prompted plan revision replaces the presented route without rewriting history
+    Given a synthetic conversation with a plan and retry evidence
+    When the learner asks for a missing step and the plan is rewritten
+    Then the presented plan shows the revised route
+    And earlier teaching work is unchanged
