@@ -98,3 +98,18 @@ export function useDeviceFeature(feature: DeviceFeature): boolean {
 export function useDeviceClass(): DeviceClass | null {
 	return useSyncExternalStore(subscribe, () => (void version, deviceClass()), () => null);
 }
+
+/** Writing palette layout on this device: the compact wheel docked in the
+ *  page's upper corner (default) or the original vertical arc. */
+export type WritingPalette = "wheel" | "arc";
+const PALETTE_KEY = "lh:writing-palette";
+export function writingPalette(): WritingPalette {
+	try { return window.localStorage.getItem(PALETTE_KEY) === "arc" ? "arc" : "wheel"; } catch { return "wheel"; }
+}
+export function setWritingPalette(value: WritingPalette) {
+	try { window.localStorage.setItem(PALETTE_KEY, value); } catch { /* storage blocked: this view only */ }
+	notify();
+}
+export function useWritingPalette(): WritingPalette {
+	return useSyncExternalStore(subscribe, () => (void version, writingPalette()), () => "wheel");
+}

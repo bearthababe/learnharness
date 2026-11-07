@@ -11,6 +11,7 @@ import { handwritingPagesDevice } from "./pages-device";
 import { externalBackground, prepareHandwritingPage, preparedBackground, pageThumbnail } from "./pages-render";
 import type { HandwritingPage, PageSummary } from "@/src/core";
 import { HandwritingToolbar } from "./toolbar";
+import { useWritingPalette } from "@/components/device-features";
 import { HANDWRITING_DELETED_EVENT } from "./device";
 import { notebookSource, normalizeHandwriting, replayHandwriting, HANDWRITING_PAGE, HANDWRITING_PEN_COLOURS, HANDWRITING_PEN_SCALES, HANDWRITING_BROAD_WIDTHS, HANDWRITING_HIGHLIGHT_COLOUR, type HandwritingStroke as Stroke } from "@/src/core";
 import type { AttachmentReview } from "./attachment";
@@ -48,6 +49,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const attachmentNotice = submission?.attachment()?.notice(normalizeHandwriting(recovery.current?.getSnapshot().working ?? { version: 1, operations: [] }).pageId);
 	const [saved, setSaved] = useState<Pick<PagesState, "ready" | "notice">>({ ready: false, notice: "Opening notebook…" });
 	const [pageId, setPageId] = useState("page_initial"), [pages, setPages] = useState<PageSummary[]>([]), [pagesOpen, setPagesOpen] = useState(false), [optionsOpen, setOptionsOpen] = useState(false);
+	const palette = useWritingPalette();
 	// Handedness: the tool palette sits on the right by default; left-handed
 	// writers can move it to the left (stored on this device).
 	const [toolsLeft, setToolsLeft] = useState(false);
@@ -63,6 +65,19 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const ownMutation = useRef(false);
 	const penToolTap = useRef<{ pointerId: number; button: HTMLButtonElement } | null>(null), penToolClick = useRef<HTMLButtonElement | null>(null);
 	const [tool, setTool] = useState<Stroke["tool"]>("pen");
+	// Fingers scroll and never draw (palm rejection); say so the first few
+	// times a finger lands, instead of leaving the page silently inert.
+	const [fingerHint, setFingerHint] = useState(false);
+	const fingerHints = useRef(0);
+	const fingerTimer = useRef<number | undefined>(undefined);
+	function noteFinger() {
+		if (fingerHints.current >= 2) return;
+		fingerHints.current++;
+		setFingerHint(true);
+		window.clearTimeout(fingerTimer.current);
+		fingerTimer.current = window.setTimeout(() => setFingerHint(false), 2600);
+	}
+	useEffect(() => () => window.clearTimeout(fingerTimer.current), []);
 	const [colour, setColour] = useState<Stroke["colour"]>(HANDWRITING_PEN_COLOURS[0]);
 	const [penScale, setPenScale] = useState<Stroke["penScale"]>(HANDWRITING_PEN_SCALES[1]), [eraserWidth, setEraserWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]), [highlighterWidth, setHighlighterWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]);
 	const [dimPaper, setDimPaper] = useState(true), [toolsOpen, setToolsOpen] = useState(false);
@@ -217,7 +232,8 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		return { x: Math.max(0, Math.min(WIDTH, (event.clientX - rect.left) * WIDTH / rect.width)), y: Math.max(0, Math.min(HEIGHT, (event.clientY - rect.top) * HEIGHT / rect.height)), pressure: event.pointerType === "pen" && event.pressure > 0 ? event.pressure : 0.5 };
 	}
 	function start(event: ReactPointerEvent<HTMLCanvasElement>) {
-		if (event.pointerType === "touch" || event.button !== 0 || active.current || decoding.current) return;
+		if (event.pointerType === "touch") { noteFinger(); return; }
+		if (event.button !== 0 || active.current || decoding.current) return;
 		const complete = recovery.current?.beginStroke(); if (!complete) return;
 		event.preventDefault(); if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 		const first = point(event.nativeEvent);
@@ -302,7 +318,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 					<canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="hw-paper" style={{ cursor: tool === "eraser" ? "cell" : "crosshair" }} aria-label="Handwriting page — use Pencil or mouse; fingers do not draw" data-testid="notebook-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onContextMenu={e => e.preventDefault()} />
 					<canvas ref={highlightRef} width={WIDTH} height={HEIGHT} className="hw-highlightOverlay" style={{ opacity: HIGHLIGHT_OPACITY }} aria-hidden="true" data-testid="notebook-highlight-overlay" />
 				</div>
-			</div><HandwritingToolbar tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} clear={clear} togglePaper={() => setDimPaper(v => !v)} /></div></div>
+			</div>{fingerHint && <p className="hw-fingerHint" role="status" data-testid="finger-hint">Write with your pen · fingers scroll the page</p>}<HandwritingToolbar variant={palette} tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} clear={clear} togglePaper={() => setDimPaper(v => !v)} /></div></div>
 			{saved.notice && <div className="hw-notice" role="status">{saved.notice}{saved.notice !== "Opening notebook…" && <button type="button" className="min-h-11 px-3 underline" {...handlers("Retry", () => { void recovery.current?.retry().then(() => refreshStatus.current()); })}>Retry</button>}</div>}
 			{attachmentNotice && <div className="hw-notice" role="status">{attachmentNotice.text}{attachmentNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
 		</aside>

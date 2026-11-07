@@ -164,6 +164,7 @@ export function StatsBar({
 				onClick={() => setOpen((o) => !o)}
 				aria-expanded={open}
 				data-testid="stats-summary"
+				data-known={contextTokens !== null || pricedCount > 0 || subscription > 0 || undefined}
 				aria-label="Usage"
 				className="flex items-center gap-1.5 tabular-nums transition-colors hover:text-foreground"
 			>

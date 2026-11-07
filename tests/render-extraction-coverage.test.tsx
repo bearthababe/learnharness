@@ -109,8 +109,9 @@ describe("CoverageMenuBody — the context-menu block", () => {
 			<CoverageMenuBody coverage={coverage()} extracting={false} onExtract={() => {}} />,
 		);
 		assert.ok(html.includes('data-testid="ctx-coverage"'), "the block carries its testid");
-		assert.match(html, /2k tok uncovered/, "the unit is typed out — tok (owner refinement round)");
-		assert.match(html, /5 messages unextracted/);
+		assert.match(html, /Not in your graph yet/, "plain words, not bookkeeping units (round 7)");
+		assert.match(html, /5 newer messages/);
+		assert.match(html, /2k tokens not yet extracted/, "the exact figure stays on hover");
 		assert.ok(html.includes('data-testid="ctx-extract"'), "the Extract affordance");
 		assert.ok(!html.includes('disabled=""'), "an uncovered session can extract (the disabled: utilities alone don't count)");
 	});
@@ -123,7 +124,7 @@ describe("CoverageMenuBody — the context-menu block", () => {
 				onExtract={() => {}}
 			/>,
 		);
-		assert.match(html, /fully extracted/);
+		assert.match(html, /Everything here is in your graph/);
 		assert.ok(html.includes("disabled"), "nothing to run — the button rests");
 	});
 
@@ -132,8 +133,8 @@ describe("CoverageMenuBody — the context-menu block", () => {
 			<CoverageMenuBody coverage={coverage({ running: true })} extracting={false} onExtract={() => {}} />,
 		);
 		assert.ok(html.includes('data-testid="ctx-coverage-running"'));
-		assert.match(html, /extracting…/);
-		assert.ok(html.includes(">Running</button>"), "the affordance reads Running while in flight");
+		assert.match(html, /Adding to your graph…/);
+		assert.ok(html.includes(">Adding…</button>"), "the affordance reads Adding… while in flight");
 		assert.ok(html.includes("disabled"), "no double-fire");
 	});
 
@@ -142,7 +143,7 @@ describe("CoverageMenuBody — the context-menu block", () => {
 			<CoverageMenuBody coverage={coverage()} extracting onExtract={() => {}} />,
 		);
 		assert.ok(html.includes('data-testid="ctx-coverage-running"'), "the optimistic state shows at once");
-		assert.match(html, />Running</);
+		assert.match(html, />Adding…</);
 	});
 });
 

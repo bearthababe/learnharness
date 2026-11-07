@@ -17,18 +17,33 @@ export function useNotebookLayout(open: boolean) {
 	return { mounted: mounted || open, expanded: open && expanded, expand: () => setExpanded(true), back: () => setExpanded(false) };
 }
 
+const SPLIT_KEY = "lh:notebook-split";
+const DEFAULT_SHARES = { row: 60, column: 50 };
+function storedShares(): { row: number; column: number } {
+	try {
+		const value = JSON.parse(window.localStorage.getItem(SPLIT_KEY) ?? "null") as { row?: unknown; column?: unknown } | null;
+		const pick = (n: unknown, fallback: number) => typeof n === "number" && n >= 30 && n <= 65 ? n : fallback;
+		return { row: pick(value?.row, DEFAULT_SHARES.row), column: pick(value?.column, DEFAULT_SHARES.column) };
+	} catch { return { ...DEFAULT_SHARES }; }
+}
+
 /** Same divider protocol as the iPad shell; equation panes use percentage bounds
- * rather than handwriting-tool pixel minima. Each orientation retains its share. */
+ * rather than handwriting-tool pixel minima. Each orientation retains its share,
+ * and the split the learner chose is remembered on this device. */
 export function NotebookSplit({ hidden }: { hidden: boolean }) {
 	const divider = useRef<HTMLDivElement>(null);
-	const shares = useRef({ row: 60, column: 50 });
+	const shares = useRef<{ row: number; column: number } | null>(null);
 	const drag = useRef<number | null>(null);
 	const [state, setState] = useState({ wide: false, share: 50 });
 	function resize(element: HTMLElement, next?: number) {
 		const layout = element.parentElement!;
 		const wide = getComputedStyle(layout).flexDirection === "row";
 		const direction = wide ? "row" : "column";
+		shares.current ??= storedShares();
 		const share = Math.max(30, Math.min(65, next ?? shares.current[direction]));
+		if (next !== undefined && Math.round(share) !== Math.round(shares.current[direction])) {
+			try { window.localStorage.setItem(SPLIT_KEY, JSON.stringify({ ...shares.current, [direction]: Math.round(share) })); } catch { /* this view only */ }
+		}
 		shares.current[direction] = share;
 		layout.style.setProperty(`--notebook-share-${direction}`, `${share}%`);
 		setState(prior => prior.wide === wide && prior.share === Math.round(share) ? prior : { wide, share: Math.round(share) });

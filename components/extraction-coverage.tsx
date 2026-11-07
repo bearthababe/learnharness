@@ -190,17 +190,17 @@ export function CoverageMenuBody({
 			{busy ? (
 				<span className="flex items-center gap-1.5 text-muted-foreground" data-testid="ctx-coverage-running">
 					<span className="size-1.5 animate-pulse rounded-full bg-foreground/70" aria-hidden />
-					extracting…
+					Adding to your graph…
 				</span>
 			) : complete ? (
-				<span className="text-muted-foreground">fully extracted</span>
+				<span className="text-muted-foreground">Everything here is in your graph.</span>
 			) : (
-				<span className="flex flex-col">
-					<span className="tabular-nums text-foreground">
-						{formatTokens(coverage.uncoveredTokens)} tok uncovered
-					</span>
+				/* Plain words for the learner (round 7): what is missing from
+				   the graph, not the bookkeeping units behind the ring. */
+				<span className="flex flex-col" title={`${formatTokens(coverage.uncoveredTokens)} tokens not yet extracted`}>
+					<span className="text-foreground">Not in your graph yet</span>
 					<span className="tabular-nums text-muted-foreground">
-						{coverage.uncoveredCount} message{coverage.uncoveredCount === 1 ? "" : "s"} unextracted
+						{coverage.uncoveredCount} newer message{coverage.uncoveredCount === 1 ? "" : "s"}
 					</span>
 				</span>
 			)}
@@ -209,9 +209,9 @@ export function CoverageMenuBody({
 				data-testid="ctx-extract"
 				onClick={onExtract}
 				disabled={busy || complete}
-				className="flex items-center justify-center rounded-lg border px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent"
+				className="flex min-h-9 items-center justify-center rounded-lg border px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent"
 			>
-				{busy ? "Running" : "Extract"}
+				{busy ? "Adding…" : "Add to graph"}
 			</button>
 		</div>
 	);

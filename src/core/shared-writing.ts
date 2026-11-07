@@ -32,7 +32,9 @@ export const writingIndexSchema = z.object({
 export type WritingIndex = z.infer<typeof writingIndexSchema>;
 export const emptyWritingIndex = (): WritingIndex => ({ version: 1, pages: {}, committed: {} });
 export type NotebookCapture = { writingId: string; pageId: string; expectedPageRevision: number; image: Uint8Array; source: NotebookSource };
-export type WritingSnapshot = { writing: SharedWriting[]; index: WritingIndex };
+/** `dismissed`: snapshots the learner removed from their next message. The
+ *  image and the editable page stay; they are only no longer pending. */
+export type WritingSnapshot = { writing: SharedWriting[]; index: WritingIndex; dismissed?: readonly string[] };
 export type NotebookCaptureReceipt = { writing: SharedWriting; committed: boolean; currentPageRevision: number };
 export type PageAttachments = Record<string, { revision: number; writingId: string; contentFingerprint: string }>;
 export class CaptureConflict extends Error {
@@ -49,14 +51,18 @@ export function commitNotebookCapture(index: WritingIndex, capture: Pick<Noteboo
 }
 export function pendingSharedWriting(snapshot: WritingSnapshot, messages: readonly LhMessage[]): SharedWriting[] {
 	const sent = submittedWritingIds(messages);
-	return snapshot.writing.filter(writing => !sent.has(writing.id) && (!writing.notebook || snapshot.index.pages[writing.notebook.pageId]?.writingId === writing.id));
+	const dismissed = new Set(snapshot.dismissed ?? []);
+	return snapshot.writing.filter(writing => !sent.has(writing.id) && !dismissed.has(writing.id) && (!writing.notebook || snapshot.index.pages[writing.notebook.pageId]?.writingId === writing.id));
 }
 export function pageAttachments(snapshot: WritingSnapshot): PageAttachments {
 	const byId = new Map(snapshot.writing.map(writing => [writing.id, writing]));
+	const dismissed = new Set(snapshot.dismissed ?? []);
 	return Object.fromEntries(Object.entries(snapshot.index.pages).map(([pageId, head]) => {
 		const writing = byId.get(head.writingId);
 		if (!writing?.notebook) throw new Error("Missing committed snapshot");
-		return [pageId, { ...head, contentFingerprint: writing.notebook.contentFingerprint }];
+		// A removed attachment never reads as "already attached": attaching the
+		// same page again makes a fresh snapshot at the next revision.
+		return [pageId, { ...head, contentFingerprint: dismissed.has(head.writingId) ? "dismissed" : writing.notebook.contentFingerprint }];
 	}));
 }
 

@@ -55,6 +55,11 @@ const TOOL_LABEL: Record<string, string> = {
 	list_propositions: "Looked up ideas from a session",
 };
 
+/** The learner-facing name of a lookup step (shared with step summaries). */
+export function toolStepLabel(tool: string): string {
+	return TOOL_LABEL[tool] ?? tool;
+}
+
 /** The collapsed line's subject: file paths and search patterns read as
  *  given; opaque record ids (the propositions' session) stay in the
  *  expanded input instead of the summary. */

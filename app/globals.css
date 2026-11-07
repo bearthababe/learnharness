@@ -2936,12 +2936,31 @@ button[role="switch"][aria-checked="true"] > span {
 	font-size: 12.5px;
 }
 
-/* Usage reads as one label on every device; its numbers live in the panel. */
+/* Usage: one label on phones and tablets (the numbers live in the panel);
+   laptops have the room to show context and cost at a glance. */
 .lh-stats-bar .lh-usage-numbers {
 	display: none;
 }
 .lh-stats-bar .lh-phone-usage-label {
 	display: inline;
+}
+@media (min-width: 1024px) {
+	.lh-stats-bar [data-known] .lh-usage-numbers {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.lh-stats-bar [data-known] .lh-phone-usage-label {
+		display: none;
+	}
+}
+
+/* Tablets and laptops: a shorter fade above the dock, so a short lesson
+   rests close to its task (the transcript reserves the drawn height). */
+@media (min-width: 768px) {
+	.lh-dock-fade {
+		height: 44px;
+	}
 }
 @media (max-width: 767px) {
 	/* The header carries Plan; the composer row keeps notebook, model, usage. */
@@ -2990,17 +3009,16 @@ button[role="switch"][aria-checked="true"] > span {
 	transform: none;
 }
 
-/* A lifted dock (short lesson, wide screens) needs no fade above it. */
-.lh-dock-overlay[style*="bottom"] .lh-dock-fade {
-	opacity: 0;
-}
-
-/* Phones: Plan reads as a labelled chip in the header (it left the
-   composer row), so it is found without guessing an icon. */
+/* Phones: Plan is labelled (a caption under its icon) without taking the
+   title's width: one 44px square, like a tab-bar item. */
 @media (max-width: 767px) {
 	.lh-topbar .lh-header-chip {
-		width: auto;
-		padding: 0 12px 0 10px;
+		flex-direction: column;
+		gap: 2px;
+		width: 46px;
+		height: 44px;
+		padding: 0;
+		border-radius: 12px;
 	}
 	.lh-topbar .lh-header-chip .lh-header-chip-label {
 		position: static;
@@ -3008,8 +3026,29 @@ button[role="switch"][aria-checked="true"] > span {
 		height: auto;
 		overflow: visible;
 		clip: auto;
-		font-size: 14px;
+		font-size: 11px;
+		line-height: 1;
+		font-weight: 600;
+		letter-spacing: .01em;
 	}
+	.lh-topbar .lh-header-chip svg {
+		width: 17px;
+		height: 17px;
+	}
+}
+
+/* Every device: a short lesson rests on the dock (like a message thread),
+   so the task reads straight on from what led to it, while the composer
+   itself never moves. Empty space, if any, sits quietly above. */
+.lh-column > :first-child {
+	margin-top: auto;
+}
+
+/* The step rule before a problem that the dock card shows has nothing
+   left to divide. */
+[data-lh-separator]:has(+ .lh-problem-card[data-active]),
+[data-lh-separator]:last-child {
+	display: none;
 }
 
 /* Background jobs: names and failure reasons wrap to two lines instead of
@@ -3029,15 +3068,6 @@ button[role="switch"][aria-checked="true"] > span {
 	margin-top: 2px;
 }
 
-/* Writing palette: a compact arc (about 15% smaller) keeps more page free. */
-.hw-arc {
-	transform: scale(.86);
-	transform-origin: top right;
-}
-.hw-notebook[data-tools-side="left"] .hw-arc {
-	transform: scale(-.86, .86);
-	transform-origin: top center;
-}
 
 /* First-run setup: a touch-sized close. */
 .lh-setup > header button:last-child {
@@ -3067,3 +3097,281 @@ button[role="switch"][aria-checked="true"] > span {
 		padding-bottom: 4px;
 	}
 }
+
+/* ============================================================
+ * Writing tools as a wheel (default): one compact disc docked in the
+ * page's upper corner. Tools and undo/redo sit on the ring, the hub shows
+ * the current ink and size and opens its settings.
+ * ============================================================ */
+.hw-overlay[data-variant="wheel"] .hw-arc {
+	top: 10px;
+	right: 10px;
+	width: 172px;
+	height: 172px;
+	transform: none;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border: 1px solid var(--tool-edge);
+	border-radius: 50%;
+	background: var(--tool-surface);
+	box-shadow: var(--tool-shadow);
+	pointer-events: auto;
+}
+.hw-overlay[data-variant="wheel"] .hw-arcTrack {
+	display: none;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton {
+	width: 50px;
+	height: 50px;
+	gap: 0;
+	padding: 0;
+	border-radius: 50%;
+	border-color: transparent;
+	background: transparent;
+	box-shadow: none;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton .hw-toolName {
+	display: none;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton .hw-toolGlyph {
+	width: 24px;
+	height: 30px;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton[aria-pressed="true"] {
+	background: var(--accent);
+	border-color: color-mix(in srgb, var(--foreground) 45%, transparent);
+	color: var(--foreground);
+}
+/* Ring positions (centre 86,86; radius 58; 50px buttons). */
+.hw-overlay[data-variant="wheel"] .hw-arc_pen { left: 61px; top: 3px; right: auto; }
+.hw-overlay[data-variant="wheel"] .hw-arc_highlighter { left: 6px; top: 43px; right: auto; }
+.hw-overlay[data-variant="wheel"] .hw-arc_eraser { left: 27px; top: 108px; right: auto; }
+.hw-overlay[data-variant="wheel"] .hw-arcUndo {
+	display: contents;
+}
+.hw-overlay[data-variant="wheel"] .hw-arcUndo > .hw-iconButton {
+	position: absolute;
+	width: 48px;
+	height: 48px;
+	pointer-events: auto;
+	background: transparent;
+}
+.hw-overlay[data-variant="wheel"] .hw-arcUndo > .hw-iconButton:first-child { left: 96px; top: 109px; }
+.hw-overlay[data-variant="wheel"] .hw-arcUndo > .hw-iconButton:last-child { left: 117px; top: 44px; }
+.hw-wheelHub {
+	position: absolute;
+	left: 56px;
+	top: 56px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 3px;
+	width: 60px;
+	height: 60px;
+	border: 1px solid var(--tool-edge);
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--card) 80%, var(--foreground) 6%);
+	pointer-events: auto;
+}
+.hw-wheelHub[aria-expanded="true"] {
+	border-color: var(--primary);
+}
+.hw-wheelSwatch {
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	box-shadow: inset 0 0 0 1px #ffffff40;
+}
+.hw-wheelSwatch[data-tool="eraser"] {
+	border: 2px dashed var(--muted-foreground);
+}
+.hw-wheelSize {
+	max-width: 52px;
+	overflow: hidden;
+	color: var(--muted-foreground);
+	font-family: var(--font-prose);
+	font-size: 10.5px;
+	line-height: 1;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.hw-overlay[data-variant="wheel"] .hw-arcInspector {
+	top: 0;
+	right: 184px;
+}
+/* Left-handed: the wheel docks in the upper-left corner, unmirrored. */
+.hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arc {
+	left: 10px;
+	right: auto;
+	transform: none;
+}
+.hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arc > .hw-toolButton,
+.hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arcUndo,
+.hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arcInspector {
+	transform: none;
+}
+.hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arcInspector {
+	right: auto;
+	left: 184px;
+}
+
+/* Behind-the-scenes work (thinking notes, lookups) folds into one quiet
+   line per run; the lesson's own content stays in the flow. */
+.lh-steps {
+	margin: 2px 0 6px;
+	max-width: 40rem;
+}
+.lh-steps-summary {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 32px;
+	max-width: 100%;
+	padding: 2px 10px 2px 6px;
+	margin-left: -6px;
+	border-radius: 999px;
+	cursor: pointer;
+	list-style: none;
+	font-size: 13px;
+	color: var(--muted-foreground);
+	user-select: none;
+}
+.lh-steps-summary::-webkit-details-marker { display: none; }
+.lh-steps-summary:hover { background: color-mix(in oklab, var(--muted) 70%, transparent); }
+.lh-steps-summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.lh-steps-chevron {
+	width: 14px;
+	height: 14px;
+	flex: none;
+	opacity: .6;
+	transition: transform .15s ease;
+}
+.lh-steps[open] > .lh-steps-summary .lh-steps-chevron { transform: rotate(90deg); }
+.lh-steps-title { font-weight: 500; white-space: nowrap; }
+.lh-steps-detail {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: .8;
+}
+.lh-steps-detail::before { content: "· "; }
+.lh-steps-body {
+	margin: 4px 0 4px 6px;
+	padding-left: 14px;
+	border-left: 2px solid color-mix(in oklab, var(--border) 80%, transparent);
+}
+.lh-steps-body > * + * { margin-top: 2px; }
+@media (pointer: coarse) {
+	.lh-steps-summary { min-height: 40px; }
+}
+/* A thinking-only run: the run's own line is the heading, so the note
+   reads straight away (the inner toggle returns while it streams). */
+.lh-steps[data-kind="thinking"]:not([data-live]) .lh-reasoning > button:first-child { display: none; }
+.lh-steps .lh-reasoning { margin-bottom: 6px; }
+.lh-steps-body .lh-reasoning [data-slot="collapsible-content"],
+.lh-steps-body .lh-reasoning > div {
+	font-size: 14px;
+	line-height: 1.55;
+	color: var(--muted-foreground);
+}
+
+/* Attached pages: a remove (×) on each one, touch-sized, over its corner. */
+.lh-writing-thumb { padding-top: 6px; padding-right: 6px; }
+.lh-writing-remove {
+	position: absolute;
+	top: -4px;
+	right: -4px;
+	z-index: 1;
+	display: grid;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: var(--card);
+	color: var(--foreground);
+	box-shadow: var(--lh-shadow-sm, 0 1px 3px #0005);
+}
+.lh-writing-remove::after { content: ""; position: absolute; inset: -6px; }
+.lh-writing-remove svg { width: 15px; height: 15px; }
+.lh-writing-remove:hover { background: var(--accent); }
+
+/* Phones: recent background jobs scroll in a shorter box, so the session
+   list above stays in view. */
+@media (max-width: 767px) {
+	.lh-activity-history { max-height: 30dvh; }
+}
+
+/* Portrait tablets: card eyebrows and step lines read at arm's length. */
+@media (min-width: 768px) and (max-width: 1023px) and (pointer: coarse) {
+	.lh-column .uppercase.tracking-wide,
+	.lh-dock-block .uppercase.tracking-wide { font-size: 12.5px; }
+	.lh-steps-summary { font-size: 14.5px; }
+}
+
+/* A finger on the page: a short, quiet note that the pen writes. */
+.hw-fingerHint {
+	position: absolute;
+	left: 50%;
+	bottom: 20px;
+	z-index: 6;
+	transform: translateX(-50%);
+	padding: 8px 14px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--popover) 92%, transparent);
+	border: 1px solid var(--border);
+	color: var(--foreground);
+	font-size: 14px;
+	white-space: nowrap;
+	box-shadow: var(--lh-shadow-md, 0 6px 20px #0006);
+	pointer-events: none;
+	animation: hw-hint-in .18s ease-out;
+}
+@keyframes hw-hint-in { from { opacity: 0; transform: translate(-50%, 6px); } }
+
+/* Model picker: the price, provider and context read as scannable
+   details, a step below the model name rather than faint footnotes. */
+.lh-model-menu .text-muted-foreground {
+	color: color-mix(in oklab, var(--foreground) 68%, var(--card));
+}
+.lh-model-detail {
+	font-size: 12.5px;
+	margin-top: 1px;
+}
+
+/* Folded wheel: just the hub (current ink and size); tap it to unfold. */
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] {
+	width: 64px;
+	height: 64px;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-toolButton,
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo {
+	display: none;
+}
+.hw-overlay[data-variant="wheel"] .hw-arc[data-folded] .hw-wheelHub {
+	left: 2px;
+	top: 2px;
+	border-color: transparent;
+	background: transparent;
+}
+.hw-foldWheel {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 100%;
+	min-height: 44px;
+	margin-top: 6px;
+	padding: 0 10px;
+	border-top: 1px solid var(--tool-edge);
+	color: var(--foreground);
+	font-size: 14px;
+	text-align: left;
+}
+.hw-foldWheel span { color: var(--muted-foreground); font-size: 12.5px; }
+.hw-wheelSize { font-size: 11.5px; }

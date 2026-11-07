@@ -36,6 +36,15 @@ export function createSharedWritingStore(root: string): SharedWritingStore {
 		try { fs.writeFileSync(temp, JSON.stringify(index), { flag: "wx" }); fs.renameSync(temp, target); }
 		finally { fs.rmSync(temp, { force: true }); }
 	}
+	function readDismissed(chatId: string): string[] {
+		try {
+			const ids = z.array(z.string().regex(/^writing_[A-Za-z0-9_-]+$/)).parse(JSON.parse(fs.readFileSync(path.join(directory(chatId), "dismissed.json"), "utf8")));
+			return ids;
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+			throw error;
+		}
+	}
 	function bundle(chatId: string, id: string) {
 		const dir = bundlePath(chatId, id);
 		const manifest = manifestSchema.parse(JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")));
@@ -73,7 +82,16 @@ export function createSharedWritingStore(root: string): SharedWritingStore {
 			const dir = directory(chatId);
 			const index = readIndex(chatId);
 			const raw = !fs.existsSync(dir) ? [] : fs.readdirSync(dir).filter((f) => /^writing_[A-Za-z0-9_-]+\.png$/.test(f)).map((f) => ({ id: f.slice(0, -4), createdAt: fs.statSync(path.join(dir, f)).mtime.toISOString() }));
-			return { index, writing: [...raw, ...Object.keys(index.committed).map(id => metadata(chatId, id, index))].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)) };
+			return { index, dismissed: readDismissed(chatId), writing: [...raw, ...Object.keys(index.committed).map(id => metadata(chatId, id, index))].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)) };
+		},
+		dismiss(chatId, id) {
+			bundlePath(chatId, id);
+			const ids = readDismissed(chatId);
+			if (ids.includes(id)) return;
+			const target = path.join(directory(chatId), "dismissed.json"), temp = `${target}.${crypto.randomUUID()}.tmp`;
+			fs.mkdirSync(directory(chatId), { recursive: true });
+			try { fs.writeFileSync(temp, JSON.stringify([...ids, id]), { flag: "wx" }); fs.renameSync(temp, target); }
+			finally { fs.rmSync(temp, { force: true }); }
 		},
 		putNotebook(chatId, capture) {
 			const source = notebookSourceSchema.parse(capture.source), dir = directory(chatId), target = bundlePath(chatId, capture.writingId);

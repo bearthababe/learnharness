@@ -19,8 +19,8 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 		return { workspace: rect(".session-workspace"), tutor: rect(".session-tutor"), slot: rect(".notebook-slot"), card: rect(".notebook-frame"), divider: rect(".notebook-split-divider"), direction: getComputedStyle(document.querySelector(".session-panes")).flexDirection };
 	});
 	const frame = r => {
-		// The card is inset evenly in its slot: 8px on phones, 16px wider up.
-		const inset = r.workspace.width < 768 ? 8 : 16;
+		// Phones: an edge-to-edge bottom sheet; wider: a card inset 16px.
+		const inset = r.workspace.width < 768 ? 0 : 16;
 		assert.equal(Math.round(r.card.x - r.slot.x), inset);
 		assert.equal(Math.round(r.card.y - r.slot.y), inset);
 		assert.equal(Math.round(r.slot.right - r.card.right), inset);

@@ -6,6 +6,7 @@ import { useServerEvent, useServerResync } from "@/components/server-events";
 import { HandwritingPagesContext } from "./handwriting/pages-context";
 import type { OpenChoice, SnapshotWriting } from "./handwriting/pages";
 import { useMenuEscape } from "./menu-escape";
+import { XIcon } from "lucide-react";
 
 export function useSharedWriting(chatId: string, messages: readonly LhMessage[]) {
 	const submittedKey = messages.flatMap((m) => m.sharedWriting?.map((w) => w.id) ?? []).join(",");
@@ -50,7 +51,7 @@ export function useSharedWriting(chatId: string, messages: readonly LhMessage[])
 	return { pending, pageAttachments, error, refresh, ids: () => pending.map((w) => w.id) };
 }
 
-export function SharedWritingImages({ chatId, writing }: { chatId: string; writing: readonly Pick<SharedWriting, "id">[] }) {
+export function SharedWritingImages({ chatId, writing, onRemove }: { chatId: string; writing: readonly Pick<SharedWriting, "id">[]; onRemove?: (id: string) => void }) {
 	const actions = useContext(HandwritingPagesContext);
 	const [opened, setOpened] = useState<{ item: SnapshotWriting; label: string; decision?: boolean } | null>(null), [menu, setMenu] = useState<string | null>(null), [notice, setNotice] = useState<string | null>(null), [busy, setBusy] = useState(false);
 	async function run(item: SnapshotWriting, duplicate: boolean) {
@@ -59,11 +60,11 @@ export function SharedWritingImages({ chatId, writing }: { chatId: string; writi
 		finally { setBusy(false); }
 	}
 	return <><div className="flex max-h-32 gap-2 overflow-auto overscroll-contain py-2" data-testid="shared-writing-images">
-		{writing.map((item, index) => <div key={item.id} className="shrink-0" data-writing-id={item.id}><button type="button" onClick={() => { setMenu(null); setOpened({ item, label: `Handwritten working ${index + 1}` }); }} className="rounded border bg-white p-1" style={{ filter: "var(--lh-writing-image-filter)" }} aria-label={`Open handwritten working ${index + 1}`}>
+		{writing.map((item, index) => <div key={item.id} className="flex shrink-0 items-end gap-1" data-writing-id={item.id}><span className="lh-writing-thumb relative inline-block">{onRemove && <button type="button" className="lh-writing-remove" aria-label={`Remove handwritten working ${index + 1} from this message`} title="Remove from this message" data-testid="writing-remove" disabled={busy} onClick={() => { setMenu(null); onRemove(item.id); }}><XIcon aria-hidden /></button>}<button type="button" onClick={() => { setMenu(null); setOpened({ item, label: `Handwritten working ${index + 1}` }); }} className="rounded border bg-white p-1" style={{ filter: "var(--lh-writing-image-filter)" }} aria-label={`Open handwritten working ${index + 1}`}>
 			{/* Theme presentation only; the private endpoint retains original PNG bytes. */}
 			{/* eslint-disable-next-line @next/next/no-img-element */}
 			<img src={sharedWritingImageUrl(chatId, item.id)} alt={`Handwritten working ${index + 1}`} className="h-24 max-w-48 object-contain" />
-		</button>{actions && <button type="button" className="min-h-11 px-3" aria-label="Snapshot actions" aria-expanded={menu === item.id} disabled={busy} onClick={() => setMenu(value => value === item.id ? null : item.id)}>⋯</button>}
+		</button></span>{actions && <button type="button" className="min-h-11 px-3" aria-label="Snapshot actions" aria-expanded={menu === item.id} disabled={busy} onClick={() => setMenu(value => value === item.id ? null : item.id)}>⋯</button>}
 		</div>)}
 	</div>{menu && <SnapshotMenu duplicate={() => void run(writing.find(item => item.id === menu)!, true)} open={() => void run(writing.find(item => item.id === menu)!, false)} close={() => { const id = menu; setMenu(null); document.querySelector<HTMLButtonElement>(`[data-writing-id="${id}"] [aria-label="Snapshot actions"]`)?.focus(); }} />}
 	{notice && <p role="status" data-testid="snapshot-action-status">{notice}</p>}
@@ -150,12 +151,25 @@ export function SharedWritingPanel({ chatId, writing, busy }: {
 }) {
 	const [uploadUrl, setUploadUrl] = useState("");
 	const [copied, setCopied] = useState(false);
+	const [removeError, setRemoveError] = useState<string | null>(null);
+	// Removing only takes the snapshot out of this message: the page stays
+	// in the notebook and can be attached again.
+	const remove = (id: string) => {
+		setRemoveError(null);
+		void fetch(`/api/chats/${encodeURIComponent(chatId)}/writing/${encodeURIComponent(id)}`, { method: "DELETE" })
+			.then(async (response) => {
+				if (!response.ok && response.status !== 409) throw new Error(((await response.json().catch(() => null)) as { error?: string } | null)?.error ?? "Couldn’t remove it. Try again.");
+			})
+			.catch((error: unknown) => setRemoveError(error instanceof Error ? error.message : "Couldn’t remove it. Try again."))
+			.finally(() => void writing.refresh().catch(() => {}));
+	};
 	useEffect(() => { setUploadUrl(`${location.origin}/api/chats/${encodeURIComponent(chatId)}/writing`); }, [chatId]);
 	return <section className="lh-shared-writing mb-2 rounded-lg border border-border bg-card px-3 py-2 text-xs" data-has-writing={writing.pending.length > 0 || !!writing.error} aria-label="Shared writing">
 		{writing.pending.length > 0 && <>
 			<p className="font-medium">{writing.pending.length} shared {writing.pending.length === 1 ? "image" : "images"} · not sent</p>
-			<SharedWritingImages chatId={chatId} writing={writing.pending} />
-			<p className="text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Review the images, add an explanation below if needed, then send your answer."}</p>
+			<SharedWritingImages chatId={chatId} writing={writing.pending} onRemove={busy ? undefined : remove} />
+			<p className="text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Review the images, add an explanation below if needed, then send your answer. × takes a page out of this message; it stays in your notebook."}</p>
+			{removeError && <p role="alert" className="text-destructive">{removeError}</p>}
 		</>}
 		{writing.error && <p role="alert" className="text-destructive">{writing.error} <button type="button" className="underline" onClick={() => void writing.refresh().catch(() => {})}>Try again</button></p>}
 		<details className={`lh-concepts-setup ${writing.pending.length ? "mt-2" : ""}`}>
