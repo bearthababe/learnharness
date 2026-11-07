@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, SparklesIcon } from "lucide-react";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatSettings, ModelCatalogEntry, ModelCatalogResponse, ModelsSettings, UserSettings } from "@/src/core";
@@ -280,7 +280,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 	const modelMenu = <>
 		{error && <div className="mb-1.5 text-destructive">{error}</div>}
 		<ModelMenuList models={catalog?.models} effectiveId={effectiveId} effectiveProvider={effectiveProvider} onPick={pickModel} focusSearch={!phone}
-			footer={catalog && catalog.models.length === 0 ? "No models — add a provider key in Keys" : chatId ? "This session's model" : "Strong tier — the default for new sessions"} />
+			footer={catalog && catalog.models.length === 0 ? "No models — add a provider key in Keys" : `${chatId ? "This session's model" : "Strong tier — the default for new sessions"}${effectiveId ? `: ${prettyModel(effectiveId)}` : ""}`} />
 	</>;
 	return (
 		<div ref={containerRef} className="relative flex items-center gap-1.5" data-testid="model-control">
@@ -300,7 +300,10 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				// graph no longer bleeds through these pills.
 				className="lh-pill flex h-8 min-w-0 items-center gap-1 rounded-full bg-card/90 px-3 text-[13px] backdrop-blur transition-colors hover:bg-accent"
 			>
-				<span className="text-card-foreground">{effectiveId ? prettyModel(effectiveId) : "—"}</span>
+				{/* Phones show only the model mark and its chevron (owner's
+				    composer reference): the name lives in the menu and the label. */}
+				<span className="lh-model-name text-card-foreground">{effectiveId ? prettyModel(effectiveId) : "—"}</span>
+				<SparklesIcon aria-hidden className="lh-model-glyph hidden size-[18px] shrink-0 text-card-foreground" />
 				<ChevronDownIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
 			</button>
 			</Hint>

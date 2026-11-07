@@ -1342,8 +1342,10 @@ try {
 	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-attempt-review"]'));
 	await page.goto(`${origin}/chat/mobile_selection`, { waitUntil: "networkidle2" });
 	await page.click('[data-testid="reading-thinking-field"] [data-testid="teach-check-reveal"]');
-	await page.waitForSelector('[data-testid="thinking-field"] [data-file-path-input]', { visible: true });
+	// Phones bring in confidence and "Your thinking" once an answer is picked.
+	await page.waitForSelector('[role="radio"]', { visible: true });
 	await page.locator('[role="radio"]').filter(button => button.textContent.includes("Halve the area")).click();
+	await page.waitForSelector('[data-testid="thinking-field"] [data-file-path-input]', { visible: true });
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "The force stays the same.");
 	assert.ok(await page.$('[data-testid="confidence-slider"]'), "Selection questions retain confidence");
 	await page.click('.lh-phone-plan');

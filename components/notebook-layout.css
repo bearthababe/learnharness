@@ -21,7 +21,7 @@
 .notebook-instruction-form { flex: none; max-height: calc(100% - 52px); padding: 8px; overflow-y: auto; overscroll-behavior: contain; }
 .notebook-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px; }
 .notebook-input-row .lh-compact-field { display: flex; position: relative; min-width: 0; min-height: 54px; border: 1px solid var(--border); border-radius: 12px; background: var(--background); }
-.notebook-input-row .lh-compact-field:focus-within { border-color: var(--primary); }
+.notebook-input-row .lh-compact-field:focus-within { border-color: color-mix(in oklab, var(--foreground) 34%, var(--border)); }
 .notebook-input-row textarea { min-width: 0; min-height: 52px; max-height: min(8rem, 20dvh); padding: 12px 8px; font-size: var(--text-lg); line-height: var(--text-lg--line-height); field-sizing: content; overflow-y: auto; overscroll-behavior: contain; }
 .notebook-input-row [data-has-mic] > textarea { flex: 0 1 auto; width: calc(100% - 48px); padding-right: 0; }
 .notebook-input-row textarea:placeholder-shown { white-space: nowrap; text-overflow: ellipsis; }

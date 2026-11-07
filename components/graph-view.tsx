@@ -64,7 +64,7 @@
  */
 
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { NotesImportControl, NotesImportErrors, NotesImportNotices, NotesImportRecovery, useNotesImport } from "@/components/notes-import.tsx";
+import { NotesImportControl, NotesImportErrors, NotesImportNotices, NotesImportReceipts, NotesImportRecovery, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
 import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon, XIcon } from "lucide-react";
@@ -359,7 +359,7 @@ export function GraphCostControl({ costs }: { costs: GraphCostSummary }) {
 				type="button"
 				aria-expanded={open}
 				onClick={() => setOpen((o) => !o)}
-				className={`rounded-lg px-2 py-1 text-xs tabular-nums transition-colors hover:bg-accent ${
+				className={`lh-graph-cost rounded-lg px-2 py-1 text-xs tabular-nums transition-colors hover:bg-accent ${
 					open ? "text-foreground" : "text-muted-foreground hover:text-foreground"
 				}`}
 			>
@@ -1147,6 +1147,9 @@ export function GraphView({
 			refreshActivity();
 			setTimeout(() => refreshActivity(), 600);
 		},
+		// An import's merge is on disk when its response returns: refetch so
+		// search and the canvas show the new ideas without a reload.
+		onFinish: () => setRefreshTick((tick) => tick + 1),
 	});
 	const { importing, onImportFiles } = notesImport;
 
@@ -1747,8 +1750,9 @@ export function GraphView({
 				/>
 			</div>
 
+			<NotesImportReceipts receipts={notesImport.receipts} onDismiss={notesImport.dismiss} />
 			<NotesImportErrors errors={notesImport.errors} />
-				<NotesImportRecovery errors={notesImport.errors} retryable={notesImport.retryable} onRetry={notesImport.retry} onDismiss={notesImport.dismiss} onOpenSettings={() => openSettings("keys")} />
+				<NotesImportRecovery errors={notesImport.errors} retryable={notesImport.retryable} onRetry={notesImport.retry} onDismiss={notesImport.dismiss} onOpenSettings={() => openSettings("keys")} onOpenModels={() => openSettings("agent")} />
 			<NotesImportNotices notices={notesImport.notices} />
 			{/* Top-right tail (owner, 2026-09-20): the pipeline cost number —
 			    just a number, hover-highlighted, dropdown breakdown — then

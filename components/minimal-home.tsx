@@ -22,7 +22,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ListTreeIcon } from "lucide-react";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { GraphCostControl } from "@/components/graph-view.tsx";
-import { NotesImportControl, NotesImportErrors, NotesImportNotices, NotesImportRecovery, useNotesImport } from "@/components/notes-import.tsx";
+import { NotesImportControl, NotesImportErrors, NotesImportNotices, NotesImportReceipts, NotesImportRecovery, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import { Hint } from "@/components/ui/hint";
 import { useSidebar } from "@/components/sidebar";
@@ -175,8 +175,9 @@ export function MinimalHome({
 					</div>
 					<NotesImportControl importing={importing} onImportFiles={onImportFiles} />
 				</div>
+				<NotesImportReceipts receipts={notesImport.receipts} onDismiss={notesImport.dismiss} />
 				<NotesImportErrors errors={notesImport.errors} />
-				<NotesImportRecovery errors={notesImport.errors} retryable={notesImport.retryable} onRetry={notesImport.retry} onDismiss={notesImport.dismiss} onOpenSettings={() => openSettings("keys")} />
+				<NotesImportRecovery errors={notesImport.errors} retryable={notesImport.retryable} onRetry={notesImport.retry} onDismiss={notesImport.dismiss} onOpenSettings={() => openSettings("keys")} onOpenModels={() => openSettings("agent")} />
 				<NotesImportNotices notices={notesImport.notices} />
 				{costs && costs.runs.length > 0 && <GraphCostControl costs={costs} />}
 			</div>

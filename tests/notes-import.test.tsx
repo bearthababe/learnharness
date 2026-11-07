@@ -69,7 +69,7 @@ for (const outcome of ["completed", "failed", "partial", "aborted", "busy"] as c
 	globalThis.fetch = async () => Response.json({ results: [result] });
 	await mount(); await submit([file]);
 	assert.equal(current.importing, false); assert.equal(starts, 1); assert.equal(finishes, 1);
-	assert.deepEqual(Object.keys(current).sort(), ["dismiss", "errors", "importing", "notices", "onImportFiles", "retry", "retryable"]);
+	assert.deepEqual(Object.keys(current).sort(), ["dismiss", "errors", "importing", "notices", "onImportFiles", "receipts", "retry", "retryable"]);
 	const html = host!.innerHTML;
 	assert.doesNotMatch(html, /<button|<section|<ul|border|bg-card|rounded|shadow|Retry|Dismiss|Import complete/);
 	if (outcome === "completed") { assert.equal(html, ""); assert.deepEqual(current.errors, []); }
@@ -187,4 +187,10 @@ it("provider refusals read as plain guidance instead of a raw payload", () => {
 		"buoyancy.md: nothing was extracted — the model provider turned the request down. Check your provider key in Settings, then try again. (Error 401)");
 	assert.equal(readableImportError("a.pdf: OCR not supported yet."), "a.pdf: OCR not supported yet.");
 	assert.match(readableImportError('n.md: 503: {"error":"busy"}'), /didn't respond normally\. Try again in a moment\. \(Error 503\)/);
+});
+
+it("refusal codes and unsupported files read as plain guidance", () => {
+	assert.equal(readableImportError("n.md: Models are not configured\nmodels_not_configured — cheap"), "n.md: Models are not configured — nothing was extracted. Set up your models, then try again.");
+	assert.equal(readableImportError("n.md: Missing key\nprovider_key_missing — openai"), "n.md: Missing key — nothing was extracted. Add the provider key in Settings, then try again.");
+	assert.equal(readableImportError("a.docx: Unsupported format or unsafe relative path."), "a.docx: this file can't be imported. Use Markdown (.md), plain text (.txt) or PDF.");
 });

@@ -107,10 +107,14 @@ export function useHandwritingEditor(targetKey: string, read: () => EditorSnapsh
 	return bridge;
 }
 
-export function HandwritingDeliveryNotice({ bridge, activeTarget }: { bridge: Bridge; activeTarget?: string }) {
+export function HandwritingDeliveryNotice({ bridge, activeTarget, pendingWriting }: { bridge: Bridge; activeTarget?: string;
+	/** How many shared images still wait to be sent; with none, an
+	 *  "attached · not sent" line is stale (the page went with the answer). */
+	pendingWriting?: number }) {
 	const model = bridge.model, attempt = model?.attempt;
+	const entries = bridge.attachment()?.noticeEntries().filter(({ kind }) => pendingWriting !== 0 || (kind !== "attached" && kind !== "updated")) ?? [];
 	return <div className="text-xs" data-testid="handwriting-delivery">
-		{bridge.attachment()?.noticeEntries().map(({ pageId, text, refresh }) => <p role="status" key={pageId}>{text}{refresh && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.refreshReview().catch(() => {})}>Refresh review</button>}</p>)}
+		{entries.map(({ pageId, text, refresh }) => <p role="status" key={pageId}>{text}{refresh && <button type="button" className="min-h-11 px-2 underline" onClick={() => void bridge.refreshReview().catch(() => {})}>Refresh review</button>}</p>)}
 		{model?.notice && <p role="status">{model.notice}</p>}
 		{attempt && <div data-testid="handwriting-attempt-review"><p>Original answer · delivery unconfirmed</p><pre className="max-h-48 overflow-auto whitespace-pre-wrap">{JSON.stringify(attempt.input, null, 2)}</pre><SharedWritingImages chatId={attempt.chatId} writing={attempt.imageVersions.map(image => ({ id: image.writingId }))} /><p>Later edits are not part of this answer.</p></div>}
 		{model?.savedDrafts().filter(draft => draft.targetKey !== activeTarget && !bridge.field(draft.targetKey)).map(draft => <div key={draft.draftId}><p>This draft belongs to an earlier question.</p><pre className="max-h-48 overflow-auto whitespace-pre-wrap">{JSON.stringify(draft.editor, null, 2)}</pre></div>)}

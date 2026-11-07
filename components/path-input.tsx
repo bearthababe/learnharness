@@ -240,7 +240,10 @@ export const PathInput = React.forwardRef<HTMLDivElement, PathInputProps>(functi
 			},
 		};
 		paint(saved, false);
-		if (initial.current.autoFocus) { root.focus(); restorePathSelection(root, saved); }
+		// Touch-first screens never auto-focus: focusing would raise the
+		// on-screen keyboard over the page before the learner chose to type.
+		const touchFirst = typeof window.matchMedia === "function" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+		if (initial.current.autoFocus && !touchFirst) { root.focus(); restorePathSelection(root, saved); }
 		root.addEventListener(INSERT_FILE_PATHS_EVENT, insertEvent);
 		root.addEventListener("beforeinput", beforeInput);
 		root.addEventListener("input", input);

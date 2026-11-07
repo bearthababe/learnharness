@@ -1117,10 +1117,6 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.lh-reading-column :is(.lh-prose, [data-streamdown="table"]) { font-size: calc(var(--lh-prose-size) * 1.1875); }
 	.lh-reading-column { max-width: 624px; padding-inline: 32px; }
 	.lh-dock-column { max-width: 640px; padding-inline: 24px; }
-	/* A question or problem waiting in the dock: a short transcript sits just
-	   above it, so the lead-in and the task read as one workspace (long
-	   transcripts scroll as usual). */
-	.lh-reading-column[data-task-pending] { justify-content: flex-end; }
 	/* Answer footers are touch-first: no keyboard hint, a full-size Submit. */
 	.lh-submit-hint[data-keys-hint] { visibility: hidden; }
 	.lh-question-submit :is([data-testid="question-send"], [data-testid="practice-send"]) { height: 44px; padding-inline: 20px; border-radius: 10px; font-size: 15px; }
@@ -1130,7 +1126,8 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	:root .lh-compact-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px; }
 	:root form.lh-compact-row:has([data-testid="attach-files"]) { grid-template-columns: minmax(0, 1fr) auto auto; }
 	:root .lh-compact-field { display: flex; position: relative; min-width: 0; min-height: 52px; border: 1px solid var(--border); border-radius: 12px; background: var(--background); }
-	:root .lh-compact-field:focus-within { border-color: var(--primary); }
+	/* Focus is a quiet grey edge, not a bright white outline. */
+	:root .lh-compact-field:focus-within { border-color: color-mix(in oklab, var(--foreground) 34%, var(--border)); }
 	:root [data-testid="composer"] .lh-compact-field { border-color: transparent; background: transparent; }
 	:root .lh-compact-field > :is(textarea, [data-file-path-input]) { width: 100%; min-width: 0; min-height: 50px; max-height: 30dvh; padding: 13px 12px; line-height: 24px; field-sizing: content; overflow-y: auto; overscroll-behavior: contain; }
 	:root .lh-compact-field[data-has-mic] > :is(textarea, [data-file-path-input]) { flex: 0 1 auto; width: calc(100% - 52px); padding-right: 0; }
@@ -1211,10 +1208,12 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.lh-stats-bar { font-size: 13px; }
 }
 @media (max-width: 767px) {
-	/* The practice pause: "Next problem" keeps its words on a full-width row
-	   of its own, so the field above keeps its room. */
+	/* The practice pause: "Next problem" stays inline with its words; the
+	   attach button steps aside until something is typed, so the field keeps
+	   its room and the composer never grows over the problem. */
 	:root form.lh-compact-row:has([data-testid="next-problem-button"]) { grid-template-columns: minmax(0, 1fr) auto; }
-	:root form.lh-compact-row > [data-testid="next-problem-button"] { grid-column: 1 / -1; order: 3; width: 100%; min-height: 44px; margin-bottom: 0; }
+	:root form.lh-compact-row:has([data-testid="next-problem-button"]) [data-testid="attach-files"] { display: none; }
+	:root form.lh-compact-row > [data-testid="next-problem-button"] { min-height: 44px; margin-bottom: 5px; padding-inline: 14px; }
 }
 
 /* ── Phone + equation notebook (whole-app redesign, round 6) ─────────────
@@ -1226,7 +1225,9 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 	.session-panes[data-notebook-open="true"] .lh-reading-input[data-reading-claim="false"]:has([data-file-path-input][data-empty="true"]) { display: none; }
 	.session-panes[data-notebook-open="true"] [data-testid="question-dock"] .lh-input-label { display: none; }
 	.session-panes[data-notebook-open="true"] .lh-question-confidence { padding-block: 4px; }
-	.session-panes[data-notebook-open="true"] .lh-session-controls { display: inline-flex; height: 44px; padding-inline: 10px; }
+	/* Icon-only here, so the session title keeps its width. */
+	.session-panes[data-notebook-open="true"] .lh-session-controls { display: inline-flex; width: 44px; height: 44px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+	.session-panes[data-notebook-open="true"] .lh-session-controls svg { width: 18px; height: 18px; }
 	.session-panes[data-notebook-open="true"] .lh-dock-block[data-tablet-controls="open"] .lh-stats-bar {
 		display: flex; position: absolute; z-index: 30; bottom: calc(100% + 8px); left: 12px; right: 12px;
 		padding: 4px 6px; border: 1px solid var(--border); border-radius: 16px; background: var(--popover); box-shadow: 0 16px 40px #0007;
@@ -1244,4 +1245,38 @@ html[data-lh-keyboard] :is(button, a, input, textarea, select, summary, [role="b
 .lh-option-key { display: none; }
 @media (min-width: 768px) and (not (pointer: coarse)) {
 	.lh-option-key { display: inline-flex; align-self: center; align-items: center; justify-content: center; flex-shrink: 0; min-width: 22px; height: 22px; padding-inline: 5px; border: 1px solid var(--border); border-radius: 6px; font: 500 12px/1 var(--font-ui); color: var(--lh-faint); }
+}
+
+/* Phones: a select question shows its options first; confidence and
+   "Your thinking" arrive once an answer is picked (owner amendment 2). */
+.lh-choice-hint { display: none; }
+@media (max-width: 767px) {
+	[data-testid="question-dock"][data-awaiting-choice] :is(.lh-question-confidence, .lh-question-form) { display: none; }
+	[data-testid="question-dock"][data-awaiting-choice] .lh-choice-hint { display: block; padding: 8px 16px 12px; border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent); font-size: 13px; color: var(--muted-foreground); }
+}
+
+/* Phones: the lesson's control row (Plan, model, thinking, Usage) reads at
+   the same size as the rest of the chrome. */
+@media (max-width: 767px) {
+	.lh-compact-stats { font-size: 14px; }
+	.lh-compact-stats :is(.lh-phone-plan, [data-testid="stats-summary"]) { color: color-mix(in oklab, var(--foreground) 78%, transparent); font-size: 14.5px; }
+	.lh-compact-stats [data-testid="model-control"] button { font-size: 14.5px; }
+}
+
+/* Touch screens: small text controls keep a finger-sized target — the
+   history's fold rows, the graph's cost chip and the copy corners of
+   tables and code (always visible on touch, where no hover reveals them). */
+@media (pointer: coarse) {
+	.lh-fold-toggle { min-height: 40px; }
+	.lh-graph-cost { min-width: 44px; min-height: 44px; padding-inline: 10px; font-size: 13.5px; }
+	.lh-copy-corner { position: relative; width: 36px; height: 36px; opacity: .8; }
+	.lh-copy-corner::after { content: ""; position: absolute; inset: -4px; }
+}
+
+/* Keyboard-and-mouse screens name the coverage pie too: [◔ Graph], beside
+   Plan — a lone circle in the header read as a loading spinner. */
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	.lh-coverage-ring > button { width: auto; height: 34px; gap: 6px; padding-inline: 8px 10px; border-radius: 8px; }
+	.lh-coverage-ring .lh-coverage-glyph { width: 18px; height: 18px; }
+	.lh-coverage-ring .lh-coverage-label { display: inline; font-size: 14px; color: var(--muted-foreground); }
 }

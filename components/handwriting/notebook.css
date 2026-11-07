@@ -96,3 +96,30 @@
 @media (min-width: 768px) {
 	.hw-splitLayout:not(.hw-fullNotebook) .hw-attachmentNotice { display: none; }
 }
+
+/* ── The tool wheel (owner amendment 2; after the Concepts wheel) ─────────
+   One 184px disc docked in the paper's upper-right corner: pen, highlighter
+   and eraser on its ring (52px each), Undo/Redo on its left, the current
+   ink and tool in the middle. Every control is at least 44px. */
+.hw-wheel { position: absolute; top: 10px; right: 10px; width: 184px; height: 184px; pointer-events: none; }
+.hw-wheel > * { pointer-events: auto; }
+.hw-wheelRing { position: absolute; inset: 0; border-radius: 50%; background: var(--tool-surface); border: 1px solid var(--tool-edge); box-shadow: var(--tool-shadow); pointer-events: none !important; }
+.hw-wheelRing::after { content: ""; position: absolute; inset: 56px; border-radius: 50%; border: 1px solid var(--tool-edge); }
+.hw-wheelTool { position: absolute; display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; border: 1px solid transparent; border-radius: 50%; color: var(--muted-foreground); transition: background 120ms, color 120ms, border-color 120ms; }
+.hw-wheelTool:hover { background: var(--accent); color: var(--foreground); }
+.hw-wheelTool[aria-pressed="true"] { color: var(--foreground); background: color-mix(in srgb, var(--foreground) 12%, var(--card)); border-color: color-mix(in srgb, var(--foreground) 55%, transparent); }
+.hw-wheelTool .hw-toolGlyph { width: 26px; height: 32px; }
+/* Five evenly spaced slots on the ring (every 72° from 12 o'clock): pen,
+   highlighter, eraser, then redo and undo — no empty side of the disc. */
+.hw-wheel_pen { left: 66px; top: 2px; }
+.hw-wheel_highlighter { left: 127px; top: 46px; }
+.hw-wheel_eraser { left: 104px; top: 118px; }
+.hw-wheelRedo { position: absolute; left: 32px; top: 122px; }
+.hw-wheelUndo { position: absolute; left: 9px; top: 50px; }
+.hw-wheelUndo .hw-iconButton, .hw-wheelRedo .hw-iconButton { width: 44px; height: 44px; }
+.hw-wheelCenter { position: absolute; left: 60px; top: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 64px; height: 64px; border-radius: 50%; background: var(--card); border: 1px solid var(--tool-edge); color: var(--foreground); }
+.hw-wheelCenter:hover, .hw-wheelCenter[aria-expanded="true"] { background: var(--accent); }
+.hw-wheelInk { display: block; width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1px #ffffff30; }
+.hw-wheelLabel { font-size: 12px; font-weight: 600; line-height: 1; }
+.hw-wheelInspector { right: 192px; top: 0; }
+@media (prefers-reduced-motion: reduce) { .hw-wheelTool { transition: none; } }

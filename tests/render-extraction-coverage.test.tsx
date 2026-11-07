@@ -146,18 +146,20 @@ describe("CoverageMenuBody — the context-menu block", () => {
 	});
 });
 
-describe("CoverageRingGlyph — the donut", () => {
-	it("half fill: the arc covers half the circumference", () => {
+// Round 7 of the whole-app redesign: the glyph became a small pie in a
+// hairline circle (a partial arc read as a loading spinner).
+describe("CoverageRingGlyph — the pie", () => {
+	it("half fill: the wedge covers half the circle", () => {
 		const html = renderToStaticMarkup(<CoverageRingGlyph fill={0.5} running={false} />);
-		const C = 2 * Math.PI * 6;
-		assert.ok(html.includes(`stroke-dasharray="${0.5 * C} ${C}"`), "fill = uncovered share of the ring");
-		assert.ok(html.includes("rotate(-90"), "the arc starts at 12 o'clock");
+		const C = 2 * Math.PI * 3.25;
+		assert.ok(html.includes(`stroke-dasharray="${0.5 * C} ${C}"`), "fill = uncovered share of the pie");
+		assert.ok(html.includes("rotate(-90"), "the wedge starts at 12 o'clock");
 		assert.ok(!html.includes("animate-pulse"), "steady state is still");
 	});
 
-	it("empty fill renders the bare track (no arc beyond a hairline)", () => {
+	it("empty fill renders the bare outline (no wedge)", () => {
 		const html = renderToStaticMarkup(<CoverageRingGlyph fill={0} running={false} />);
-		const C = 2 * Math.PI * 6;
+		const C = 2 * Math.PI * 3.25;
 		assert.ok(html.includes(`stroke-dasharray="0 ${C}"`));
 	});
 
@@ -167,7 +169,13 @@ describe("CoverageRingGlyph — the donut", () => {
 	});
 });
 
-describe("CoverageRingDetail — the popover's exact numbers", () => {
+describe("CoverageRingDetail — plain words first, exact numbers under Technical details", () => {
+	it("says in plain words what is still waiting", () => {
+		const html = renderToStaticMarkup(<CoverageRingDetail coverage={coverage()} chunkTokens={4096} />);
+		assert.match(html, /5 messages of this session aren(&#x27;|')t in your graph yet/);
+		assert.match(html, /Technical details/);
+	});
+
 	it("carries covered/uncovered tokens, messages, the threshold, the last fold", () => {
 		const html = renderToStaticMarkup(
 			<CoverageRingDetail

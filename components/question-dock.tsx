@@ -499,6 +499,9 @@ function QuestionDockForm({
 	   The listener is document-level and lives only while the dock is
 	   expanded — collapsed, the bar's native Enter expands it. */
 	const [kbdIdx, setKbdIdx] = useState<number | null>(null);
+	// The walk highlight shows only while the learner walks with arrows or
+	// Tab; a number-key pick is a choice, like a click, and shows as one.
+	const [walkShown, setWalkShown] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
 	const otherInputRef = useRef<HTMLDivElement>(null);
 	const thinkingRef = useRef<HTMLDivElement>(null);
@@ -574,6 +577,7 @@ function QuestionDockForm({
 				else {
 					const idx = kbdIdx ?? 0;
 					setKbdIdx(idx);
+					setWalkShown(true);
 					focusRow(idx);
 				}
 				return;
@@ -588,6 +592,7 @@ function QuestionDockForm({
 				if (idx >= rowCount) return;
 				e.preventDefault();
 				setKbdIdx(idx);
+				setWalkShown(false);
 				kbdAct(idx);
 				return;
 			}
@@ -595,6 +600,7 @@ function QuestionDockForm({
 				e.preventDefault();
 				const next = Math.min((kbdIdx ?? -1) + 1, rowCount - 1);
 				setKbdIdx(next);
+				setWalkShown(true);
 				// Focus follows the walk while the user is IN the rows (Tab
 				// put them there) so focused and walked never diverge.
 				if (t?.closest?.("[data-kbdrow]")) focusRow(next);
@@ -602,6 +608,7 @@ function QuestionDockForm({
 				e.preventDefault();
 				const next = Math.max((kbdIdx ?? rowCount) - 1, 0);
 				setKbdIdx(next);
+				setWalkShown(true);
 				if (t?.closest?.("[data-kbdrow]")) focusRow(next);
 			} else if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
 				// Global confidence cycling (owner, UI round 2026-10-01): the
@@ -629,6 +636,10 @@ function QuestionDockForm({
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
 	});
+
+	// A select question with nothing chosen and nothing written yet: phones
+	// show the options first and bring in confidence + thinking after.
+	const awaitingChoice = qd.mode !== "text" && sel.selected.size === 0 && !sel.dontKnow && !sel.otherSelected && !thinking.trim();
 
 	// More-below cue (whole-app redesign): on short screens the options can
 	// continue under the confidence row; a fade at the scroll edge says so.
@@ -666,7 +677,7 @@ function QuestionDockForm({
 	}, [kbdIdx, revealRow]);
 
 	return (
-		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-notebook-question={toolCallId} data-notebook-channel={owner.channel}>
+		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-awaiting-choice={awaitingChoice || undefined} data-notebook-question={toolCallId} data-notebook-channel={owner.channel}>
 			{/* Question area — scrolls internally if very tall; the bottom row stays put.
 			    Capped by the measured column (--dock-max-h; the old fixed 55dvh cut
 			    long questions short — owner round, 2026-10-05). */}
@@ -714,7 +725,7 @@ function QuestionDockForm({
 									className={cn(
 										"lh-option flex items-start gap-3 rounded-xl border px-3.5 py-2.5 text-left text-[15px] outline-none transition-colors",
 										isSel ? "border-(--lh-accent) bg-(--lh-accent-soft)" : "border-border/80 hover:bg-accent/50",
-										i === kbdIdx && !isSel && "ring-1 ring-border bg-accent/40",
+										i === kbdIdx && walkShown && !isSel && "ring-1 ring-border bg-accent/40",
 									)}
 								>
 									<span
@@ -953,8 +964,12 @@ function QuestionDockForm({
 			    send. Select modes get "Your thinking" (Enter makes a newline — it
 			    is for dumping, soon dictated; the button submits); text mode
 			    keeps "Your answer" with Enter-to-submit. */}
+			{/* Phones: until an answer is picked, confidence and "Your thinking"
+			    wait as a follow-up step, so the question and every option get
+			    the room first (owner amendment 2). */}
+			{qd.mode !== "text" && <p aria-hidden className="lh-choice-hint">Pick an answer — then say how sure you are and why.</p>}
 			<form
-				className="border-t border-border/60 p-1.5"
+				className="lh-question-form border-t border-border/60 p-1.5"
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit();

@@ -30,7 +30,7 @@
 		border-radius: 12px;
 		background: var(--background);
 	}
-	.lh-compact-field:focus-within { border-color: var(--primary); }
+	.lh-compact-field:focus-within { border-color: color-mix(in oklab, var(--foreground) 34%, var(--border)); }
 	.lh-compact-field > :is(textarea, [data-file-path-input]) {
 		width: 100%;
 		min-width: 0;
@@ -82,10 +82,18 @@
 	.lh-compact-stats .lh-usage-numbers { display: none; }
 	.lh-compact-stats .lh-phone-usage-label { display: inline; }
 	.lh-compact-stats [data-testid="stats-summary"] { min-height: 44px; min-width: 44px; justify-content: center; }
-	.lh-compact-stats [data-testid="model-control"] { flex: 1; min-width: 0; justify-content: center; gap: 2px; }
+	.lh-compact-stats [data-testid="model-control"] { flex: 1; min-width: 0; justify-content: flex-end; gap: 2px; }
 	.lh-compact-stats [data-testid="model-control"] button { min-height: 44px; min-width: 44px; padding-inline: 8px; background: transparent; font-size: 14px; }
 	.lh-compact-stats [data-testid="stats-model"] { min-width: 0; }
-	.lh-compact-stats [data-testid="stats-model"] span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.lh-compact-stats [data-testid="stats-model"] .lh-model-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	/* The row under the composer: the model is a mark with a chevron, so
+	   notebook, Plan, model, thinking and Usage sit side by side uncut. */
+	.lh-compact-stats [data-testid="stats-model"] { gap: 3px; padding-inline: 10px 8px; }
+	.lh-compact-stats [data-testid="stats-model"] .lh-model-glyph { display: block; }
+	.lh-compact-stats [data-testid="stats-model"] .lh-model-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+	/* The open controls card has room: the name is back beside the mark. */
+	[data-tablet-controls="open"] .lh-compact-stats [data-testid="stats-model"] .lh-model-name { position: static; width: auto; height: auto; clip-path: none; }
+	[data-tablet-controls="open"] .lh-compact-stats [data-testid="stats-model"] .lh-model-glyph { display: none; }
 	.lh-compact-stats [data-testid="stats-detail"] {
 		--tw-translate-x: 0;
 		left: 0; right: 0; transform: none; translate: none; width: 100%;

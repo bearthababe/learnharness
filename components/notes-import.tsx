@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
-import { FileUpIcon } from "lucide-react";
+import { FileUpIcon, CheckCircle2Icon, XIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { usePhoneLayout } from "./use-phone-viewport";
 import { createNotesImportQueue, EMPTY_IMPORT_QUEUE, notesPath } from "./notes-import-queue";
@@ -77,7 +77,7 @@ export function useNotesImport(callbacks: { onStart?: () => void; onFinish?: () 
 		}
 	}, [snapshot.completion]);
 	return {
-		errors: snapshot.errors, notices: snapshot.notices, importing: snapshot.importing,
+		errors: snapshot.errors, notices: snapshot.notices, receipts: snapshot.receipts ?? [], importing: snapshot.importing,
 		retryable: snapshot.retryable ?? 0,
 		retry: () => { latest.current.onStart?.(); pageImportQueue.retry(); },
 		dismiss: () => pageImportQueue.dismiss(),
@@ -129,6 +129,15 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
  *  what to do instead of showing the raw payload. Other messages pass
  *  through unchanged. Pure; exported for tests. */
 export function readableImportError(error: string): string {
+	// The queue appends the refusal code on its own line ("code — details"):
+	// keep the server's message, replace the internal code with what to do.
+	const coded = /^([^\n]*)\n(models_not_configured|provider_key_missing)\b[^\n]*$/s.exec(error);
+	if (coded) {
+		const [, message, code] = coded;
+		return `${message} — nothing was extracted. ${code === "models_not_configured" ? "Set up your models, then try again." : "Add the provider key in Settings, then try again."}`;
+	}
+	const unsupported = /^(.*?): Unsupported format or unsafe relative path\.$/s.exec(error);
+	if (unsupported) return `${unsupported[1]}: this file can't be imported. Use Markdown (.md), plain text (.txt) or PDF.`;
 	const match = /^(.*?): (\d{3}): (\{.*\})\s*$/s.exec(error);
 	if (!match) return error;
 	const [, file, status] = match;
@@ -139,14 +148,18 @@ export function readableImportError(error: string): string {
 
 /** Recovery for failed imports: retry definitely refused files, jump to the
  *  provider keys, or clear the messages. Rendered beside the plain alerts. */
-export function NotesImportRecovery({ errors, retryable, onRetry, onDismiss, onOpenSettings }: {
+export function NotesImportRecovery({ errors, retryable, onRetry, onDismiss, onOpenSettings, onOpenModels }: {
 	errors: readonly string[]; retryable: number; onRetry: () => void; onDismiss: () => void; onOpenSettings?: () => void;
+	/** Opens model setup (the refusal names no models configured). */
+	onOpenModels?: () => void;
 }) {
 	if (errors.length === 0) return null;
-	const keyProblem = errors.some((error) => /\b(401|403)\b|provider key|api key|authentication/i.test(error));
+	const modelsProblem = errors.some((error) => /\nmodels_not_configured\b/.test(error));
+	const keyProblem = !modelsProblem && errors.some((error) => /\b(401|403)\b|provider key|api key|authentication|provider_key_missing/i.test(error));
 	const action = "h-8 rounded-full px-3 text-[13px] font-medium transition-colors max-md:h-11 max-md:px-4 max-md:text-[14px]";
 	return (
 		<div data-testid="notes-import-recovery" className="pointer-events-auto flex flex-wrap justify-end gap-1.5">
+			{modelsProblem && onOpenModels && <button type="button" onClick={onOpenModels} className={`${action} bg-primary text-primary-foreground hover:opacity-90`}>Set up models</button>}
 			{keyProblem && onOpenSettings && <button type="button" onClick={onOpenSettings} className={`${action} bg-primary text-primary-foreground hover:opacity-90`}>Open provider settings</button>}
 			{retryable > 0 && <button type="button" onClick={onRetry} className={`${action} bg-card/90 text-foreground backdrop-blur hover:bg-accent`}>Try again</button>}
 			<button type="button" onClick={onDismiss} className={`${action} text-muted-foreground hover:bg-accent hover:text-foreground`}>Dismiss</button>
@@ -156,6 +169,19 @@ export function NotesImportRecovery({ errors, retryable, onRetry, onDismiss, onO
 
 export function NotesImportErrors({ errors }: { errors: readonly string[] }) {
 	return <>{errors.map((error, i) => <p key={i} role="alert" className="max-w-80 whitespace-pre-wrap break-words text-right text-[12.5px] leading-snug text-red-300">{readableImportError(error)}</p>)}</>;
+}
+/** What each finished import added — a receipt the learner can dismiss. */
+export function NotesImportReceipts({ receipts, onDismiss }: { receipts: readonly string[]; onDismiss: () => void }) {
+	if (receipts.length === 0) return null;
+	return (
+		<div data-testid="notes-import-receipts" role="status" className="pointer-events-auto flex max-w-80 items-start gap-2 rounded-2xl border border-border/70 bg-card/95 px-3 py-2 text-[13px] shadow-lg backdrop-blur">
+			<CheckCircle2Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-(--lh-success)" />
+			<div className="min-w-0 flex-1 space-y-0.5">
+				{receipts.map((receipt, i) => <p key={i} className="break-words leading-snug text-foreground/90">{receipt}</p>)}
+			</div>
+			<button type="button" onClick={onDismiss} aria-label="Dismiss import results" className="-my-1 -mr-1.5 flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground max-md:size-10"><XIcon className="size-4" aria-hidden /></button>
+		</div>
+	);
 }
 export function NotesImportNotices({ notices }: { notices: readonly string[] }) {
 	return <>{notices.map((notice, i) => <p key={i} role="status" className="max-w-full whitespace-pre-wrap break-words text-xs text-muted-foreground">{notice}</p>)}</>;

@@ -289,6 +289,24 @@ const KIND_ICON: Record<JobKind, typeof SearchIcon> = {
 type AbortState = "pending" | "failed";
 
 /** One finished or failed job in the Background agents history. */
+/** A failed job's reason, in full: two lines by default, the rest one tap
+ *  away (long provider messages used to be cut off mid-sentence). */
+function RecentFailure({ message }: { message: string }) {
+	const [open, setOpen] = useState(false);
+	const long = message.length > 110 || message.includes("\n");
+	return (
+		<div data-testid="activity-recent-failure" className="pb-1.5 pl-9 pr-2.5 text-[12px] leading-snug text-destructive/90">
+			<p className={cn("whitespace-pre-wrap break-words", !open && "line-clamp-2")}>{message}</p>
+			{long && (
+				<button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)}
+					className="mt-0.5 min-h-7 text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+					{open ? "Show less" : "Show the whole message"}
+				</button>
+			)}
+		</div>
+	);
+}
+
 type RecentJob = { id: string; chatId: string; chatTitle: string; kind: JobKind; status: "done" | "error" | string; error: string | null; updatedAt: string };
 const RECENT_LABEL: Record<string, string> = { research: "Research", demo: "Demo", visual: "Figure", pdf: "PDF brief" };
 /** A job the learner stopped is cancelled, not failed (the server records it
@@ -420,9 +438,10 @@ export function ActivitySection({ feed: feedProp, onOpenChat }: { feed?: Activit
 										{RECENT_LABEL[job.kind] ?? job.kind} · {job.status === "done" ? "finished" : recentCancelled(job) ? "cancelled" : "failed"}
 										<span className="text-muted-foreground"> · {recentAgo(job.updatedAt)}</span>
 									</span>
-									<span className="block truncate text-[12px] text-muted-foreground">{job.status !== "done" && job.error && !recentCancelled(job) ? `${job.error} — ` : ""}{job.chatTitle}</span>
+									<span className="block truncate text-[12px] text-muted-foreground">{job.chatTitle}</span>
 								</span>
 							</button>
+							{job.status !== "done" && job.error && !recentCancelled(job) && <RecentFailure message={job.error} />}
 						</li>
 					))}
 				</ul>

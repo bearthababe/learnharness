@@ -158,7 +158,10 @@ export function Composer({
 	const ownInputRef = useRef<HTMLDivElement>(null);
 	// Phones: the default prompt is shortened so it never ends in an ellipsis.
 	const phone = usePhoneLayout();
-	const shownPlaceholder = phone && placeholder === "Ask, answer, or steer the lesson…" ? "Ask, answer or steer…" : placeholder;
+	const shownPlaceholder = !phone ? placeholder
+		: placeholder === "Ask, answer, or steer the lesson…" ? "Ask, answer or steer…"
+		: placeholder === "Ask anything, or press Enter for the next one." ? "Ask anything…"
+		: placeholder;
 	const editorRef = inputRef ?? ownInputRef;
 	return (
 		<form

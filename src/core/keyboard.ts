@@ -35,6 +35,7 @@ export type KeyAction =
 	| "question-next-row"
 	| "question-prev-row"
 	| "question-pick-row"
+	| "question-pick-number"
 	| "question-submit"
 	| "open-settings"
 	| "toggle-user-thinking";
@@ -85,6 +86,9 @@ export const KEYBOARD_ACTIONS: readonly KeyActionDef[] = [
 	{ id: "question-next-row", label: "Question · next row", scope: "chat", binding: "arrowdown", displayOnly: true },
 	{ id: "question-prev-row", label: "Question · previous row", scope: "chat", binding: "arrowup", displayOnly: true },
 	{ id: "question-pick-row", label: "Question · pick row", scope: "chat", binding: "space", displayOnly: true },
+	// Number keys pick the answer with that number (round-6 redesign); the
+	// "binding" is a range label, shown as-is and never dispatched.
+	{ id: "question-pick-number", label: "Question · pick an answer by its number", scope: "chat", binding: "1–9", displayOnly: true },
 	{ id: "question-submit", label: "Question · submit", scope: "chat", binding: "enter", displayOnly: true },
 ];
 

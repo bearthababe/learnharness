@@ -32,6 +32,7 @@ import { Separator } from "@/components/ui/separator";
 import { AnsweredCard } from "@/components/answered-card";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { artifactRenderers } from "@/components/artifacts";
+import { WorkSteps, workSegments } from "@/components/work-steps";
 import { SubagentSteerCard } from "@/components/artifacts/steer-card";
 import { ChatSessionComposer } from "@/components/composer";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
@@ -1710,7 +1711,8 @@ export function Chat({
 									) : (
 									<Message from="assistant" className="max-w-full">
 									<MessageContent className="w-full">
-											{m.parts.map((part, pi) => {
+											{(() => {
+											const renderPart = (part: (typeof m.parts)[number], pi: number) => {
 												const isLastPart = mi === messages.length - 1 && pi === m.parts.length - 1;
 												// The step boundary where teaching begins (round 8): when
 												// the teach flip happens in a LATER step, its PhaseDivider
@@ -1812,7 +1814,17 @@ export function Chat({
 														return null;
 													}
 												}
-											})}
+											};
+											// The tutor's working (whole-app redesign, owner amendment
+											// 2): a run of thinking and tool steps reads as ONE quiet
+											// line saying what it did, its steps one tap away.
+											const isTeachBoundary = (pi: number) => mi > 0 && phases[mi] === "teach" && phases[mi - 1] !== "teach" && teachStepIndex(m.parts) === pi;
+											return workSegments(m.parts, isTeachBoundary).map((segment) => segment.kind === "part"
+												? renderPart(m.parts[segment.index]!, segment.index)
+												: <WorkSteps key={`work-${segment.indexes[0]}`} parts={segment.indexes.map((index) => m.parts[index]!)}>
+													{segment.indexes.map((index) => m.parts[index]!.type === "step-start" ? null : renderPart(m.parts[index]!, index))}
+												</WorkSteps>);
+											})()}
 										</MessageContent>
 									</Message>
 									)}
@@ -1885,7 +1897,7 @@ export function Chat({
 					notebook={notebook.session}
 					controlsOpen={controlsOpen}
 					fullQuestionWidth={canvasOpen}
-					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} compact={canvasOpen && !phoneLayout} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} /></>}
+					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} compact={canvasOpen && !phoneLayout} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} pendingWriting={sharedWriting.pending.length} /></>}
 					hasSharedWriting={hasSharedWriting || handwritingSubmission.hasAttempt()}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.key)?.form : undefined}
@@ -1906,7 +1918,7 @@ export function Chat({
 					contextTokens={contextTokens}
 					cliContextWindow={cliContextWindowOf(nativeMessages)}
 					pricing={pricing}
-					notebookToggle={notebookOffered && <span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
+					notebookToggle={notebookOffered && <span className="relative inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
 						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
 						className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
 						onClick={() => {
@@ -1915,7 +1927,9 @@ export function Chat({
 								void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
 							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
 						}}><NotebookPenIcon className="size-4" /></button>
-						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="text-muted-foreground"><PaperclipIcon className="size-3" aria-hidden="true" /></span>}
+						{/* A badge on the notebook button (not a second paperclip beside the
+						    composer's attach): the working rides along with the next send. */}
+						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="pointer-events-none absolute top-1 right-0.5 flex size-[15px] items-center justify-center rounded-full bg-(--lh-accent) text-background ring-2 ring-background"><PaperclipIcon className="size-2.5" strokeWidth={2.5} aria-hidden="true" /></span>}
 					</span>}
 					onReserve={setDockReserve}
 					dictationSlot={<DictationBar dictation={dictation} />}

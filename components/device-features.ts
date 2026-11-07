@@ -84,3 +84,29 @@ export function useDeviceFeature(feature: DeviceFeature): boolean {
 export function useDeviceClass(): DeviceClass {
 	return useSyncExternalStore(subscribe, deviceClass, () => "laptop");
 }
+
+/* ── The drawing canvas's tool palette (owner amendment 2) ───────────────
+   "wheel": a compact disc docked upper-right (the default); "arc": the
+   earlier tall arc along the right edge. Settings → Writing; this device. */
+export type CanvasPalette = "wheel" | "arc";
+export const CANVAS_PALETTE_KEY = "lh:pref:canvas-palette";
+const PALETTE_EVENT = "lh:canvas-palette";
+
+export function canvasPalette(): CanvasPalette {
+	try { return window.localStorage.getItem(CANVAS_PALETTE_KEY) === "arc" ? "arc" : "wheel"; } catch { return "wheel"; }
+}
+export function setCanvasPalette(palette: CanvasPalette): void {
+	try {
+		if (palette === "wheel") window.localStorage.removeItem(CANVAS_PALETTE_KEY);
+		else window.localStorage.setItem(CANVAS_PALETTE_KEY, palette);
+	} catch { /* storage blocked */ }
+	window.dispatchEvent(new CustomEvent(PALETTE_EVENT));
+}
+function subscribePalette(update: () => void) {
+	window.addEventListener(PALETTE_EVENT, update);
+	window.addEventListener("storage", update);
+	return () => { window.removeEventListener(PALETTE_EVENT, update); window.removeEventListener("storage", update); };
+}
+export function useCanvasPalette(): CanvasPalette {
+	return useSyncExternalStore(subscribePalette, canvasPalette, () => "wheel");
+}
