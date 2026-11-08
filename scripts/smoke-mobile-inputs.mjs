@@ -248,6 +248,7 @@ try {
 			close() { this.readyState = 3; this.dispatchEvent(new CloseEvent("close", { code: 1000 })); }
 		};
 	});
+	const waitForSpeechAudio = (finalCount = 2) => page.waitForFunction(expected => window.speech?.readyState === 1 && window.speech.audioSeconds >= window.speech.cursor + expected / 1000, {}, finalCount);
 	if (process.env.LH_NOTEBOOK_MENUS_ONLY) await checkHandwritingMenus({ page, origin });
 	else {
 	await page.goto(`${origin}/chat/mobile_conversation`, { waitUntil: "networkidle2", timeout: 240_000 });
@@ -369,7 +370,7 @@ try {
 	assert.deepEqual(await page.$eval(input, e => ({ value: e.textContent, start: getSelection().anchorOffset, end: getSelection().focusOffset, scroll: e.scrollTop })), { value: longDraft, start: 8, end: 20, scroll: beforeCapture.scroll }, "Cancel during finalization restores earlier draft, selection and internal scroll");
 	await fill(input, "Review before sending.");
 	await page.click(mic);
-	await page.waitForFunction(() => window.speech.readyState === 1);
+	await waitForSpeechAudio();
 	await page.evaluate(() => window.speech.final("Spoken working."));
 	await page.click('[aria-label="Stop dictation"]');
 	await page.waitForFunction(() => window.speech.finishing);
@@ -381,7 +382,7 @@ try {
 	assert.equal((await (await fetch(`${origin}/api/chats/mobile_conversation`)).json()).messages.filter(m => m.role === "user").length, 0, "Dictation Stop does not submit or start a tutor turn");
 	await fill(input, "Typed first.");
 	await page.locator(mic).click();
-	await page.waitForFunction(() => window.speech.readyState === 1);
+	await waitForSpeechAudio();
 	await page.evaluate(() => window.speech.final("Spoken middle."));
 	await page.click('[data-testid="composer"] [aria-label="Send"]');
 	await page.waitForFunction(() => window.speech.finishing);
@@ -412,6 +413,7 @@ try {
 	await page.click(mic);
 	await page.waitForFunction(() => window.speech !== window.cancelledSpeech && window.speech.readyState === 1);
 	assert.equal(await page.$eval(send, e => e.disabled), false, "Active speech enables Send before any text is flushed");
+	await waitForSpeechAudio();
 	await page.evaluate(() => window.speech.final("Speech only."));
 	await page.click(send);
 	await page.waitForFunction(() => window.speech.finishing);
@@ -549,7 +551,7 @@ try {
 	await page.click('[aria-label="Open handwritten working 1"]');
 	await page.waitForSelector('[data-testid="shared-writing-viewer"]');
 	await page.click('[aria-label="Close handwritten working"]');
-	await page.click(mic); await page.waitForFunction(() => window.speech?.readyState === 1);
+	await page.click(mic); await waitForSpeechAudio();
 	await page.evaluate(() => window.speech.final("With the reviewed image."));
 	await page.click('[data-testid="composer"] [aria-label="Send"]');
 	await page.waitForFunction(() => window.speech.finishing);
@@ -1296,7 +1298,7 @@ try {
 	assert.equal(await page.$eval(reading, e => e.textContent), "Capture 1. Capture 2.", "Restart after interrupted audio captures and appends a second recording once");
 	await fill(reading, "Reading thought.");
 	await page.click('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
-	await page.waitForFunction(() => window.speech?.readyState === 1);
+	await waitForSpeechAudio();
 	await page.evaluate(() => window.speech.final("Before reveal."));
 	await page.click('[data-testid="teach-check-reveal"]');
 	await page.waitForFunction(() => window.speech.finishing);
@@ -1319,7 +1321,7 @@ try {
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { hidden: true });
 	await upload("mobile_teaching"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="answer-field"] [aria-label="Start dictation"]');
-	await page.waitForFunction(() => window.speech.readyState === 1);
+	await waitForSpeechAudio(1);
 	await page.evaluate(() => window.speech.final("Spoken answer."));
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => window.speech.finishing);
@@ -1394,6 +1396,7 @@ try {
 		await page.waitForFunction(() => window.speech?.readyState === 0);
 		assert.match(await page.$eval('.lh-compact-recording [role="status"]', e => e.textContent), /Connecting/);
 		await page.evaluate(() => { window.holdConnection = false; window.speech.open(); });
+		await waitForSpeechAudio();
 		await page.evaluate(() => window.speech.final("So pressure is 50 Pa."));
 		if (id === "mobile_drill") {
 			await page.click('[data-testid="practice-send"]');

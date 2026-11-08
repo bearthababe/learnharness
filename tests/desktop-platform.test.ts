@@ -145,6 +145,14 @@ describe("desktop packaging policy", () => {
 		await validateConfiguration(config, { isEnabled: false });
 	});
 
+	it("keeps the native web sign-in opener beside its external service dependency", () => {
+		const serviceResources = config.extraResources.find((entry: { from?: string }) => entry.from === "electron");
+		assert.ok(serviceResources.filter.includes("local-service-ingress.cjs"));
+		assert.ok(serviceResources.filter.includes("web-subscription-browser.cjs"));
+		assert.match(mainSource, /deploymentModule\("web-subscription-browser\.cjs"\)\.openWebSubscriptionBrowser/);
+		assert.doesNotMatch(mainSource, /require\("\.\/web-subscription-browser\.cjs"\)/);
+	});
+
 	it("ships Mac arm64, Windows NSIS x64, and both Linux x64 channels", () => {
 		assert.deepEqual(config.mac.target, [
 			{ target: "dmg", arch: ["arm64"] }, { target: "zip", arch: ["arm64"] },

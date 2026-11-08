@@ -1,13 +1,3 @@
-/**
- * The LH_DATA_DIR seam (Electron contract, 2026-09-17): when set, every
- * mutable record relocates under it; when unset, byte-for-byte the old
- * repo-data/ behavior. The desktop shell's whole data story rests on this,
- * so pin both directions.
- *
- * The seam is evaluated at MODULE LOAD, so the "set" case must set the env
- * BEFORE the first import of config.ts in this process (dynamic import,
- * below) and the "unset" case needs a fresh child process.
- */
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -37,14 +27,21 @@ describe("LH_DATA_DIR seam", () => {
 		}
 	});
 
-	it("unset = the repo data/ exactly as before (fresh child process, no env)", () => {
-		const out = execFileSync(
-			process.execPath,
-			["--import", TSX_LOADER, "--eval", `const m = await import(${JSON.stringify(path.join(REPO_ROOT, "config.ts"))}); console.log(JSON.stringify({ data: m.PATHS.data, chats: m.PATHS.chats }));`],
-			{ cwd: REPO_ROOT, encoding: "utf-8" },
-		);
-		const parsed = JSON.parse(out) as { data: string; chats: string | null };
-		assert.equal(parsed.data, path.join(REPO_ROOT, "data"));
-		assert.equal(parsed.chats, path.join(REPO_ROOT, "data", "chats"));
+	it("unset selects the approved external Linux profile without touching the home (fresh child process)", () => {
+		const home = fs.mkdtempSync(path.join(os.tmpdir(), "lh-default-profile-"));
+		try {
+			const environment: NodeJS.ProcessEnv = { ...process.env, HOME: home, USERPROFILE: home };
+			for (const name of ["LH_PROFILE_DIR", "LH_DATA_DIR", "LH_AUTH_FILE"]) delete environment[name];
+			const out = execFileSync(
+				process.execPath,
+				["--import", TSX_LOADER, "--eval", `const configuration = await import(${JSON.stringify(path.join(REPO_ROOT, "config.ts"))}); console.log(JSON.stringify({ data: configuration.PATHS.data, chats: configuration.PATHS.chats }));`],
+				{ cwd: REPO_ROOT, encoding: "utf-8", env: environment },
+			);
+			const parsed = JSON.parse(out) as { data: string; chats: string | null };
+			const expected = process.platform === "linux" ? path.join(home, ".config", "learnharness", "data") : path.join(REPO_ROOT, "data");
+			assert.equal(parsed.data, expected);
+			assert.equal(parsed.chats, path.join(expected, "chats"));
+			assert.deepEqual(fs.readdirSync(home), []);
+		} finally { fs.rmSync(home, { recursive: true }); }
 	});
 });

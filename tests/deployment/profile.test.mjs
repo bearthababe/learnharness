@@ -110,6 +110,21 @@ test("real processes exclude a second owner, including legacy shared-auth and ov
 	assert.match(dataConflict.error, /live writer/);
 });
 
+test("legacy read-only configuration preserves alias paths while writer acquisition still refuses unsafe aliases", context => {
+	const { directory } = fixture(context);
+	const actual = path.join(directory, "actual");
+	fs.mkdirSync(actual);
+	const alias = path.join(directory, "alias");
+	fs.symlinkSync(actual, alias);
+	const environment = { LH_DATA_DIR: path.join(alias, "data"), LH_AUTH_FILE: path.join(alias, "auth.json") };
+	const legacy = resolveProfile({ env: environment, home: directory });
+	assert.equal(legacy.managed, false);
+	assert.equal(legacy.dataDir, environment.LH_DATA_DIR);
+	assert.equal(legacy.authFile, environment.LH_AUTH_FILE);
+	assert.throws(() => acquireProfile(legacy), /Unsafe profile path/);
+	assert.throws(() => resolveProfile({ env: { LH_PROFILE_DIR: alias } }), /Unsafe profile path/);
+});
+
 test("killed owners and stale PID-start identities reclaim safely; stale release cannot remove a replacement", async context => {
 	const { profile } = fixture(context);
 	const dead = await childOwner(context, profile);
@@ -264,6 +279,58 @@ test("real content corruption and late pre-restore verification preserve the exa
 	} }), /late pre-restore/);
 	assert.deepEqual(treeIdentity(profile.root), before);
 	assert.deepEqual(treeIdentity(`${profile.root}.backups`), inventory);
+});
+
+test("failed pruning retains verified copies and current data until successful rotation", context => {
+	const { profile, seed } = fixture(context);
+	const copies = [];
+	for (let index = 0; index < 10; index++) {
+		seed(`retained-${index}`);
+		copies.push(backupProfile(profile, { reason: index % 2 ? "pre-restore" : "update" }));
+	}
+	seed("current-progress");
+	const current = treeIdentity(profile.root);
+	const removal = [];
+	const io = { ...profileIO, removeTree(root) {
+		removal.push(root);
+		throw Object.assign(new Error("injected backup pruning denial"), { code: "EACCES" });
+	} };
+	assert.throws(() => backupProfile(profile, { io }), { code: "EACCES" });
+	assert.deepEqual(treeIdentity(profile.root), current);
+	assert.deepEqual(removal, [path.join(`${profile.root}.backups`, copies[0].id)]);
+	const retained = listBackups(profile);
+	assert.equal(retained.length, 11);
+	assert.deepEqual(retained.slice(0, 10), copies);
+	assert.deepEqual(retained.at(-1).entries, current);
+	const completed = backupProfile(profile);
+	const rotated = listBackups(profile);
+	assert.equal(rotated.length, 10);
+	assert.equal(rotated.at(-1).id, completed.id);
+	assert.deepEqual(rotated.slice(0, 8).map(copy => copy.id), copies.slice(2).map(copy => copy.id));
+});
+
+test("restore pruning denial rolls back data and retains the verified pre-restore copy", context => {
+	const { directory, profile, seed } = fixture(context);
+	seed("selected");
+	const selected = backupProfile(profile);
+	for (let index = 0; index < 9; index++) backupProfile(profile);
+	const original = listBackups(profile);
+	seed("current-progress");
+	const current = treeIdentity(profile.root);
+	assert.throws(() => restoreProfile(profile, selected.id, { approved: true, io: { ...profileIO,
+		removeTree() { throw Object.assign(new Error("injected restore pruning denial"), { code: "EACCES" }); },
+	} }), { code: "EACCES" });
+	assert.deepEqual(treeIdentity(profile.root), current);
+	const retained = listBackups(profile);
+	assert.equal(retained.length, 11);
+	assert.deepEqual(retained.slice(0, 10), original);
+	assert.equal(retained.at(-1).reason, "pre-restore");
+	assert.deepEqual(retained.at(-1).entries, current);
+	assert.equal(fs.readdirSync(directory).some(name => name.includes(".restore-")), false);
+	const restored = restoreProfile(profile, selected.id, { approved: true });
+	assert.equal(restored.restored, selected.id);
+	assert.equal(fs.readFileSync(path.join(profile.dataDir, "learning.json"), "utf8"), "selected");
+	assert.equal(listBackups(profile).length, 10);
 });
 
 test("public local CLI migrates, backs up, lists and explicitly restores only synthetic bytes", context => {

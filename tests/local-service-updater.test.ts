@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { test } from "node:test";
 import { createContext, runInContext } from "node:vm";
+import { loadNormalShell } from "./helpers/electron-main-vm.ts";
 
 const mainFile = path.resolve("electron/main.cjs");
 const mainRequire = createRequire(mainFile);
@@ -24,13 +25,13 @@ test("attached Linux mode never loads upstream updater and every check/install/m
 		process: { argv: [], env: { LH_DEV_URL: "http://127.0.0.1:3810" }, platform: "linux", on() {} },
 		__dirname: path.dirname(mainFile), URL, setTimeout: () => effects.push("timer"),
 	});
-	runInContext(readFileSync(mainFile, "utf8"), context);
-	runInContext('localServiceConfiguration = { origin: "http://127.0.0.1:3810" }; setupAutoUpdater(); installMenu();', context);
-	assert.equal(runInContext("updateState.status", context), "disabled");
+	const run = loadNormalShell(readFileSync(mainFile, "utf8"), context);
+	run('localServiceConfiguration = { origin: "http://127.0.0.1:3810" }; setupAutoUpdater(); installMenu();');
+	assert.equal(run("updateState.status"), "disabled");
 	assert.equal(menu[0]?.submenu?.some(item => item.label === "Check for Updates…"), false);
 	context.testUpdater = { checkForUpdates: () => effects.push("checked"), quitAndInstall: () => effects.push("installed") };
 	context.testServer = { kill: () => effects.push("server-killed") };
-	runInContext("autoUpdater = testUpdater; serverProcess = testServer; checkForUpdates(); checkForUpdates({manual:true}); installUpdateNow();", context);
+	run("autoUpdater = testUpdater; serverProcess = testServer; checkForUpdates(); checkForUpdates({manual:true}); installUpdateNow();");
 	assert.deepEqual(effects, []);
 });
 

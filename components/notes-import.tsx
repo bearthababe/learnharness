@@ -1,5 +1,7 @@
 "use client";
 
+import { useDeploymentActivity } from "./deployment-activity";
+
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import { WaypointsIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
@@ -67,6 +69,7 @@ export async function postNotesImport(files: readonly File[]): Promise<NotesImpo
 const pageImportQueue = createNotesImportQueue(postNotesImport);
 export function useNotesImport(callbacks: { onStart?: () => void; onFinish?: () => void } = {}) {
 	const snapshot = useSyncExternalStore(pageImportQueue.subscribe, pageImportQueue.getSnapshot, () => EMPTY_IMPORT_QUEUE);
+	useDeploymentActivity("upload-or-extraction", () => pageImportQueue.getSnapshot().importing);
 	const latest = useRef(callbacks);
 	latest.current = callbacks;
 	const seenCompletion = useRef(snapshot.completion);

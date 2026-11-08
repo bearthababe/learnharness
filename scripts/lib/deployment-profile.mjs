@@ -138,8 +138,8 @@ function withOwner(profile, operation) {
 	finally { owner.release(); }
 }
 
-function rotateBackups(profile, inventory) {
-	for (const expired of inventory.slice(0, -10)) fs.rmSync(path.join(backupRoot(profile), expired.id), { recursive: true });
+function rotateBackups(profile, inventory, io) {
+	for (const expired of inventory.slice(0, -10)) io.removeTree(path.join(backupRoot(profile), expired.id));
 	syncDirectory(backupRoot(profile));
 }
 
@@ -174,7 +174,7 @@ function createBackup(profile, owner, reason, io, rotate = true) {
 		const complete = verifiedInventory(profile, io);
 		if (rotate) {
 			pruning = true;
-			rotateBackups(profile, complete);
+			rotateBackups(profile, complete, io);
 		}
 		return manifest;
 	} catch (error) {
@@ -222,7 +222,7 @@ export function restoreProfile(profile, id, { approved = false, io = profileIO }
 			syncDirectory(parent);
 			const complete = verifiedInventory(resolved, io);
 			pruning = true;
-			rotateBackups(resolved, complete);
+			rotateBackups(resolved, complete, io);
 			result = { restored: id, preserved: before.id };
 		} catch (error) {
 			if (exchangeAttempted && !exchanged) {

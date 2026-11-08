@@ -56,6 +56,184 @@ The runtime browser drive resolves that cache automatically and records executab
 
 When each deployment entrypoint becomes available, record the exact exercised start, health/identity, scenario and cleanup commands here, including synthetic profile and owned port selection. This section is not complete while any required recipe remains planned. Health must expose target/profile and running revision; drive the serving public entrypoint after launch rather than an internal helper.
 
+### Browser cookie-boundary diagnostic
+
+For changes to preview origins/proxy cookies or normal admission, run:
+
+```bash
+RUN=".prove-it/runs/$(date -u +%Y-%m-%dT%H-%M-%SZ)-preview-browser-boundary"
+CHROMIUM_PATH=/absolute/path/to/lockfile-supported/chrome node scripts/prove-preview-browser.mjs "$RUN"
+```
+
+The exercised script creates real local HTTPS endpoints, a synthetic backend,
+the production preview proxy and normal admission boundary, and one shared
+incognito Chromium context. It first reproduces same-host/different-port cookie
+read/overwrite as a negative control. It then checks distinct hosts, `__Host-`
+session cookies, sibling-domain cookie injection, both ingresses' refusal of
+actual cookie-bearing same-site POST and originless image requests, WebRTC
+egress refusal versus a working owned STUN negative control, and normal admission
+after the attacks. Inspect `result.json` and `normal-after-attacks.png`; ten
+scoped steps and owned-browser/listener cleanup must pass. Compare the behavior
+to the owner's isolation requirement, not just the script's exit code.
+
+For only the ingress diagnostic, the synthetic server removes
+Connection-Allowlist on one exact diagnostic document path and Chromium bypasses
+CSP. Require that explicit exception in the receipt and actual incoming requests
+with 403 and zero writes. Browser policy blocking a request before ingress does
+not prove the ingress refused it. Cookie and WebRTC probes use the primary
+document with unchanged production policy. Chromium proof does not establish
+that another browser enforces those network controls.
+
+The script explicitly pins only its generated fixture TLS key in Chromium.
+That is not real tailnet certificate/DNS proof, full-app/browser/native/helper
+parity, or a passing deployment row 7/10. Those remain blocked until exercised
+through the real manager and separately provisioned private HTTPS identities.
+Never substitute separate ports or a document-cookie monkey patch for those
+identities, and never weaken TLS checking on the actual tailnet drive.
+
+### Cross-engine network isolation
+
+For preview proxy/network-policy changes, run the Chromium diagnostic above and
+an actual Firefox probe using externally installed Playwright tooling. Keep that
+tooling and its browser cache outside repository dependencies:
+
+```bash
+node .agents/skills/prove-learnharness/scripts/browser-egress.mjs --engine firefox --tooling "$PLAYWRIGHT_MODULE" --spec "$PRIVATE_SPEC" --run "$NEW_RUN"
+```
+
+The module path names Playwright's `index.mjs`; its browser cache must already be
+installed. Set `PLAYWRIGHT_BROWSERS_PATH` for a non-default cache.
+`--executable` selects an explicit browser binary. `--engine webkit`
+can diagnose an available Linux WebKit, but is not physical iOS Safari proof.
+Missing browser/libraries are BLOCKED, not a reason to infer Chromium parity.
+
+Require a working owned non-loopback STUN control. For unverified Firefox/WebKit,
+require HTTP403, zero upstream PR requests, zero PR execution and zero packets,
+including a Chrome User-Agent spoof and an actual attempt to forge Sec-CH-UA.
+The latter probe explicitly bypasses CSP only on the already-refused trusted
+plain-text page; the server must observe that the browser stripped the forbidden
+header. Do not inject an attack into a refused page and call it PR execution.
+
+Use `--engine chromium --executable "$CHROMIUM_PATH"` to prove the admitted
+case: actual source inline JavaScript must execute with zero network escape,
+while the control sends packets. The script binds only its own temporary
+HTTP/Unix/UDP endpoints and uses empty browser profiles. Read `result.json` and
+`receipt.md`, including engine version and cleanup. These are HTTP boundary
+diagnostics, not the trusted-HTTPS/full-app proof below. A refusal proves safety,
+not functional preview support; report the compatibility limitation explicitly.
+
+Could fool you: an earlier loopback probe blocked its control too. A later real
+Firefox probe sent packets through the production policy. Preserve such an
+escape as BROKEN; Chromium-only success cannot accept the browser boundary.
+The owner explicitly approved verified Chromium or the isolated desktop app for
+untrusted previews on 2026-11-07; normal daily-use access remains unchanged. See
+`docs/preview-sandbox.md` for this supplemental compatibility decision. Compare
+refused Firefox/WebKit clients against that decision, not a claim of functional
+support. Keep the original private specification unchanged. New engine admission
+still requires real isolation proof; this decision waives no other acceptance
+check. Any further compatibility change requires an explicit owner decision.
+
+### Private tailnet HTTPS diagnostic
+
+After scoped owner authorization and authentication of a disposable dedicated
+node, run the exercised trusted-TLS diagnostic with its owner-metadata JSON, the
+synthetic normal service's already-authorized HTTPS origin, and its exact free
+loopback backend port:
+
+```bash
+node scripts/prove-preview-tailnet.mjs "$RUN" "$OWNED_NODE_JSON" "$NORMAL_HTTPS_ORIGIN" "$NORMAL_LOOPBACK_PORT"
+```
+
+The metadata file is created by the run's identity-checked disposable-node driver;
+it is not an arbitrary existing personal-daemon state file. Inspect `result.json`
+and `normal-after-attacks.png`. Require five observed scoped checks: actual DNS
+and trusted TLS on both hosts, browser admission, sibling-host cookie/session
+isolation, same-site CSRF refusal with the diagnostic CSP bypass, and normal
+service usability afterward. Node certificate authorization must be true; Chrome
+has no certificate exceptions, SPKI pin or host-resolver overrides. The browser
+context is shared across both origins. Cookie values and admission fragments do
+not belong in receipts.
+
+The script verifies the existing normal route before starting its synthetic
+backend and changes only the dedicated node's initially empty HTTPS443 route.
+Require original route configuration unchanged, dedicated route removed and owned
+browser/listeners stopped. Its authenticated daemon is deliberately retained for
+subsequent proof and must be stopped by its owner driver when no longer needed.
+This proves only the named browser transport boundary. Complete LearnHarness,
+actual manager/FIFO, concurrent per-source host provisioning, helper, packaged
+preview and physical Safari remain separate checks. Do not promote deployment
+rows 7/10 from this diagnostic alone.
+
+### Actual managed app and packaged preview
+
+After confirming the dedicated node and existing normal/review mappings belong
+to this rehearsal, exercise the real full-app manager and helper:
+
+```bash
+node scripts/prove-managed-preview.mjs --spec "$PRIVATE_SPEC" --node "$OWNED_NODE_JSON" --run "$NEW_MANAGER_RUN"
+node scripts/prove-packaged-preview.mjs --spec "$PRIVATE_SPEC" --node "$OWNED_NODE_JSON" --run "$NEW_PACKAGED_RUN"
+```
+
+Run them serially: both need the authorized 3810 and 3800–3802 listeners and the
+dedicated source route. These recipes currently target the scoped normal host
+and existing 8452–8455 mappings named in the drivers; inspect those prerequisites
+instead of adapting or overwriting an unrelated mapping. The real manager alone
+creates/removes the dedicated source node's matching HTTPS443 mapping. Never
+provision another node implicitly. Retain the authenticated daemon for further
+proof, then stop it through its identity-checked owner driver.
+
+The manager drive exercises actual browser model switching, synthetic chat,
+revocation and a real elapsed ten-minute deadline despite interaction. The
+packaged drive exercises normal native Home, two-way visible edits, the one
+writer, the actual ticket desktop command, packaged preview startup, kernel
+sandbox state, manual stop/reopen and helper stream cancellation. Inspect its
+real screenshot and `PREVIEW_SHELL_READY` record; require `diagnostic: false`,
+matching source/lease/origin and accepted startup arguments. Linux may rewrite
+`/proc/PID/cmdline`; retain that observation separately rather than pretending
+it still contains the original argv. The trusted shell reports only arguments
+already checked by its strict startup allowlist. Kernel process inspection and
+unsafe-launch refusal remain separate security checks.
+
+Could fool you: a compositor-listed, mapped, apparently visible window produced
+only the desktop lock screen in the captured PNG. The driver originally reported
+all automated checks passed; direct image inspection caught the false positive.
+`loginctl`'s unlocked hint and a missing traditional lock-process name did not
+rule it out. Native HTTPS runs now remain `blocked-pending-visual-review` with a
+nonzero exit until a separate caller actually inspects the screenshot and records
+the visual verdict. Never infer app visibility from capture success, window
+metadata, or the raw automated-check count. If locked, ask the owner to unlock
+the desktop; do not kill, dismiss or bypass the lock surface.
+
+The desktop CLI must inherit the local graphical session's allowlisted display
+variables, not the user's profile, credentials or arbitrary Electron flags.
+Wayland requires the explicit ozone-platform argument selected by the launcher.
+A verifier that strips the display variables cannot diagnose a product startup
+failure. Production still rejects loopback desktop origins; do not enable a
+packaged diagnostic or certificate exception to make this recipe pass.
+
+By default the package stamp must match current source. An explicitly supplied
+`--expected-package-source-hash` permits an honestly identified older-package
+diagnostic only; it never qualifies as final-source acceptance. Expired-action
+refusal does not prove successful native provider-page opening. One source host
+does not prove multi-source browser identity or the full three-slot FIFO.
+
+### Actual client and worker activity
+
+```bash
+node scripts/prove-deployment-activity.mjs
+node scripts/prove-deployment-notebook.mjs
+```
+
+These drive actual packaged-service/browser inputs and worker/executor paths on
+synthetic profiles, plus real preparation subprocess cancellation. Inspect exact
+package/source identity, client activity reports, retained input and owned-group
+cleanup. Stale or unknown clients must continue refusing cutover. A later passing
+attempt does not erase the retained Home-navigation idle timeout or browser
+crash; diagnose recurring failures with the recorded departed-client reports.
+The scoped activity matrix is not handwritten-snapshot transfer, actual package
+cutover, physical iOS or live-provider proof. Complete all required row surfaces
+independently before accepting the row.
+
 Every run writes `.prove-it/runs/<UTC timestamp>-<slug>/receipt.md` plus `deployment.json` incrementally and atomically. The JSON must contain:
 
 - `schemaVersion: 1`, start/finish timestamps, overall status and independent checker identity;

@@ -1,18 +1,24 @@
 const { randomBytes } = require("node:crypto");
 
 const COOKIE = "lh-local-session";
+const cookieName = origin => origin.startsWith("https:") ? `__Host-${COOKIE}` : COOKIE;
 const token = () => randomBytes(32).toString("hex");
 
-function createAdmission(origins) {
+function createAdmission(origins, retained = []) {
 	const byHost = new Map(origins.map(origin => [new URL(origin).host, origin]));
 	if (byHost.size !== origins.length) throw new Error("Service origins must have distinct hosts");
 	const tickets = new Map();
 	const sessions = new Map();
-	function issue(origin) {
+	const healthSessions = new Set();
+	for (const entry of retained) {
+		if (!Array.isArray(entry) || !/^[a-f0-9]{64}$/.test(entry[0]) || !origins.includes(entry[1])) throw new Error("Invalid retained admission");
+		sessions.set(entry[0], entry[1]);
+	}
+	function issue(origin, health = false) {
 		if (!origins.includes(origin)) throw new Error("Origin is not configured");
 		for (const [key, value] of tickets) if (value.expires < Date.now()) tickets.delete(key);
 		const ticket = token();
-		tickets.set(ticket, { origin, expires: Date.now() + 60000 });
+		tickets.set(ticket, { origin, health, expires: Date.now() + 60000 });
 		return ticket;
 	}
 	function exchange(ticket, origin) {
@@ -22,6 +28,7 @@ function createAdmission(origins) {
 		if (grant.expires < Date.now()) return;
 		const session = token();
 		sessions.set(session, origin);
+		if (grant.health) healthSessions.add(session);
 		return session;
 	}
 	function addressed(request) {
@@ -33,8 +40,10 @@ function createAdmission(origins) {
 		return origin;
 	}
 	function authenticated(request, origin) {
-		const values = (request.headers.cookie || "").split(";").map(value => value.trim()).filter(value => value.startsWith(`${COOKIE}=`));
-		return values.length === 1 && sessions.get(values[0].slice(COOKIE.length + 1)) === origin;
+		const name = cookieName(origin);
+		const values = (request.headers.cookie || "").split(";").map(value => value.trim()).filter(value => value.startsWith(`${name}=`));
+		const session = values.length === 1 ? values[0].slice(name.length + 1) : null;
+		return session && sessions.get(session) === origin ? session : null;
 	}
 	function refuse(response, status = 403) {
 		response.writeHead(status, { "Cache-Control": "no-store", "Content-Type": "text/plain", "Referrer-Policy": "no-referrer" });
@@ -60,16 +69,17 @@ function createAdmission(origins) {
 			let session;
 			try { session = exchange(JSON.parse(contents).ticket, origin); } catch { return refuse(response); }
 			if (!session) return refuse(response);
-			response.writeHead(204, { "Cache-Control": "no-store", "Set-Cookie": `${COOKIE}=${session}; Path=/; HttpOnly; SameSite=Strict${origin.startsWith("https:") ? "; Secure" : ""}` });
+			response.writeHead(204, { "Cache-Control": "no-store", "Set-Cookie": `${cookieName(origin)}=${session}; Path=/; HttpOnly; SameSite=Strict${origin.startsWith("https:") ? "; Secure" : ""}` });
 			response.end();
 			return;
 		}
-		if (!authenticated(request, origin)) return refuse(response);
+		const session = authenticated(request, origin);
+		if (!session) return refuse(response);
 		for (const name of Object.keys(request.headers)) if (name.startsWith("x-forwarded-") || name === "forwarded" || name === "x-learnharness-desktop" || name.startsWith("x-middleware-") || name.startsWith("x-nextjs-")) delete request.headers[name];
 		request.headers["x-forwarded-proto"] = new URL(origin).protocol.slice(0, -1);
-		return next(request, response);
+		return next(request, response, session);
 	}
-	return { issue, handle };
+	return { issue, handle, retain: () => [...sessions].filter(([session]) => !healthSessions.has(session)), isHealth: session => healthSessions.has(session), revokeHealth() { for (const session of healthSessions) sessions.delete(session); healthSessions.clear(); } };
 }
 
-module.exports = { createAdmission, COOKIE };
+module.exports = { createAdmission, COOKIE, cookieName };

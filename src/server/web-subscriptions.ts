@@ -10,6 +10,7 @@ import { createSubscriptions } from "../../electron/subscriptions.cjs";
 import { chatGPTControl } from "../../electron/chatgpt-ipc.cjs";
 import { subscriptionControl } from "../../electron/subscription-ipc.cjs";
 import { emit } from "../core/events.ts";
+import { previewSubscriptionsActive, previewSubscriptionRequest, previewSubscriptionStatus } from "../agent/preview-subscription-runtime.ts";
 import type { ChatGPTStatus } from "../core/contracts/chatgpt.ts";
 import type { NativeSubscriptionSnapshot } from "../core/contracts/subscriptions.ts";
 import { configureWebSubscriptionRuntime, publishWebSubscriptionPacket, webSubscriptionsEnabled, type SubscriptionRuntimeChannel as Channel, type SubscriptionRuntimePacket as Packet } from "../agent/subscription-runtime.ts";
@@ -94,6 +95,7 @@ export function createWebSubscriptionOwner(options: {
 	};
 }
 export function webSubscriptionOwner() {
+	if (previewSubscriptionsActive()) throw new Error("Preview subscriptions are controlled only by local lease approval.");
 	if (!webSubscriptionsEnabled()) throw new Error("Web subscription controls are unavailable in desktop-owned mode.");
 	const state = registry();
 	if (!state.owner) {
@@ -102,8 +104,22 @@ export function webSubscriptionOwner() {
 	}
 	return state.owner;
 }
+export function deploymentCredentialActivity() {
+	const owner = registry().owner;
+	return !!owner && (owner.chatgpt.activity() || owner.native.activity());
+}
+export async function quiesceDeploymentCredentials() {
+	const owner = registry().owner;
+	if (owner) await Promise.all([owner.chatgpt.quiesce(), owner.native.quiesce()]);
+}
+export function resumeDeploymentCredentials() {
+	const owner = registry().owner;
+	owner?.chatgpt.resume();
+	owner?.native.resume();
+}
 /** Private runtime calls only: no HTTP lease/token operation exists. */
 export async function webSubscriptionRequest<T>(channel: Channel, op: string, fields: Record<string, unknown>): Promise<T> {
+	if (previewSubscriptionsActive()) return previewSubscriptionRequest<T>(channel, op, fields);
 	const owner = webSubscriptionOwner();
 	let value: unknown;
 	if (channel === "lh:chatgpt") {
@@ -119,8 +135,12 @@ export async function webSubscriptionRequest<T>(channel: Channel, op: string, fi
 	return value as T;
 }
 configureWebSubscriptionRuntime(webSubscriptionRequest);
+const ownerBridgeKey = Symbol.for("learnharness.web-subscription-owner.v1");
+const ownerBridge = (globalThis as typeof globalThis & { [ownerBridgeKey]?: { getOwner?: typeof webSubscriptionOwner } })[ownerBridgeKey];
+if (ownerBridge) ownerBridge.getOwner = webSubscriptionOwner;
 
 export async function webSubscriptionStatus(): Promise<{ chatgpt: ChatGPTStatus; native: NativeSubscriptionSnapshot["statuses"] }> {
+	if (previewSubscriptionsActive()) return previewSubscriptionStatus();
 	const owner = webSubscriptionOwner();
 	const [chatgpt, native] = await Promise.all([owner.chatgpt.status(), owner.native.status()]);
 	return { chatgpt, native };

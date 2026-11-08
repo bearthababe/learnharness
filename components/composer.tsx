@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useDeploymentActivity } from "./deployment-activity";
 import { ArrowRightIcon, CornerDownLeftIcon, SquareIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PathInput } from "@/components/path-input";
@@ -81,6 +82,7 @@ export function ChatSessionComposer({
 	onNext?: () => void;
 }) {
 	const [draft, setDraft] = useState(value);
+	useDeploymentActivity("composer", () => !!draft.trim() || dictationActive || hasContent || busy);
 	useLayoutEffect(() => { setDraft(value); }, [revision, value]);
 	const canSend = sendAllowed && (draft.trim().length > 0 || dictationActive || hasContent);
 	const applyDraft = useCallback((next: string) => {

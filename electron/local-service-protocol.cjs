@@ -50,7 +50,7 @@ function controlRequest(configuration, command) {
 		if (!information.isSocket() || information.uid !== process.getuid() || information.mode & 0o077) throw new Error("Unsafe local-service socket");
 		const socket = net.createConnection(configuration.socket);
 		let contents = "";
-		socket.setTimeout(5000, () => socket.destroy(new Error("Local-service control timed out")));
+		socket.setTimeout(command.op === "freeze" ? 60000 : 5000, () => socket.destroy(new Error("Local-service control timed out")));
 		socket.on("error", reject);
 		socket.on("connect", () => socket.end(JSON.stringify({ ...command, deploymentId: configuration.deploymentId, profileId: configuration.profileId, revision: configuration.revision, sourceHash: configuration.sourceHash, buildId: configuration.buildId }) + "\n"));
 		socket.on("data", chunk => {

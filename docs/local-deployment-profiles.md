@@ -70,6 +70,12 @@ the latest ten slots; there are no protected exemptions. Space, copy and
 verification failures do not prune to make room. Local commands never print
 file contents or credential values.
 
+A pruning failure reports failure and leaves verified copies available; it can
+temporarily retain more than ten rather than discard the new safety copy. A
+later successful operation applies the same latest-ten rotation, with no
+exemptions. Failed restore pruning exchanges the current data back and retains
+the verified pre-restore copy. Resolve the storage error before retrying.
+
 Restore requires explicit local approval, stages and verifies the selected copy
 before rotation, and verifies a current-profile backup before changing the root.
 It uses Linux atomic directory exchange through GNU `mv --exchange --no-copy`;
@@ -77,7 +83,9 @@ older coreutils or filesystems without exchange fail closed, with no two-rename
 fallback. The previous root remains available through verification and can be
 exchanged back if the operation fails. Rotation commits only after verification;
 temporary staging is not a permanent protected backup class. No automatic
-history restoration, updater or installed-launcher cutover is implemented.
+history restoration or installed-launcher cutover is implemented. The explicit
+local updater in `docs/local-service.md` safely hands ownership off by stopping
+its drained backend before acquiring this same administration lease.
 If deleting the old staging tree fails after commit, the result explicitly
 reports `retainedRoot` and `cleanupError`; it does not falsely report a failed
 data restore or attempt rollback through a partially deleted old tree.

@@ -5,40 +5,53 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { execFileSync } from "node:child_process";
 import { alive, choosePort, cliPath, ensureManager, git, locked, prView, checkPR, readState, repository, rootOf, skillPath, slug, statePath, writeState, delay, worktreeUsers } from "./lib/ticket-state.mjs";
+import { createPreviewTransport, verifyReviewRoutes } from "./lib/preview-tailnet.mjs";
+import { validatePreviewHelper } from "./lib/preview-helper-config.mjs";
+import { launchPreviewDesktop } from "./lib/preview-desktop.mjs";
 
 const { values, positionals } = parseArgs({ allowPositionals: true, options: Object.fromEntries([
 	["root", "string"], ["state-dir", "string"], ["delivery", "string"], ["worktree", "string"], ["thread", "string"], ["ports", "string"],
-	["origin-port", "string"], ["observe-ms", "string"], ["repository", "string"], ["pr", "string"], ["archive", "string"], ["tailnet-host", "string"], ["https-ports", "string"], ["help", "boolean"],
+	["origin-port", "string"], ["observe-ms", "string"], ["repository", "string"], ["pr", "string"], ["archive", "string"], ["tailnet-host", "string"], ["https-ports", "string"], ["tailnet-socket", "string"], ["helper-directory", "string"], ["service-config", "string"], ["normal-origin", "string"], ["lease", "string"], ["help", "boolean"],
 ].map(([name, type]) => [name, { type }])) });
 const [command, identifier] = positionals;
 const help = `Ticket workflow (POSIX, Git, Node, gh; T3 for worktree binding)
   init [--ports 3800,3801,3802] [--origin-port 18100]
-       [--tailnet-host HOST.ts.net --https-ports 8450,8451,8452]
        [--observe-ms 30000]
   prepare TICKET --delivery full-stop|full-send
   attach TICKET --worktree PATH --thread T3_THREAD_ID
   delivery TICKET                 resolve selected skill, independent of preview queue
   pr TICKET --pr NUMBER           verify and observe direct-main PR
-  preview NAME [--worktree PATH]  claim or queue; PATH registers an exploratory worktree
-  release NAME                    stop only this preview; retain its profile/worktree
+  preview NAME [--worktree PATH] [--tailnet-socket PATH]
+                                 claim/queue; bind a dedicated HTTPS node per source
+  configure-tailnet --tailnet-host HOST --https-ports PORT,PORT,PORT
+                                 verify existing private review routes; no route writes
+  configure-helper --helper-directory PATH
+                                 connect stopped manager to existing trusted helper
+  desktop NAME --service-config FILE --normal-origin ORIGIN
+                                 open the accepted shell on a running isolated preview
+  release NAME [--lease LEASE]    stop only matching preview; retain its profile/worktree
   observe                        observe associated PRs without merging
   status                         owners, revisions, URLs, queue, errors (JSON)
   idle TICKET --thread ID         end matching thread lease before cleanup
   finish TICKET [--archive PATH]  safely update main, preserve artifacts, remove unused worktree
   stop                           stop this registry's owned previews/manager
 All commands accept --root PATH and --state-dir PATH. No command grants merge authority.
+Tailnet previews need distinct dedicated hostnames, never normal-host port mappings.
 `;
 
 async function main() {
 	if (values.help || !command) return console.log(help);
 	if (command === "worker") {
 		const { runManager } = await import("./lib/ticket-preview.mjs");
-		return runManager(path.resolve(values["state-dir"]));
+		const directory = path.resolve(values["state-dir"]);
+		const state = readState(directory);
+		const { previewHelperHooks } = await import("./lib/preview-subscription-helper.mjs");
+		return runManager(directory, { helper: state.helperDirectory ? previewHelperHooks(validatePreviewHelper(state.helperDirectory, state)) : null });
 	}
 	const root = fs.realpathSync(rootOf(path.resolve(values.root ?? process.cwd())));
 	const directory = statePath(root, values["state-dir"]);
 	if (command === "init") {
-		return locked(directory, state => {
+		return locked(directory, async state => {
 			assert.ok(!state, "Registry already initialized; inspect status instead of replacing owners");
 			assert.equal(git(root, "branch", "--show-current"), "main", "Project root must stay on main");
 			const actualDirectory = fs.realpathSync(directory);
@@ -60,13 +73,14 @@ async function main() {
 			assert.ok(Number.isInteger(observationIntervalMs) && observationIntervalMs >= 250, "Observation interval must be at least 250ms");
 			const created = { schemaVersion: 1, root, repository: values.repository ?? repository(root), nextPort, observationIntervalMs, tailnetHost: host ?? null,
 				slots: ports.map((port, index) => ({ id: index + 1, port, httpsPort: https?.[index] ?? null, ticket: null, claim: null })), tickets: {}, queue: [], manager: null };
+			if (host) await verifyReviewRoutes(host, created.slots);
 			writeState(directory, created);
 			return { stateDirectory: directory, slots: created.slots, preserved: "No existing process or mapping was changed" };
 		});
 	}
 	if (command === "status") {
 		const state = readState(directory);
-		return { ...state, managerRunning: alive(state.manager), tickets: Object.fromEntries(Object.entries(state.tickets).map(([name, ticket]) => [name, { ...ticket, revision: ticket.worktree && fs.existsSync(ticket.worktree) ? git(ticket.worktree, "rev-parse", "HEAD") : null }])) };
+		return { ...state, deploymentAcceptance: "BLOCKED: independent final check required; loopback builder proof is not deployment acceptance", managerRunning: alive(state.manager), tickets: Object.fromEntries(Object.entries(state.tickets).map(([name, ticket]) => [name, { ...ticket, revision: ticket.worktree && fs.existsSync(ticket.worktree) ? git(ticket.worktree, "rev-parse", "HEAD") : null, servingRevision: ticket.preview === "running" ? ticket.sandbox?.revision ?? null : null, servingSourceHash: ticket.preview === "running" ? ticket.sandbox?.sourceHash ?? null : null }])) };
 	}
 	if (command === "stop") {
 		let state = readState(directory);
@@ -97,6 +111,21 @@ async function main() {
 	return locked(directory, async state => {
 		assert.ok(state, "Run ticket init first");
 		assert.equal(state.root, root, "Registry belongs to another repository root");
+		if (command === "configure-helper") {
+			assert.ok(!alive(state.manager) && state.slots.every(slot => !slot.ticket) && state.queue.length === 0, "Stop this registry's manager before changing helper configuration");
+			state.helperDirectory = validatePreviewHelper(values["helper-directory"], state);
+			return { helperDirectory: state.helperDirectory, access: "default-deny; explicit grant per active lease" };
+		}
+		if (command === "configure-tailnet") {
+			assert.ok(state.slots.every(slot => !slot.ticket) && state.queue.length === 0, "Stop/release this registry's previews before changing review transport");
+			const httpsPorts = values["https-ports"]?.split(",").map(Number);
+			assert.equal(httpsPorts?.length, 3, "Provide the three existing --https-ports");
+			const slots = state.slots.map((slot, index) => ({ ...slot, httpsPort: httpsPorts[index] }));
+			await verifyReviewRoutes(values["tailnet-host"], slots);
+			state.tailnetHost = values["tailnet-host"];
+			state.slots = slots;
+			return { tailnetHost: state.tailnetHost, slots, mappingsChanged: false };
+		}
 		const id = slug(identifier);
 		if (command === "prepare") {
 			assert.ok(!Object.hasOwn(state.tickets, id), "Ticket already exists; use status, attach or delivery");
@@ -143,6 +172,11 @@ async function main() {
 			return ticket;
 		}
 		assert.ok(ticket.worktree, "Attach the T3-managed worktree first");
+		if (command === "desktop") {
+			assert.ok(values["service-config"] && values["normal-origin"], "Provide --service-config and --normal-origin explicitly");
+			ticket.desktop = await launchPreviewDesktop(directory, state, ticket, { serviceConfig: path.resolve(values["service-config"]), normalOrigin: values["normal-origin"] });
+			return { ticket: id, ...ticket.desktop, origin: ticket.origin, note: "Starting only; shell.log must contain PREVIEW_SHELL_READY before treating this window as ready" };
+		}
 		if (command === "delivery") {
 			assert.ok(fs.existsSync(ticket.skill), "Selected delivery skill is no longer installed");
 			return { ticket: id, skill: ticket.skill, mode: ticket.delivery, base: "main", repository: state.repository,
@@ -165,10 +199,20 @@ async function main() {
 		}
 		if (command === "preview") {
 			assert.ok(!ticket.merged, "Merged tickets cannot reclaim previews");
+			if (values["tailnet-socket"]) {
+				assert.ok(["none", "error"].includes(ticket.preview) && !ticket.claim, "Release the preview before binding its dedicated hostname");
+				const transport = createPreviewTransport();
+				const socketPath = path.resolve(values["tailnet-socket"]);
+				if (ticket.previewHost) {
+					assert.equal(socketPath, ticket.previewHost.socketPath, "Source already owns its persistent hostname; not replacing its identity");
+					await transport.verify(ticket.previewHost);
+				} else ticket.previewHost = await transport.bind(socketPath, { normalHostname: state.tailnetHost, existingHostnames: Object.values(state.tickets).map(other => other.previewHost?.hostname).filter(Boolean) });
+				ticket.origin = ticket.previewHost.origin;
+			}
 			if (!ticket.originPort) {
 				ticket.originPort = await choosePort(state.nextPort, [...state.slots.map(slot => slot.port), ...state.slots.map(slot => slot.httpsPort), ...Object.values(state.tickets).map(other => other.originPort)]);
 				state.nextPort = ticket.originPort + 1;
-				ticket.origin = state.tailnetHost ? `https://${state.tailnetHost}:${ticket.originPort}/` : `http://127.0.0.1:${ticket.originPort}/`;
+				ticket.origin = ticket.previewHost?.origin ?? `http://127.0.0.1:${ticket.originPort}/`;
 			}
 			if (["none", "error"].includes(ticket.preview)) {
 				ticket.preview = "queued";
@@ -179,6 +223,7 @@ async function main() {
 			return { ticket: id, preview: ticket.preview, origin: ticket.origin, queued: state.queue.indexOf(id) + 1, deliveryMayContinue: true };
 		}
 		if (command === "release") {
+			assert.ok(!values.lease || ticket.claim === values.lease, "Stale preview lease; replacement is untouched");
 			state.queue = state.queue.filter(name => name !== id);
 			ticket.preview = ticket.claim ? "releasing" : "none";
 			ensureManager(directory, state);

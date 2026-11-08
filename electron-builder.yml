@@ -90,7 +90,17 @@ extraResources:
       - local-service.cjs
       - local-service-protocol.cjs
       - local-service-ingress.cjs
+      - web-subscription-browser.cjs
+      - deployment-activity.cjs
+      - deployment-compatibility.cjs
       - deployment-profile.cjs
+      - preview-subscription-owner.cjs
+  - from: scripts/lib
+    to: scripts/lib
+    filter:
+      - preview-subscription-helper.mjs
+      - preview-sandbox.mjs
+      - ticket-state.mjs
   # Attribution/license for the bounded local Pi cutoff-selector port.
   - from: docs/compaction-accounting.md
     to: licenses/pi-compaction.md

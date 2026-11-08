@@ -24,10 +24,13 @@ The existing private desktop protocol remains separate.
   Unmanaged web owners also claim those credential files atomically with data/auth.
 - **LD-3 History preservation:** rollback is code-only, subject to compatibility.
   Automatic history restoration is forbidden. Explicit local restore requires a
-  verified current-profile copy. Code rollback is planned, not implemented here.
+  verified current-profile copy. The previous package probes current owned
+  formats before a code-only rollback; unknown/newer data stops the updater.
 - **LD-4 Preview isolation:** preview build/runtime must not access personal
   profile/credentials, sessions or unrelated services. Strong sandbox/helper/expiry
-  enforcement is planned; origin/session separation alone does not enforce it.
+  enforcement uses the namespace sandbox, lease-scoped helper and external hard
+  deadline. Origin/session separation alone does not enforce it; full independent
+  deployment acceptance remains blocked.
 - **LD-5 Explicit ingress:** only configured loopback/tailnet hosts are served;
   all application requests require an origin-bound session. Local Unix-socket
   admission creates one-use links; HTTP only exchanges those links, never issues
@@ -35,11 +38,14 @@ The existing private desktop protocol remains separate.
   authentication. The service never provisions routes or enables Funnel.
 - **LD-6 Honest release identity:** service, shell and Settings report the build's
   commit, source fingerprint and build ID. Mismatched shells refuse attachment.
-  Local upstream updater paths are disabled end-to-end. Until a real local updater
-  exists, status is `not-configured` / `updater-not-running`, activity `unknown`.
+  Local upstream updater paths are disabled end-to-end. The explicitly configured
+  private supervisor publishes measured activity/lifecycle/liveness; absent or
+  stale supervision is reported rather than inferred to be running.
 
 The same-user filesystem/socket contract is not an OS-user malware sandbox.
-Normal browser sessions live only in service memory and disappear on restart.
+Normal browser sessions live in service memory. An idle updater cutover transfers
+only origin-bound admissions through a private local handoff; an ordinary restart
+requires readmission. Attached shells obtain a fresh admission when reconnecting.
 Admission links expire after 60 seconds; provider credentials never enter these
 links, configuration, status, renderer or logs. Independent proof of all ten
 deployment flows remains required; builder tests cannot promote this decision.

@@ -33,7 +33,7 @@ test("packaged real service owns all profile writers, admits clients and refuses
 		child.stdout.on("data", contents => { output += contents; });
 		child.stderr.on("data", contents => { output += contents; });
 		context.after(async () => {
-			if (child.exitCode === null && child.signalCode === null) { const exited = once(child, "exit"); process.kill(-child.pid, "SIGTERM"); await exited; }
+			if (child.exitCode === null && child.signalCode === null) { const exited = once(child, "exit"); child.kill("SIGTERM"); await exited; }
 		});
 		return child;
 	};
@@ -80,7 +80,9 @@ test("packaged real service owns all profile writers, admits clients and refuses
 		assert.equal(status.sourceHash, build.sourceHash);
 		assert.equal(status.profileId, configuration.profileId);
 		assert.equal(status.updateState, "not-configured");
-		assert.equal(status.activity, "unknown");
+		assert.equal(status.activity, "idle");
+		assert.equal((await request("/api/runtime", { headers: { accept: "text/html", "sec-fetch-dest": "document" } })).status, 200);
+		assert.equal((await controlRequest(configuration, { op: "activity" })).state, "idle", "API browser-action documents do not own React input state");
 		assert.equal(JSON.stringify(status).includes(profile.root), false);
 		const created = await request("/api/chats", { method: "POST", body: JSON.stringify({ title: "zz-prove-it-shared-service" }) });
 		assert.equal(created.status, 200);
@@ -122,7 +124,7 @@ test("packaged real service owns all profile writers, admits clients and refuses
 		const occupied = net.createServer();
 		await assert.rejects(new Promise((resolve, reject) => { occupied.once("error", reject); occupied.listen(port, "127.0.0.1", resolve); }), { code: "EADDRINUSE" });
 		const exited = once(child, "exit");
-		process.kill(-child.pid, "SIGTERM");
+		child.kill("SIGTERM");
 		await exited;
 		assert.equal(fs.existsSync(configurationFile), false);
 		const lease = acquireProfile(profile);

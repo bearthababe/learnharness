@@ -7,7 +7,12 @@ export interface RuntimeStatus {
 	deploymentId?: string;
 	profileId?: string;
 	pid?: number;
-	updateState: "not-configured" | "external";
-	updater: "updater-not-running" | "not-configured";
-	activity: "unknown";
+	updateState: "not-configured" | "external" | "observing" | "waiting" | "preparing" | "maintenance" | "backing-up" | "starting" | "healthy" | "rolling-back" | "failed" | "blocked" | "stopped";
+	updater: "running" | "updater-not-running" | "not-configured";
+	activity: "idle" | "busy" | "unknown";
+	activityReasons?: string[];
+	candidate?: string | null;
+	updateReason?: string | null;
+	updaterObservedAt?: number | null;
+	maintenance?: boolean;
 }

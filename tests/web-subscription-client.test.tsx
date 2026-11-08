@@ -130,3 +130,22 @@ test("attached shell refuses missing, ambiguous or malformed admission before re
 		}), /admitted service session/);
 	}
 });
+
+test("HTTPS shell sign-in forwards only its host-bound admitted cookie", async () => {
+	const origin = "https://normal.synthetic.ts.net";
+	const sessionValue = "a".repeat(64);
+	let opened = false;
+	await openWebSubscriptionBrowser(action, origin, {
+		cookies: { get: async (filter: { url: string; name: string }) => {
+			assert.deepEqual(filter, { url: origin + action, name: "__Host-lh-local-session" });
+			return [{ value: sessionValue }];
+		} },
+		fetch: async (_target: URL, init: RequestInit) => {
+			assert.equal(new Headers(init.headers).get("cookie"), `__Host-lh-local-session=${sessionValue}`);
+			assert.equal(init.redirect, "manual");
+			return new Response(null, { status: 303, headers: { location: "https://provider.invalid/authorize" } });
+		},
+		openExternal: async () => { opened = true; },
+	});
+	assert.equal(opened, true);
+});

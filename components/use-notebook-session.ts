@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { createNotebookSession } from "./notebook-session";
 import { useNotifyHub } from "./server-events";
+import { useDeploymentActivity } from "./deployment-activity";
 
 export function useNotebookSession(chatId: string) {
 	const session = useMemo(() => createNotebookSession(chatId), [chatId]);
 	const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
+	useDeploymentActivity("notebook", () => !state.view || state.saving || state.editing || state.inputLocked || !!state.draftText.trim());
 	const hub = useNotifyHub();
 	useEffect(() => {
 		let timer: ReturnType<typeof setTimeout> | undefined;

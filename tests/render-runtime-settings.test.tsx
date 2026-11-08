@@ -19,7 +19,7 @@ test("common General status is read-only, shows actual commit and never invents 
 	try {
 		await act(async () => root.render(<RuntimeSettings />));
 		assert.ok(host.textContent?.includes("a".repeat(40)));
-		assert.ok(host.textContent?.includes("Updates not configured · Updater not running"));
+		assert.ok(host.textContent?.includes("Updater not running · not-configured · Activity unknown"));
 		assert.equal(host.querySelector("button,input"), null);
 		assert.deepEqual(calls, ["/api/runtime"]);
 		assert.equal(host.textContent?.includes("up to date"), false);

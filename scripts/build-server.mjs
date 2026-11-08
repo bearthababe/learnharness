@@ -12,6 +12,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { compatibilityManifest } from "../electron/deployment-compatibility.cjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const STANDALONE = path.join(ROOT, ".next", "standalone");
@@ -32,6 +33,7 @@ if (exists(requiredServerFiles)) {
 		if (built[1] !== current.revision || built[2] !== current.sourceHash) throw new Error("Sources changed since next build; rebuild before curating the deployment payload");
 		const build = { revision: built[1], sourceHash: built[2], buildId };
 		fs.writeFileSync(path.join(STANDALONE, "deployment-build.json"), JSON.stringify(build) + "\n");
+		fs.writeFileSync(path.join(STANDALONE, "deployment-compatibility.json"), JSON.stringify(compatibilityManifest(ROOT)) + "\n");
 	}
 }
 

@@ -58,9 +58,10 @@ function resolveProfile(options = {}) {
 	}
 	const managed = environment.LH_PROFILE_DIR !== undefined || (linux && !environment.LH_DATA_DIR && !environment.LH_AUTH_FILE);
 	const requested = environment.LH_PROFILE_DIR || path.join(home, ".config", "learnharness");
-	const root = managed ? managedRoot(requested, codeRoot) : inspectPath(requested);
-	const dataDir = inspectPath(environment.LH_DATA_DIR || path.join(managed || linux ? root : codeRoot, "data"));
-	const authFile = inspectPath(environment.LH_AUTH_FILE || path.join(managed || linux ? root : codeRoot, "auth.json"));
+	const root = managed ? managedRoot(requested, codeRoot) : path.resolve(requested);
+	const resolveLocation = managed ? inspectPath : filename => path.resolve(filename);
+	const dataDir = resolveLocation(environment.LH_DATA_DIR || path.join(managed || linux ? root : codeRoot, "data"));
+	const authFile = resolveLocation(environment.LH_AUTH_FILE || path.join(managed || linux ? root : codeRoot, "auth.json"));
 	if (environment.LH_PROFILE_DIR !== undefined && (dataDir !== path.join(root, "data") || authFile !== path.join(root, "auth.json"))) {
 		throw new Error("LH_PROFILE_DIR conflicts with LH_DATA_DIR or LH_AUTH_FILE");
 	}

@@ -1,28 +1,15 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
-import net from "node:net";
 import path from "node:path";
-import { alive, assertPreviewCheckout, checkPR, choosePort, delay, freePort, git, locked, ownerOf, previewEnvironment, prView, readState, stopOwned } from "./ticket-state.mjs";
+import { alive, assertPreviewCheckout, checkPR, delay, freePort, locked, ownerOf, prView, readState, stopOwned } from "./ticket-state.mjs";
+import { proxyFor } from "./preview-proxy.mjs";
+import { leaseExpired, newLaunch, supervisorPath } from "./preview-supervisor.mjs";
+import { createPreviewTransport, verifyReviewRoutes } from "./preview-tailnet.mjs";
+import { stopPreviewDesktop } from "./preview-desktop.mjs";
 
-const tailnet = args => execFileSync("tailscale", ["serve", ...args], { encoding: "utf8", timeout: 15_000, stdio: ["ignore", "pipe", "pipe"] });
-const mappingAt = (status, host, port) => status.Web?.[`${host}:${port}`]?.Handlers;
-function addMapping(host, port, target) {
-	const status = JSON.parse(tailnet(["status", "--json"]));
-	assert.ok(!status.TCP?.[port] && !mappingAt(status, host, port) && !status.AllowFunnel?.[`${host}:${port}`], `Tailnet port ${port} already has an owner or Funnel permission; not replacing it`);
-	tailnet(["--bg", `--https=${port}`, target]);
-	return { host, port, target };
-}
-function removeMapping(mapping) {
-	const status = JSON.parse(tailnet(["status", "--json"]));
-	const handlers = mappingAt(status, mapping.host, mapping.port);
-	if (!handlers && !status.TCP?.[mapping.port]) return;
-	assert.ok(!status.AllowFunnel?.[`${mapping.host}:${mapping.port}`], "Mapping acquired Funnel permission; stop and coordinate with its owner");
-	assert.ok(handlers && Object.keys(handlers).length === 1 && handlers["/"]?.Proxy === mapping.target, `Tailnet mapping ${mapping.port} changed owners; leaving it untouched`);
-	tailnet([`--https=${mapping.port}`, "off"]);
-}
 const listen = (server, port) => new Promise((resolve, reject) => {
 	server.once("error", reject);
 	server.listen(port, "127.0.0.1", () => { server.removeListener("error", reject); resolve(server); });
@@ -32,48 +19,6 @@ const close = server => new Promise(resolve => {
 	server.close(resolve);
 	server.closeAllConnections();
 });
-const prefixOf = ticket => `lh-preview-${ticket.id}__`;
-function proxyFor(ticket, backendPort) {
-	const prefix = prefixOf(ticket);
-	const origin = new URL(ticket.origin);
-	const valid = request => request.headers.host === origin.host && (!request.headers.origin || request.headers.origin === origin.origin);
-	const headers = request => ({ ...request.headers,
-		cookie: (request.headers.cookie ?? "").split(";").map(value => value.trim()).filter(value => value.startsWith(prefix)).map(value => value.slice(prefix.length)).join("; "),
-		"accept-encoding": "identity", host: origin.host,
-	});
-	const server = http.createServer((request, response) => {
-		if (!valid(request)) { response.writeHead(403).end("Wrong preview origin"); return; }
-		const upstream = http.request({ host: "127.0.0.1", port: backendPort, path: request.url, method: request.method, headers: headers(request) }, incoming => {
-			const outgoing = { ...incoming.headers };
-			if (outgoing["set-cookie"]) outgoing["set-cookie"] = outgoing["set-cookie"].map(cookie => prefix + cookie);
-			response.writeHead(incoming.statusCode, outgoing);
-			incoming.pipe(response);
-			incoming.once("error", () => response.destroy());
-		});
-		upstream.once("error", () => { if (!response.headersSent) response.writeHead(503); response.end("Ticket preview is starting or unavailable"); });
-		request.once("aborted", () => upstream.destroy());
-		response.once("close", () => upstream.destroy());
-		request.pipe(upstream);
-	});
-	const upgraded = new Set();
-	server.on("upgrade", (request, socket, head) => {
-		if (!valid(request)) { socket.destroy(); return; }
-		const upstream = net.connect(backendPort, "127.0.0.1");
-		upgraded.add(socket);
-		upgraded.add(upstream);
-		const finish = () => { upgraded.delete(socket); upgraded.delete(upstream); socket.destroy(); upstream.destroy(); };
-		socket.on("error", finish).on("close", finish);
-		upstream.on("error", finish).on("close", finish);
-		upstream.once("connect", () => {
-			const outgoing = headers(request);
-			upstream.write(`${request.method} ${request.url} HTTP/${request.httpVersion}\r\n${Object.entries(outgoing).map(([name, value]) => `${name}: ${value}`).join("\r\n")}\r\n\r\n`);
-			if (head.length) upstream.write(head);
-			socket.pipe(upstream).pipe(socket);
-		});
-	});
-	server.stopUpgrades = () => { for (const socket of upgraded) socket.destroy(); };
-	return server;
-}
 
 export async function observe(directory) {
 	const snapshot = readState(directory);
@@ -103,102 +48,118 @@ export async function observe(directory) {
 	return { observed };
 }
 
-export async function runManager(directory) {
+export function clearLease(state, id, lease) {
+	const ticket = state.tickets[id];
+	if (!ticket || ticket.claim !== lease) return false;
+	const slot = state.slots.find(candidate => candidate.ticket === id && candidate.claim === lease);
+	if (slot) Object.assign(slot, { ticket: null, claim: null });
+	Object.assign(ticket, { claim: null, process: null, backendPort: null, mappings: [], route: null, desktop: null, preview: "none", slot: null, reviewUrl: null, stoppedAt: new Date().toISOString() });
+	return true;
+}
+
+export async function runManager(directory, { helper = null, transport = createPreviewTransport() } = {}) {
 	const runtime = new Map();
 	let stopping = false;
 	let lastObservation = 0;
-	let mappingStatus;
-	let lastMappingCheck = 0;
-	for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(signal, () => { stopping = true; });
+	const signalStop = () => { stopping = true; };
+	for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(signal, signalStop);
 	const state = await locked(directory, current => {
 		assert.equal(current.manager?.pid, process.pid, "Another manager owns this registry");
 		current.manager.ready = true;
 		return structuredClone(current);
 	});
-	async function release(id, entry, recover = false) {
+	async function release(id, entry, reason = "stopped") {
 		entry.proxy?.stopUpgrades();
 		await Promise.all([close(entry.proxy), close(entry.gateway)]);
-		await stopOwned(entry.process);
-		for (const mapping of [...(entry.mappings ?? [])].reverse()) removeMapping(mapping);
-		await locked(directory, current => {
-			const ticket = current.tickets[id];
-			const slot = current.slots.find(candidate => candidate.ticket === id && candidate.claim === entry.claim);
-			if (slot) Object.assign(slot, { ticket: null, claim: null });
-			if (ticket.claim === entry.claim) {
-				const requeue = recover && !ticket.merged && ["starting", "running"].includes(ticket.preview);
-				Object.assign(ticket, { claim: null, process: null, backendPort: null, mappings: [], preview: requeue ? "queued" : "none", slot: null, reviewUrl: null });
-				if (requeue && !current.queue.includes(id)) current.queue.push(id);
-			}
+		try { await helper?.revoke({ ticketId: id, lease: entry.claim, reason }); }
+		finally { await stopOwned(entry.process); }
+		await locked(directory, async current => {
+			if (current.tickets[id]?.claim !== entry.claim) return;
+			await stopPreviewDesktop(current.tickets[id].desktop, entry.claim);
+			if (entry.route) await transport.stop(current.tickets[id].previewHost, entry.route);
+			if (clearLease(current, id, entry.claim)) current.tickets[id].stopReason = reason;
 		});
-		runtime.delete(id);
+		if (runtime.get(id)?.claim === entry.claim) runtime.delete(id);
 	}
 	try {
 		for (const ticket of Object.values(state.tickets)) {
 			if (!ticket.claim) continue;
-			await release(ticket.id, { claim: ticket.claim, process: ticket.process, mappings: ticket.mappings }, true);
+			await release(ticket.id, { claim: ticket.claim, process: ticket.process, route: ticket.route }, "manager-recovery");
 		}
 		while (!stopping) {
 			for (const [id, entry] of runtime) {
 				const ticket = readState(directory).tickets[id];
-				if (ticket.preview === "releasing" || !alive(entry.process)) {
-					const crashed = ticket.preview !== "releasing";
-					await release(id, entry);
-					if (crashed) await locked(directory, current => Object.assign(current.tickets[id], { preview: "error", error: "Owned app exited; inspect its profile/server.log before requesting another preview" }));
-				} else if (ticket.preview === "starting" && !await freePort(ticket.backendPort)) {
-					await locked(directory, current => { if (current.tickets[id].claim === entry.claim) current.tickets[id].preview = "running"; });
+				let event;
+				try { event = JSON.parse(fs.readFileSync(entry.eventPath, "utf8")); } catch {}
+				if (event?.lease !== entry.claim) event = null;
+				const expired = leaseExpired(entry.launch);
+				if (ticket.claim !== entry.claim || ticket.preview === "releasing" || expired || !alive(entry.process) || ["failed", "expired", "stopped", "exited"].includes(event?.status)) {
+					const reason = expired ? "expired" : ticket.preview === "releasing" ? "stopped" : event?.status ?? "failed";
+					await release(id, entry, reason);
+					if (reason === "failed") await locked(directory, current => { if (!current.tickets[id].claim) Object.assign(current.tickets[id], { preview: "error", error: event?.error ?? "Sandbox supervisor failed; inspect server.log" }); });
+				} else if (event?.sandbox) {
+					entry.socketPath = event.sandbox.socketPath;
+					entry.ready = event.status === "starting";
+					await locked(directory, current => {
+						if (current.tickets[id].claim !== entry.claim) return;
+						const running = entry.ready && fs.existsSync(entry.socketPath) && fs.lstatSync(entry.socketPath).isSocket();
+						Object.assign(current.tickets[id], { preview: running ? "running" : event.status, sandbox: event.sandbox });
+					});
 				}
 			}
 			await locked(directory, async current => {
-				if (current.tailnetHost && current.queue.length && Date.now() - lastMappingCheck > 3000) {
-					mappingStatus = JSON.parse(tailnet(["status", "--json"]));
-					lastMappingCheck = Date.now();
-				}
 				for (const slot of current.slots) {
 					if (slot.ticket || !current.queue.length) continue;
 					if (!await freePort(slot.port)) { slot.error = "Occupied by an unowned listener; preserved"; continue; }
-					if (current.tailnetHost && (mappingStatus?.TCP?.[slot.httpsPort] || mappingAt(mappingStatus ?? {}, current.tailnetHost, slot.httpsPort) || mappingStatus?.AllowFunnel?.[`${current.tailnetHost}:${slot.httpsPort}`])) {
-						slot.error = "Occupied by an unowned tailnet mapping or Funnel permission; preserved";
-						continue;
-					}
 					const id = current.queue[0];
 					const ticket = current.tickets[id];
 					const claim = randomUUID();
-					const entry = { claim, mappings: [] };
+					const entry = { claim, launch: newLaunch() };
 					try {
+						if (current.tailnetHost) {
+							assert.ok(ticket.previewHost, "BLOCKED: a dedicated per-preview hostname is required; bind its private daemon using preview --tailnet-socket PATH; same-host ports do not isolate browser sessions");
+							assert.equal(ticket.origin, ticket.previewHost.origin, "Preview origin no longer matches its dedicated hostname");
+							await verifyReviewRoutes(current.tailnetHost, current.slots);
+						}
 						assertPreviewCheckout(ticket.worktree);
 						assert.ok(await freePort(ticket.originPort), "Persistent ticket origin is occupied; not changing identity or stopping its owner");
-						const excluded = [...current.slots.map(candidate => candidate.port), ...current.slots.map(candidate => candidate.httpsPort), ...Object.values(current.tickets).flatMap(candidate => [candidate.originPort, candidate.backendPort])];
-						const backendPort = await choosePort(20000, excluded);
-						entry.proxy = await listen(proxyFor(ticket, backendPort), ticket.originPort);
+						entry.proxy = await listen(proxyFor(ticket, () => entry.socketPath, { ready: () => entry.ready === true && !leaseExpired(entry.launch) }), ticket.originPort);
 						entry.gateway = await listen(http.createServer((request, response) => {
 							const target = new URL(ticket.origin);
-							const requested = new URL(request.url, "http://localhost");
+							let requested;
+							try { requested = new URL(request.url, "http://localhost"); }
+							catch { response.writeHead(400).end("Invalid preview path"); return; }
 							target.pathname = requested.pathname;
 							target.search = requested.search;
 							response.writeHead(302, { Location: target.href, "Cache-Control": "no-store" }).end();
 						}), slot.port);
-						if (current.tailnetHost) {
-							entry.mappings.push(addMapping(current.tailnetHost, ticket.originPort, `http://127.0.0.1:${ticket.originPort}`));
-							entry.mappings.push(addMapping(current.tailnetHost, slot.httpsPort, `http://127.0.0.1:${slot.port}`));
-						}
+						const control = path.join(directory, "leases", claim);
+						fs.mkdirSync(control, { recursive: true, mode: 0o700 });
+						entry.eventPath = path.join(control, "event.json");
+						const capability = await helper?.issue({ ticketId: id, lease: claim, launch: entry.launch });
+						const configPath = path.join(control, "config.json");
+						fs.writeFileSync(configPath, JSON.stringify({ ticketId: id, lease: claim, launch: entry.launch, eventPath: entry.eventPath, worktree: ticket.worktree, profile: ticket.profile, helperSocket: capability?.socketPath ?? null }), { mode: 0o600 });
 						const log = fs.openSync(path.join(ticket.profile, "server.log"), "a", 0o600);
 						const processToken = randomUUID();
-						const child = spawn(process.execPath, [path.join(ticket.worktree, "node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(backendPort)], {
-							cwd: ticket.worktree, detached: true, stdio: ["ignore", log, log], env: { ...previewEnvironment(ticket.profile, prefixOf(ticket), current.tailnetHost ?? "127.0.0.1"), LH_PREVIEW_PROCESS_TOKEN: processToken },
+						const child = spawn(process.execPath, [supervisorPath, configPath], {
+							cwd: directory, detached: true, stdio: ["ignore", log, log], env: { PATH: "/usr/bin", HOME: process.env.HOME, LH_PREVIEW_PROCESS_TOKEN: processToken },
 						});
 						fs.closeSync(log);
 						assert.ok(child.pid, "Next process failed to spawn");
 						child.unref();
 						entry.process = { ...ownerOf(child.pid), token: processToken };
 						assert.ok(entry.process.identity, "Next process exited during startup");
+						if (current.tailnetHost) entry.route = await transport.start(ticket.previewHost, { lease: claim, port: ticket.originPort });
 						runtime.set(id, entry);
-						Object.assign(ticket, { preview: "starting", claim, slot: slot.id, process: entry.process, backendPort, mappings: entry.mappings,
+						Object.assign(ticket, { preview: "starting", claim, slot: slot.id, process: entry.process, backendPort: null, mappings: [], route: entry.route ?? null, launch: entry.launch, eventPath: entry.eventPath,
+							deploymentAcceptance: "BLOCKED: independent final ten-flow check and helper/native parity outstanding",
 							reviewUrl: current.tailnetHost ? `https://${current.tailnetHost}:${slot.httpsPort}/` : `http://127.0.0.1:${slot.port}/`, error: null });
 						Object.assign(slot, { ticket: id, claim, error: null });
 					} catch (error) {
 						entry.proxy?.stopUpgrades();
 						await Promise.all([close(entry.proxy), close(entry.gateway), stopOwned(entry.process)]);
-						for (const mapping of entry.mappings.reverse()) removeMapping(mapping);
+						await helper?.revoke({ ticketId: id, lease: claim, reason: "failed" });
+						if (entry.route) await transport.stop(ticket.previewHost, entry.route);
 						ticket.preview = "error";
 						ticket.error = error.message;
 					}
@@ -214,5 +175,6 @@ export async function runManager(directory) {
 			catch (error) { console.error(`Cleanup blocked for ${id}: ${error.message}`); }
 		}
 		await locked(directory, current => { if (current.manager?.pid === process.pid) current.manager = null; });
+		for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) process.removeListener(signal, signalStop);
 	}
 }

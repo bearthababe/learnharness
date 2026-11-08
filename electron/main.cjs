@@ -24,6 +24,9 @@
  *     would shadow every settings-page key change until restart.
  */
 
+if (process.argv.some(argument => argument === "--preview" || argument === "--preview-diagnostic" || argument.startsWith("--preview="))) {
+	require("./preview-shell.cjs").startPreviewShell();
+} else {
 const { app, BrowserWindow, Menu, ipcMain, session, shell, dialog } = require("electron");
 const { pickAttachmentPath } = require("./attachment-picker.cjs");
 const { createChatGPT, fileStore } = require("./chatgpt.cjs");
@@ -31,7 +34,6 @@ const { attachChatGPTChild, trustedSender, chatGPTControl } = require("./chatgpt
 const { createSubscriptions, loadSubscriptionSDK } = require("./subscriptions.cjs");
 const { attachSubscriptionChild, subscriptionControl } = require("./subscription-ipc.cjs");
 const { desktopAPIHeaders } = require("./desktop-api.cjs");
-const { openWebSubscriptionBrowser } = require("./web-subscription-browser.cjs");
 const { randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -428,6 +430,11 @@ function createWindow(url) {
 	});
 
 	void win.loadURL(url);
+	if (localServiceConfiguration) win.webContents.on("did-finish-load", () => {
+		const { controlRequest } = deploymentModule("local-service-protocol.cjs");
+		const { processIdentity } = deploymentModule("deployment-profile.cjs");
+		void controlRequest(localServiceConfiguration, { op: "shell", shell: processIdentity() }).catch(() => {});
+	});
 	// Zoom truth reaches the renderer for EVERY load (reload, nav): the
 	// renderer's --lh-zoom must never go stale. The fallback catcher below
 	// covers ⌘= / layout variants the menu's ⌘Plus may not claim — menu-
@@ -717,12 +724,57 @@ async function main() {
 		const { attachService, controlRequest } = deploymentModule("local-service-protocol.cjs");
 		const build = JSON.parse(fs.readFileSync(path.join(path.dirname(serverEntry()), "deployment-build.json"), "utf8"));
 		localServiceConfiguration = await attachService(localServiceFile, build, process.env.LH_PROFILE_DIR);
-		const { ticket } = await controlRequest(localServiceConfiguration, { op: "admit", origin: url });
-		const response = await fetch(`${url}/__local/session`, { method: "POST", headers: { origin: url, "Content-Type": "application/json" }, body: JSON.stringify({ ticket }), signal: AbortSignal.timeout(5000), redirect: "error" });
-		const cookie = response.headers.get("set-cookie")?.match(/^lh-local-session=([a-f0-9]{64});/);
-		if (response.status !== 204 || !cookie) throw new Error("Service admission failed");
-		await session.defaultSession.cookies.set({ url, name: "lh-local-session", value: cookie[1], httpOnly: true, sameSite: "strict", path: "/" });
+		async function admitAttachedService(attached) {
+			const { ticket } = await controlRequest(attached, { op: "admit", origin: url });
+			const response = await fetch(`${url}/__local/session`, { method: "POST", headers: { origin: url, "Content-Type": "application/json" }, body: JSON.stringify({ ticket }), signal: AbortSignal.timeout(5000), redirect: "error" });
+			const cookie = response.headers.get("set-cookie")?.match(/^lh-local-session=([a-f0-9]{64});/);
+			if (response.status !== 204 || !cookie) throw new Error("Service admission failed");
+			await session.defaultSession.cookies.set({ url, name: "lh-local-session", value: cookie[1], httpOnly: true, sameSite: "strict", path: "/" });
+		}
+		await admitAttachedService(localServiceConfiguration);
 		log(`attached local service: ${build.revision}`);
+		const { processIdentity } = deploymentModule("deployment-profile.cjs");
+		await controlRequest(localServiceConfiguration, { op: "shell", shell: processIdentity() });
+		const maintenanceDeadline = Date.now() + 120000;
+		while ((await controlRequest(localServiceConfiguration, { op: "status" })).maintenance) {
+			if (Date.now() > maintenanceDeadline) throw new Error("Local service remains in maintenance");
+			await new Promise(resolve => setTimeout(resolve, 200));
+		}
+		let checkingService = false;
+		const monitor = setInterval(async () => {
+			if (checkingService) return;
+			checkingService = true;
+			try {
+				const { readConfiguration } = deploymentModule("local-service-protocol.cjs");
+				const next = readConfiguration(localServiceFile);
+				if (next.deploymentId === localServiceConfiguration.deploymentId) return;
+				if (next.profileId !== localServiceConfiguration.profileId || next.origin !== url || next.runtime !== localServiceConfiguration.runtime) throw new Error("Service custody changed");
+				if (["revision", "sourceHash", "buildId"].some(field => next[field] !== build[field])) {
+					const executable = fs.realpathSync(next.executable);
+					const identity = JSON.parse(fs.readFileSync(path.join(path.dirname(executable), "resources", "server", "standalone", "deployment-build.json"), "utf8"));
+					if (["revision", "sourceHash", "buildId"].some(field => identity[field] !== next[field])) throw new Error("Replacement shell identity mismatch");
+					const environment = { ...process.env };
+					delete environment.ELECTRON_RUN_AS_NODE;
+					app.releaseSingleInstanceLock();
+					const replacement = spawn(executable, [`--local-service=${localServiceFile}`], { env: environment, detached: true, stdio: "ignore" });
+					replacement.once("error", () => { app.requestSingleInstanceLock(); });
+					replacement.once("spawn", () => { replacement.unref(); app.exit(0); });
+				} else {
+					const attached = await attachService(localServiceFile, build, process.env.LH_PROFILE_DIR);
+					const handoff = (await controlRequest(attached, { op: "status" })).maintenance;
+					if (!handoff) await admitAttachedService(attached);
+					await controlRequest(attached, { op: "shell", shell: processIdentity() });
+					const deadline = Date.now() + 120000;
+					while ((await controlRequest(attached, { op: "status" })).maintenance) {
+						if (Date.now() > deadline) throw new Error("Replacement service remains in maintenance");
+						await new Promise(resolve => setTimeout(resolve, 200));
+					}
+					localServiceConfiguration = attached;
+					if (!handoff) for (const window of BrowserWindow.getAllWindows()) window.webContents.reload();
+				}
+			} catch {} finally { checkingService = false; }
+		}, 500);
+		app.once("before-quit", () => clearInterval(monitor));
 	} else if (!devUrl) {
 		desktopAPISecret = randomBytes(32).toString("hex");
 		const ownedOrigin = new URL(url).origin;
@@ -778,7 +830,7 @@ async function main() {
 	// Next server may be resolved here; never accept an arbitrary external URL.
 	ipcMain.handle("lh:subscriptions:web-browser", async (event, action) => {
 		if ((!devUrl && !localServiceConfiguration) || !trustedAppWindows.has(BrowserWindow.fromWebContents(event.sender)) || !trustedSender(event, new URL(url).origin, BrowserWindow)) throw new Error("Untrusted development request.");
-		await openWebSubscriptionBrowser(action, new URL(url).origin, { ...(localServiceConfiguration ? { cookies: session.defaultSession.cookies } : {}), openExternal: (target) => shell.openExternal(target) });
+		await deploymentModule("web-subscription-browser.cjs").openWebSubscriptionBrowser(action, new URL(url).origin, { ...(localServiceConfiguration ? { cookies: session.defaultSession.cookies } : {}), openExternal: (target) => shell.openExternal(target) });
 	});
 
 	ipcMain.handle("lh:attachment:pick", (event, mode) => pickAttachmentPath(event, mode, {
@@ -829,4 +881,5 @@ async function main() {
 		checkForUpdates();
 		setInterval(() => checkForUpdates(), UPDATE_CHECK_INTERVAL_MS);
 	}
+}
 }
