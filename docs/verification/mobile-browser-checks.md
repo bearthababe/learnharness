@@ -76,3 +76,10 @@ These scripts are excluded from ESLint. When editing them, run `node --check` on
 each changed script and execute `npm run test:mobile`. Chromium touch/viewport
 emulation is automated regression evidence; physical iPhone keyboard, gestures
 and recording acceptance remain separate checks.
+
+Phone-menu animation sampling retains the actual exit objects captured by the
+animation hook, rather than relying on `getAnimations()[0]`. A catalog update can
+legitimately cancel an entrance; replaying that canceled reference can revive its
+fill effect. The sampler releases its own entrance references after inspection so
+they cannot obscure a later exit. Keep the existing contour, linearity, timing and
+touch assertions unchanged when maintaining this synchronization.
