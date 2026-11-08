@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn, execFileSync } from "node:child_process";
+import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { once } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
@@ -57,6 +57,22 @@ async function childOwner(context, profile) {
 	});
 	const [message] = await once(child, "message");
 	return { child, ...message };
+}
+
+function interleaveDirectoryRead(directory, occurrence, interleave, operation) {
+	const original = fs.readdirSync;
+	let reads = 0;
+	let injected = false;
+	fs.readdirSync = (filename, ...options) => {
+		const entries = original(filename, ...options);
+		if (filename === directory && ++reads === occurrence) { interleave(); injected = true; }
+		return entries;
+	};
+	try {
+		const result = operation();
+		assert.equal(injected, true);
+		return result;
+	} finally { fs.readdirSync = original; }
 }
 
 test("default and override resolution, exact conflicts, code roots, and legacy compatibility", context => {
@@ -331,6 +347,181 @@ test("restore pruning denial rolls back data and retains the verified pre-restor
 	assert.equal(restored.restored, selected.id);
 	assert.equal(fs.readFileSync(path.join(profile.dataDir, "learning.json"), "utf8"), "selected");
 	assert.equal(listBackups(profile).length, 10);
+});
+
+test("partial recursive pruning preserves selected history and recovers after permissions return", context => {
+	for (const operation of ["backup", "restore"]) {
+		const { profile, seed } = fixture(context);
+		seed("selected-history");
+		const selected = backupProfile(profile);
+		for (let index = 0; index < 9; index++) backupProfile(profile, { reason: index % 2 ? "pre-restore" : "update" });
+		seed("new-progress");
+		const current = treeIdentity(profile.root);
+		const inventoryRoot = `${profile.root}.backups`;
+		const expiredRoot = path.join(inventoryRoot, selected.id);
+		let partialFailure = false;
+		const io = { ...profileIO, removeTree(root) {
+			if (root !== expiredRoot) return profileIO.removeTree(root);
+			fs.chmodSync(inventoryRoot, 0o500);
+			try { profileIO.removeTree(root); }
+			catch (error) {
+				assert.equal(error.code, "EACCES");
+				assert.equal(fs.readdirSync(root).length, 0);
+				partialFailure = true;
+				throw error;
+			}
+		} };
+		try {
+			assert.throws(() => operation === "backup" ? backupProfile(profile, { io }) : restoreProfile(profile, selected.id, { approved: true, io }));
+			assert.equal(partialFailure, true);
+			assert.deepEqual(treeIdentity(profile.root), current);
+		} finally { fs.chmodSync(inventoryRoot, 0o700); }
+		const recovered = listBackups(profile);
+		assert.equal(recovered.length, 11);
+		assert.equal(fs.readFileSync(path.join(expiredRoot, "profile/data/learning.json"), "utf8"), "selected-history");
+		assert.deepEqual(recovered.find(copy => copy.id === selected.id), selected);
+		assert.deepEqual(treeIdentity(profile.root), current);
+		if (operation === "backup") backupProfile(profile);
+		else {
+			const result = restoreProfile(profile, selected.id, { approved: true });
+			assert.equal(fs.readFileSync(path.join(profile.dataDir, "learning.json"), "utf8"), "selected-history");
+			assert.deepEqual(treeIdentity(path.join(inventoryRoot, result.preserved, "profile")), current);
+		}
+		assert.equal(listBackups(profile).length, 10);
+	}
+});
+
+test("killed preparation and partial pruning recover before another administration command", context => {
+	for (const phase of ["copy", "delete"]) {
+		const { profile, seed } = fixture(context);
+		seed("selected-before-crash");
+		const selected = backupProfile(profile);
+		for (let index = 0; index < 9; index++) backupProfile(profile);
+		seed("current-before-crash");
+		const current = treeIdentity(profile.root);
+		const source = `
+		const { backupProfile, profileIO } = await import(${JSON.stringify(path.join(code, "scripts/lib/deployment-profile.mjs"))});
+		const fs = await import("node:fs");
+		backupProfile(JSON.parse(process.argv[1]), { io: { ...profileIO,
+			copyTree(source, destination) {
+				profileIO.copyTree(source, destination);
+				if (process.argv[2] === "copy" && destination.includes(".backups.pruning/")) process.kill(process.pid, "SIGKILL");
+			},
+			removeTree(root) {
+				fs.rmSync(root, { recursive: true });
+				process.kill(process.pid, "SIGKILL");
+		} } });
+	`;
+		const child = spawnSync(process.execPath, ["--input-type=module", "-e", source, JSON.stringify(profile), phase], { encoding: "utf8" });
+		assert.equal(child.signal, "SIGKILL", child.stderr);
+		assert.equal(fs.existsSync(path.join(`${profile.root}.backups`, selected.id)), phase === "copy");
+		assert.deepEqual(treeIdentity(profile.root), current);
+		if (phase === "delete") {
+			const directory = `${profile.root}.backups.pruning`;
+			const preparedFile = path.join(directory, "prepared");
+			const prepared = fs.readFileSync(preparedFile);
+			for (const state of ["missing", "malformed"]) {
+				if (state === "missing") fs.unlinkSync(preparedFile);
+				else fs.writeFileSync(preparedFile, "{", { mode: 0o600 });
+				const before = treeIdentity(directory);
+				assert.throws(() => listBackups(profile));
+				assert.deepEqual(treeIdentity(directory), before);
+				assert.deepEqual(treeIdentity(profile.root), current);
+				fs.writeFileSync(preparedFile, prepared, { mode: 0o600 });
+			}
+		}
+		assert.equal(listBackups(profile).length, 11);
+		assert.equal(fs.readFileSync(path.join(`${profile.root}.backups`, selected.id, "profile/data/learning.json"), "utf8"), "selected-before-crash");
+		assert.equal(fs.existsSync(`${profile.root}.backups.pruning`), false);
+		backupProfile(profile);
+		assert.equal(listBackups(profile).length, 10);
+	}
+});
+
+test("post-commit pruning cleanup reports success honestly and retries without rolling back restored history", context => {
+	for (const operation of ["backup", "restore"]) {
+		const { profile, seed } = fixture(context);
+		seed("selected-history");
+		const selected = backupProfile(profile);
+		for (let index = 0; index < 9; index++) backupProfile(profile);
+		seed("new-progress");
+		const current = treeIdentity(profile.root);
+		const io = { ...profileIO, removeTree(root) {
+			profileIO.removeTree(root);
+			if (root === path.join(`${profile.root}.backups`, selected.id)) fs.chmodSync(`${profile.root}.backups.pruning`, 0o500);
+		} };
+		const result = operation === "backup" ? backupProfile(profile, { io }) : restoreProfile(profile, selected.id, { approved: true, io });
+		const committed = `${profile.root}.backups.pruning.committed`;
+		try {
+			assert.equal(result.pruningCleanup.retainedRoot, committed);
+			assert.equal(result.pruningCleanup.cleanupError, "EACCES");
+			if (operation === "backup") assert.deepEqual(treeIdentity(profile.root), current);
+			else {
+				assert.equal(result.restored, selected.id);
+				assert.equal(fs.readFileSync(path.join(profile.dataDir, "learning.json"), "utf8"), "selected-history");
+				assert.deepEqual(treeIdentity(path.join(`${profile.root}.backups`, result.preserved, "profile")), current);
+			}
+		} finally { fs.chmodSync(committed, 0o700); }
+		assert.equal(listBackups(profile).length, 10);
+		assert.equal(fs.existsSync(committed), false);
+	}
+});
+
+test("unrecognized pruning directories preserve every byte and refuse administrative cleanup", context => {
+	for (const suffix of [".backups.pruning", ".backups.pruning.committed"]) {
+		for (const identity of ["missing", "malformed", "foreign"]) {
+			const { profile, seed } = fixture(context);
+			seed("current-history");
+			const current = treeIdentity(profile.root);
+			const directory = `${profile.root}${suffix}`;
+			fs.mkdirSync(path.join(directory, "data"), { recursive: true, mode: 0o700 });
+			fs.writeFileSync(path.join(directory, "data/learning.json"), "another-dormant-profile", { mode: 0o600 });
+			if (identity !== "missing") fs.writeFileSync(path.join(directory, "manifest.json"), identity === "malformed" ? "{" : JSON.stringify({ schemaVersion: 1, profileId: "foreign-profile", transaction: "cae02f51-d01c-4c26-9d16-7d49855a11c4", backups: [] }), { mode: 0o600 });
+			const before = treeIdentity(directory);
+			assert.throws(() => listBackups(profile));
+			assert.deepEqual(treeIdentity(directory), before);
+			assert.deepEqual(treeIdentity(profile.root), current);
+		}
+	}
+});
+
+test("empty pruning cleanup refuses contents introduced after its validated directory read", context => {
+	for (const [suffix, occurrence] of [[".backups.pruning", 1], [".backups.pruning", 2], [".backups.pruning.committed", 1]]) {
+		const { profile, seed } = fixture(context);
+		seed("current-history");
+		const current = treeIdentity(profile.root);
+		const directory = `${profile.root}${suffix}`;
+		fs.mkdirSync(directory, { mode: 0o700 });
+		interleaveDirectoryRead(directory, occurrence, () => {
+			fs.mkdirSync(path.join(directory, "data"), { mode: 0o700 });
+			fs.writeFileSync(path.join(directory, "data/learning.json"), "concurrent-dormant-profile", { mode: 0o600 });
+		}, () => assert.throws(() => listBackups(profile)));
+		assert.equal(fs.readFileSync(path.join(directory, "data/learning.json"), "utf8"), "concurrent-dormant-profile");
+		assert.deepEqual(treeIdentity(profile.root), current);
+		const preserved = treeIdentity(directory);
+		assert.throws(() => listBackups(profile));
+		assert.deepEqual(treeIdentity(directory), preserved);
+	}
+});
+
+test("identified pruning cleanup preserves names introduced after transaction validation", context => {
+	const { profile, seed } = fixture(context);
+	seed("current-history");
+	for (let index = 0; index < 10; index++) backupProfile(profile);
+	const current = treeIdentity(profile.root);
+	const committed = `${profile.root}.backups.pruning.committed`;
+	const result = interleaveDirectoryRead(committed, 1, () => {
+		fs.mkdirSync(path.join(committed, "foreign"), { mode: 0o700 });
+		fs.writeFileSync(path.join(committed, "foreign/learning.json"), "new-unrecognized-history", { mode: 0o600 });
+	}, () => backupProfile(profile));
+	assert.equal(fs.existsSync(path.join(committed, "foreign/learning.json")), true);
+	assert.equal(fs.readFileSync(path.join(committed, "foreign/learning.json"), "utf8"), "new-unrecognized-history");
+	assert.equal(result.pruningCleanup.retainedRoot, committed);
+	assert.equal(result.pruningCleanup.cleanupError, "ENOTEMPTY");
+	assert.deepEqual(treeIdentity(profile.root), current);
+	const preserved = treeIdentity(committed);
+	assert.throws(() => listBackups(profile));
+	assert.deepEqual(treeIdentity(committed), preserved);
 });
 
 test("public local CLI migrates, backs up, lists and explicitly restores only synthetic bytes", context => {

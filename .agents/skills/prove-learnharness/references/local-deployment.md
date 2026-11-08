@@ -56,6 +56,32 @@ The runtime browser drive resolves that cache automatically and records executab
 
 When each deployment entrypoint becomes available, record the exact exercised start, health/identity, scenario and cleanup commands here, including synthetic profile and owned port selection. This section is not complete while any required recipe remains planned. Health must expose target/profile and running revision; drive the serving public entrypoint after launch rather than an internal helper.
 
+### Backup pruning failure coverage
+
+For custody changes, run `node --test tests/deployment/profile.test.mjs`, then
+drive the actual local-administration CLI on synthetic profiles. A fault that
+throws before recursive deletion is insufficient: change disposable storage
+permissions after deletion starts, for both backup and approved restore. Repair
+permissions and inspect current bytes, the selected historical contents and
+the inventory through the public `backups` command; retry the failed operation.
+The selected history must remain recoverable, inventory verification must work
+again, and a successful retry must return to the same mixed latest-ten pool.
+Also kill an owned pruning process after its first deletion and verify recovery
+before the next administration operation. Never repair a failed proof by
+deleting its damaged inventory or its only retained recovery copy.
+Place a dormant synthetic profile at each recovery/committed-cleanup path with
+missing, malformed and foreign transaction records; administration must refuse
+it without changing any byte. Directory ownership and mode alone are not proof
+that recursive cleanup is authorized.
+Schedule new synthetic contents immediately after empty-directory or transaction
+validation. Empty cleanup must use nonrecursive removal; identified cleanup must
+not adopt newly enumerated names. Inspect the added bytes after refusal/warning.
+
+A post-commit garbage-cleanup warning is not a failed data restore. Check the
+reported retained path, actual current/pre-restore bytes and later cleanup;
+do not accept a silent rollback after successful restore or silently ignore
+`pruningCleanup`. Temporary recovery material is not a protected backup class.
+
 ### Browser cookie-boundary diagnostic
 
 For changes to preview origins/proxy cookies or normal admission, run:

@@ -133,14 +133,121 @@ function verifiedInventory(profile, io) {
 
 function withOwner(profile, operation) {
 	const resolved = managed(profile);
-	const owner = acquireProfile(resolved, { additionalDirectories: [backupRoot(resolved)] });
-	try { owner.assertOwner(); return operation(resolved, owner); }
+	const owner = acquireProfile(resolved, { additionalDirectories: [backupRoot(resolved), pruningRoot(resolved), `${pruningRoot(resolved)}.committed`] });
+	try { owner.assertOwner(); recoverPruning(resolved); return operation(resolved, owner); }
 	finally { owner.release(); }
 }
 
+function pruningRoot(profile) {
+	return `${backupRoot(profile)}.pruning`;
+}
+
+function readPruningRecord(filename) {
+	inspectPath(filename);
+	const information = fs.statSync(filename);
+	if (!information.isFile() || information.uid !== process.getuid() || (information.mode & 0o777) !== 0o600) throw new Error("Unsafe pruning record");
+	return JSON.parse(fs.readFileSync(filename, "utf8"));
+}
+
+function readPruningManifest(profile, directory) {
+	const names = fs.readdirSync(directory);
+	if (!names.length) return null;
+	if (!names.includes("manifest.json")) throw new Error("Missing pruning transaction identity; preserving unrecognized contents");
+	const manifest = readPruningRecord(path.join(directory, "manifest.json"));
+	if (manifest.schemaVersion !== 1 || manifest.profileId !== profileId(profile) || !/^[-a-f0-9]{36}$/.test(manifest.transaction) ||
+		!Array.isArray(manifest.backups) || !manifest.backups.length ||
+		manifest.backups.some(backup => !backup || !/^\d{12}-[-a-f0-9]{36}$/.test(backup.id) || !Array.isArray(backup.entries)) ||
+		new Set(manifest.backups.map(backup => backup.id)).size !== manifest.backups.length) throw new Error("Unknown pruning transaction identity");
+	const known = new Set(["manifest.json", "prepared", ...manifest.backups.flatMap(backup => [backup.id, `residue-${backup.id}`])]);
+	if (names.some(name => !known.has(name))) throw new Error("Unrecognized pruning transaction contents");
+	const prepared = names.includes("prepared");
+	if (prepared) {
+		const marker = readPruningRecord(path.join(directory, "prepared"));
+		if (marker.schemaVersion !== 1 || marker.transaction !== manifest.transaction || marker.identity !== digest(JSON.stringify(manifest))) throw new Error("Unknown prepared pruning identity");
+	}
+	if (directory === `${pruningRoot(profile)}.committed` && !prepared && names.some(name => name !== "manifest.json")) throw new Error("Missing committed pruning preparation identity");
+	return { manifest, prepared, names };
+}
+
+function clearPruning(profile, directory) {
+	const record = readPruningManifest(profile, directory);
+	if (!record) { fs.rmdirSync(directory); syncDirectory(path.dirname(directory)); return; }
+	for (const name of record.names) {
+		if (!["manifest.json", "prepared"].includes(name)) fs.rmSync(path.join(directory, name), { recursive: true });
+	}
+	for (const name of ["prepared", "manifest.json"]) {
+		if (record.names.includes(name)) fs.unlinkSync(path.join(directory, name));
+	}
+	fs.rmdirSync(directory);
+	syncDirectory(path.dirname(directory));
+}
+
+function recoverPruning(profile) {
+	const directory = pruningRoot(profile);
+	const committed = `${directory}.committed`;
+	inspectPath(committed);
+	if (exists(committed)) { privateDirectory(committed); clearPruning(profile, committed); }
+	inspectPath(directory);
+	if (!exists(directory)) return;
+	privateDirectory(directory);
+	const record = readPruningManifest(profile, directory);
+	if (!record) { clearPruning(profile, directory); return; }
+	const { manifest, prepared } = record;
+	if (!prepared) {
+		for (const backup of manifest.backups) verifyTree(path.join(backupRoot(profile), backup.id), backup.entries);
+		clearPruning(profile, directory);
+		return;
+	}
+	for (const backup of manifest.backups) {
+		const destination = path.join(backupRoot(profile), backup.id);
+		const preserved = path.join(directory, backup.id);
+		let intact = false;
+		if (exists(destination)) {
+			privateDirectory(destination);
+			intact = JSON.stringify(treeIdentity(destination)) === JSON.stringify(backup.entries);
+		}
+		if (!intact) verifyTree(preserved, backup.entries);
+	}
+	for (const backup of manifest.backups) {
+		const destination = path.join(backupRoot(profile), backup.id);
+		if (exists(destination) && JSON.stringify(treeIdentity(destination)) === JSON.stringify(backup.entries)) continue;
+		if (exists(destination)) fs.renameSync(destination, path.join(directory, `residue-${backup.id}`));
+		fs.renameSync(path.join(directory, backup.id), destination);
+		syncDirectory(backupRoot(profile));
+	}
+	clearPruning(profile, directory);
+}
+
 function rotateBackups(profile, inventory, io) {
-	for (const expired of inventory.slice(0, -10)) io.removeTree(path.join(backupRoot(profile), expired.id));
-	syncDirectory(backupRoot(profile));
+	const expired = inventory.slice(0, -10);
+	if (!expired.length) { syncDirectory(backupRoot(profile)); return {}; }
+	const directory = pruningRoot(profile);
+	const committed = `${directory}.committed`;
+	fs.mkdirSync(directory, { mode: 0o700 });
+	try {
+		const backups = expired.map(backup => ({ id: backup.id, entries: treeIdentity(path.join(backupRoot(profile), backup.id)) }));
+		io.checkSpace(path.dirname(directory), backups.flatMap(backup => backup.entries));
+		const manifest = { schemaVersion: 1, profileId: profileId(profile), transaction: randomUUID(), backups };
+		writePrivate(path.join(directory, "manifest.json"), JSON.stringify(manifest));
+		syncDirectory(directory);
+		syncDirectory(path.dirname(directory));
+		for (const backup of backups) {
+			io.copyTree(path.join(backupRoot(profile), backup.id), path.join(directory, backup.id));
+			io.verifyTree(path.join(directory, backup.id), backup.entries);
+		}
+		writePrivate(path.join(directory, "prepared"), JSON.stringify({ schemaVersion: 1, transaction: manifest.transaction, identity: digest(JSON.stringify(manifest)) }));
+		syncDirectory(directory);
+		for (const backup of backups) io.removeTree(path.join(backupRoot(profile), backup.id));
+		syncDirectory(backupRoot(profile));
+		fs.renameSync(directory, committed);
+	} catch (error) {
+		try { recoverPruning(profile); }
+		catch (recoveryError) { throw new Error(`${error.message}; backup recovery retained at ${directory}: ${recoveryError.message}`, { cause: error }); }
+		throw error;
+	}
+	try { syncDirectory(path.dirname(committed)); clearPruning(profile, committed); }
+	catch (error) { return { pruningCleanup: { retainedRoot: committed, cleanupError: error.code || "cleanup-failed" } }; }
+	return {};
 }
 
 function createBackup(profile, owner, reason, io, rotate = true) {
@@ -174,7 +281,7 @@ function createBackup(profile, owner, reason, io, rotate = true) {
 		const complete = verifiedInventory(profile, io);
 		if (rotate) {
 			pruning = true;
-			rotateBackups(profile, complete, io);
+			return { ...manifest, ...rotateBackups(profile, complete, io) };
 		}
 		return manifest;
 	} catch (error) {
@@ -222,8 +329,8 @@ export function restoreProfile(profile, id, { approved = false, io = profileIO }
 			syncDirectory(parent);
 			const complete = verifiedInventory(resolved, io);
 			pruning = true;
-			rotateBackups(resolved, complete, io);
-			result = { restored: id, preserved: before.id };
+			const pruningResult = rotateBackups(resolved, complete, io);
+			result = { restored: id, preserved: before.id, ...pruningResult };
 		} catch (error) {
 			if (exchangeAttempted && !exchanged) {
 				try {

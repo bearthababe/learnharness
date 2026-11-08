@@ -32,8 +32,9 @@ avoids temporary-directory cleanup invalidating a live lease. Locks remain
 outside the profile during atomic restoration.
 Managed owners exclude the entire profile tree. Legacy owners exclude both the
 configured data tree and auth file, including overlapping managed roots.
-Administration also locks the sibling backup inventory against other configured
-profile writers. `acquireProfile(profile, { additionalDirectories })` acquires
+Administration also locks the sibling backup inventory and its temporary
+pruning/recovery directories against other configured profile writers.
+`acquireProfile(profile, { additionalDirectories })` acquires
 these resources together, not through an unchecked lock-bypass flag.
 
 Ownership records contain PID, Linux start ticks, boot identity and a random
@@ -75,6 +76,32 @@ temporarily retain more than ten rather than discard the new safety copy. A
 later successful operation applies the same latest-ten rotation, with no
 exemptions. Failed restore pruning exchanges the current data back and retains
 the verified pre-restore copy. Resolve the storage error before retrying.
+
+Before recursive pruning, administration makes space for and verifies a private
+recovery copy of every expiring backup. `PROFILE.backups.pruning` journals these
+copies before deletion begins. The profile-bound transaction manifest is durable
+before any preparation copy; a separate hash-bound prepared marker precedes
+deletion. Missing, malformed, foreign or unrecognized nonempty journals are
+preserved and refused, not recursively cleaned based on their name or ownership.
+Empty unjournaled roots are removed only with nonrecursive `rmdir`; concurrent
+new contents cause refusal. Identified cleanup uses its validated name snapshot,
+never a fresh listing that could adopt unrelated files added after validation.
+Failed or interrupted deletion never makes a
+partial directory an accepted backup: the next administration command recovers
+the exact originals under the same writer lease before reading the inventory.
+If storage permissions prevent immediate recovery, the error names the retained
+recovery directory. Repair the storage error and retry; do not delete that
+directory. This also preserves the selected historical copy when restore
+pruning fails and the current profile is exchanged back.
+
+Successful rotation atomically renames that journal to
+`PROFILE.backups.pruning.committed` before removing recovery garbage. A later
+cleanup failure is reported as `pruningCleanup.retainedRoot` and
+`pruningCleanup.cleanupError` on the successful backup/restore result. It does
+not falsely fail a completed restore or roll history back. Subsequent local
+administration retries this cleanup. These temporary transaction copies are
+not a protected backup class or a second rotation pool; successful cleanup
+leaves the same latest ten verified backups.
 
 Restore requires explicit local approval, stages and verifies the selected copy
 before rotation, and verifies a current-profile backup before changing the root.
