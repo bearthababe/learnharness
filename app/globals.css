@@ -5273,18 +5273,22 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 
 /* R2: the folded bar shows what was chosen (it wraps up to two lines). */
 .lh-question-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 14.5px; font-weight: 550; line-height: 1.35; }
-/* E1: the reading note shows as attached on the question card. */
-.lh-reading-attached { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 4px 10px 2px; color: var(--muted-foreground); font-size: 13.5px; line-height: 1.4; }
-.lh-reading-attached svg { flex: none; width: 15px; height: 15px; margin-top: 2px; }
-.lh-reading-attached-label { color: var(--foreground); font-weight: 600; }
-/* E7: the confidence slider explained beside it. */
-.lh-confidence-explain { margin: 0 0 6px; color: var(--muted-foreground); font-size: 13.5px; line-height: 1.4; }
+/* E1: the reading note shows as attached, on the reasoning label's own row. */
+.lh-reasoning-label { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 10px; }
+.lh-reading-attached { display: inline-flex; align-items: center; gap: 5px; color: var(--muted-foreground); font-size: 13px; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.lh-reading-attached svg { flex: none; width: 14px; height: 14px; }
+.lh-reading-attached-label { color: color-mix(in oklab, var(--primary) 65%, var(--foreground)); font-weight: 600; }
+/* E7: the confidence slider explained beside it; its ends under the track. */
+.lh-confidence-explain { flex: 0 1 13.5rem; margin: 0; color: var(--muted-foreground); font-size: 13.5px; line-height: 1.35; }
 .lh-confidence-name { color: var(--foreground); font-weight: 600; }
-.lh-confidence-ends { display: flex; justify-content: space-between; gap: 6px; margin-top: 4px; padding-right: 48px; color: var(--muted-foreground); font-size: 13px; line-height: 1.3; }
+.lh-confidence-track { display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }
+.lh-confidence-row > [data-testid="confidence-value"] { padding-top: 1px; }
+.lh-confidence-ends { display: flex; justify-content: space-between; gap: 6px; color: var(--muted-foreground); font-size: 13px; line-height: 1.25; }
 .lh-confidence-ends > span:nth-child(2) { text-align: center; }
 .lh-confidence-ends > span:last-child { text-align: right; }
 @media (max-width: 767px) {
-	.lh-confidence-ends > span:first-child, .lh-confidence-ends > span:last-child { max-width: 30%; }
+	.lh-confidence-row { flex-wrap: wrap; row-gap: 6px; }
+	.lh-confidence-explain { flex-basis: 100%; }
 }
 
 /* R9: "Skip to sessions" — the first stop for a keyboard, shown on focus. */
@@ -5392,3 +5396,4 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	:root:has(.lh-graph-search[data-over]) :is(.lh-home-navigation, .lh-home-page-menu, .lh-home-toolbar-actions > :not(.lh-graph-search)) { visibility: hidden; }
 	:root:has(.lh-chains-search[data-over]) [data-testid="chain-table"] .lh-topbar > :not(.lh-chains-search) { visibility: hidden; }
 }
+.lh-confidence-track > [data-testid="confidence-track"] { flex: none; height: 16px; }

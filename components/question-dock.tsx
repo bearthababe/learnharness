@@ -899,11 +899,14 @@ function QuestionDockForm({
 			</p>}
 			{kind === "quiz" && (
 				<div className="lh-question-confidence border-t border-border/60 px-4 py-2.5">
-					{/* E7 (round 16): what the slider means, beside it — no hover. */}
-					<p className={cn("lh-confidence-explain", sel.dontKnow && "opacity-50")} data-testid="confidence-explain">
-						<span className="lh-confidence-name">Confidence</span> — the chance your answer is correct
-					</p>
-					<div className="flex items-center gap-3">
+					{/* E7 (round 16): what the slider means, beside it — no hover — and
+					    its ends labelled under the track. The label is the
+					    explanation, so the row stays one row on wider screens. */}
+					<div className="lh-confidence-row flex items-start gap-3">
+						<p className={cn("lh-confidence-explain", sel.dontKnow && "opacity-50")} data-testid="confidence-explain">
+							<span className="lh-confidence-name">Confidence</span> — the chance your answer is correct
+						</p>
+						<div className="lh-confidence-track min-w-0 flex-1">
 						<div
 							className={cn("relative h-4 min-w-0 flex-1", sel.dontKnow && "opacity-40")}
 							data-testid="confidence-track"
@@ -958,6 +961,10 @@ function QuestionDockForm({
 								)}
 							/>
 						</div>
+							<div className={cn("lh-confidence-ends", sel.dontKnow && "opacity-50")} aria-hidden="true" data-testid="confidence-ends">
+								<span>0%</span><span>50% = a coin flip</span><span>100%</span>
+							</div>
+						</div>
 						<span
 							data-testid="confidence-value"
 							className={cn(
@@ -967,9 +974,6 @@ function QuestionDockForm({
 						>
 							{sel.dontKnow ? "—" : `${CONFIDENCE_STOPS[confIdx]}%`}
 						</span>
-					</div>
-					<div className={cn("lh-confidence-ends", sel.dontKnow && "opacity-50")} aria-hidden="true" data-testid="confidence-ends">
-						<span>0%</span><span>50% = a coin flip</span><span>100%</span>
 					</div>
 				</div>
 			)}
@@ -996,12 +1000,12 @@ function QuestionDockForm({
 					{/* E1 (round 16): the answer's reasoning has one name everywhere —
 					    "Your reasoning"; a reading note, when there is one, shows as
 					    attached (it goes with the answer, as before). */}
-					<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-						{qd.mode === "text" ? "Your answer" : "YOUR REASONING"}
+					<div className="lh-input-label lh-reasoning-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+						<span>{qd.mode === "text" ? "Your answer" : "YOUR REASONING"}</span>
+						{(readingAttached ?? !!(readingThinkingNow?.() ?? readingThinking).trim()) && <span className="lh-reading-attached" data-testid="reading-attached">
+							<PaperclipIcon aria-hidden /><span className="lh-reading-attached-label">Thinking while reading is attached</span><span className="sr-only"> — it goes with this answer.</span>
+						</span>}
 					</div>
-					{(readingAttached ?? !!(readingThinkingNow?.() ?? readingThinking).trim()) && <p className="lh-reading-attached" data-testid="reading-attached">
-						<PaperclipIcon aria-hidden /><span><span className="lh-reading-attached-label">Thinking while reading is attached</span> — it goes with this answer.</span>
-					</p>}
 					<CompactLearningInput dictation={dictationClaim ? dictation : undefined}>{qd.mode === "text" ? (
 						<PathInput
 							aria-label="Your answer"
