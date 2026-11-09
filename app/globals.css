@@ -4867,7 +4867,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	flex: 1 1 auto; height: auto; min-height: 0; max-height: none; padding: 12px 14px; field-sizing: fixed; overflow-y: auto; overscroll-behavior: contain;
 	white-space: normal; font-size: 17px; line-height: 26px;
 }
-:root .lh-reading-pane-field .lh-compact-field[data-has-mic] > [data-file-path-input] { width: calc(100% - 52px); padding-right: 0; }
+:root .lh-reading-pane-field .lh-compact-field[data-has-mic] > [data-file-path-input] { flex: 0 1 auto; width: calc(100% - 52px); padding-right: 0; }
 :root .lh-reading-pane-field .lh-compact-speech { display: block; position: absolute; right: 4px; bottom: 4px; left: auto; top: auto; }
 :root .lh-reading-pane-field .lh-compact-field[data-recording] .lh-compact-speech { left: 4px; }
 /* Dictating keeps the note in view: the recording strip takes the field's
