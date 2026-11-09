@@ -4840,32 +4840,103 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 .lh-reading-open-preview { overflow: hidden; color: var(--muted-foreground); font-size: 14px; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
 .lh-reading-entry > .lh-phone-reveal { display: inline-flex; flex: none; align-self: stretch; }
 .lh-reading-pane {
-	position: fixed; inset: 0; z-index: 70; display: flex; flex-direction: column;
-	padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+	/* Round 16: under menus (60) and dialogs (50), so ⋯, its cards and
+	   Settings open over it; over the page bar, the question and Exit focus. */
+	position: fixed; inset-inline: 0; top: var(--lh-pane-top, 0px); height: var(--lh-pane-height, 100dvh); z-index: 48; display: flex; flex-direction: column;
+	padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
 	background: var(--background); transform: translateX(100%); visibility: hidden;
 	transition: transform 240ms cubic-bezier(.2, .8, .2, 1), visibility 0s linear 240ms; touch-action: pan-y pinch-zoom;
 }
-.lh-reading-pane[data-open] { transform: translateX(0); visibility: visible; transition: transform 240ms cubic-bezier(.2, .8, .2, 1), visibility 0s; }
+.lh-reading-pane[data-open]:not([data-peeking]) { transform: translateX(0); visibility: visible; transition: transform 240ms cubic-bezier(.2, .8, .2, 1), visibility 0s; }
 @media (prefers-reduced-motion: reduce) { .lh-reading-pane, .lh-reading-pane[data-open] { transition: none; } }
-.lh-reading-pane-head { display: flex; align-items: center; min-height: 60px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
-.lh-reading-pane-close {
-	display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 14px 0 8px; border-radius: 12px;
-	border: 1px solid var(--border); background: var(--card); color: var(--foreground); font-size: 15px; font-weight: 600;
-}
-.lh-reading-pane-close svg { width: 18px; height: 18px; }
-.lh-reading-pane-body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 8px; padding: 16px; overflow-y: auto; }
-.lh-reading-pane-title { margin: 0; font-size: 19px; font-weight: 650; }
-.lh-reading-pane-hint { margin: 0; color: var(--muted-foreground); font-size: 15px; line-height: 1.45; }
-.lh-reading-pane-field { display: flex; flex-direction: column; margin-top: 4px; }
-:root .lh-reading-pane-field .lh-compact-field { min-height: 40dvh; align-items: stretch; }
+.lh-reading-pane-head { display: flex; flex: none; flex-direction: column; gap: 2px; padding: 14px 16px 6px; }
+.lh-reading-pane-title { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.3; }
+.lh-reading-pane-hint { margin: 0; color: var(--muted-foreground); font-size: 14px; line-height: 1.4; }
+.lh-reading-pane-body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 8px; padding: 8px 16px 12px; }
+.lh-reading-pane-field { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+/* The field fills the pane; long notes scroll inside it. The mic sits at
+   its bottom right (P1-A), in a lane of its own so text never runs under it. */
+:root .lh-reading-pane-field .lh-compact-field { display: flex; flex: 1; min-height: 120px; align-items: stretch; position: relative; border: 1px solid var(--border); border-radius: 14px; background: var(--card); }
+:root .lh-reading-pane-field .lh-compact-field:focus-within { border-color: var(--primary); }
 :root .lh-reading-pane-field .lh-compact-field > [data-file-path-input] {
-	min-height: 40dvh; max-height: calc(var(--lh-phone-height, 100dvh) - 260px); white-space: normal;
+	flex: 1 1 auto; height: auto; min-height: 0; max-height: none; padding: 12px 14px; field-sizing: fixed; overflow-y: auto; overscroll-behavior: contain;
+	white-space: normal; font-size: 17px; line-height: 26px;
 }
-.lh-reading-pane-question {
-	display: inline-flex; align-self: flex-end; align-items: center; gap: 4px; min-height: 44px; margin-top: 4px; padding: 0 16px; border-radius: 999px;
-	border: 1px solid color-mix(in oklab, var(--primary) 55%, var(--border)); color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); font-size: 15px; font-weight: 600;
+:root .lh-reading-pane-field .lh-compact-field[data-has-mic] > [data-file-path-input] { width: calc(100% - 52px); padding-right: 0; }
+:root .lh-reading-pane-field .lh-compact-speech { display: block; position: absolute; right: 4px; bottom: 4px; left: auto; top: auto; }
+:root .lh-reading-pane-field .lh-compact-field[data-recording] .lh-compact-speech { left: 4px; }
+/* Dictating keeps the note in view: the recording strip takes the field's
+   bottom lane and the text scrolls above it. */
+:root .lh-reading-pane-field .lh-compact-field[data-recording] > [data-file-path-input] { visibility: visible; height: auto; min-height: 0; width: 100%; padding-right: 14px; padding-bottom: 56px; }
+:root .lh-reading-pane-field .lh-compact-recording { min-height: 44px; border-radius: 10px; background: var(--card); }
+:root .lh-reading-pane-field .lh-compact-speech button { min-width: 44px; min-height: 44px; }
+/* The bottom bar: Back at the left; P1-A puts ⋯ at the right, P1-B a big
+   mic in the centre and the keyboard switch at the right. */
+.lh-reading-pane-bar {
+	display: flex; flex: none; align-items: center; gap: 8px; min-height: 64px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+	border-top: 1px solid var(--border); background: var(--background);
 }
-.lh-reading-pane-question svg { width: 18px; height: 18px; }
+.lh-reading-pane[data-controls="big-mic"] .lh-reading-pane-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.lh-reading-pane-bar-end { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; min-width: 0; }
+.lh-reading-pane-close, .lh-reading-pane-peek, .lh-pane-keyboard, .lh-pane-menu-button {
+	display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 12px;
+	border: 1px solid var(--border); background: var(--card); color: var(--foreground); font-size: 15px; font-weight: 600; white-space: nowrap;
+}
+.lh-reading-pane-close { justify-self: start; padding: 0 14px 0 8px; }
+.lh-reading-pane-close svg, .lh-reading-pane-peek svg, .lh-pane-keyboard svg, .lh-pane-menu-button svg { width: 20px; height: 20px; flex: none; }
+.lh-pane-menu-button { width: 48px; padding: 0; }
+.lh-pane-keyboard { flex-direction: column; gap: 2px; min-width: 64px; padding: 0 6px; font-size: 12.5px; line-height: 1; }
+.lh-pane-keyboard[aria-pressed="false"] { border-color: color-mix(in oklab, var(--primary) 50%, var(--border)); color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); }
+/* In the big-mic bar the Peek button is an icon, so Back, the mic and the
+   right-hand pair fit side by side at 375px. */
+.lh-reading-pane[data-controls="big-mic"] .lh-reading-pane-peek { padding: 0; width: 48px; }
+.lh-reading-pane[data-controls="big-mic"] .lh-reading-pane-peek-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.lh-pane-mic-wrap { display: inline-flex; justify-self: center; }
+.lh-pane-mic {
+	position: relative; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 999px;
+	background: var(--primary); color: var(--primary-foreground); box-shadow: 0 2px 10px rgb(0 0 0 / .35);
+}
+.lh-pane-mic svg { position: relative; width: 24px; height: 24px; }
+.lh-pane-mic[data-recording] { background: var(--destructive); color: white; }
+.lh-pane-mic-ring { position: absolute; inset: -5px; border: 2px solid color-mix(in oklab, var(--primary) 60%, transparent); border-radius: 999px; transition: transform 90ms linear; }
+.lh-pane-mic[data-recording] .lh-pane-mic-ring { border-color: color-mix(in oklab, var(--destructive) 70%, transparent); }
+.lh-pane-mic:disabled { opacity: .5; }
+/* P2-B: "From the lesson" — two lines of the paragraph in view; a tap
+   opens it to about 40% of the pane, read-only and scrolling. */
+.lh-reading-strip { display: flex; flex: none; flex-direction: column; gap: 4px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--card); }
+.lh-reading-strip-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin: -8px -4px 0; padding: 0 4px; text-align: left; }
+.lh-reading-strip-label { color: var(--muted-foreground); font-size: 13px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
+.lh-reading-strip-action { display: inline-flex; align-items: center; gap: 2px; color: var(--muted-foreground); font-size: 14px; font-weight: 600; }
+.lh-reading-strip-action svg { width: 18px; height: 18px; transition: transform .15s ease; }
+.lh-reading-strip[data-expanded] .lh-reading-strip-action svg { transform: rotate(180deg); }
+.lh-reading-strip-text { font-size: 15px; line-height: 1.5; color: var(--foreground); }
+.lh-reading-strip-text > * { margin: 0 0 8px; }
+.lh-reading-strip:not([data-expanded]) .lh-reading-strip-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-height: 3em; }
+.lh-reading-strip:not([data-expanded]) .lh-reading-strip-text > * { margin: 0; display: inline; }
+.lh-reading-strip[data-expanded] .lh-reading-strip-text { max-height: calc(var(--lh-pane-height, 100dvh) * .4); overflow-y: auto; overscroll-behavior: contain; }
+/* P2-A: "Continue writing", beside Show question in the dock band. */
+.lh-reading-entry[data-compact] { flex-direction: row; align-items: center; justify-content: space-between; }
+.lh-reading-continue {
+	display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 0 16px; border-radius: 999px;
+	border: 1px solid color-mix(in oklab, var(--primary) 45%, var(--border)); background: color-mix(in oklab, var(--primary) 12%, var(--card));
+	color: var(--foreground); font-size: 15px; font-weight: 600; white-space: nowrap;
+}
+.lh-reading-continue svg { width: 18px; height: 18px; color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); }
+:root .lh-reading-entry[data-compact] > .lh-phone-reveal { align-self: center; }
+/* P2-C: the peek shows the lesson; "Return to writing" holds the bottom
+   band (where the dock is), so it never sits over the text. */
+.lh-reading-return-bar {
+	position: fixed; inset-inline: 0; bottom: 0; z-index: 47; display: flex; justify-content: center; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+	border-top: 1px solid var(--border); background: var(--background);
+}
+.lh-reading-return {
+	display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 22px; border-radius: 999px;
+	background: var(--primary); color: var(--primary-foreground); font-size: 16px; font-weight: 650;
+}
+.lh-reading-return svg { width: 18px; height: 18px; }
+@media (max-width: 767px) {
+	:root[data-reading-peek] .lh-dock-overlay[data-question-open] { visibility: hidden; }
+}
 :root .lh-reading-entry > .lh-phone-reveal {
 	align-self: flex-end; align-items: center; justify-content: center; gap: 2px; min-height: 48px; padding: 0 12px 0 18px;
 	border-radius: 999px; font-size: 15px; font-weight: 600; white-space: nowrap;
@@ -4970,3 +5041,71 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 }
 /* R9: the "You" label above the learner's messages is a label, at 13px. */
 :root [data-testid="user-message"] .uppercase { font-size: 13px; }
+
+/* ══ Round 16 ═══════════════════════════════════════════════════════════ */
+/* §0: Settings → Try-out designs. Each card: a title with its device, one
+   line on what it changes, then its variants as radio rows (the default
+   marked). Cards that do not apply on this device stay listed, greyed. */
+.lh-tryouts { display: flex; flex-direction: column; gap: 14px; }
+.lh-tryouts-intro { margin: 0; color: var(--muted-foreground); font-size: 14px; line-height: 1.45; }
+.lh-tryout { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: color-mix(in oklab, var(--card) 70%, transparent); }
+.lh-tryout[data-applies="false"] { opacity: .55; }
+.lh-tryout-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.lh-tryout-title { margin: 0; font-size: 16px; font-weight: 650; line-height: 1.3; }
+.lh-tryout-device { flex: none; padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted-foreground); font-size: 13px; font-weight: 550; white-space: nowrap; }
+.lh-tryout-desc { margin: 0; color: var(--muted-foreground); font-size: 14px; line-height: 1.4; }
+.lh-tryout-options { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.lh-tryout-option {
+	display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 8px 10px; border: 1px solid transparent; border-radius: 10px;
+	color: var(--foreground); text-align: left; transition: background-color .15s, border-color .15s;
+}
+.lh-tryout-option:hover:not(:disabled) { background: var(--accent); }
+.lh-tryout-option[aria-checked="true"] { border-color: color-mix(in oklab, var(--primary) 50%, var(--border)); background: color-mix(in oklab, var(--primary) 10%, var(--card)); }
+.lh-tryout-option:disabled { cursor: not-allowed; }
+.lh-tryout-radio { flex: none; width: 18px; height: 18px; margin-top: 2px; border: 2px solid var(--muted-foreground); border-radius: 999px; }
+.lh-tryout-option[aria-checked="true"] .lh-tryout-radio { border-color: var(--primary); box-shadow: inset 0 0 0 3px var(--card), inset 0 0 0 9px var(--primary); }
+.lh-tryout-option-text { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.lh-tryout-option-label { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; line-height: 1.3; }
+.lh-tryout-option-desc { color: var(--muted-foreground); font-size: 13.5px; line-height: 1.4; }
+.lh-tryout-default { padding: 0 6px; border-radius: 6px; background: var(--accent); color: var(--muted-foreground); font-size: 12.5px; font-weight: 600; line-height: 20px; }
+.lh-tryout-note { margin: 2px 0 0; color: var(--muted-foreground); font-size: 13px; }
+
+/* R11: Appearance — a reading-size stepper with a live preview, background
+   swatches, the exact values under Advanced. */
+.lh-stepper { display: inline-flex; flex: none; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: 12px; background: color-mix(in oklab, var(--card) 70%, black); }
+.lh-stepper > button { display: grid; place-items: center; width: 44px; height: 38px; border-radius: 9px; color: var(--foreground); font-size: 20px; line-height: 1; }
+.lh-stepper > button:hover:not(:disabled) { background: var(--accent); }
+.lh-stepper > button:disabled { opacity: .4; cursor: not-allowed; }
+.lh-stepper > output { min-width: 52px; text-align: center; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lh-size-preview { margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; font-size: var(--lh-prose-size); line-height: 1.55; }
+.lh-size-reset { display: inline-flex; min-height: 32px; margin-left: 8px; color: var(--muted-foreground); font-family: var(--font-sans); font-size: 13px; text-decoration: underline; }
+.lh-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.lh-swatch { width: 40px; height: 40px; border: 2px solid var(--border); border-radius: 999px; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .06); }
+.lh-swatch[aria-checked="true"] { border-color: var(--foreground); box-shadow: 0 0 0 2px var(--background), 0 0 0 4px color-mix(in oklab, var(--primary) 70%, transparent); }
+@media (pointer: coarse) { .lh-swatch { width: 44px; height: 44px; } }
+.lh-settings-advanced { margin-top: 6px; border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent); padding-top: 10px; }
+.lh-settings-advanced > summary { display: flex; align-items: center; min-height: 44px; color: var(--muted-foreground); font-size: 14px; font-weight: 600; cursor: pointer; }
+
+/* F5 (phones): Focus is a 44px icon at the right end of the title row. In
+   focus mode the whole bar goes; "Exit" takes the icon's own spot, in a
+   lane the lesson keeps free on the right, so it never sits over text at
+   any scroll position. Tablets and laptops keep their routes (⋯, the chip). */
+.lh-focus-title { display: none; }
+@media (max-width: 767px) {
+	:root .lh-topbar > .lh-title-block { min-height: 32px; }
+	:root .lh-focus-title {
+		display: inline-flex; flex: none; align-self: center; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -6px -6px -6px auto;
+		border-radius: 12px; color: var(--muted-foreground);
+	}
+	:root .lh-focus-title:hover { background: var(--accent); color: var(--foreground); }
+	:root .lh-focus-title svg { width: 20px; height: 20px; }
+	:root[data-focus-mode] .session-tutor { padding-top: 0; }
+	:root[data-focus-mode] .session-tutor [data-session-find-root]:not([data-dock-scroll-area]) { padding-right: calc(var(--lh-focus-spot-right, 16px) + 52px); }
+	:root[data-focus-mode] .lh-dock-overlay[data-question-open] { padding-right: calc(var(--lh-focus-spot-right, 16px) + 52px); }
+	:root .lh-focus-exit {
+		top: var(--lh-focus-spot-top, 56px); right: var(--lh-focus-spot-right, 16px); flex-direction: column; justify-content: center; gap: 3px;
+		width: 44px; height: 52px; padding: 0; border-radius: 14px; font-size: 12.5px; line-height: 1;
+	}
+	:root .lh-focus-exit svg { width: 18px; height: 18px; }
+	:root .lh-focus-exit-more { display: none; }
+}

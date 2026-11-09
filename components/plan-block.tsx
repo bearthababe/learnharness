@@ -763,7 +763,7 @@ const POPUP_PAD = GLOW_REACH;
  * territory. Surface 80% + blur (owner decision): the transcript ghosts
  * through while the focus owns the session area.
  */
-export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessage[]; onClose: () => void }) {
+export function PlanPopup({ messages, onClose, emptyNote = "No plan in this session yet." }: { messages: readonly PopupMessage[]; onClose: () => void; emptyNote?: string }) {
 	const phone = usePhoneLayout();
 	const tree = useMemo(() => latestTree(messages), [messages]);
 	const statuses = useMemo(
@@ -1013,14 +1013,14 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 						</div>
 					</>
 				) : (
-					<div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-						No plan in this session yet.
+					<div className="flex h-full items-center justify-center px-6 text-center text-[15px] leading-relaxed text-muted-foreground" data-testid="plan-empty">
+						{emptyNote}
 					</div>
 				)}
 			</div>
 	);
 	if (phone) return <PhonePanel title="The plan" testid="plan-popup" onClose={onClose}>
-		<p className="mb-2 shrink-0 text-xs text-muted-foreground">live — statuses derive from your check outcomes</p>
+		{tree && <p className="mb-2 shrink-0 text-xs text-muted-foreground">live — statuses derive from your check outcomes</p>}
 		{graph}
 	</PhonePanel>;
 	return (

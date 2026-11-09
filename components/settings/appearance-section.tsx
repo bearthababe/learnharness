@@ -38,12 +38,10 @@ import {
 	type GraphSettings,
 } from "@/src/core";
 import { MenuShell } from "@/components/menu-shell";
-import { setHeaderLook, setRevealStyle, useHeaderLook, useRevealStyle } from "@/components/device-prefs";
-import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { Hint } from "@/components/ui/hint";
 import { useAppearance } from "./appearance.tsx";
 import { FontMenuList } from "./model-menu";
-import { CommitInput, SettingsMenuTrigger, SettingsRow, ThinSelect, Toggle } from "./controls.tsx";
+import { CommitInput, SettingsMenuTrigger, SettingsRow, Toggle } from "./controls.tsx";
 
 /** The factory reading family — the DEFAULT row's identity (unset =
  *  this). Exported for tests. */
@@ -186,29 +184,31 @@ export function AppearanceSection({
 		};
 	}, [fontMenuOpen]);
 
+	const size = resolved.proseFontSize;
+	const setSize = (next: number | undefined) => onSectionChange({ ...appearance, proseFontSize: next === undefined ? undefined : Math.min(24, Math.max(12, Math.round(next))) });
+	const background = appearance?.background ?? null;
 	return (
 		<>
-			<SettingsRow label="Mode" hint="Coming soon" testid="row-mode" dimmed>
-				<ThinSelect value="dark" ariaLabel="mode" onChange={() => {}} testid="select-mode" disabled>
-					<option value="dark">Dark</option>
-				</ThinSelect>
-			</SettingsRow>
-			<SettingsRow
-				label="Background"
-				hint={`Empty = ${resolved.background ?? "#131218"}`}
-				testid="row-background"
-			>
-				<CommitInput
-					value={appearance?.background ?? ""}
-					placeholder="#131218"
-					ariaLabel="background hex"
-					testid="input-background"
-					onCommit={(v) => onSectionChange({ ...appearance, background: v === "" ? null : v })}
-				/>
-			</SettingsRow>
+			{/* R11 (round 16): the everyday reading choices first — size with a
+			    preview, the font, the background as swatches; exact values
+			    under Advanced. (Mode stays dark-only and is not offered until a
+			    light palette exists.) */}
+			<div className="lh-settings-row lh-size-row" data-testid="row-prose-size">
+				<span className="lh-settings-row-label min-w-0">
+					<span className="block font-prose text-(length:--lh-prose-size)">Reading size</span>
+				</span>
+				<div className="lh-stepper" role="group" aria-label="Reading size">
+					<button type="button" aria-label="Smaller text" data-testid="prose-size-down" disabled={size <= 12} onClick={() => setSize(size - 1)}>−</button>
+					<output aria-live="polite" data-testid="prose-size-value">{size}px</output>
+					<button type="button" aria-label="Larger text" data-testid="prose-size-up" disabled={size >= 24} onClick={() => setSize(size + 1)}>+</button>
+				</div>
+			</div>
+			<p className="lh-size-preview font-prose" data-testid="prose-size-preview">
+				Pressure is force spread over an area — the same push on a smaller area presses harder.
+				{appearance?.proseFontSize !== undefined && <button type="button" className="lh-size-reset" data-testid="prose-size-reset" onClick={() => setSize(undefined)}>Reset to 16px</button>}
+			</p>
 			<SettingsRow
 				label="Reading font"
-				hint={`Empty = ${DEFAULT_READING_FONT}`}
 				testid="row-font"
 			>
 				<span ref={fontMenuOpen ? menuAnchorRef : undefined} className="relative flex items-center gap-2">
@@ -262,27 +262,30 @@ export function AppearanceSection({
 					)}
 				</span>
 			</SettingsRow>
-			<SettingsRow label="Reading font size" hint={`${resolved.proseFontSize}px`} testid="row-prose-size">
-				<CommitInput
-					type="number"
-					value={String(appearance?.proseFontSize ?? "")}
-					placeholder="16"
-					ariaLabel="prose font size"
-					testid="input-prose-size"
-					onCommit={(v) => {
-						// Empty = factory default (owner, fix wave): omit the key so the record
-						// UNSETS and the field stays empty (absence, not null, is the
-						// unset for numbers). Number("") is 0, so the old clamp wrote 12.
-						if (v === "") {
-							onSectionChange({ ...appearance, proseFontSize: undefined });
-							return;
-						}
-						const n = Number(v);
-						if (!Number.isFinite(n)) return; // bad input: no write, factory stays
-						onSectionChange({ ...appearance, proseFontSize: Math.min(24, Math.max(12, Math.round(n))) });
-					}}
-				/>
-			</SettingsRow>
+			<div className="lh-settings-row lh-swatch-row" data-testid="row-background">
+				<span className="lh-settings-row-label min-w-0">
+					<span className="block font-prose text-(length:--lh-prose-size)">Background</span>
+				</span>
+				<div className="lh-swatches" role="radiogroup" aria-label="Background">
+					{BACKGROUND_SWATCHES.map((swatch) => {
+						const checked = swatch.value === null ? background === null : background?.toLowerCase() === swatch.value;
+						return (
+							<button
+								key={swatch.name}
+								type="button"
+								role="radio"
+								aria-checked={checked}
+								aria-label={swatch.value === null ? `${swatch.name} (default)` : swatch.name}
+								title={swatch.name}
+								data-testid={`background-${swatch.name.toLowerCase().replace(/[^a-z]+/g, "-")}`}
+								className="lh-swatch"
+								style={{ background: swatch.value ?? "#131218" }}
+								onClick={() => onSectionChange({ ...appearance, background: swatch.value })}
+							/>
+						);
+					})}
+				</div>
+			</div>
 			<SettingsRow label="Session names in serif" testid="row-session-serif">
 				<Toggle
 					checked={appearance?.sessionNameSerif ?? false}
@@ -290,94 +293,81 @@ export function AppearanceSection({
 					onChange={(on) => onSectionChange({ ...appearance, sessionNameSerif: on })}
 				/>
 			</SettingsRow>
-			<SettingsRow label="Heading weight" hint={`${resolved.mdRendering.headingWeight}`} testid="row-heading-weight">
-				<CommitInput
-					type="number"
-					value={String(md?.headingWeight ?? "")}
-					placeholder="700"
-					ariaLabel="heading weight"
-					testid="input-heading-weight"
-					onCommit={(v) => {
-						// Empty = factory default (owner, fix wave): Number("") is 0, so
-						// Absence is the unset representation — the old clamp wrote 100.
-						if (v === "") {
-							onSectionChange({ ...appearance, mdRendering: { ...md, headingWeight: undefined } });
-							return;
-						}
-						const n = Number(v);
-						if (!Number.isFinite(n)) return;
-						onSectionChange({
-							...appearance,
-							mdRendering: { ...md, headingWeight: Math.min(900, Math.max(100, Math.round(n))) },
-						});
-					}}
-				/>
-			</SettingsRow>
-			{/* The emphasis inks default to the REGULAR TEXT COLOR now
-			    (appearance wave, 2026-09-26) — the empty-state labels say
-			    so; explicit hex overrides ride unchanged. */}
-			<SettingsRow label="Bold color" hint="Empty = same as text" testid="row-bold-color">
-				<CommitInput
-					value={md?.boldColor ?? ""}
-					placeholder="same as text"
-					ariaLabel="bold color"
-					testid="input-bold-color"
-					onCommit={(v) => onSectionChange({ ...appearance, mdRendering: { ...md, boldColor: v === "" ? null : v } })}
-				/>
-			</SettingsRow>
-			<SettingsRow label="Italic color" hint="Empty = same as text" testid="row-italic-color">
-				<CommitInput
-					value={md?.italicColor ?? ""}
-					placeholder="same as text"
-					ariaLabel="italic color"
-					testid="input-italic-color"
-					onCommit={(v) => onSectionChange({ ...appearance, mdRendering: { ...md, italicColor: v === "" ? null : v } })}
-				/>
-			</SettingsRow>
-			<RevealStyleRow />
-			<HeaderLookRow />
+			<details className="lh-settings-advanced" data-testid="appearance-advanced">
+				<summary>Advanced: exact values</summary>
+				<div className="flex flex-col gap-3 pt-3">
+					<SettingsRow
+						label="Background colour"
+						hint={`Empty = ${resolved.background ?? "#131218"}`}
+						testid="row-background-hex"
+					>
+						<CommitInput
+							value={appearance?.background ?? ""}
+							placeholder="#131218"
+							ariaLabel="background hex"
+							testid="input-background"
+							onCommit={(v) => onSectionChange({ ...appearance, background: v === "" ? null : v })}
+						/>
+					</SettingsRow>
+					<SettingsRow label="Heading weight" hint={`${resolved.mdRendering.headingWeight}`} testid="row-heading-weight">
+						<CommitInput
+							type="number"
+							value={String(md?.headingWeight ?? "")}
+							placeholder="700"
+							ariaLabel="heading weight"
+							testid="input-heading-weight"
+							onCommit={(v) => {
+								// Empty = factory default (owner, fix wave): Number("") is 0, so
+								// Absence is the unset representation — the old clamp wrote 100.
+								if (v === "") {
+									onSectionChange({ ...appearance, mdRendering: { ...md, headingWeight: undefined } });
+									return;
+								}
+								const n = Number(v);
+								if (!Number.isFinite(n)) return;
+								onSectionChange({
+									...appearance,
+									mdRendering: { ...md, headingWeight: Math.min(900, Math.max(100, Math.round(n))) },
+								});
+							}}
+						/>
+					</SettingsRow>
+					{/* The emphasis inks default to the REGULAR TEXT COLOR now
+					    (appearance wave, 2026-09-26) — the empty-state labels say
+					    so; explicit hex overrides ride unchanged. */}
+					<SettingsRow label="Bold color" hint="Empty = same as text" testid="row-bold-color">
+						<CommitInput
+							value={md?.boldColor ?? ""}
+							placeholder="same as text"
+							ariaLabel="bold color"
+							testid="input-bold-color"
+							onCommit={(v) => onSectionChange({ ...appearance, mdRendering: { ...md, boldColor: v === "" ? null : v } })}
+						/>
+					</SettingsRow>
+					<SettingsRow label="Italic color" hint="Empty = same as text" testid="row-italic-color">
+						<CommitInput
+							value={md?.italicColor ?? ""}
+							placeholder="same as text"
+							ariaLabel="italic color"
+							testid="input-italic-color"
+							onCommit={(v) => onSectionChange({ ...appearance, mdRendering: { ...md, italicColor: v === "" ? null : v } })}
+						/>
+					</SettingsRow>
+				</div>
+			</details>
 		</>
 	);
 }
 
-/** Owner O5: "Show question" quiet by default; the earlier filled look as
- *  an option. Kept on this device (it is about this screen). */
-function RevealStyleRow() {
-	const style = useRevealStyle();
-	// R6 (round 13): a phone-only button, so a phone-only setting.
-	const phone = usePhoneLayout();
-	if (!phone) return null;
-	return (
-		<SettingsRow label="Show question button" hint="How strongly the button that opens a check stands out. Stored on this phone." testid="row-reveal-style">
-			<div className="lh-segmented" role="group" aria-label="Show question button">
-				{(["quiet", "prominent"] as const).map((option) => (
-					<button key={option} type="button" data-active={style === option} aria-pressed={style === option} data-testid={`reveal-style-${option}`} onClick={() => setRevealStyle(option)}>
-						{option === "quiet" ? "Quiet" : "Prominent"}
-					</button>
-				))}
-			</div>
-		</SettingsRow>
-	);
-}
-
-/** Round 15 (A6): the phone's page bar, Solid (default) or Glass — glass
- *  lets the lesson scroll beneath it, softened. Phone-only, like the bar. */
-function HeaderLookRow() {
-	const look = useHeaderLook();
-	const phone = usePhoneLayout();
-	if (!phone) return null;
-	return (
-		<SettingsRow label="Page bar" hint="Solid, or glass that lets the lesson scroll beneath it. Stored on this phone." testid="row-header-look">
-			<div className="lh-segmented" role="group" aria-label="Page bar">
-				{(["solid", "glass"] as const).map((option) => (
-					<button key={option} type="button" data-active={look === option} aria-pressed={look === option} data-testid={`header-look-${option}`} onClick={() => setHeaderLook(option)}>
-						{option === "solid" ? "Solid" : "Glass"}
-					</button>
-				))}
-			</div>
-		</SettingsRow>
-	);
-}
+/** R11 (round 16): background swatches on the dark curve (the app derives
+ *  the raised surfaces and edges from the chosen one). null = the default. */
+export const BACKGROUND_SWATCHES: ReadonlyArray<{ name: string; value: string | null }> = [
+	{ name: "Ink", value: null },
+	{ name: "Graphite", value: "#141414" },
+	{ name: "Midnight", value: "#10141c" },
+	{ name: "Forest", value: "#111712" },
+	{ name: "Umber", value: "#1a1614" },
+];
 
 export function GraphSection({
 	graph,

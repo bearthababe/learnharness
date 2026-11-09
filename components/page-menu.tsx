@@ -47,9 +47,12 @@ export const OPEN_GRAPH_DISPLAY_EVENT = "lh:open-graph-display";
 
 export type PageMenuRow = { id: string; label: string; value?: string; open: () => void };
 
-export function PageMenuButton({ extraRows = [] }: {
+export function PageMenuButton({ extraRows = [], placement = "page" }: {
 	/** Rows of this page placed after Usage (Home: import, graph display). */
 	extraRows?: PageMenuRow[];
+	/** Round 16 (F4, P1-A): the same menu, also reachable from the thinking
+	 *  pane's bottom bar, so its keyboard switch is in reach while writing. */
+	placement?: "page" | "pane";
 }) {
 	const values = useSyncExternalStore(subscribe, () => state, () => state);
 	const [open, setOpen] = useState(false);
@@ -59,26 +62,30 @@ export function PageMenuButton({ extraRows = [] }: {
 	const touch = useCoarsePointer();
 	const keyboardOff = useKeyboardOff();
 	const { open: openSettings } = useSettingsDialog();
-	useOneMenu("page-menu", open, () => setOpen(false));
-	useOneMenu("helpers-sheet", helpers, () => setHelpers(false));
-	useCardDismiss(open, () => setOpen(false), ['[data-testid="page-menu"]', '[data-testid="page-menu-button"]']);
-	useCardDismiss(helpers, () => setHelpers(false), ['[data-testid="helpers-sheet"]', '[data-testid="page-menu-button"]']);
+	const pane = placement === "pane";
+	const triggerTestid = pane ? "pane-menu-button" : "page-menu-button";
+	useOneMenu(pane ? "pane-menu" : "page-menu", open, () => setOpen(false));
+	useOneMenu(pane ? "pane-helpers-sheet" : "helpers-sheet", helpers, () => setHelpers(false));
+	useCardDismiss(open, () => setOpen(false), ['[data-testid="page-menu"]', `[data-testid="${triggerTestid}"]`]);
+	useCardDismiss(helpers, () => setHelpers(false), ['[data-testid="helpers-sheet"]', `[data-testid="${triggerTestid}"]`]);
 	const helpersPresence = usePhoneMenuPresence(helpers ? "helpers" : null, phone);
 	useEffect(() => { installKeyboardGuard(); }, []);
 	// F4 (round 15): once, when a field stays without a keyboard, say where
 	// the switch is. It passes on its own and never moves anything.
 	const [keyboardHint, setKeyboardHint] = useState(false);
 	useEffect(() => {
+		if (pane) return;
 		let timer = 0;
 		const show = () => { setKeyboardHint(true); window.clearTimeout(timer); timer = window.setTimeout(() => setKeyboardHint(false), 4500); };
 		window.addEventListener(KEYBOARD_HINT_EVENT, show);
 		return () => { window.removeEventListener(KEYBOARD_HINT_EVENT, show); window.clearTimeout(timer); };
-	}, []);
+	}, [pane]);
 	useEffect(() => {
+		if (pane) return;
 		const onOpen = () => setHelpers(true);
 		window.addEventListener(OPEN_HELPERS_EVENT, onOpen);
 		return () => window.removeEventListener(OPEN_HELPERS_EVENT, onOpen);
-	}, []);
+	}, [pane]);
 	const choose = (open: () => void) => {
 		setOpen(false);
 		// The chosen card opens as this menu leaves (one menu at a time).
@@ -125,8 +132,8 @@ export function PageMenuButton({ extraRows = [] }: {
 			<button
 				ref={trigger}
 				type="button"
-				className="lh-nav-chip lh-page-menu-button lh-no-drag"
-				data-testid="page-menu-button"
+				className={pane ? "lh-pane-menu-button" : "lh-nav-chip lh-page-menu-button lh-no-drag"}
+				data-testid={triggerTestid}
 				aria-label="More options"
 				aria-haspopup="menu"
 				aria-expanded={open}
@@ -135,8 +142,8 @@ export function PageMenuButton({ extraRows = [] }: {
 				<EllipsisIcon aria-hidden />
 			</button>
 			{open && (
-				<MenuShell anchorRef={trigger} testid="page-menu" preferredSide="down" align="right" fitVisualViewport={phone}
-					phoneTriggerTestid="page-menu-button" onClose={() => setOpen(false)}
+				<MenuShell anchorRef={trigger} testid="page-menu" preferredSide={pane ? "up" : "down"} align="right" fitVisualViewport={phone}
+					phoneTriggerTestid={triggerTestid} onClose={() => setOpen(false)}
 					menuClass="lh-page-menu lh-glass rounded-xl border bg-card p-1.5 shadow-xl">
 					<div role="menu" aria-label="More options">
 						{keyboardSwitch}
@@ -155,9 +162,9 @@ export function PageMenuButton({ extraRows = [] }: {
 				</div>
 			)}
 			{helpersPresence.value && (
-				<MenuShell anchorTestid="page-menu-button" testid="helpers-sheet" preferredSide="down" align="right" fitVisualViewport={phone}
+				<MenuShell anchorTestid={triggerTestid} testid="helpers-sheet" preferredSide={pane ? "up" : "down"} align="right" fitVisualViewport={phone}
 					closing={helpersPresence.closing} onClosed={helpersPresence.onClosed}
-					phoneTriggerTestid="page-menu-button" onClose={() => setHelpers(false)}
+					phoneTriggerTestid={triggerTestid} onClose={() => setHelpers(false)}
 					menuClass="lh-helpers-sheet lh-glass w-[24rem] max-w-[calc(100vw-24px)] rounded-xl border bg-card p-1 shadow-xl">
 					<ActivitySection sheet />
 				</MenuShell>

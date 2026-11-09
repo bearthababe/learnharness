@@ -21,8 +21,43 @@ function apply() {
 }
 export function setFocusMode(next: boolean) {
 	if (on === next) return;
-	on = next;
-	apply();
+	// F5 (round 16): the Exit control takes the Focus icon's own spot (one
+	// place opens and closes); the reading line stays the top line across
+	// the switch, though the bar goes and the column narrows.
+	if (next && typeof document !== "undefined") {
+		const icon = document.querySelector<HTMLElement>(".lh-focus-title");
+		const box = icon?.checkVisibility?.() ? icon.getBoundingClientRect() : null;
+		const style = document.documentElement.style;
+		if (box && box.width) {
+			style.setProperty("--lh-focus-spot-top", `${Math.round(box.top)}px`);
+			style.setProperty("--lh-focus-spot-right", `${Math.round(window.innerWidth - box.right)}px`);
+		}
+	}
+	keepReadingPlace(() => { on = next; apply(); });
+}
+
+/** Keep the lesson's top visible line in place while the page around it
+ *  changes (the bar hiding, the column re-wrapping). */
+function keepReadingPlace(change: () => void) {
+	if (typeof document === "undefined") { change(); return; }
+	const content = [...document.querySelectorAll<HTMLElement>("[data-session-find-root]")].find((el) => !el.hasAttribute("data-dock-scroll-area"));
+	let scroller = content?.parentElement ?? null;
+	while (scroller && !/auto|scroll/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+	if (!content || !scroller) { change(); return; }
+	const top = scroller.getBoundingClientRect().top;
+	let anchor: Element | null = null;
+	let offset = 0;
+	for (const block of content.querySelectorAll("p, li, h1, h2, h3, h4, pre, table, blockquote, .katex-display, [data-testid='user-message']")) {
+		const box = block.getBoundingClientRect();
+		if (box.height && box.bottom > top + 1) { anchor = block; offset = box.top - top; break; }
+	}
+	change();
+	if (!anchor) return;
+	const target = anchor, el = scroller;
+	requestAnimationFrame(() => {
+		const now = el.getBoundingClientRect().top;
+		el.scrollTop += target.getBoundingClientRect().top - now - offset;
+	});
 }
 export function useFocusMode(): boolean {
 	return useSyncExternalStore((listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; }, () => on, () => false);
@@ -34,6 +69,16 @@ export function FocusModeButton() {
 	return (
 		<button type="button" className="lh-nav-chip lh-focus-enter lh-no-drag" data-testid="focus-enter" aria-label="Focus on the lesson" title="Focus on the lesson (hides this bar)" onClick={() => setFocusMode(true)}>
 			<MaximizeIcon aria-hidden /><span className="lh-nav-chip-label">Focus</span>
+		</button>
+	);
+}
+
+/** Phones (round 16, F5): a visible Focus control — a 44px icon at the
+ *  right end of the title row. ⋯ keeps its row as a second route. */
+export function FocusTitleButton() {
+	return (
+		<button type="button" className="lh-focus-title lh-no-drag" data-testid="focus-title" aria-label="Focus on the lesson" title="Focus on the lesson" onClick={() => setFocusMode(true)}>
+			<MaximizeIcon aria-hidden />
 		</button>
 	);
 }
@@ -51,8 +96,8 @@ export function FocusModeExit() {
 	}, [active]);
 	if (!active) return null;
 	return (
-		<button type="button" className="lh-focus-exit lh-glass" data-testid="focus-exit" onClick={() => setFocusMode(false)}>
-			<MinimizeIcon aria-hidden />Exit focus
+		<button type="button" className="lh-focus-exit lh-glass" data-testid="focus-exit" aria-label="Exit focus" title="Exit focus" onClick={() => setFocusMode(false)}>
+			<MinimizeIcon aria-hidden /><span className="lh-focus-exit-label">Exit<span className="lh-focus-exit-more"> focus</span></span>
 		</button>
 	);
 }

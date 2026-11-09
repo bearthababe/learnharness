@@ -85,7 +85,8 @@ export function followAnsweredCard({ scroller, holdAutoFollow, before, pending, 
 		const card = cards[cards.length - 1]!;
 		const box = card.getBoundingClientRect();
 		if (!card.isConnected || box.height === 0) return;
-		const top = view.getBoundingClientRect().top;
+		// K1 (round 16): below a floating Glass bar (scroll-padding-top), never under it.
+		const top = view.getBoundingClientRect().top + scrollInset(view);
 		const desired = view.scrollTop + (box.top - top) - margin;
 		const target = Math.max(0, Math.min(desired, view.scrollHeight - view.clientHeight));
 		if (Math.abs(view.scrollTop - target) > 2) {
@@ -105,4 +106,9 @@ export function followAnsweredCard({ scroller, holdAutoFollow, before, pending, 
 /** Count of answered cards currently rendered in `scope`. */
 export function answeredCardCount(scope: ParentNode | null | undefined): number {
 	return scope ? scope.querySelectorAll(CARD).length : 0;
+}
+
+/** The scroller's declared top inset (scroll-padding-top), 0 when unknown. */
+function scrollInset(view: HTMLElement): number {
+	try { return Number.parseFloat(getComputedStyle(view).scrollPaddingTop) || 0; } catch { return 0; }
 }

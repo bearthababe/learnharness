@@ -19,7 +19,11 @@ export function scrollSessionTarget(target: Range | HTMLElement, scope: HTMLElem
 		if (element !== main && (!style || !/(auto|scroll)/.test(style.overflowY) || element.scrollHeight <= element.clientHeight)) continue;
 		const rect = target.getBoundingClientRect();
 		const container = element.getBoundingClientRect();
-		element.scrollTo({ top: element.scrollTop + rect.top - container.top - 16, behavior: "instant" });
+		// K1 (round 16): a scroller that runs beneath a floating bar (the
+		// phone's Glass page bar) declares it as scroll-padding-top; the
+		// passage lands below the bar, never under it.
+		const inset = Number.parseFloat(style?.scrollPaddingTop ?? "") || 0;
+		element.scrollTo({ top: element.scrollTop + rect.top - container.top - inset - 16, behavior: "instant" });
 	}
 }
 

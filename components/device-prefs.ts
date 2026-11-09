@@ -33,9 +33,55 @@ const listeners = new Set<() => void>();
 function notify() { for (const listener of listeners) listener(); }
 function subscribe(listener: () => void) {
 	listeners.add(listener);
-	const onStorage = (event: StorageEvent) => { if (event.key === KEYS.revealStyle || event.key === KEYS.keyboardOff || event.key === KEYS.headerLook) notify(); };
+	const onStorage = (event: StorageEvent) => { if (event.key === KEYS.revealStyle || event.key === KEYS.keyboardOff || event.key === KEYS.headerLook || event.key?.startsWith(TRYOUT_PREFIX)) notify(); };
 	window.addEventListener("storage", onStorage);
 	return () => { listeners.delete(listener); window.removeEventListener("storage", onStorage); };
+}
+
+/**
+ * Try-out designs (round 16, owner rule): alternatives the owner compares
+ * on his phone and tablet. Each is a real, complete variant, kept on this
+ * device like the other preferences here; the first option is the default.
+ * - paneControls (P1): the thinking pane's controls — the mic inside the
+ *   field with ⋯ in the bottom bar, or a big centre mic with a keyboard toggle.
+ * - panePeek (P2): looking at the lesson while writing — Back plus a
+ *   "Continue writing" pill, a "From the lesson" strip, or a Peek button.
+ * - tabletPane (F6): the tablet's reading note inline, or the slide-in pane.
+ * - notebookInput (P3): the phone notebook's one chat box docked at the
+ *   bottom with a Tutor | Notebook switch, or following the active area.
+ */
+export const TRYOUTS = {
+	paneControls: { options: ["field-mic", "big-mic"] },
+	panePeek: { options: ["pill", "strip", "peek"] },
+	tabletPane: { options: ["inline", "pane"] },
+	notebookInput: { options: ["docked", "follow"] },
+} as const;
+export type Tryout = keyof typeof TRYOUTS;
+export type TryoutValue<T extends Tryout> = (typeof TRYOUTS)[T]["options"][number];
+const TRYOUT_PREFIX = "lh:try:";
+const TRYOUT_KEY: Record<Tryout, string> = {
+	paneControls: `${TRYOUT_PREFIX}pane-controls`,
+	panePeek: `${TRYOUT_PREFIX}pane-peek`,
+	tabletPane: `${TRYOUT_PREFIX}tablet-pane`,
+	notebookInput: `${TRYOUT_PREFIX}notebook-input`,
+};
+export function tryoutDefault<T extends Tryout>(name: T): TryoutValue<T> {
+	return TRYOUTS[name].options[0] as TryoutValue<T>;
+}
+export function readTryout<T extends Tryout>(name: T): TryoutValue<T> {
+	try {
+		const raw = window.localStorage.getItem(TRYOUT_KEY[name]);
+		return ((TRYOUTS[name].options as readonly string[]).includes(raw ?? "") ? raw : tryoutDefault(name)) as TryoutValue<T>;
+	} catch {
+		return tryoutDefault(name);
+	}
+}
+export function setTryout<T extends Tryout>(name: T, value: TryoutValue<T>) {
+	try { window.localStorage.setItem(TRYOUT_KEY[name], value); } catch { /* this view only */ }
+	notify();
+}
+export function useTryout<T extends Tryout>(name: T): TryoutValue<T> {
+	return useSyncExternalStore(subscribe, () => readTryout(name), () => tryoutDefault(name));
 }
 
 export function setHeaderLook(look: HeaderLook) {

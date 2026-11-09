@@ -7,7 +7,7 @@ import { OPEN_HELPERS_EVENT, PageMenuButton } from "@/components/page-menu";
 import { SessionHelperFailures } from "@/components/activity-dock";
 import { NotebookOpener } from "@/components/notebook-opener";
 import { useMarkSessionSeen } from "@/components/session-seen";
-import { FocusModeButton, FocusModeExit, setFocusMode } from "@/components/focus-mode";
+import { FocusModeButton, FocusModeExit, FocusTitleButton, setFocusMode } from "@/components/focus-mode";
 import { useHeaderLook } from "@/components/device-prefs";
 import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
@@ -229,8 +229,10 @@ function unsentReason(error: string | null): string {
 /** The not-sent note: "back in the box" only when the box really holds
  *  that message; otherwise the message itself is quoted beneath. */
 export function unsentNoticeText(kind: "failed" | "restored", error: string | null, inBox: boolean): string {
-	if (kind === "restored") return inBox ? "Your last message wasn't sent. It's back in the box — send it when you're ready." : "This message wasn't sent:";
-	return inBox ? `Not sent — ${unsentReason(error)}. Your message is back in the box.` : `Not sent — ${unsentReason(error)}:`;
+	// K2 (round 16): one wording, live and after a reload — "Not sent", the
+	// reason when it is known (after a reload it is not), then where it is.
+	const head = kind === "restored" ? "Not sent" : `Not sent — ${unsentReason(error)}`;
+	return inBox ? `${head}. Your message is back in the box.` : `${head}:`;
 }
 
 export function retryFailedResponse(
@@ -1883,6 +1885,7 @@ export function Chat({
 						<span className="lh-session-subtitle" aria-hidden="true" data-kind={kind === "practice" ? (practiceMode === "drill" ? "drill" : "practice") : "teach"}>
 							{kind === "practice" ? (practiceMode === "drill" ? "Drill session" : "Practice session") : phaseLabel(phases.at(-1) ?? "probe")}
 						</span>
+						<FocusTitleButton />
 						</span>
 							{/* flex-1 spacer: keeps the chips at the right edge AND stays a
 							    drag surface (no carve-out) — the freed bar is grippable. */}
@@ -1893,11 +1896,16 @@ export function Chat({
 					    structure beside the phase chip — access to the full-DAG popup
 					    at every width; the marginalia is the wide-screen glance view. */}
 					<NotebookSpeechDestination session={notebook.session} />
-					{planTree && (
+					{/* E6 (round 16): on phones the Plan slot is always there, so the
+					    toolbar keeps identical positions with or without a plan (no
+					    hole); before a plan exists it opens a note saying why. Wider
+					    screens show it only once there is a plan. */}
+					{(planTree || phoneLayout) && (
 						<Hint label="Open the full plan" side="bottom">
 <button
 							type="button"
 							data-testid="plan-chip"
+							data-empty={!planTree || undefined}
 							onClick={(e) => {
 								blurAfterPointerClick(e);
 								setPlanOpen(true);
@@ -2433,7 +2441,8 @@ export function Chat({
 						onClose={() => setFigureFocus(null)}
 					/>
 				)}
-				{planOpen && <PlanPopup messages={messages} onClose={() => setPlanOpen(false)} />}
+				{planOpen && <PlanPopup messages={messages} onClose={() => setPlanOpen(false)}
+					emptyNote={kind === "practice" ? "Practice sessions have no plan: the tutor picks each problem from how you are doing." : "No plan yet. The tutor makes one once it has found out what you already know."} />}
 				<AbortTurnDialog mode={abortAsk} onClose={() => setAbortAsk(null)} onConfirm={confirmAbort} busy={busy} />
 				</div>
 				</div>
@@ -3197,6 +3206,7 @@ function DockOverlay({
 									: undefined
 							}
 							claim={revealPending}
+							questionOpen={questionOpen}
 						/>
 					)}
 					<div ref={shellRef} data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-lg">

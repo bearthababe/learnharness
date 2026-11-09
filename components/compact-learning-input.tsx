@@ -19,10 +19,13 @@ export function useFocusWithin(): [boolean, { onFocus: () => void; onBlur: (even
 /** Presentation around the existing, always-mounted editor. Capture, ownership
  * and submission stay with the caller. The mic sits inside the field on every
  * device (round 15, F4/A2); the keyboard switch lives only in ⋯. */
-export function CompactLearningInput({ children, dictation, enabled = true }: {
+export function CompactLearningInput({ children, dictation, enabled = true, speech = true }: {
 	children: ReactNode;
 	dictation?: Dictation;
 	enabled?: boolean;
+	/** Round 16 (P1-B): the thinking pane's big mic bar carries the mic and
+	 *  its recording state instead, so the field shows neither. */
+	speech?: boolean;
 }) {
 	const field = useRef<HTMLDivElement>(null);
 	const saved = useRef<{ value: string; start: number; end: number; direction: "forward" | "backward" | "none"; scroll: number } | null>(null);
@@ -101,9 +104,9 @@ export function CompactLearningInput({ children, dictation, enabled = true }: {
 			<span>{dictation.error}</span>
 			<button type="button" onClick={recover}>{dictation.error === DICTATION_KEYLESS ? "Settings" : "Retry"}</button>
 		</div>}
-		<div ref={field} className={enabled ? "lh-compact-field" : "contents"} data-recording={active || undefined} data-has-mic={!!dictation || undefined}>
+		<div ref={field} className={enabled ? "lh-compact-field" : "contents"} data-recording={(speech && active) || undefined} data-has-mic={(speech && !!dictation) || undefined}>
 			{children}
-			{enabled && dictation && <div className="lh-compact-speech">
+			{enabled && speech && dictation && <div className="lh-compact-speech">
 				{active ? <Recording dictation={dictation} /> : <button type="button" aria-label="Start dictation" data-testid="compact-dictation-toggle" onPointerDown={remember} onClick={recover}>
 					<MicIcon size={20} />
 				</button>}

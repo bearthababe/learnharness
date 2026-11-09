@@ -52,9 +52,10 @@ import { KeysSection } from "./keys-section.tsx";
 import { Hint } from "@/components/ui/hint";
 import { AppearanceSection, GraphSection } from "./appearance-section.tsx";
 import { KeyboardSection } from "./keyboard-section.tsx";
+import { TryoutsSection } from "./tryouts-section.tsx";
 import { ChatGPTUIProvider } from "./chatgpt-connection.tsx";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
-import { ActivityIcon, BrainIcon, ChevronLeftIcon, ChevronRightIcon, KeyRoundIcon, KeyboardIcon, PaletteIcon, SlidersHorizontalIcon } from "lucide-react";
+import { ActivityIcon, BrainIcon, ChevronLeftIcon, ChevronRightIcon, FlaskConicalIcon, KeyRoundIcon, KeyboardIcon, PaletteIcon, SlidersHorizontalIcon } from "lucide-react";
 import { NativeSubscriptionUIProvider } from "./subscription-connections.tsx";
 import { useOneMenu } from "@/components/one-menu";
 import { useDialogFocus } from "@/components/dialog-focus";
@@ -69,6 +70,8 @@ const SECTIONS = [
 	{ id: "graph", label: "Graph", blurb: "Knowledge graph and extraction" },
 	{ id: "keyboard", label: "Keyboard", hint: "Stored on this device", blurb: "Shortcuts" },
 	{ id: "general", label: "General", blurb: "Tools on this device, updates" },
+	// Round 16: alternatives to compare, after the everyday settings.
+	{ id: "tryouts", label: "Try-out designs", blurb: "Alternative designs to compare" },
 ] as const;
 // Phones only: tablets keep the two-pane list beside the section, so
 // switching categories stays one tap.
@@ -89,6 +92,7 @@ const SECTION_ICON = {
 	graph: ActivityIcon,
 	keyboard: KeyboardIcon,
 	general: SlidersHorizontalIcon,
+	tryouts: FlaskConicalIcon,
 } as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -480,6 +484,11 @@ export function SettingsDialogBody({
 											void write("graph", next)
 										}
 									/>
+								</SettingsSection>
+							)}
+							{active === "tryouts" && (
+								<SettingsSection title="Try-out designs" testid="section-tryouts">
+									<TryoutsSection />
 								</SettingsSection>
 							)}
 							{active === "keyboard" && (
