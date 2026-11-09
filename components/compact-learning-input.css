@@ -132,15 +132,17 @@
 	.lh-compact-field > :is(textarea, [data-file-path-input]) { flex: 1 1 auto; width: 100%; min-width: 0; }
 	.lh-compact-field[data-has-mic] > :is(textarea, [data-file-path-input]) { padding-right: 52px; }
 	.lh-compact-field[data-has-mic][data-type-instead] > :is(textarea, [data-file-path-input]) { padding-right: 100px; }
-	.lh-compact-field[data-recording] > :is(textarea, [data-file-path-input]) {
-		visibility: hidden;
-		height: var(--lh-capture-height);
-		min-height: var(--lh-capture-height, 52px);
-	}
 	/* Centred on the first line's height and anchored to the bottom, so the
 	   mic lines up with a one-line field and never moves as it grows. */
 	.lh-compact-speech { display: block; position: absolute; right: 4px; bottom: calc(min(100%, 48px) / 2 - 22px); }
-	.lh-compact-field[data-recording] .lh-compact-speech { left: 4px; }
+	/* Recording on a tablet: the strip covers the field in place (nothing
+	   moves), and the field itself stays shown underneath, so typing focus
+	   stays where it was (a hidden field would drop focus). */
+	.lh-compact-field[data-recording] .lh-compact-speech {
+		left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; padding: 0 4px;
+		border-radius: inherit; background: var(--lh-recording-surface, var(--card));
+	}
+	.lh-compact-field[data-recording] .lh-compact-speech > * { flex: 1 1 auto; min-width: 0; }
 	.lh-compact-speech button {
 		display: inline-flex; align-items: center; justify-content: center;
 		min-width: 44px; min-height: 44px; flex-shrink: 0; border-radius: 10px;
