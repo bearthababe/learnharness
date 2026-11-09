@@ -256,6 +256,11 @@ package/source identity, client activity reports, retained input and owned-group
 cleanup. Stale or unknown clients must continue refusing cutover. A later passing
 attempt does not erase the retained Home-navigation idle timeout or browser
 crash; diagnose recurring failures with the recorded departed-client reports.
+Navigate Home while an actual tutor request is held and the composer is empty.
+Server work must keep refusing preparation/freeze after the old page departs;
+completing that work must return to idle with only the Home client remaining.
+Contrast departure with real drafts, dictation or attachments, which must keep
+refusing cutover. A transient tutor busy flag is not an unsent learner draft.
 The scoped activity matrix is not handwritten-snapshot transfer, actual package
 cutover, physical iOS or live-provider proof. Complete all required row surfaces
 independently before accepting the row.

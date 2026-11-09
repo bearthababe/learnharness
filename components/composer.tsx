@@ -82,7 +82,7 @@ export function ChatSessionComposer({
 	onNext?: () => void;
 }) {
 	const [draft, setDraft] = useState(value);
-	useDeploymentActivity("composer", () => !!draft.trim() || dictationActive || hasContent || busy);
+	useDeploymentActivity("composer", () => !!draft.trim() || dictationActive || hasContent);
 	useLayoutEffect(() => { setDraft(value); }, [revision, value]);
 	const canSend = sendAllowed && (draft.trim().length > 0 || dictationActive || hasContent);
 	const applyDraft = useCallback((next: string) => {

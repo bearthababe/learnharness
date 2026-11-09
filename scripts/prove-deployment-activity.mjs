@@ -411,6 +411,20 @@ try {
 		const settled = await api(`/api/jobs?chatId=${encodeURIComponent(result.chat.id)}`); assert.ok(settled.body.jobs.every(job => job.status !== "running"));
 		return { start, jobs, cancellation, workerOnly, settled, after: await activity() };
 	});
+	await step("departing during a tutor turn releases only completed server work", "A real held tutor turn remains busy after navigation; completing it restores idle without discarding unfinished input", async () => {
+		currentStep = "departure"; fixtureMode = "tutor";
+		const entry = await startPreparation(); const start = await sendFromComposer("ZZ_ACTIVITY held departure");
+		await waitFor("actual held tutor request before departure", () => heldProvider && !heldProvider.record.researcher);
+		const cancellation = await cancelled(entry, "turn-in-flight");
+		await waitFor("actual composer draft cleared before departure", () => page.$eval('[data-testid="composer"] [contenteditable="true"]', element => !element.textContent.trim()));
+		await page.goto(origin, { waitUntil: "networkidle2", timeout: 30000 });
+		await page.waitForSelector('[data-testid="import-notes"]', { timeout: 15000 });
+		const held = await refusesPreparation("departed-client-active-tutor");
+		assert.ok(held.activity.reasons.includes("turn-in-flight"));
+		fixtureMode = "idle"; completeProvider();
+		const after = await idle(); assert.equal(after.clients, 1);
+		return { start, cancellation, held, after };
+	});
 	await step("actual file selection/upload/extraction cancels preparation", "Real browser File input and multipart service request, real extraction provider call; controlled upstream refusal safely returns idle", async () => {
 		currentStep = "upload";
 		await page.goto(origin, { waitUntil: "networkidle2", timeout: 30000 }); await page.waitForSelector('[data-testid="import-notes"]', { timeout: 15000 });
