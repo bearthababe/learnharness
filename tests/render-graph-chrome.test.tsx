@@ -75,10 +75,12 @@ describe("GraphChromeRow — the empty-graph ruling (owner, 2026-09-25)", () => 
 		const html = renderToStaticMarkup(
 			createElement(GraphChromeRow, { ...PROPS, isEmpty: false, query: "zzz", noMatch: true }),
 		);
-		assert.ok(html.includes("No matching nodes."));
+		// E5 (round 16): learner words, the query named, and a way on.
+		assert.ok(html.includes("No ideas match “zzz”."));
+		assert.ok(html.includes('data-testid="graph-search-sessions"'));
 		const quiet = renderToStaticMarkup(
 			createElement(GraphChromeRow, { ...PROPS, isEmpty: false, query: "zzz", noMatch: false }),
 		);
-		assert.ok(!quiet.includes("No matching nodes."));
+		assert.ok(!quiet.includes("No ideas match"));
 	});
 });

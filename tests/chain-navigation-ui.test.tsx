@@ -50,6 +50,8 @@ async function key(key: string, target: Element = active() ?? document.querySele
 	await act(async () => { target.dispatchEvent(event); }); return event;
 }
 function activeKey() { return JSON.parse(active()?.dataset.chainNavRow ?? "null"); }
+/** E4 (round 16): sources with no ideas (Book B here) wait behind "Show empty". */
+async function showEmpty() { await act(async () => { (document.querySelector('[data-testid="show-empty-sources"]') as HTMLElement).click(); }); }
 async function point(selector: string) {
 	await act(async () => { document.querySelector(selector)!.dispatchEvent(new dom.window.Event("pointerdown", { bubbles: true })); });
 }
@@ -59,7 +61,8 @@ it("Find focuses/selects chains search, and Down enters results without changing
 	assert.equal(focused, search); assert.equal(selectedText, 1);
 	assert.equal((await key("ArrowLeft", search)).defaultPrevented, false); assert.equal(focused, search);
 	assert.equal((await key("ArrowDown", search)).defaultPrevented, true);
-	assert.deepEqual(activeKey(), ["source", "b"]); assert.equal(focused, active()); assert.ok(scrolled > 0);
+	// Folders come first (round 16, F1/E2).
+	assert.deepEqual(activeKey(), ["folder", "outer"]); assert.equal(focused, active()); assert.ok(scrolled > 0);
 	assert.equal(document.querySelectorAll('input[type="checkbox"]:checked').length, 0);
 });
 it("Right enters newly rendered children; Left focuses and collapses each parent through all four layers", async () => {
@@ -76,9 +79,9 @@ it("Right enters newly rendered children; Left focuses and collapses each parent
 	await key("ArrowLeft"); assert.deepEqual(activeKey(), ["folder", "outer"]); assert.equal(active()?.dataset.chainNavExpanded, "false");
 });
 it("Up/Down skip expanded subtrees and pointer interaction establishes the active row", async () => {
-	await mount(); await key("ArrowDown"); await key("ArrowDown"); await key("ArrowRight");
-	await point('[data-testid="folder-row-outer"]'); await key("ArrowUp"); assert.deepEqual(activeKey(), ["source", "b"]);
-	await key("ArrowDown"); assert.deepEqual(activeKey(), ["folder", "outer"]); await key("ArrowDown"); assert.deepEqual(activeKey(), ["folder", "outer"]);
+	await mount(); await showEmpty(); await key("ArrowDown"); await key("ArrowRight");
+	await point('[data-testid="folder-row-outer"]'); await key("ArrowDown"); assert.deepEqual(activeKey(), ["source", "b"]);
+	await key("ArrowUp"); assert.deepEqual(activeKey(), ["folder", "outer"]); await key("ArrowUp"); assert.deepEqual(activeKey(), ["folder", "outer"]);
 });
 it("search auto-expansion permits explicit collapse and resets for a new query", async () => {
 	await mount(); await act(async () => { setQuery("Book A"); });
@@ -98,13 +101,15 @@ it("a foreground menu/dialog keeps both Find and arrows, even if focus was left 
 	assert.equal(focused, document.querySelector('[data-testid="chain-table-search"]'));
 });
 it("removing the active row by filtering safely restarts on the first visible result", async () => {
-	await mount(); await key("ArrowDown"); assert.deepEqual(activeKey(), ["source", "b"]);
+	await mount(); await showEmpty(); await key("ArrowDown"); await key("ArrowDown"); assert.deepEqual(activeKey(), ["source", "b"]);
 	await act(async () => { setQuery("n2"); }); assert.equal(active(), null);
 	await key("ArrowDown"); assert.deepEqual(activeKey(), ["folder", "outer"]);
 });
 it("rename arrows stay in the input, and modal-owned keyboard focus disables both Find and navigation", async () => {
-	await mount(); await point('[data-source-drag-row="b"]');
-	await act(async () => { (document.querySelector('[data-source-drag-row="b"] button[title="Rename"]') as HTMLElement).click(); });
+	await mount(); await showEmpty(); await point('[data-source-drag-row="b"]');
+	// E3 (round 16): the title opens the row; Rename is the opened row's action.
+	await act(async () => { (document.querySelector('[data-testid="cluster-toggle-b"]') as HTMLElement).click(); });
+	await act(async () => { (document.querySelector('[data-testid="source-rename-b"]') as HTMLElement).click(); });
 	const input = document.querySelector('[data-testid="source-name-input"]')!;
 	for (const arrow of ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]) assert.equal((await key(arrow, input)).defaultPrevented, false);
 	assert.equal(focused, input); await act(async () => { setEnabled(false); });

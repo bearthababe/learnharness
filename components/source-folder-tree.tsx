@@ -315,7 +315,7 @@ export function SourceFolderTree<T extends TreeSource>({ groups, directory, quer
 	};
 	const renderLevel = (parentId: string | null, depth: number): ReactNode => {
 		const items = [
-			...groups.filter((g) => parentOf(g) === parentId && !(hideEmpty && isEmptySource(g))).map((g) => ({ kind: "source" as const, source: g, id: g.key, name: g.label ?? "\uffff", count: g.nodeIds.length, date: g.newestCreatedAt, empty: isEmptySource(g) })),
+			...groups.filter((g) => parentOf(g) === parentId).map((g) => ({ kind: "source" as const, source: g, id: g.key, name: g.label ?? "\uffff", count: g.nodeIds.length, date: g.newestCreatedAt, empty: isEmptySource(g) })),
 			...state.folders.filter((f) => f.parentId === parentId && visibleFolder(f.id)).map((f) => ({ kind: "folder" as const, folder: f, id: f.id, name: f.name, count: nodeIds(f.id).length, date: f.createdAt, empty: false })),
 		];
 		// Folders first (E2/F1 — drop targets in reach), then sources with
@@ -326,7 +326,8 @@ export function SourceFolderTree<T extends TreeSource>({ groups, directory, quer
 			return rank(a) - rank(b) || (sort.col === "name" ? byName : sort.col === "props" ? a.count - b.count : a.date.localeCompare(b.date)) * sort.dir || byName || a.id.localeCompare(b.id);
 		});
 		return items.map((item) => {
-			if (item.kind === "source") return <div key={item.id} {...dropProps(parentId)} data-dragging={drag?.kind === "source" && drag.id === item.source.birth ? true : undefined}>{renderSource(item.source, depth)}</div>;
+			// E4: an empty source stays in place but out of sight until "Show empty".
+			if (item.kind === "source") return <div key={item.id} {...dropProps(parentId)} hidden={hideEmpty && item.empty} data-empty-source={item.empty || undefined} data-dragging={drag?.kind === "source" && drag.id === item.source.birth ? true : undefined}>{renderSource(item.source, depth)}</div>;
 			const folder = item.folder;
 			const open = search ? !collapsedForSearch?.has(folder.id) : expanded.has(folder.id);
 			const members = nodeIds(folder.id);

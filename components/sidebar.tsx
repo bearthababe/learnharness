@@ -1195,14 +1195,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 	if (process.env.NODE_ENV !== "production" && pathname.startsWith("/prototype/mobile-ui")) return <>{children}</>;
 	return (
 		<SettingsDialogProvider>
+			{/* R9 (round 16): the first stop for a keyboard — straight to the sessions. */}
+			<div className="lh-skip-links">
+				<a href="#sessions" data-testid="skip-to-sessions" onClick={(event) => { event.preventDefault(); window.dispatchEvent(new CustomEvent("lh:kbd-sessions-search")); }}>Skip to sessions</a>
+			</div>
 			<SessionsSidebar />
-			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open}>
-				{/* R9 (round 16): the first stop for a keyboard — straight to the sessions. */}
-				<div className="lh-skip-links">
-					<a href="#sessions" data-testid="skip-to-sessions" onClick={(event) => { event.preventDefault(); window.dispatchEvent(new CustomEvent("lh:kbd-sessions-search")); }}>Skip to sessions</a>
-				</div>
-				{children}
-			</FilePathDropZone>
+			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open}>{children}</FilePathDropZone>
 			{drawer && open && <div className="lh-drawer-scrim" aria-hidden="true" data-testid="sessions-drawer-scrim" onClick={toggle} />}
 			{/* The single document-level keydown listener (keyboard wave A) —
 			    after the content in the tree, but it's window-level so order only

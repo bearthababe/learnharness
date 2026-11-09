@@ -890,7 +890,7 @@ function QuestionDockForm({
 				signal stands alone. */}
 			{/* Keyboard users see the model at a glance (laptops only). */}
 			{qd.mode !== "text" && <p className="lh-kbd-hint" aria-hidden="true" data-testid="question-kbd-hint">
-				<kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Space</kbd> pick{kind === "quiz" ? <> · <kbd>←</kbd><kbd>→</kbd> confidence</> : null} · <kbd>Tab</kbd> your thinking · <kbd>Enter</kbd> submit
+				<kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Space</kbd> pick{kind === "quiz" ? <> · <kbd>←</kbd><kbd>→</kbd> confidence</> : null} · <kbd>Tab</kbd> your reasoning · <kbd>Enter</kbd> submit
 			</p>}
 			{kind === "quiz" && (
 				<div className="lh-question-confidence border-t border-border/60 px-4 py-2.5">

@@ -287,12 +287,15 @@ describe("KeysSection (thin SSR)", () => {
 });
 
 describe("AppearanceSection (thin SSR)", () => {
-	it("mode is rendered DISABLED — dark-only this wave, no lying control", () => {
+	it("R11 (round 16): everyday choices first, no not-yet-available controls, exact values under Advanced", () => {
 		const html = renderToStaticMarkup(<AppearanceSection appearance={undefined} onSectionChange={() => {}} />);
-		assert.ok(tagOf(html, "select-mode").includes("disabled"), "mode select disabled");
-		assert.ok(html.includes("Coming soon"));
-		// The whole row dims, graph-view style (the control never adds its own).
-		assert.ok(tagOf(html, "row-mode").includes("opacity-40"), "mode row dims whole");
+		assert.ok(!html.includes("Coming soon"), "no control that does not work yet");
+		assert.ok(!html.includes('data-testid="row-mode"'));
+		const at = (id: string) => html.indexOf(`data-testid="${id}"`);
+		assert.ok(at("row-prose-size") < at("row-font") && at("row-font") < at("row-background") && at("row-background") < at("appearance-advanced"));
+		assert.ok(html.includes('data-testid="prose-size-preview"'), "the size shows on a sample");
+		assert.ok(html.includes('aria-label="Ink (default)"'), "swatches name the default");
+		assert.ok(at("appearance-advanced") < at("input-background"), "the hex field sits under Advanced");
 	});
 
 	it("hex inputs carry the factory placeholders; prose size resolves against the factory", () => {

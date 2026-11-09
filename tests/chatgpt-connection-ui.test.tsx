@@ -69,10 +69,10 @@ async function begin() { await click(byTest("chatgpt-login")); await click(byTes
 async function confirmDisconnect() { await click(byTest("chatgpt-disconnect")); await click(byTest("chatgpt-confirm-disconnect")); }
 afterEach(async () => { await act(async () => root?.unmount()); host?.remove(); root = undefined; host = undefined; delete window.lh; globalThis.fetch = originalFetch; });
 
-test("Providers is the first/default page; General is last and other pages keep relative order", () => {
+test("Providers is the first/default page; General ends the everyday settings, Try-out designs follows", () => {
  const html = renderToStaticMarkup(<SettingsDialogBody onClose={() => {}} />);
  const ids = [...html.matchAll(/data-testid="settings-nav-([^"]+)"/g)].map((m) => m[1]);
- assert.deepEqual(ids, ["keys", "agent", "appearance", "graph", "keyboard", "general"]);
+ assert.deepEqual(ids, ["keys", "agent", "appearance", "graph", "keyboard", "general", "tryouts"]); // round 16: Try-out designs follows the everyday settings
  assert.match(html, /settings-nav-keys[^>]*aria-current="true"/); assert.match(html, /settings-nav-keys[\s\S]*?lh-settings-nav-label">Providers</);
  assert.doesNotMatch(html, />Model providers</);
 });
