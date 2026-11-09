@@ -4258,8 +4258,10 @@ html[data-answer-follow] .lh-jump-down { display: none; }
    top with the full width, the toolbar below: Sessions, Home, then
    Notebook, Plan and More. */
 @media (max-width: 767px) {
-	:root .lh-topbar { flex-wrap: wrap; height: auto; min-height: 0; padding: 6px 16px 8px; column-gap: 8px; row-gap: 8px; align-content: flex-start; }
-	:root .lh-topbar > :is(.lh-title-block, input.lh-session-title) { order: -1; flex: 1 0 100%; max-width: 100%; }
+	:root .lh-topbar { flex-wrap: wrap; height: auto; min-height: 0; padding: 8px 16px 6px; column-gap: 8px; row-gap: 6px; align-content: flex-start; }
+	/* Round 15 (F1): the toolbar row comes first, the name row second, so
+	   Sessions and Home sit exactly where Home's own bar puts them. */
+	:root .lh-topbar > :is(.lh-title-block, input.lh-session-title) { order: 99; flex: 1 0 100%; max-width: 100%; }
 	:root .lh-topbar > .lh-title-block { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: baseline; height: auto; gap: 10px; min-width: 0; margin-inline: 0; padding: 2px 6px 0; }
 	:root .lh-topbar > .lh-title-block > .lh-session-title { flex: 0 1 auto; min-width: 0; }
 	:root .lh-topbar > .lh-title-block > .lh-session-subtitle { flex: none; margin-top: 0; padding-inline: 0; }
@@ -4273,7 +4275,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	   the name row in place of the phase, never in the toolbar row. */
 	:root .lh-topbar { position: relative; }
 	:root .lh-topbar > [role="status"] {
-		position: absolute; top: 9px; right: 16px; max-width: 40%;
+		position: absolute; top: calc(8px + 48px + 6px + 3px); right: 16px; max-width: 40%;
 		overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12.5px; line-height: 20px;
 	}
 	:root .lh-topbar:has(> [role="status"]) > .lh-title-block { padding-right: 42%; }
@@ -4458,7 +4460,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 		position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; overflow: hidden;
 		visibility: hidden; pointer-events: none; clip-path: inset(50%);
 	}
-	/* M5: Settings, and the Tutor helpers list, live in ⋯ on touch screens. */
+	/* M5: Settings, and the Helpers list, live in ⋯ on touch screens. */
 	:root .lh-sessions-content [data-testid="activity-section"] { display: none; }
 }
 @media (min-width: 768px) and (pointer: coarse) {
@@ -4466,30 +4468,34 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 }
 /* The menu itself. */
 .lh-page-menu-divider { height: 1px; margin: 4px 8px; background: var(--border); }
-:root .lh-page-menu-switch { align-items: center; }
-.lh-page-menu-switch-hint { flex: 1; min-width: 0; text-align: right; font-size: 13px; color: var(--muted-foreground); }
-.lh-switch { position: relative; flex: none; width: 40px; height: 24px; border-radius: 999px; background: var(--muted); transition: background-color .15s; }
-.lh-switch > span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 999px; background: var(--background); box-shadow: 0 1px 2px rgb(0 0 0 / .3); transition: transform .15s; }
-.lh-switch[data-on] { background: var(--primary); }
-.lh-switch[data-on] > span { transform: translateX(16px); }
+:root .lh-page-menu-switch { align-items: center; gap: 10px; grid-template-columns: minmax(0, 1fr) auto auto; }
+.lh-page-menu-switch-text { display: flex; flex: 1; min-width: 0; flex-direction: column; text-align: left; }
+.lh-page-menu-switch-hint { font-size: 13px; line-height: 1.3; color: var(--muted-foreground); }
+.lh-page-menu-switch-state { flex: none; width: 2.2em; text-align: right; font-size: 13px; font-weight: 600; color: var(--muted-foreground); }
+/* R5 (round 15): both states read at a glance — Off is an outlined track
+   with a light knob at the left, On a filled track with the knob right. */
+.lh-switch {
+	position: relative; flex: none; width: 42px; height: 26px; border-radius: 999px;
+	border: 2px solid color-mix(in oklab, var(--foreground) 55%, transparent); background: transparent;
+	transition: background-color .15s, border-color .15s;
+}
+.lh-switch > span {
+	position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 999px;
+	background: color-mix(in oklab, var(--foreground) 75%, transparent); transition: transform .15s, background-color .15s;
+}
+.lh-switch[data-on] { border-color: var(--primary); background: var(--primary); }
+.lh-switch[data-on] > span { transform: translateX(16px); background: var(--primary-foreground); }
+.lh-switch[data-on] ~ .lh-page-menu-switch-state, .lh-page-menu-switch:has(.lh-switch[data-on]) .lh-page-menu-switch-state { color: var(--foreground); }
+/* F2: the ⋯ menu has one width, whatever its rows say. */
+:root .lh-page-menu[data-lh-menu], :root [data-testid="page-menu"] { width: min(320px, calc(100vw - 24px)); }
 .lh-helpers-sheet [data-testid="activity-section"] { border-top: 0; padding: 4px; }
 .lh-helpers-sheet .lh-activity-history { max-height: min(60dvh, 420px); overflow-y: auto; }
 .lh-activity-empty { margin: 4px 8px 8px; color: var(--muted-foreground); font-size: 14px; line-height: 1.45; }
 
-/* M2: "Type instead" — a keyboard key inside each dictation field while
-   the keyboard is kept closed; it sits beside the mic, never moving it. */
-.lh-type-instead { display: none; }
-:root .lh-compact-field[data-type-instead] > .lh-type-instead {
-	position: absolute; right: 50px; bottom: 3px; z-index: 1;
-	display: inline-flex; align-items: center; justify-content: center;
-	width: 44px; height: 44px; border-radius: 10px;
-	background: color-mix(in oklab, var(--primary) 16%, transparent); color: var(--foreground);
-}
-:root .lh-compact-field[data-type-instead] > .lh-type-instead svg { width: 20px; height: 20px; }
-:root .lh-compact-field[data-recording] > .lh-type-instead { visibility: hidden; }
-@media (max-width: 767px) {
-	:root .lh-compact-field[data-type-instead][data-has-mic] > :is(textarea, [data-file-path-input]) { width: calc(100% - 96px); }
-}
+/* Round 15 (F4/A2): one mic, inside the field, on every device; the row
+   under the composer no longer carries its own Dictate (the shortcut and the
+   field's mic drive the same dictation). */
+:root .lh-stats-bar .lh-dictation-slot { visibility: hidden; }
 
 /* M6: Send keeps its place and fades in when there is something to send,
    the box is in use, or a turn can be stopped. */
@@ -4670,6 +4676,20 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 }
 .lh-focus-exit svg { width: 16px; height: 16px; }
 @media (min-width: 1024px) { .lh-focus-exit { top: 12px; right: 16px; } }
+/* A1 (round 15): laptops enter focus from the bar's right end; touch
+   layouts use the ⋯ row. */
+:root .lh-topbar .lh-nav-chip.lh-focus-enter { display: none; }
+@media (min-width: 1024px) and (not (pointer: coarse)) {
+	:root .lh-topbar .lh-nav-chip.lh-focus-enter { display: inline-flex; margin-left: 4px; }
+}
+/* R6 (round 15): Exit focus has a band of its own at the top, so it never
+   covers the lesson's first line; the lesson still gains the bar's height.
+   Wide laptop windows centre the lesson with room to spare on the right, so
+   the pill sits in that margin and the lesson starts at the top. */
+:root[data-focus-mode] .session-tutor { padding-top: 56px; }
+@media (min-width: 1280px) and (not (pointer: coarse)) {
+	:root[data-focus-mode] .session-tutor { padding-top: 0; }
+}
 
 /* ── Round 14: the handwriting notebook ─────────────────────────────── */
 /* T3: the notebook ⋯ holds the current page's actions. */
@@ -4786,3 +4806,20 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	background: color-mix(in oklab, var(--primary) 26%, transparent);
 	color: var(--foreground);
 }
+
+/* ── Round 15 ──────────────────────────────────────────────────────── */
+/* F4: the one-time "keyboard is kept closed" note, under the bar, over the
+   lesson (it takes no space, so nothing moves). */
+.lh-keyboard-hint {
+	position: fixed; z-index: 60; top: calc(env(safe-area-inset-top, 0px) + 64px); right: 12px; left: 12px; margin-inline: auto; max-width: 360px;
+	padding: 10px 14px; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--lh-shadow-pop, 0 8px 24px rgb(0 0 0 / .35));
+	color: var(--foreground); font-size: 14px; line-height: 1.4; pointer-events: none;
+}
+/* A3: what the number on Sessions means, visible above the list. */
+.lh-your-turn-hint {
+	display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; margin: 2px 12px 6px; padding: 0;
+	color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); font-size: 13.5px; font-weight: 600; line-height: 1.4;
+}
+.lh-your-turn-dot { align-self: center; width: 8px; height: 8px; border-radius: 999px; background: var(--primary); }
+.lh-your-turn-note { color: var(--muted-foreground); font-weight: 500; }
+:root .lh-sessions-content[data-searching] .lh-your-turn-hint { display: none; }

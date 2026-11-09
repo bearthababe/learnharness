@@ -31,7 +31,7 @@ export function usePhoneLayout() {
 }
 
 /** Phones and tablets (round 14, owner M1–M4): one control model — the ⋯
- *  app menu holds Model, Reasoning, Usage, Tutor helpers and Settings, and
+ *  app menu holds Model, Reasoning, Usage, Helpers and Settings, and
  *  the mic sits inside every field. Laptops keep the row under the composer
  *  and the sidebar footer. Keep in sync with the touch rules in globals.css. */
 export const TOUCH_MEDIA = "(max-width: 1023px), (pointer: coarse)";
@@ -85,11 +85,16 @@ export function usePhoneViewport() {
 				const css = getComputedStyle(target);
 				const size = vertical ? target.clientHeight : target.clientWidth;
 				const extent = vertical ? target.scrollHeight : target.scrollWidth;
-				if (/auto|scroll/.test(vertical ? css.overflowY : css.overflowX) && extent > size) {
+				// Round 15 (F3): a box that is only a pixel or two "scrollable"
+				// (overflow on the other axis, a chip, a link) never takes the
+				// gesture, and a scroller at its edge hands it outward (the
+				// lesson) instead of cancelling it: only when nothing up the
+				// chain can move is the page's bounce stopped.
+				if (/auto|scroll/.test(vertical ? css.overflowY : css.overflowX) && extent - size > 2) {
 					const position = vertical ? target.scrollTop : target.scrollLeft;
 					const delta = vertical ? dy : dx;
 					if ((delta < 0 && position + size < extent - 1) || (delta > 0 && position > 0)) return;
-					break;
+					if (getComputedStyle(target).overscrollBehavior.includes("contain") || getComputedStyle(target).overscrollBehavior.includes("none")) break;
 				}
 				target = target.parentElement;
 			}

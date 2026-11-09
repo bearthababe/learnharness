@@ -7,7 +7,7 @@ import { OPEN_HELPERS_EVENT, PageMenuButton } from "@/components/page-menu";
 import { SessionHelperFailures } from "@/components/activity-dock";
 import { NotebookOpener } from "@/components/notebook-opener";
 import { useMarkSessionSeen } from "@/components/session-seen";
-import { FocusModeExit, setFocusMode } from "@/components/focus-mode";
+import { FocusModeButton, FocusModeExit, setFocusMode } from "@/components/focus-mode";
 import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
 import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
@@ -1912,6 +1912,7 @@ export function Chat({
 					{notebookOpenerEl}
 					{/* Phones: model, reasoning and Usage live here (owner O1). */}
 					<PageMenuButton extraRows={[{ id: "focus", label: "Focus on the lesson", value: "Hides this bar", open: () => setFocusMode(true) }]} />
+					<FocusModeButton />
 				</TopBar>
 				<FocusModeExit />
 				{!notebookVisible && notebook.error && (friendlyNetworkError(notebook.error)
@@ -2878,9 +2879,10 @@ function DockOverlay({
 		return () => ro.disconnect();
 	}, []);
 
-	// The reserve grows immediately, but never shrinks while a question or
-	// practice problem owns the dock: shrinking flow space could pin a nearby
-	// learner back to the bottom. Composer mode may give space back.
+	// The reserve grows immediately, but never shrinks while an open question
+	// or practice problem owns the dock: shrinking flow space could pin a
+	// nearby learner back to the bottom. A closed question and composer mode
+	// give space back.
 	const reserveRef = useRef(0);
 	const fadeRef = useRef<HTMLDivElement>(null);
 	const offer = useCallback((blockH: number) => {
@@ -2891,7 +2893,11 @@ function DockOverlay({
 		const fade = fadeRef.current;
 		const fadeH = !fade ? GRADIENT_H : typeof fade.getClientRects !== "function" ? fade.offsetHeight || GRADIENT_H : fade.getClientRects().length > 0 ? fade.offsetHeight : 0;
 		const next = blockH + fadeH;
-		if (next <= reserveRef.current + 0.5 && pendingRef.current) return;
+		// Round 15 (F5): scrolling no longer folds or opens a question
+		// (round 14, C2/C3), so the clamp this guarded against cannot happen;
+		// once the learner closes the question the tail gives its height
+		// back, and the lesson ends at its last divider, not in a blank band.
+		if (next <= reserveRef.current + 0.5 && pendingRef.current && expandedRef.current) return;
 		// Stamp growth at the source, including child-only field resizes, so
 		// stick-to-bottom's catch-up is not mistaken for the learner leaving.
 		if (shouldStampGeometryMute(next, reserveRef.current, pendingRef.current)) geometryAtRef.current = Date.now();

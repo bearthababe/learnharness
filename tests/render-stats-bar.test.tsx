@@ -82,13 +82,13 @@ describe("stats bar", () => {
 		assert.equal(formatContextMeasurement(83_000, 100_000), "83k / 100k");
 		assert.equal(formatContextMeasurement(83_000, 200_000), "83k / 200k");
 		assert.equal(formatContextMeasurement(83_000, null), "83k");
-		// Round 14 (C6): an unmeasured context is left out of the row (only what
-		// is known shows); the Usage card says "Not measured yet".
+		// Round 15 (A7): with replies but no figure (after a compaction) the
+		// meter says when it returns, in words; never "? / …" (round 14, C6).
 		const html = renderToStaticMarkup(<StatsBar chatId="fixture" turns={[turn()]} contextTokens={null} />);
-		assert.ok(!html.includes('data-testid="stats-context"') && !html.includes("? /"), "no \"? / …\" while nothing is measured");
+		assert.ok(html.includes("Context: updates after the next reply") && !html.includes("? /"), "plain words, no \"? / …\"");
 		assert.match(html, /data-testid="stats-cost"/);
 		const empty = renderToStaticMarkup(<StatsBar chatId="fixture" turns={[]} />);
-		assert.ok(!empty.includes('data-testid="stats-context"') && !empty.includes("? /"));
+		assert.ok(!empty.includes("? /"));
 	});
 
 	it("prettyModel strips only the vendor path, preserving versions, dates and variants", () => {

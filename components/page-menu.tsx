@@ -6,7 +6,7 @@ import { MenuShell } from "@/components/menu-shell";
 import { useOneMenu } from "@/components/one-menu";
 import { useCardDismiss } from "@/components/card-dismiss";
 import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
-import { installKeyboardGuard, setKeyboardOff, useKeyboardOff } from "@/components/device-prefs";
+import { installKeyboardGuard, KEYBOARD_HINT_EVENT, setKeyboardOff, useKeyboardOff } from "@/components/device-prefs";
 import { useCoarsePointer, usePhoneLayout } from "@/components/use-phone-viewport";
 import { useSettingsDialog } from "@/components/settings/settings-dialog";
 import { ActivitySection } from "@/components/activity-dock";
@@ -19,7 +19,7 @@ import { ActivitySection } from "@/components/activity-dock";
  * - Model, Reasoning, Usage: their values in full, each opening the same
  *   card as before (the controls stay mounted but hidden, because the send
  *   guard and the shortcuts read them);
- * - Tutor helpers (P14), opening its own sheet, and Settings (M5).
+ * - Helpers (P14; one name everywhere, round 15 A5), opening its own sheet, and Settings (M5).
  * Laptops keep the model row under the composer and the sidebar footer;
  * the button is touch-only (CSS).
  */
@@ -38,7 +38,7 @@ export function publishPageMenu(next: Partial<PageMenuState>) {
 
 export const OPEN_THINKING_EVENT = "lh:open-thinking-picker";
 export const OPEN_USAGE_EVENT = "lh:open-usage";
-/** Opens the Tutor helpers sheet (the ⋯ row, or a session's failure note). */
+/** Opens the Helpers sheet (the ⋯ row, or a session's failure note). */
 export const OPEN_HELPERS_EVENT = "lh:open-helpers";
 /** Home's rows (round 14, P5/P16): the import menu and Graph display open
  *  from ⋯ on phones and tablets. */
@@ -65,6 +65,15 @@ export function PageMenuButton({ extraRows = [] }: {
 	useCardDismiss(helpers, () => setHelpers(false), ['[data-testid="helpers-sheet"]', '[data-testid="page-menu-button"]']);
 	const helpersPresence = usePhoneMenuPresence(helpers ? "helpers" : null, phone);
 	useEffect(() => { installKeyboardGuard(); }, []);
+	// F4 (round 15): once, when a field stays without a keyboard, say where
+	// the switch is. It passes on its own and never moves anything.
+	const [keyboardHint, setKeyboardHint] = useState(false);
+	useEffect(() => {
+		let timer = 0;
+		const show = () => { setKeyboardHint(true); window.clearTimeout(timer); timer = window.setTimeout(() => setKeyboardHint(false), 4500); };
+		window.addEventListener(KEYBOARD_HINT_EVENT, show);
+		return () => { window.removeEventListener(KEYBOARD_HINT_EVENT, show); window.clearTimeout(timer); };
+	}, []);
 	useEffect(() => {
 		const onOpen = () => setHelpers(true);
 		window.addEventListener(OPEN_HELPERS_EVENT, onOpen);
@@ -86,7 +95,7 @@ export function PageMenuButton({ extraRows = [] }: {
 			...extraRows,
 		],
 		[
-			{ id: "helpers", label: "Tutor helpers", open: () => setHelpers(true) },
+			{ id: "helpers", label: "Helpers", open: () => setHelpers(true) },
 			{ id: "settings", label: "Settings", open: () => openSettings() },
 		],
 	];
@@ -99,10 +108,15 @@ export function PageMenuButton({ extraRows = [] }: {
 	);
 	let keyboardSwitch: ReactNode = null;
 	if (touch) keyboardSwitch = (
+		// Round 15 (F2): the row is the same size on and off (a fixed subtitle,
+		// a fixed-width state word), so the menu never moves or resizes.
 		<button type="button" role="menuitemcheckbox" aria-checked={keyboardOff} className="lh-page-menu-row lh-page-menu-switch" data-testid="page-menu-keyboard"
 			onClick={() => setKeyboardOff(!keyboardOff)}>
-			<span className="lh-page-menu-label">Keep keyboard closed</span>
-			<span className="lh-page-menu-switch-hint">{keyboardOff ? "On — dictate, or tap the keyboard icon in a field to type" : "Off"}</span>
+			<span className="lh-page-menu-switch-text">
+				<span className="lh-page-menu-label">Keep keyboard closed</span>
+				<span className="lh-page-menu-switch-hint">For dictating: fields won’t raise the keyboard</span>
+			</span>
+			<span className="lh-page-menu-switch-state" aria-hidden>{keyboardOff ? "On" : "Off"}</span>
 			<span className="lh-switch" data-on={keyboardOff || undefined} aria-hidden><span /></span>
 		</button>
 	);
@@ -134,6 +148,11 @@ export function PageMenuButton({ extraRows = [] }: {
 						))}
 					</div>
 				</MenuShell>
+			)}
+			{keyboardHint && touch && (
+				<div role="status" className="lh-keyboard-hint lh-glass" data-testid="keyboard-off-hint">
+					The keyboard is kept closed. Dictate with the mic, or switch it back on in ⋯.
+				</div>
 			)}
 			{helpersPresence.value && (
 				<MenuShell anchorTestid="page-menu-button" testid="helpers-sheet" preferredSide="down" align="right" fitVisualViewport={phone}

@@ -201,6 +201,11 @@ export function rmsToMeter(rms: number): number {
 type SpeechRetention = () => ((text: string) => void) | undefined;
 type SpeechTarget = { append: (text: string) => void; retain?: SpeechRetention };
 let questionTarget: SpeechTarget | null = null;
+/** Claims stack (round 15, F4): a field the learner picks up (the reading
+ *  note while the question is open, say) claims on top and hands the mic
+ *  back to the claim beneath when it lets go. The newest claim speaks. */
+const claimedTargets: SpeechTarget[] = [];
+const settleTarget = () => { questionTarget = claimedTargets.at(-1) ?? null; };
 let dictationCancellation = 0;
 /** Attach/Submit retain the existing speech owner through finalization. */
 export function dictationCheckpoint() {
@@ -245,9 +250,12 @@ export function useDictationTarget(append: (text: string) => void, claimed: bool
 	useEffect(() => {
 		if (!claimed) return;
 		const target = { append, retain: () => retention.current?.() };
-		questionTarget = target;
+		claimedTargets.push(target);
+		settleTarget();
 		return () => {
-			if (questionTarget === target) questionTarget = null;
+			const index = claimedTargets.indexOf(target);
+			if (index >= 0) claimedTargets.splice(index, 1);
+			settleTarget();
 		};
 	}, [append, claimed]);
 }

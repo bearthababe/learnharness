@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { MinimizeIcon } from "lucide-react";
+import { MaximizeIcon, MinimizeIcon } from "lucide-react";
 
 /**
  * Focus mode (round 14, owner P2): an explicit choice, never hide-on-scroll
@@ -26,6 +26,16 @@ export function setFocusMode(next: boolean) {
 }
 export function useFocusMode(): boolean {
 	return useSyncExternalStore((listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; }, () => on, () => false);
+}
+
+/** Laptops (round 15, A1): focus mode from the bar's right-hand end, the
+ *  place ⋯ takes on phones and tablets (where it is a ⋯ row instead). */
+export function FocusModeButton() {
+	return (
+		<button type="button" className="lh-nav-chip lh-focus-enter lh-no-drag" data-testid="focus-enter" aria-label="Focus on the lesson" title="Focus on the lesson (hides this bar)" onClick={() => setFocusMode(true)}>
+			<MaximizeIcon aria-hidden /><span className="lh-nav-chip-label">Focus</span>
+		</button>
+	);
 }
 
 /** The way out, always visible while focus mode is on. Leaving the session

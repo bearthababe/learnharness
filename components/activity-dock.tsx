@@ -447,14 +447,14 @@ export function ActivitySection({ feed: feedProp, trailing, sheet = false }: {
 				className="lh-activity-header flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm text-muted-foreground"
 				aria-expanded={recent.length > 0 ? historyOpen : undefined}
 				data-testid="activity-history-toggle"
-				title="Tutor helpers"
+				title="Helpers"
 				onClick={() => { if (recent.length > 0) setHistoryOpen((v) => !v); }}
 			>
 				<ActivityIcon className="size-4 shrink-0" />
 				{/* Round 14 (P14): the tutor's background helpers, in words —
 				    "Helpers · 1 failed"; the full name is the accessible name. */}
-				<span className="truncate" aria-hidden="true">{sheet ? "Tutor helpers" : "Helpers"}</span>
-				<span className="sr-only">Tutor helpers</span>
+				<span className="truncate" aria-hidden="true">Helpers</span>
+				<span className="sr-only">Helpers</span>
 				{blobs.length === 0 && (
 					<span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground/80">
 						{failedCount > 0 ? `${failedCount} failed` : recent.length > 0 ? `${recent.length} recent` : "Idle"}
@@ -473,7 +473,7 @@ export function ActivitySection({ feed: feedProp, trailing, sheet = false }: {
 				<p className="lh-activity-empty">No helpers have run yet. When the tutor sends one off (an import, a search), it shows here.</p>
 			)}
 			{historyOpen && recent.length > 0 && (
-				<ul className="lh-activity-history" data-testid="activity-history" aria-label="Recent tutor helpers">
+				<ul className="lh-activity-history" data-testid="activity-history" aria-label="Recent helpers">
 					{recent.map((job) => {
 						const Icon = KIND_ICON[job.kind] ?? BotIcon;
 						const status = jobStatusText(job);
@@ -655,7 +655,7 @@ function ActivityBlobRow({
 /**
  * A tutor helper's failure, shown in the session it affects (round 14,
  * P14): the reason in plain words, one tap to try again, and the full list
- * one step away (Tutor helpers, in ⋯). The list stays the advanced view;
+ * one step away (Helpers, in ⋯). The list stays the advanced view;
  * this note is what the learner needs here.
  */
 export function SessionHelperFailures({ chatId, onOpenHelpers }: { chatId: string; onOpenHelpers?: () => void }) {
@@ -679,14 +679,14 @@ export function SessionHelperFailures({ chatId, onOpenHelpers }: { chatId: strin
 			{failed.map((job) => (
 				<div key={job.id} role="status" className="lh-helper-failure">
 					<span className="lh-helper-failure-text">
-						<strong>A tutor helper couldn&apos;t finish</strong> ({KIND_LABEL[job.kind] ?? "Helper"} · {job.title}). {readableJobError(job.error ?? "")}
+						<strong>A helper couldn&apos;t finish</strong> ({KIND_LABEL[job.kind] ?? "Helper"} · {job.title}). {readableJobError(job.error ?? "")}
 						{retrying[job.id] === "failed" && " Couldn't start it again — ask the tutor instead."}
 					</span>
 					<span className="lh-helper-failure-actions">
 						<button type="button" className="lh-activity-action" data-testid="session-helper-retry" disabled={retrying[job.id] === "pending"} onClick={() => void retry(job.id)}>
 							<RotateCwIcon aria-hidden />{retrying[job.id] === "pending" ? "Retrying…" : "Retry"}
 						</button>
-						{onOpenHelpers && <button type="button" className="lh-activity-action" onClick={onOpenHelpers}>Tutor helpers<ChevronRightIcon aria-hidden /></button>}
+						{onOpenHelpers && <button type="button" className="lh-activity-action" onClick={onOpenHelpers}>Helpers<ChevronRightIcon aria-hidden /></button>}
 					</span>
 				</div>
 			))}

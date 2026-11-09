@@ -36,8 +36,9 @@ test("meter keeps its measured numerator across selected-model/catalog changes, 
 		await act(async () => notifySettingsSaved("models"));
 		assert.equal(context(), "83k / 200k", "only denominator changes");
 		await act(async () => root.render(<StatsBar chatId="fixture" turns={[turn]} contextTokens={null} pricing={pricing} />));
-		// Round 14 (C6): an unknown measurement is never shown as "? / …".
-		assert.equal(context(), undefined, "post-compaction unknown hides the meter rather than showing '?'");
+		// Round 15 (A7): after compaction the meter says when it returns, in
+		// plain words — never "? / …" (round 14, C6) and never just gone.
+		assert.equal(context(), "Context: updates after the next reply", "post-compaction unknown says when the figure returns");
 		assert.equal(host.querySelector('[data-testid="stats-cost"]')?.textContent, "$0.0030", "summary spending is still visible");
 		await act(async () => root.render(<StatsBar chatId="fixture" turns={[turn]} contextTokens={72_000} pricing={pricing} />));
 		assert.equal(context(), "72k / 200k");

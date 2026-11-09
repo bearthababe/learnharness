@@ -242,13 +242,17 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
  *  The icon fades with the slot and is clipped by it as it collapses —
  *  no popping in either direction. */
 export function SidebarToggle() {
-	const { open, phone, toggle } = useSidebar();
+	const { open, phone, drawer, toggle } = useSidebar();
 	const waiting = useWaitingCount();
+	// Round 15 (F1): where the list is an overlay (phones, tablet drawers) the
+	// bar underneath never rearranges, so closing the list never slides Home.
+	// Only the docked laptop sidebar takes the chip's place.
+	const collapse = open && !phone && !drawer;
 	return (
 		<span
 			className={cn(
 				"sidebar-motion lh-no-drag relative flex shrink-0 items-center overflow-hidden duration-200",
-				open ? "w-0 -mr-3" : "w-auto mr-0 lh-closed-toggle",
+				collapse ? "w-0 -mr-3" : "w-auto mr-0 lh-closed-toggle",
 			)}
 		>
 			<Hint label="Open sessions" action="toggle-sidebar" disabled={phone}>
@@ -472,17 +476,14 @@ function SessionsSidebar() {
 	}, [phone, open]);
 	const [chats, setChats] = useState<ChatListItem[] | null>(null);
 	const [ctxChatId, setCtxChatId] = useState<string | null>(null);
-	// P15 (round 14): nothing reorders while the list is in use — the drawer
-	// is open, a session's menu is open, or the pointer is over the list.
-	// Updates keep their places until it is let go; new sessions lead.
-	const [listHover, setListHover] = useState(false);
-	const listInUse = (drawer && open) || ctxChatId !== null || listHover;
-	const frozenOrder = useRef<Map<string, number> | null>(null);
-	if (!listInUse) frozenOrder.current = null;
-	else if (!frozenOrder.current && chats) frozenOrder.current = new Map(chats.map((c, i) => [c.id, i]));
+	// Round 15 (A4): no special freezing. The list is ordered by the
+	// learner's own activity (activityAt: sent, answered, retried), so a
+	// background event — a helper finishing, say — never moves a row; it only
+	// adds the "New result" mark.
+	const yourTurn = (chats ?? []).filter((c) => c.pendingQuestion || ((c.kind ?? "teach") === "practice" && c.pendingProblem)).length;
 	useEffect(() => {
-		publishWaitingCount((chats ?? []).filter((c) => c.pendingQuestion || ((c.kind ?? "teach") === "practice" && c.pendingProblem)).length);
-	}, [chats]);
+		publishWaitingCount(yourTurn);
+	}, [yourTurn]);
 	const [query, setQuery] = useState("");
 	// Phone search is its own mode (round 11): the search bar pins to the
 	// top, the filter sits under it and the results get the whole sheet;
@@ -523,8 +524,7 @@ function SessionsSidebar() {
 	 * keeps the natural list order (scores are all 0, sort is stable). */
 	const shown = useMemo(() => {
 		const q = query.trim();
-		const order = frozenOrder.current;
-		let list = chats && order ? [...chats].sort((a, b) => (order.get(a.id) ?? -1) - (order.get(b.id) ?? -1)) : chats;
+		let list = chats;
 		if (list && kindFilter !== "all") {
 			list = list.filter((c) => (c.kind ?? "teach") === kindFilter);
 		}
@@ -535,7 +535,7 @@ function SessionsSidebar() {
 			.filter((r): r is { c: (typeof list)[number]; score: number } => r.score !== null)
 			.sort((a, b) => b.score - a.score)
 			.map((r) => r.c);
-	}, [chats, query, kindFilter, listInUse]);
+	}, [chats, query, kindFilter]);
 
 	const refreshInFlightRef = useRef(false);
 	const refresh = useCallback(async () => {
@@ -974,8 +974,14 @@ function SessionsSidebar() {
 				</div>
 
 				{deletedNotice && <p role="status" data-testid="session-deleted-notice" className="lh-deleted-notice">{deletedNotice}</p>}
-				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 pt-1"
-					onPointerEnter={(event) => { if (event.pointerType === "mouse") setListHover(true); }} onPointerLeave={() => setListHover(false)}>
+				{/* Round 15 (A3): the badge on Sessions, explained where the
+				    sessions are — it counts only those waiting for an answer. */}
+				{yourTurn > 0 && <p className="lh-your-turn-hint" data-testid="your-turn-hint">
+					<span className="lh-your-turn-dot" aria-hidden />
+					{yourTurn === 1 ? "Your turn in 1 session" : `Your turn in ${yourTurn} sessions`}
+					<span className="lh-your-turn-note"> · the number on Sessions counts these</span>
+				</p>}
+				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 pt-1">
 					{shown === null ? (
 						<div className="px-2 py-4 text-sm text-muted-foreground">Loading…</div>
 					) : shown.length === 0 ? (

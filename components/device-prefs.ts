@@ -45,8 +45,16 @@ export function useRevealStyle(): RevealStyle {
 export function keyboardOff(): boolean {
 	return typeof window !== "undefined" && read("keyboardOff");
 }
+/** Round 15 (F4): the first time a field gets no keyboard because the switch
+ *  is on, say once where the switch is (cleared when the keyboard comes back,
+ *  so the next time it is kept closed the reminder can show once more). */
+export const KEYBOARD_HINT_EVENT = "lh:keyboard-off-hint";
+const HINT_KEY = "lh:keyboard-off-hinted";
 export function setKeyboardOff(off: boolean) {
-	try { window.localStorage.setItem(KEYS.keyboardOff, off ? "on" : "off"); } catch { /* this view only */ }
+	try {
+		window.localStorage.setItem(KEYS.keyboardOff, off ? "on" : "off");
+		if (!off) window.localStorage.removeItem(HINT_KEY);
+	} catch { /* this view only */ }
 	applyKeyboardMode();
 	notify();
 }
@@ -98,6 +106,15 @@ export function installKeyboardGuard() {
 		const field = (event.target as HTMLElement | null)?.closest?.<HTMLElement>(EDITABLE);
 		if (field) mark(field, keyboardOff());
 	};
+	const remind = (event: Event) => {
+		if (!keyboardOff() || !(event.target as HTMLElement | null)?.closest?.(EDITABLE)) return;
+		try {
+			if (window.localStorage.getItem(HINT_KEY)) return;
+			window.localStorage.setItem(HINT_KEY, "1");
+		} catch { return; }
+		window.dispatchEvent(new CustomEvent(KEYBOARD_HINT_EVENT));
+	};
 	document.addEventListener("pointerdown", follow, true);
 	document.addEventListener("focusin", follow, true);
+	document.addEventListener("focusin", remind);
 }

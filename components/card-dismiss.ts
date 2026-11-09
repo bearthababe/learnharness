@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 
 /**
  * Escape and a tap outside close a card opened from ⋯ (round 14): the menu
- * itself, Tutor helpers, Graph display, Import and the Notebook chooser.
+ * itself, Helpers, Graph display, Import and the Notebook chooser.
  * MenuShell only places a card; each site owns its dismissal, and these
  * portaled cards had none on tablets. `inside` lists the card and its
  * trigger(s): a press there is the card's own business (the trigger

@@ -142,6 +142,10 @@ export function StatsBar({
 	// The phone page menu (owner O1) shows Usage and opens this card.
 	const hasUsage = !!chatId || turns.length > 0;
 	const contextKnown = contextTokens !== null;
+	// A7 (round 15): after a compaction (replies so far, no figure) the meter
+	// says when it comes back instead of disappearing; before any reply it is
+	// simply not measured yet. Never a "?" placeholder (C6).
+	const contextPending = turns.length > 0 ? "Updates after the next reply" : "Not measured yet";
 	const usageLabel = !hasUsage ? null
 		: contextKnown ? `${contextLabel} · ${costLabel === "—" ? "cost not reported" : costLabel}`
 		: costLabel === "—" ? "Not measured yet" : costLabel;
@@ -186,15 +190,15 @@ export function StatsBar({
 				data-testid="stats-summary"
 				// Figures at a glance (laptops) only when both are real: no "?"
 				// or "—" placeholders; otherwise the plain "Usage" label.
-				data-known={(contextTokens !== null && (pricedCount > 0 || subscription > 0 || cliBilled)) || undefined}
+				data-known={(turns.length > 0 && (pricedCount > 0 || subscription > 0 || cliBilled)) || undefined}
 				aria-label="Usage"
 				className="flex items-center gap-1.5 tabular-nums transition-colors hover:text-foreground"
 			>
 				<span className="lh-phone-usage-label">Usage</span>
-				<span className="lh-usage-numbers contents">{contextKnown && <><span data-testid="stats-context">
-					{contextLabel}
+				<span className="lh-usage-numbers contents"><span data-testid="stats-context" data-pending={!contextKnown || undefined}>
+					{contextKnown ? contextLabel : `Context: ${contextPending.toLowerCase()}`}
 				</span>
-				<span aria-hidden>·</span></>}
+				<span aria-hidden>·</span>
 				<span data-testid="stats-cost">{costLabel}</span>
 				</span>
 			</button>
@@ -207,7 +211,7 @@ export function StatsBar({
 							<div className="flex justify-between gap-2">
 								<span>Context (last call)</span>
 								<span className="tabular-nums text-card-foreground">
-									{contextKnown ? contextLabel : "Not measured yet"}
+									{contextKnown ? contextLabel : contextPending}
 								</span>
 							</div>
 							{selectedModel?.startsWith(`${CLAUDE_CODE_PROVIDER}:`) && (

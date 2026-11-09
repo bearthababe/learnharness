@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type ReactNode } from "react";
-import { KeyboardIcon, Loader2Icon, MicIcon, SquareIcon, XIcon } from "lucide-react";
-import { setKeyboardOff, useKeyboardOff } from "@/components/device-prefs";
-import { useCoarsePointer } from "@/components/use-phone-viewport";
+import { Loader2Icon, MicIcon, SquareIcon, XIcon } from "lucide-react";
 import { DICTATION_KEYLESS, sampleDictationMeter, useDictationRecovery, type Dictation } from "@/components/dictation";
 import { readPathInput, readPathSelection, restorePathSelection, type TextSelection } from "./path-input-dom";
 
@@ -19,18 +17,13 @@ export function useFocusWithin(): [boolean, { onFocus: () => void; onBlur: (even
 }
 
 /** Presentation around the existing, always-mounted editor. Capture, ownership
- * and submission stay with the caller. Laptop layouts use display:contents;
- * phones and tablets put the mic inside the field (round 14, M3). */
+ * and submission stay with the caller. The mic sits inside the field on every
+ * device (round 15, F4/A2); the keyboard switch lives only in ⋯. */
 export function CompactLearningInput({ children, dictation, enabled = true }: {
 	children: ReactNode;
 	dictation?: Dictation;
 	enabled?: boolean;
 }) {
-	// M2 (round 14): while "Keep keyboard closed" (⋯) is on, every dictation
-	// field shows a small keyboard key — the state is visible, and one tap
-	// brings typing back (switch off, field focused, keyboard up).
-	const keyboardOff = useKeyboardOff();
-	const touch = useCoarsePointer();
 	const field = useRef<HTMLDivElement>(null);
 	const saved = useRef<{ value: string; start: number; end: number; direction: "forward" | "backward" | "none"; scroll: number } | null>(null);
 	const savedPath = useRef<{ value: string; selection: TextSelection | null; scroll: number } | null>(null);
@@ -108,17 +101,8 @@ export function CompactLearningInput({ children, dictation, enabled = true }: {
 			<span>{dictation.error}</span>
 			<button type="button" onClick={recover}>{dictation.error === DICTATION_KEYLESS ? "Settings" : "Retry"}</button>
 		</div>}
-		<div ref={field} className={enabled ? "lh-compact-field" : "contents"} data-recording={active || undefined} data-has-mic={!!dictation || undefined} data-type-instead={(enabled && touch && keyboardOff) || undefined}>
+		<div ref={field} className={enabled ? "lh-compact-field" : "contents"} data-recording={active || undefined} data-has-mic={!!dictation || undefined}>
 			{children}
-			{enabled && touch && keyboardOff && <button type="button" className="lh-type-instead" data-testid="type-instead" aria-label="Type instead (turns the keyboard back on)" title="Type instead"
-				onPointerDown={(event) => event.preventDefault()}
-				onClick={() => {
-					setKeyboardOff(false);
-					const editor = field.current?.querySelector<HTMLElement>("[data-file-path-input], textarea");
-					editor?.focus();
-				}}>
-				<KeyboardIcon aria-hidden />
-			</button>}
 			{enabled && dictation && <div className="lh-compact-speech">
 				{active ? <Recording dictation={dictation} /> : <button type="button" aria-label="Start dictation" data-testid="compact-dictation-toggle" onPointerDown={remember} onClick={recover}>
 					<MicIcon size={20} />
