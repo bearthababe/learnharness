@@ -113,6 +113,15 @@ temporary staging is not a permanent protected backup class. No automatic
 history restoration or installed-launcher cutover is implemented. The explicit
 local updater in `docs/local-service.md` safely hands ownership off by stopping
 its drained backend before acquiring this same administration lease.
+
+Linux deployment CI supplies these prerequisites explicitly. Its checkout has
+complete Git history for the updater's real ancestry/fetch fixture. The optional
+`atomic-restore` setup input builds GNU coreutils 9.7 from the SHA-256-pinned
+official source archive, places only its `mv` on the disposable job's PATH, and
+checks actual two-way atomic directory exchange before running the unchanged
+restore tests. It does not upgrade system coreutils, replace local-machine tools,
+or add a non-atomic production fallback. Other CI jobs do not build this tool.
+
 If deleting the old staging tree fails after commit, the result explicitly
 reports `retainedRoot` and `cleanupError`; it does not falsely report a failed
 data restore or attempt rollback through a partially deleted old tree.

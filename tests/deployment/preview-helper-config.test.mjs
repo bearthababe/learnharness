@@ -6,6 +6,7 @@ import test from "node:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { validatePreviewHelper } from "../../scripts/lib/preview-helper-config.mjs";
+import { git } from "../../scripts/lib/ticket-state.mjs";
 
 test("local CLI configures only private helper administration outside preview mounts", async () => {
 	const directory = fs.mkdtempSync("/tmp/lh-helper-config-");
@@ -15,10 +16,13 @@ test("local CLI configures only private helper administration outside preview mo
 	const control = path.join(helperDirectory, "control.sock");
 	await new Promise(resolve => server.listen(control, resolve));
 	fs.chmodSync(control, 0o600);
-	const root = path.resolve(import.meta.dirname, "../..");
+	const source = path.resolve(import.meta.dirname, "../..");
+	const root = path.join(directory, "repository");
+	fs.mkdirSync(root);
+	git(root, "init", "--initial-branch=main");
 	const state = { root, tickets: {} };
 	const execute = promisify(execFile);
-	const cli = (...args) => execute(process.execPath, [path.join(root, "scripts/ticket.mjs"), ...args, "--root", root, "--state-dir", path.join(directory, "registry")]);
+	const cli = (...args) => execute(process.execPath, [path.join(source, "scripts/ticket.mjs"), ...args, "--root", root, "--state-dir", path.join(directory, "registry")]);
 	try {
 		assert.equal(validatePreviewHelper(helperDirectory, state), helperDirectory);
 		fs.symlinkSync(helperDirectory, path.join(directory, "alias"));
@@ -30,7 +34,7 @@ test("local CLI configures only private helper administration outside preview mo
 		fs.chmodSync(helperDirectory, 0o755);
 		await assert.rejects(cli("configure-helper", "--helper-directory", helperDirectory));
 		fs.chmodSync(helperDirectory, 0o700);
-		await cli("init", "--ports", "29100,29101,29102");
+		await cli("init", "--ports", "29100,29101,29102", "--repository", "zz-prove-it/project");
 		const configured = JSON.parse((await cli("configure-helper", "--helper-directory", helperDirectory)).stdout);
 		assert.equal(configured.helperDirectory, helperDirectory);
 		assert.match(configured.access, /default-deny/);
