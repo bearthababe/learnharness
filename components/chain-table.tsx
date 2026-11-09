@@ -77,6 +77,7 @@ import { TopBar } from "@/components/top-bar";
 import { DeleteSourceDialog } from "@/components/delete-source-dialog";
 import { LatexGlyph } from "@/components/latex-glyph";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { ImportNotesLink } from "@/components/notes-import";
 
 /** The sortable columns (owner ruling: all three — consistency). */
 export type ChainSortCol = "name" | "props" | "created";
@@ -320,6 +321,8 @@ export function ChainTableBody({
 				<span className="lh-chains-count min-w-0 flex-1 truncate text-xs text-muted-foreground">
 					{chains.length} {chains.length === 1 ? "chain" : "chains"} · {nodes.length} {nodes.length === 1 ? "node" : "nodes"}
 				</span>
+				{/* R4 (round 15): importing is findable where the ideas are. */}
+				{!selectMode && <ImportNotesLink testid="ideas-import" label="Import" className="lh-ideas-import lh-no-drag" />}
 				{onOrganizationChange && <button type="button" aria-label="Add folder" data-testid="add-source-folder"
 					onClick={() => setCreatingFolder(true)} className="lh-no-drag rounded-lg p-2 text-muted-foreground hover:bg-accent"><FolderPlusIcon className="size-4" /></button>}
 				<div className="lh-chains-search relative shrink-0">

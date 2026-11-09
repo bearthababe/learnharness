@@ -979,7 +979,7 @@ function SessionsSidebar() {
 				{yourTurn > 0 && <p className="lh-your-turn-hint" data-testid="your-turn-hint">
 					<span className="lh-your-turn-dot" aria-hidden />
 					{yourTurn === 1 ? "Your turn in 1 session" : `Your turn in ${yourTurn} sessions`}
-					<span className="lh-your-turn-note"> · the number on Sessions counts these</span>
+					<span className="lh-your-turn-note">The number on Sessions counts only these.</span>
 				</p>}
 				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 pt-1">
 					{shown === null ? (

@@ -66,7 +66,7 @@
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDesktopPaths } from "@/components/attach-files-button";
 import { sourceFileLabel } from "@/src/core";
-import { NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
+import { ImportNotesLink, NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
 import { ChevronLeftIcon, FileTextIcon, ListTreeIcon, Loader2Icon, Maximize2Icon, ScanIcon, SearchIcon, SlidersHorizontalIcon, WaypointsIcon, XIcon } from "lucide-react";
@@ -1588,6 +1588,24 @@ export function GraphView({
 		card.style.visibility = "visible";
 	}, [selected]);
 
+	// The import result or error, and running pipelines (R1, round 15): in the
+	// bar's column on wider screens, a full-width row of their own on phones.
+	const importStatus = <>
+		<NotesImportErrors errors={notesImport.errors} onOpenSettings={(section) => openSettings(section)} onDismiss={dismissNotesImportResults} />
+		<NotesImportDone done={notesImport.done} importing={importing} onShowIdeas={() => { setIdeasQuery(notesImport.done.length ? sourceFileLabel(notesImport.done[0]!.filePath) : undefined); dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
+		<NotesImportNotices notices={notesImport.notices} />
+	</>;
+	const pipelinePills = <>{pipelineRuns.map((run) => (
+				<div
+					key={run.id}
+					className="flex items-center gap-2 rounded-full border bg-card/85 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur"
+				>
+					<Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+					<span className="capitalize">{run.phase}</span>
+					<span className="max-w-48 truncate text-foreground">{run.title}</span>
+					<span className="tabular-nums">{Math.max(0, Math.round((Date.now() - run.startedAt) / 1000))}s</span>
+				</div>
+			))}</>;
 	return (
 		<div className="relative h-full w-full">
 			{isEmpty ? (
@@ -1600,7 +1618,7 @@ export function GraphView({
 							<p>Start a session to begin learning.</p>
 							{desktop
 								? <p className="mt-1.5">Attach your material with the paperclip or drag and drop.</p>
-								: <p className="mt-1.5">Bring in your own notes with Import to knowledge map.</p>}
+								: <p className="mt-1.5">Bring in your own notes: <ImportNotesLink /></p>}
 						</div>
 					</div>
 				</div>
@@ -1721,9 +1739,8 @@ export function GraphView({
 				/>
 			</div>
 
-			<NotesImportErrors errors={notesImport.errors} onOpenSettings={(section) => openSettings(section)} onDismiss={dismissNotesImportResults} />
-			<NotesImportDone done={notesImport.done} importing={importing} onShowIdeas={() => { setIdeasQuery(notesImport.done.length ? sourceFileLabel(notesImport.done[0]!.filePath) : undefined); dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
-			<NotesImportNotices notices={notesImport.notices} />
+			{!phoneMap && importStatus}
+
 			{/* Top-right tail (owner, 2026-09-20): the pipeline cost number —
 			    just a number, hover-highlighted, dropdown breakdown — then
 			    the running-pipeline pills under it. Lives BELOW the actions
@@ -1731,19 +1748,14 @@ export function GraphView({
 			    the way the old bottom-left stack did; the whole top-right
 			    cluster is one column, right-aligned. */}
 			{costs && costs.runs.length > 0 && <div className="lh-graph-cost-pill"><GraphCostControl costs={costs} /></div>}
-			{pipelineRuns.map((run) => (
-				<div
-					key={run.id}
-					className="flex items-center gap-2 rounded-full border bg-card/85 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur"
-				>
-					<Loader2Icon className="size-3.5 shrink-0 animate-spin" />
-					<span className="capitalize">{run.phase}</span>
-					<span className="max-w-48 truncate text-foreground">{run.title}</span>
-					<span className="tabular-nums">{Math.max(0, Math.round((Date.now() - run.startedAt) / 1000))}s</span>
-				</div>
-			))}
+			{!phoneMap && pipelinePills}
+
 			</div>
 
+			{/* R1 (round 15): on phones the import result or error, and running
+			    pipelines, get a full-width row of their own under the bar and
+			    Full map, never squeezed into the bar's narrow column. */}
+			{phoneMap && <div className="lh-home-status" data-testid="home-status-row">{importStatus}{pipelinePills}</div>}
 			{phoneMap && !isEmpty && (fullMap ? (
 				<div className="lh-map-bar lh-no-drag" data-testid="map-bar">
 					<button type="button" className="lh-map-exit" data-testid="map-exit" onClick={() => setFullMap(false)}><ChevronLeftIcon aria-hidden />Done</button>

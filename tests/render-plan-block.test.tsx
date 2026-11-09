@@ -275,8 +275,12 @@ describe("plan popup (live derivation)", () => {
 		const whiteHeads = (html.match(/marker-end="url\(#(?:R\d+|[a-z0-9-]+)\)"/g) ?? []).length;
 		assert.equal(dimHeads, 1, "the gray-origin edge dims");
 		assert.equal(whiteHeads, 1, "the both-white edge stays white");
-		assert.match(html, /<path[^>]*class="fill-none stroke-border"/);
+		assert.match(html, /<path[^>]*class="fill-none stroke-muted-foreground\/50"[^>]*stroke-dasharray/, "round 15 (R8): the way ahead is dashed");
 		assert.match(html, /<path[^>]*class="fill-none stroke-white"/);
+		// R8: each state reads in words on the box — Done ✓ and Now; upcoming is dashed.
+		assert.match(html, /data-testid="plan-tag-y"[\s\S]*?Done ✓/);
+		assert.match(html, /data-testid="plan-tag-z"[\s\S]*?>Now</);
+		assert.doesNotMatch(html, /data-testid="plan-tag-x"/);
 	});
 
 	it("renders the empty state when the session has no plan", () => {

@@ -24,7 +24,7 @@ import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { GraphCostControl } from "@/components/graph-view.tsx";
 import { useDesktopPaths } from "@/components/attach-files-button";
 import { sourceFileLabel } from "@/src/core";
-import { NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
+import { ImportNotesLink, NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import { Hint } from "@/components/ui/hint";
 import { useSidebar } from "@/components/sidebar";
@@ -83,7 +83,7 @@ export function KnowledgeSummary({
 					    in a browser, notes come in through Extract files. */}
 					{desktop
 						? <p className="mt-1">Attach your material with the paperclip or drag and drop.</p>
-						: <p className="mt-1">Bring in your own notes with Import to knowledge map.</p>}
+						: <p className="mt-1">Bring in your own notes: <ImportNotesLink /></p>}
 				</div>
 			)}
 		</div>

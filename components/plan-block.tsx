@@ -446,13 +446,17 @@ export function edgePathD(
 // bleeding over the edges). The IN-CHAT block is monochrome white instead
 // — no status language; the popup/window show the progression.
 const BOX: Record<PlanNodeStatus, string> = {
-	// 50%-opacity app background instead of true transparency: a routed
-	// edge passing behind the box composites UNDER the fill — dimmed to
-	// half, not shown straight through (owner, round 9).
-	visited: "fill-background/50 stroke-white",
-	current: "fill-background/50 stroke-white",
-	// The grayed-out not-yet-visited look stays as-is (owner).
-	upcoming: "fill-card stroke-border",
+	// R8 (round 15): progress reads at a glance — done steps are tinted,
+	// the current one has the strongest outline (and its glow), the ones
+	// ahead are dashed. A routed edge behind a box still dims under the fill.
+	visited: "fill-primary/15 stroke-primary",
+	current: "fill-background/50 stroke-yellow-300",
+	upcoming: "fill-card stroke-muted-foreground/60 lh-plan-upcoming",
+};
+/** The small tag on a box's corner (R8): what the step's state is, in words. */
+const TAG: Partial<Record<PlanNodeStatus, { text: string; box: string; label: string }>> = {
+	visited: { text: "Done ✓", box: "fill-primary", label: "fill-primary-foreground" },
+	current: { text: "Now", box: "fill-yellow-300", label: "fill-black" },
 };
 const TEXT: Record<PlanNodeStatus, string> = {
 	visited: "fill-white text-xs",
@@ -571,7 +575,7 @@ export function PlanDiagram({
 					markerUnits="userSpaceOnUse"
 					orient="auto"
 				>
-					<path d={ARROW_HEAD} className="fill-border" />
+					<path d={ARROW_HEAD} className="fill-muted-foreground/50" />
 				</marker>
 				{/* The current node's highlight: a faint yellow fill BLURRED so it
 				    bleeds out over the node's edges (owner). Generous filter region
@@ -602,12 +606,14 @@ export function PlanDiagram({
 				const dim =
 					!monochrome &&
 					(statusOf(e.from) === "upcoming" || statusOf(e.to) === "upcoming");
+				// R8: the walked path is solid; the way ahead is dashed.
 				return (
 					<path
 						key={`${e.from}->${e.to}`}
 						d={edgePathD(pts, target)}
-						className={dim ? "fill-none stroke-border" : "fill-none stroke-white"}
+						className={dim ? "fill-none stroke-muted-foreground/50" : "fill-none stroke-white"}
 						strokeWidth={STROKE_W}
+						strokeDasharray={dim ? "5 4" : undefined}
 						markerEnd={`url(#${markerId}${dim ? "-dim" : ""})`}
 					/>
 				);
@@ -633,7 +639,8 @@ export function PlanDiagram({
 							width={w}
 							height={h}
 							className={monochrome ? MONO_BOX : BOX[status]}
-							strokeWidth={STROKE_W}
+							strokeWidth={!monochrome && status === "current" ? STROKE_W * 2 : STROKE_W}
+							strokeDasharray={!monochrome && status === "upcoming" ? "6 4" : undefined}
 						/>
 						{glow && (
 							// The current node's highlight: faint yellow, blurred so it
@@ -661,6 +668,12 @@ export function PlanDiagram({
 								{line}
 							</text>
 						))}
+						{!monochrome && TAG[status] && (
+							<g data-testid={`plan-tag-${n.id}`} transform="translate(-8, -11)">
+								<rect width={status === "current" ? 36 : 52} height={20} rx={10} className={TAG[status]!.box} />
+								<text x={status === "current" ? 18 : 26} y={14} textAnchor="middle" className={`${TAG[status]!.label} text-[11px] font-semibold`}>{TAG[status]!.text}</text>
+							</g>
+						)}
 					</g>
 				);
 			})}

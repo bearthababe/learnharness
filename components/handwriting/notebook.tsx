@@ -335,15 +335,21 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				{/* The page's own actions live here (round 14, T3): there is no
 				    separate Page button on the paper any more. */}
 				<div className="hw-optionsSection" role="group" aria-labelledby="hw-current-page"><h3 id="hw-current-page">Current page</h3>
-					<Button variant="ghost" disabled={!saved.ready || submission?.preparing} {...handlers("Duplicate", () => { setOptionsOpen(false); void recovery.current?.duplicateWorking(); })} data-testid="notebook-duplicate">Duplicate</Button>
-					<Button variant="ghost" role="switch" aria-checked={dimPaper} {...handlers("Dim paper", () => setDimPaper(v => !v))} data-testid="notebook-paper-mode">Dim paper<span className="hw-optionValue">{dimPaper ? "On" : "Off"}</span></Button>
-					<Button variant="ghost" aria-label="Clear page" disabled={!saved.ready} {...handlers("Clear", () => { setOptionsOpen(false); clear(); })} data-testid="notebook-clear">Clear page</Button>
+					<button type="button" className="hw-optionRow" disabled={!saved.ready || submission?.preparing} {...handlers("Duplicate", () => { setOptionsOpen(false); void recovery.current?.duplicateWorking(); })} data-testid="notebook-duplicate"><span className="hw-optionLabel">Duplicate</span></button>
+					{/* R7 (round 15): a plain row with the app's switch (no stuck
+					    highlight, nothing spilling out); Clear says it can be undone. */}
+					<button type="button" className="hw-optionRow" aria-pressed={dimPaper} {...handlers("Dim paper", () => setDimPaper(v => !v))} data-testid="notebook-paper-mode">
+						<span className="hw-optionLabel">Dim paper</span><span className="hw-optionState" aria-hidden>{dimPaper ? "On" : "Off"}</span><span className="lh-switch" data-on={dimPaper || undefined} aria-hidden><span /></span>
+					</button>
+					<button type="button" className="hw-optionRow" aria-label="Clear page (you can undo it)" disabled={!saved.ready} {...handlers("Clear", () => { setOptionsOpen(false); clear(); })} data-testid="notebook-clear">
+						<span className="hw-optionLabel">Clear page</span><span className="hw-optionHint">You can undo it</span>
+					</button>
 				</div><hr />
 				{palette === "wheel"
-					? <Button variant="ghost" {...handlers("Reset wheel position", () => { setOptionsOpen(false); setWheelSpot(null); })} data-testid="wheel-reset">Reset wheel position<span className="hw-optionValue">{wheelSpot === "top-right" ? "Top right" : "Moved"}</span></Button>
-					: <Button variant="ghost" {...handlers("Tools side", () => { setOptionsOpen(false); toggleToolsSide(); })} data-testid="notebook-tools-side">{toolsLeft ? "Tools on the right" : "Tools on the left (left-handed)"}</Button>}<hr />
-				<Button variant="ghost" {...handlers("Tools and help", () => { setOptionsOpen(false); setToolsOpen(true); })} data-testid="notebook-tools-toggle">Tools and help</Button><hr />
-				<Button variant="ghost" {...handlers("Concepts setup", () => { setOptionsOpen(false); setConceptsOpen(true); })} data-testid="notebook-concepts-toggle">Send pages from the Concepts app</Button>
+					? <button type="button" className="hw-optionRow" {...handlers("Reset wheel position", () => { setOptionsOpen(false); setWheelSpot(null); })} data-testid="wheel-reset"><span className="hw-optionLabel">Reset wheel position</span><span className="hw-optionHint">{wheelSpot === "top-right" ? "Top right" : "Moved"}</span></button>
+					: <button type="button" className="hw-optionRow" {...handlers("Tools side", () => { setOptionsOpen(false); toggleToolsSide(); })} data-testid="notebook-tools-side"><span className="hw-optionLabel">{toolsLeft ? "Tools on the right" : "Tools on the left (left-handed)"}</span></button>}<hr />
+				<button type="button" className="hw-optionRow" {...handlers("Tools and help", () => { setOptionsOpen(false); setToolsOpen(true); })} data-testid="notebook-tools-toggle"><span className="hw-optionLabel">Tools and help</span></button><hr />
+				<button type="button" className="hw-optionRow" {...handlers("Concepts setup", () => { setOptionsOpen(false); setConceptsOpen(true); })} data-testid="notebook-concepts-toggle"><span className="hw-optionLabel">Send pages from the Concepts app</span></button>
 			</div>}
 			{conceptsOpen && <div className="hw-toolsPanel hw-conceptsPanel" role="group" aria-label="Send pages from the Concepts app">
 				<div className="hw-toolsHeading"><span>Send pages from the Concepts app</span><Button variant="ghost" size="icon" aria-label="Close Concepts setup" {...handlers("Close Concepts setup", () => { setConceptsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')?.focus(); })}><XIcon /></Button></div>

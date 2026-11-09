@@ -3720,9 +3720,10 @@ button[role="switch"][aria-checked="true"] > span {
 	display: block;
 	font-family: var(--font-prose);
 	font-size: 11px;
-	font-weight: 500;
+	font-weight: 600;
 	line-height: 1;
-	color: var(--muted-foreground);
+	/* R10 (round 15): as readable as the lesson — foreground, not muted. */
+	color: color-mix(in oklab, var(--foreground) 88%, transparent);
 	white-space: nowrap;
 	pointer-events: none;
 }
@@ -4044,9 +4045,11 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	font-size: 15px;
 }
 .lh-page-menu-row:hover, .lh-page-menu-row:focus-visible { background: var(--accent); }
-.lh-page-menu-label { color: var(--muted-foreground); font-size: 14px; }
+/* R2 (round 15): the row's action reads first (bright), its current
+   value second (muted) — in ⋯, Import and every menu built from these rows. */
+.lh-page-menu-label { color: var(--foreground); font-size: 15px; font-weight: 550; }
 /* The model is named in full, wrapping — never "deepseek-…" (R1). */
-.lh-page-menu-value { min-width: 0; text-align: right; color: var(--foreground); font-weight: 550; overflow-wrap: anywhere; }
+.lh-page-menu-value { min-width: 0; text-align: right; color: var(--muted-foreground); font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
 .lh-page-menu-row svg { width: 16px; height: 16px; color: var(--muted-foreground); }
 @media (max-width: 767px) {
 	/* The row's model and Usage live in the page menu now; the controls
@@ -4206,7 +4209,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 :root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) .hw-wheelHub { left: 68px; top: 68px; width: 64px; height: 64px; }
 :root .hw-overlay[data-variant="wheel"] .hw-arcInspector { right: 212px; }
 :root .hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arcInspector { left: 212px; right: auto; }
-:root .hw-ringLabel { font-size: 13px; }
+:root .hw-ringLabel { font-size: 14px; }
 :root .hw-overlay[data-variant="wheel"] .hw-wheelSize { font-size: 13px; }
 
 /* ── Type floor on touch screens (section 3): no 11–12px secondary text ── */
@@ -4817,11 +4820,11 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 }
 /* A3: what the number on Sessions means, visible above the list. */
 .lh-your-turn-hint {
-	display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; margin: 2px 12px 6px; padding: 0;
+	display: grid; grid-template-columns: 8px minmax(0, 1fr); align-items: center; gap: 1px 8px; margin: 2px 12px 6px; padding: 0;
 	color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); font-size: 13.5px; font-weight: 600; line-height: 1.4;
 }
 .lh-your-turn-dot { align-self: center; width: 8px; height: 8px; border-radius: 999px; background: var(--primary); }
-.lh-your-turn-note { color: var(--muted-foreground); font-weight: 500; }
+.lh-your-turn-note { grid-column: 2; color: var(--muted-foreground); font-size: 13px; font-weight: 500; }
 :root .lh-sessions-content[data-searching] .lh-your-turn-hint { display: none; }
 
 /* F6 (round 15, phones): Thinking while reading is a full-screen pane that
@@ -4887,4 +4890,81 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 }
 @media (max-width: 767px) and (prefers-reduced-transparency: reduce) {
 	:root[data-header-look="glass"] .lh-session-head > .lh-topbar { background: var(--background); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+/* R1: phones give import results, errors and running pipelines a
+   full-width row of their own under the bar and Full map. */
+.lh-home-status { display: none; }
+@media (max-width: 767px) {
+	:root .lh-home-status {
+		position: absolute; top: 112px; left: 12px; right: 12px; z-index: 22;
+		display: flex; flex-direction: column; align-items: stretch; gap: 8px; pointer-events: none;
+	}
+	:root .lh-home-status:empty { display: none; }
+	:root .lh-home-status > * { width: auto; max-width: none; pointer-events: auto; }
+	:root[data-graph-full] .lh-home-status { top: 64px; }
+}
+
+/* R2: the import menu's explanation is quiet; its two actions lead. */
+.lh-import-hint { margin: 2px 0 6px; padding: 6px 12px 8px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 13.5px; line-height: 1.45; }
+:root .lh-import-choice { grid-template-columns: auto minmax(0, 1fr); }
+:root .lh-import-choice svg { width: 18px; height: 18px; color: var(--foreground); }
+/* R3: the first-run hint's import is a real button, not a name to find. */
+.lh-import-link {
+	display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 6px; padding: 0 14px; border-radius: 999px; vertical-align: middle;
+	border: 1px solid color-mix(in oklab, var(--primary) 55%, var(--border)); color: var(--foreground); font-size: 14px; font-weight: 600; pointer-events: auto;
+}
+.lh-import-link svg { width: 15px; height: 15px; color: var(--primary); }
+.lh-import-link:hover { background: var(--accent); }
+:root .lh-ideas-import { margin-top: 0; min-height: 36px; padding: 0 12px; }
+@media (pointer: coarse) { :root .lh-ideas-import { min-height: 44px; } }
+@media (max-width: 767px) { :root .lh-ideas-import > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } :root .lh-ideas-import { padding: 0; width: 44px; justify-content: center; } }
+/* R7 (round 15): the canvas menu's page rows — plain rows, the app switch,
+   and Clear's reassurance in words. */
+.hw-optionRow {
+	display: flex; width: 100%; min-height: 48px; align-items: center; gap: 10px; padding: 0 12px; border-radius: 10px;
+	color: var(--foreground); font-size: 15px; text-align: left;
+}
+@media (hover: hover) { .hw-optionRow:hover:not(:disabled) { background: var(--accent); } }
+.hw-optionRow:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.hw-optionRow:disabled { opacity: .5; }
+.hw-optionLabel { flex: 1; min-width: 0; }
+.hw-optionState { flex: none; width: 2.2em; text-align: right; color: var(--muted-foreground); font-size: 13.5px; font-weight: 600; }
+.hw-optionHint { flex: none; color: var(--muted-foreground); font-size: 13.5px; }
+
+/* R9 (round 15): a 13px floor for learner-facing labels on every device —
+   touch screens had it (section 3); laptops now too, in the lesson, the
+   question and Home's composer (dense chrome such as Settings keeps its
+   own sizes). */
+@media (not (pointer: coarse)) {
+	:root :is([role="log"], .lh-dock-overlay, .lh-home-dock) :is(.text-xs, .text-\[10px\], .text-\[11px\], .text-\[12px\], .text-xs.uppercase) { font-size: 13px; line-height: 1.4; }
+	:root [data-testid^="phase-divider-"] > span:not([aria-hidden]) { font-size: 13px; }
+	:root :is(.lh-input-label, .lh-eyebrow, .lh-reading-label, .lh-reading-fold-label, .lh-mode-hint) { font-size: 13px; }
+}
+/* R12 (round 15): the Teach / Practice / Drill switch is a full 44px target. */
+:root .lh-mode-row { height: 44px; }
+:root .lh-mode-row > :not(.lh-mode-switch), :root .lh-mode-row > :not(.lh-mode-switch) :is(button, a) { height: 44px; max-height: 44px; }
+:root .lh-mode-switch > :is(button, a) { min-height: 44px; font-size: 14.5px; }
+/* R10: the grip's one-time introduction, next to it. */
+.hw-gripHint {
+	position: absolute; left: 50%; top: calc(100% + 38px); translate: -50% 0; z-index: 3; width: max-content; max-width: 220px;
+	padding: 8px 12px; border: 1px solid var(--tool-edge); border-radius: 12px; background: var(--card); box-shadow: var(--tool-shadow);
+	color: var(--foreground); font-family: var(--font-prose); font-size: 14px; line-height: 1.35; text-align: center; pointer-events: none;
+}
+.hw-overlay[data-spot^="bottom-"] .hw-gripHint { top: auto; bottom: calc(100% + 38px); }
+/* R11 (round 15): two numbering systems, two looks — line numbers sit in a
+   ruled margin, term addresses are tinted #tags. */
+:root .notebook-working-line > :is(button, span):first-child:not(.notebook-expression) {
+	min-width: 2.4em; justify-content: flex-end; text-align: right; padding-inline: 0 8px; border-right: 1px solid var(--border); border-radius: 0;
+	font-variant-numeric: tabular-nums; font-weight: 600;
+}
+:root .notebook-expression-number {
+	background: color-mix(in oklab, var(--primary) 18%, transparent);
+	color: color-mix(in oklab, var(--primary) 70%, var(--foreground));
+}
+:root .notebook-expression-number::before, .notebook-hint-term::before { content: "#"; opacity: .75; }
+:root .notebook-numbers-hint { margin: 0 0 10px; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notebook-hint-line { display: inline-block; margin-inline: 2px; padding: 0 6px 0 2px; border-right: 1px solid var(--border); color: var(--foreground); font-weight: 600; font-variant-numeric: tabular-nums; }
+.notebook-hint-term {
+	display: inline-block; margin-inline: 2px; padding: 1px 5px; border-radius: 6px; font: 600 12px/1.25 var(--font-sans);
+	background: color-mix(in oklab, var(--primary) 18%, transparent); color: color-mix(in oklab, var(--primary) 70%, var(--foreground));
 }

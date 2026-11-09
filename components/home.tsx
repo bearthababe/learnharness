@@ -1,5 +1,7 @@
 "use client";
 
+import { useCoarsePointer } from "@/components/use-phone-viewport";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpIcon, BookOpenIcon, DumbbellIcon, TargetIcon } from "lucide-react";
@@ -67,6 +69,7 @@ export function Home({
 	const router = useRouter();
 	const [topic, setTopic] = useState("");
 	const [composerFocused, composerFocusHandlers] = useFocusWithin();
+	const coarse = useCoarsePointer();
 	/* The topic MIRROR ("nothing gets lost" round, 2026-10-01 — same
 	 * mechanics as the chat composer, owner's consistency ruling): a
 	 * dictation flush lands via setState, invisible to a closure that
@@ -354,7 +357,9 @@ export function Home({
 						type="submit"
 						aria-label="Start session"
 						disabled={(!topic.trim() && !dictation.active) || busy}
-						data-ready={(!!topic.trim() || dictation.active || composerFocused) || undefined}
+						// R12 (round 15): on laptops Send appears with something to send,
+						// as in sessions; on touch screens focus shows it too (M6).
+						data-ready={(!!topic.trim() || dictation.active || (composerFocused && coarse)) || undefined}
 						className="lh-send-button flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-40"
 					>
 						<ArrowUpIcon className="size-5" />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
-import { WaypointsIcon } from "lucide-react";
+import { FileTextIcon, FolderOpenIcon, WaypointsIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { usePhoneLayout, useTouchLayout } from "./use-phone-viewport";
 import { MenuShell } from "./menu-shell";
@@ -105,13 +105,21 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 		onImportFiles(event.target.files);
 		event.target.value = "";
 	};
-	const choices = [["Files…", filesRef], ["A folder…", folderRef]] as const;
+	const choices = [["Files…", filesRef, FileTextIcon], ["A folder…", folderRef, FolderOpenIcon]] as const;
 	// Phones and tablets (round 14, P5): the import is a row in the ⋯ menu,
 	// and this menu opens from there.
 	const touch = useTouchLayout();
-	useCardDismiss(open && touch, () => setOpen(false), ['[data-testid="import-menu"]', '[data-testid="page-menu-button"]']);
+	// The control that asked for the menu (⋯ on touch screens, or an Import
+	// button elsewhere): the menu opens beside it.
+	const anchorRef = useRef<HTMLElement | null>(null);
+	const [anchored, setAnchored] = useState(false);
+	const close = () => { setOpen(false); setAnchored(false); anchorRef.current = null; };
+	useCardDismiss(open && (touch || anchored), close, ['[data-testid="import-menu"]', '[data-testid="page-menu-button"]', '[data-testid="import-link"]', '[data-testid="ideas-import"]']);
 	useEffect(() => {
-		const onOpen = () => setOpen(true);
+		const onOpen = (event: Event) => {
+			const anchor = (event as CustomEvent<{ anchor?: HTMLElement } | null>).detail?.anchor ?? null;
+			anchorRef.current = anchor; setAnchored(!!anchor); setOpen(true);
+		};
 		window.addEventListener(OPEN_IMPORT_EVENT, onOpen);
 		publishPageMenu({ importing: true });
 		return () => { window.removeEventListener(OPEN_IMPORT_EVENT, onOpen); publishPageMenu({ importing: false }); };
@@ -121,27 +129,43 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	const menu = (
 		<div role="menu" aria-label="Import to knowledge map" aria-describedby={hintId}>
 			<div role="none"><p id={hintId} className="lh-import-hint">Adds the ideas in your notes or PDFs to your knowledge map. For material you want in one lesson, attach it inside that session instead.</p></div>
-			{choices.map(([label, input]) => <button key={label} type="button" role="menuitem" className="lh-page-menu-row"
-				onClick={() => { setOpen(false); input.current?.click(); }}><span className="lh-page-menu-label">{label}</span></button>)}
+			{/* R2 (round 15): the two actions lead; the explanation stays quiet. */}
+			{choices.map(([label, input, Icon]) => <button key={label} type="button" role="menuitem" className="lh-page-menu-row lh-import-choice"
+				onClick={() => { close(); input.current?.click(); }}><Icon aria-hidden /><span className="lh-page-menu-label">{label}</span></button>)}
 		</div>
 	);
 	return (
 		<div className="lh-graph-import relative shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur"
-			onBlur={(event) => { if (!touch && !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
-			onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
+			onBlur={(event) => { if (!touch && !anchored && !event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
+			onKeyDown={(event) => { if (event.key === "Escape") close(); }}>
 			<input ref={filesRef} type="file" multiple accept=".md,.markdown,.txt,.pdf" className="hidden" onChange={onChange} />
 			<input ref={folderRef} type="file" {...{ webkitdirectory: "" }} className="hidden" onChange={onChange} />
 			<Hint label="Import notes or PDFs into your knowledge map" side="bottom" disabled={phone}>
-				<button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu" data-testid="import-notes"
+				<button type="button" onClick={() => { if (open) close(); else setOpen(true); }} aria-expanded={open} aria-haspopup="menu" data-testid="import-notes"
 					className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
 					<WaypointsIcon className="size-3" />{importing ? "Importing…" : "Import to knowledge map"}
 				</button>
 			</Hint>
-			{open && (touch
-				? <MenuShell anchorTestid="page-menu-button" testid="import-menu" preferredSide="down" align="right" onClose={() => setOpen(false)}
+			{open && (anchored
+				? <MenuShell anchorRef={anchorRef} testid="import-menu" preferredSide="down" align="left" onClose={close}
+					menuClass="lh-page-menu lh-glass w-80 max-w-[calc(100vw-24px)] rounded-xl border bg-card p-1.5 shadow-xl">{menu}</MenuShell>
+				: touch
+				? <MenuShell anchorTestid="page-menu-button" testid="import-menu" preferredSide="down" align="right" onClose={close}
 					menuClass="lh-page-menu lh-glass w-80 max-w-[calc(100vw-24px)] rounded-xl border bg-card p-1.5 shadow-xl">{menu}</MenuShell>
 				: <div className="lh-import-menu absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border bg-card p-1 shadow-lg">{menu}</div>)}
 		</div>
+	);
+}
+
+/** R3/R4 (round 15): an Import button outside the bar (the first-run hint,
+ *  the Ideas view). It opens the same import menu (Files… / A folder…),
+ *  next to itself, on every device. */
+export function ImportNotesLink({ className = "", label = "Import to knowledge map", testid = "import-link" }: { className?: string; label?: string; testid?: string }) {
+	return (
+		<button type="button" className={`lh-import-link ${className}`} data-testid={testid} aria-label="Import to knowledge map"
+			onClick={(event) => window.dispatchEvent(new CustomEvent(OPEN_IMPORT_EVENT, { detail: { anchor: event.currentTarget } }))}>
+			<WaypointsIcon aria-hidden /><span>{label}</span>
+		</button>
 	);
 }
 

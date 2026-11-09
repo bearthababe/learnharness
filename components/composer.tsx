@@ -1,5 +1,7 @@
 "use client";
 
+import { useCoarsePointer } from "@/components/use-phone-viewport";
+
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { ArrowRightIcon, ArrowUpIcon, SquareIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -160,6 +162,7 @@ export function Composer({
 	// something to send or the box is in use (focus is tracked here, never
 	// guessed from the keyboard).
 	const [focused, focusHandlers] = useFocusWithin();
+	const coarse = useCoarsePointer();
 	return (
 		<form
 			data-testid="composer"
@@ -228,7 +231,9 @@ export function Composer({
 						type="submit"
 						aria-label={busy && !canSend ? "Stop" : "Send"}
 						disabled={!busy && !canSend}
-						data-ready={(busy || canSend || focused) || undefined}
+						// R12 (round 15): focus shows Send on touch screens only (M6);
+						// laptops show it with something to send, as on Home.
+						data-ready={(busy || canSend || (focused && coarse)) || undefined}
 						className={cn(
 							"lh-send-button flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
 							busy && !canSend

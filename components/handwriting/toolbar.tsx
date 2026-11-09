@@ -83,6 +83,20 @@ export function HandwritingToolbar(p: Props) {
 	const arcRef = useRef<HTMLDivElement>(null), overlayRef = useRef<HTMLDivElement>(null);
 	const drag = useRef<{ id: number; x: number; y: number } | null>(null);
 	const [dragging, setDragging] = useState(false);
+	// R10 (round 15): the grip introduces itself once, on this device, and the
+	// note goes as soon as the wheel is moved or a few seconds pass.
+	const [gripHint, setGripHint] = useState(false);
+	useEffect(() => {
+		if (variant !== "wheel") return;
+		let timer = 0;
+		try {
+			if (window.localStorage.getItem("lh:wheel-grip-introduced")) return;
+			window.localStorage.setItem("lh:wheel-grip-introduced", "1");
+		} catch { return; }
+		setGripHint(true);
+		timer = window.setTimeout(() => setGripHint(false), 7000);
+		return () => window.clearTimeout(timer);
+	}, [variant]);
 	// Escape closes the tool settings (one layer at a time).
 	useEffect(() => {
 		if (!expanded) return;
@@ -101,7 +115,7 @@ export function HandwritingToolbar(p: Props) {
 		event.preventDefault(); event.stopPropagation();
 		event.currentTarget.setPointerCapture(event.pointerId);
 		drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
-		setDragging(true); setExpanded(false);
+		setDragging(true); setExpanded(false); setGripHint(false);
 	};
 	const gripMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
 		const start = drag.current; if (!start || start.id !== event.pointerId || !arcRef.current) return;
@@ -151,6 +165,7 @@ export function HandwritingToolbar(p: Props) {
 				onPointerDown={gripDown} onPointerMove={gripMove} onPointerUp={event => gripEnd(event, true)} onPointerCancel={event => gripEnd(event, false)} onLostPointerCapture={event => gripEnd(event, true)} onKeyDown={gripKey}>
 				<GripHorizontalIcon aria-hidden size={18} />
 			</button>}
+			{variant === "wheel" && gripHint && !isFolded && <p className="hw-gripHint" role="status" data-testid="wheel-grip-hint">Drag the handle to move the wheel to any corner or side</p>}
 			<div className="hw-arcUndo"><button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled || !p.canUndo} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} />{variant === "wheel" && <span className="hw-ringLabel" aria-hidden="true">Undo</span>}</button><button type="button" className="hw-iconButton" aria-label="Redo" title="Redo" disabled={p.disabled || !p.canRedo} {...p.handlers("Redo", p.redo)}><Redo2Icon size={19} />{variant === "wheel" && <span className="hw-ringLabel" aria-hidden="true">Redo</span>}</button></div>
 			{expanded && <div className="hw-arcInspector">
 				<div className="hw-inspectorTitle"><span>{label}</span><button type="button" aria-label="Close tool settings" {...p.handlers("Close tool settings", () => setExpanded(false))}><XIcon size={16} /></button></div>
