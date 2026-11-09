@@ -8,6 +8,7 @@ import { SessionHelperFailures } from "@/components/activity-dock";
 import { NotebookOpener } from "@/components/notebook-opener";
 import { useMarkSessionSeen } from "@/components/session-seen";
 import { FocusModeButton, FocusModeExit, setFocusMode } from "@/components/focus-mode";
+import { useHeaderLook } from "@/components/device-prefs";
 import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
 import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
@@ -329,6 +330,24 @@ export function Chat({
 	useEffect(() => { handwritingSubmission.attachment()?.reconcile(sharedWriting.pending); }, [handwritingSubmission, sharedWriting.pending]);
 
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
+	// A6 (round 15): the head's height, for the Glass bar (the lesson starts
+	// below it and scrolls beneath it; an open question starts below it).
+	const sessionTutorRef = useRef<HTMLDivElement | null>(null);
+	const sessionHeadRef = useRef<HTMLDivElement | null>(null);
+	const headerLook = useHeaderLook();
+	useLayoutEffect(() => {
+		const head = sessionHeadRef.current, tutor = sessionTutorRef.current;
+		if (!head || !tutor) return;
+		const measure = () => tutor.style.setProperty("--lh-session-head", `${Math.round(head.getBoundingClientRect().height)}px`);
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(head);
+		return () => observer.disconnect();
+	}, []);
+	useEffect(() => {
+		document.documentElement.dataset.headerLook = headerLook;
+		return () => { delete document.documentElement.dataset.headerLook; };
+	}, [headerLook]);
 	const workspaceRef = useRef<HTMLDivElement | null>(null);
 	const workspaceId = useId();
 	const notebook = useNotebookSession(chatId);
@@ -1782,7 +1801,12 @@ export function Chat({
 		<div className={handwriting.open ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
 			<div inert={handwriting.open && handwriting.expanded} className={handwriting.open ? "hw-chat hw-mobileHidden flex min-h-0 min-w-0 flex-1 flex-col" : "contents"}>
 			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
-			<div className="session-tutor" inert={notebookLayout.expanded}>
+			<div ref={sessionTutorRef} className="session-tutor" inert={notebookLayout.expanded}>
+				{/* Round 15 (A6): the bar and the strips under it are one head; with
+				    the phone's Glass bar it floats over the lesson, which scrolls
+				    beneath it (its measured height offsets the lesson's start and
+				    the open question). */}
+				<div ref={sessionHeadRef} className="lh-session-head">
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its
 				    bottom outline (border-b border-border) matches the one that
@@ -1920,6 +1944,7 @@ export function Chat({
 					: <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>)}
 
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
+				</div>
 				<div ref={sessionFindScopeRef} data-input-owner="tutor" className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />

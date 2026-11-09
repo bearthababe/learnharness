@@ -4868,3 +4868,23 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	border-radius: 999px; font-size: 15px; font-weight: 600; white-space: nowrap;
 }
 :root .lh-reading-entry > .lh-phone-reveal .lh-phone-reveal-label { display: inline; }
+
+/* A6 (round 15, phones): the Glass page bar. The head floats over the
+   lesson, which starts below it and scrolls beneath it; an open question
+   still starts below it. Solid (the default) changes nothing. */
+@media (max-width: 767px) {
+	:root[data-header-look="glass"] .session-tutor { position: relative; }
+	:root[data-header-look="glass"] .lh-session-head { position: absolute; top: 0; inset-inline: 0; z-index: 44; }
+	:root[data-header-look="glass"] .lh-session-head > .lh-topbar {
+		background: color-mix(in oklab, var(--background) 86%, transparent);
+		-webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2);
+	}
+	:root[data-header-look="glass"] .lh-session-head > :not(.lh-topbar) { background: var(--background); }
+	:root[data-header-look="glass"] .session-tutor [data-session-find-root] { padding-top: calc(var(--lh-session-head, 120px) + 16px); }
+	:root[data-header-look="glass"] .session-tutor [role="log"] > div { scroll-padding-top: var(--lh-session-head, 120px); }
+	:root[data-header-look="glass"] .lh-dock-overlay[data-question-open] { top: var(--lh-session-head, 120px); }
+	:root[data-header-look="glass"][data-focus-mode] .session-tutor [data-session-find-root] { padding-top: 16px; }
+}
+@media (max-width: 767px) and (prefers-reduced-transparency: reduce) {
+	:root[data-header-look="glass"] .lh-session-head > .lh-topbar { background: var(--background); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

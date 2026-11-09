@@ -38,7 +38,7 @@ import {
 	type GraphSettings,
 } from "@/src/core";
 import { MenuShell } from "@/components/menu-shell";
-import { setRevealStyle, useRevealStyle } from "@/components/device-prefs";
+import { setHeaderLook, setRevealStyle, useHeaderLook, useRevealStyle } from "@/components/device-prefs";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { Hint } from "@/components/ui/hint";
 import { useAppearance } from "./appearance.tsx";
@@ -335,6 +335,7 @@ export function AppearanceSection({
 				/>
 			</SettingsRow>
 			<RevealStyleRow />
+			<HeaderLookRow />
 		</>
 	);
 }
@@ -352,6 +353,25 @@ function RevealStyleRow() {
 				{(["quiet", "prominent"] as const).map((option) => (
 					<button key={option} type="button" data-active={style === option} aria-pressed={style === option} data-testid={`reveal-style-${option}`} onClick={() => setRevealStyle(option)}>
 						{option === "quiet" ? "Quiet" : "Prominent"}
+					</button>
+				))}
+			</div>
+		</SettingsRow>
+	);
+}
+
+/** Round 15 (A6): the phone's page bar, Solid (default) or Glass — glass
+ *  lets the lesson scroll beneath it, softened. Phone-only, like the bar. */
+function HeaderLookRow() {
+	const look = useHeaderLook();
+	const phone = usePhoneLayout();
+	if (!phone) return null;
+	return (
+		<SettingsRow label="Page bar" hint="Solid, or glass that lets the lesson scroll beneath it. Stored on this phone." testid="row-header-look">
+			<div className="lh-segmented" role="group" aria-label="Page bar">
+				{(["solid", "glass"] as const).map((option) => (
+					<button key={option} type="button" data-active={look === option} aria-pressed={look === option} data-testid={`header-look-${option}`} onClick={() => setHeaderLook(option)}>
+						{option === "solid" ? "Solid" : "Glass"}
 					</button>
 				))}
 			</div>

@@ -10,15 +10,19 @@ import { useSyncExternalStore } from "react";
  *   dictating; typing comes back when it is switched off again.
  */
 export type RevealStyle = "quiet" | "prominent";
-type Prefs = { revealStyle: RevealStyle; keyboardOff: boolean };
+/** Round 15 (A6): the phone's page bar, solid (default) or glass over the
+ *  lesson, which then scrolls beneath it. */
+export type HeaderLook = "solid" | "glass";
+type Prefs = { revealStyle: RevealStyle; keyboardOff: boolean; headerLook: HeaderLook };
 
-const KEYS = { revealStyle: "lh:reveal-style", keyboardOff: "lh:keyboard-off" } as const;
-const DEFAULTS: Prefs = { revealStyle: "quiet", keyboardOff: false };
+const KEYS = { revealStyle: "lh:reveal-style", keyboardOff: "lh:keyboard-off", headerLook: "lh:header-look" } as const;
+const DEFAULTS: Prefs = { revealStyle: "quiet", keyboardOff: false, headerLook: "solid" };
 
 function read<K extends keyof Prefs>(key: K): Prefs[K] {
 	try {
 		const raw = window.localStorage.getItem(KEYS[key]);
 		if (key === "revealStyle") return (raw === "prominent" ? "prominent" : "quiet") as Prefs[K];
+		if (key === "headerLook") return (raw === "glass" ? "glass" : "solid") as Prefs[K];
 		return (raw === "on") as Prefs[K];
 	} catch {
 		return DEFAULTS[key];
@@ -29,9 +33,17 @@ const listeners = new Set<() => void>();
 function notify() { for (const listener of listeners) listener(); }
 function subscribe(listener: () => void) {
 	listeners.add(listener);
-	const onStorage = (event: StorageEvent) => { if (event.key === KEYS.revealStyle || event.key === KEYS.keyboardOff) notify(); };
+	const onStorage = (event: StorageEvent) => { if (event.key === KEYS.revealStyle || event.key === KEYS.keyboardOff || event.key === KEYS.headerLook) notify(); };
 	window.addEventListener("storage", onStorage);
 	return () => { listeners.delete(listener); window.removeEventListener("storage", onStorage); };
+}
+
+export function setHeaderLook(look: HeaderLook) {
+	try { window.localStorage.setItem(KEYS.headerLook, look); } catch { /* this view only */ }
+	notify();
+}
+export function useHeaderLook(): HeaderLook {
+	return useSyncExternalStore(subscribe, () => read("headerLook"), () => DEFAULTS.headerLook);
 }
 
 export function setRevealStyle(style: RevealStyle) {
