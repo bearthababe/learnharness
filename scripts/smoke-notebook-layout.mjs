@@ -77,13 +77,13 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	await page.screenshot({ path: path.join(artifacts, "notebook-phone-full.png") });
 	await page.$eval('[data-notebook-scroll]', e => { e.scrollTop = 150; });
 	await page.waitForFunction(() => document.querySelector('[data-notebook-scroll]').scrollTop === 150);
-	await page.click('[aria-label="Back to split"]');
+	await page.click('[aria-label="Back to the lesson"]');
 	await page.waitForFunction(() => document.querySelector('.session-panes').dataset.notebookExpanded === "false");
 	await page.$eval('[data-notebook-scroll]', e => { e.scrollTop = 300; });
 	await page.waitForFunction(() => document.querySelector('[data-notebook-scroll]').scrollTop === 300);
 	await page.click('[aria-label="Expand notebook"]');
 	await page.waitForFunction(() => document.querySelector('[data-notebook-scroll]').scrollTop === 150);
-	await page.click('[aria-label="Back to split"]');
+	await page.click('[aria-label="Back to the lesson"]');
 	await page.waitForFunction(() => document.querySelector('[data-notebook-scroll]').scrollTop === 300);
 	await openNotebookMenu(page, "Close notebook");
 	await page.waitForFunction(() => document.querySelector('.notebook-slot').hidden);

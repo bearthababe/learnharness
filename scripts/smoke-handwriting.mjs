@@ -298,7 +298,7 @@ try {
 	const beforeExpand = await page.$eval('[data-testid="notebook-paper-scroll"]', e => e.scrollTop);
 	await action("Expand notebook");
 	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]').dataset.expanded === "true");
-	await action("Back to question");
+	await action("Show question too");
 	await page.waitForFunction(expected => Math.abs(document.querySelector('[data-testid="notebook-paper-scroll"]').scrollTop - expected) <= 1, {}, beforeExpand);
 	assert.equal(await page.$eval(field, e => e.textContent), "My unsent explanation");
 	await page.click('[aria-label="Close notebook"]');

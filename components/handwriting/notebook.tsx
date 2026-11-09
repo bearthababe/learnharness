@@ -228,9 +228,16 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	}, [expanded, hidden]);
 	useEffect(() => {
 		redraw(); const area = areaRef.current!;
-		const observer = new ResizeObserver(() => { if (area.clientWidth && area.clientHeight) { const width = Math.max(1, area.clientWidth - 16); setPaperSize({ width, height: width * HEIGHT / WIDTH }); } });
+		const observer = new ResizeObserver(() => { if (area.clientWidth && area.clientHeight) { const width = paperWidthFor(area, viewRef.current.expanded); setPaperSize({ width, height: width * HEIGHT / WIDTH }); } });
 		observer.observe(area); return () => observer.disconnect();
 	}, [redraw]);
+	// The view changes size without the area resizing (expanded ↔ split).
+	useEffect(() => {
+		const area = areaRef.current;
+		if (!area || !area.clientWidth || !area.clientHeight) return;
+		const width = paperWidthFor(area, expanded);
+		setPaperSize(prior => Math.abs(prior.width - width) < 1 ? prior : { width, height: width * HEIGHT / WIDTH });
+	}, [expanded]);
 	function prepareViewChange(nextExpanded: boolean) {
 		const position = (areaRef.current?.scrollTop ?? 0) / paperSize.height;
 		paperPositions.current[expanded ? "full" : "split"] = position;
@@ -239,7 +246,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	}
 	useLayoutEffect(() => {
 		const area = areaRef.current;
-		if (!area || restorePaperPosition.current === null || Math.abs(paperSize.width - (area.clientWidth - 16)) > 1) return;
+		if (!area || restorePaperPosition.current === null || Math.abs(paperSize.width - paperWidthFor(area, expanded)) > 1) return;
 		area.scrollTop = restorePaperPosition.current * paperSize.height; restorePaperPosition.current = null;
 	}, [expanded, paperSize]);
 	useEffect(() => {
@@ -327,7 +334,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Pages" aria-expanded={pagesOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Pages", () => { setPagesOpen(value => !value); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); void recovery.current?.refreshPages().catch(() => {}); })}><FilesIcon aria-hidden />Pages</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Notebook options" aria-expanded={optionsOpen} {...handlers("Notebook options", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); setConceptsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction" disabled={!saved.ready || submission?.preparing} {...handlers("Attach snapshot", () => { void attachSnapshot(); })} data-testid="notebook-attach"><PaperclipIcon aria-hidden />Attach page</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? `Back to ${origin}` : "Expand notebook"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? `Back to ${origin}` : "Expand"}</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? `Show ${origin} too` : "Expand notebook"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? `Show ${origin} too` : "Expand"}</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close notebook" {...handlers("Close writing", () => { if (expanded) prepareViewChange(false); onClose(); })}><XIcon aria-hidden />Close</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" {...handlers("Chat", onClose)} data-testid="open-notebook-chat">Chat</Button>
 			</header>
@@ -406,4 +413,16 @@ function PageRow({ page, index, pages, current, revision, model, disabled, choos
 		{/* eslint-disable-next-line @next/next/no-img-element */}
 		{image && <img src={image} width={140} height={180} alt={`Page ${index + 1} preview`} />}<span>Page {index + 1}{page.id === current && <strong> · Current</strong>}{subtitle && <small>{subtitle}</small>}</span>
 	</button>{failed && <button type="button" onClick={() => { setFailed(false); setRetry(value => value + 1); }}>Couldn’t load page. Retry</button>}</div>;
+}
+
+/** R7 (round 16): beside the lesson the whole page fits its panel, with the
+ *  page controls (Previous, Next, Add page) just below it — no Expand
+ *  needed to reach them. Expanded, the page takes the full width and the
+ *  paper scrolls as before. */
+function paperWidthFor(area: HTMLElement, expanded: boolean): number {
+	const width = Math.max(1, area.clientWidth - 16);
+	if (expanded) return width;
+	const footer = area.querySelector<HTMLElement>(".hw-pageFooter")?.getBoundingClientRect().height ?? 56;
+	const room = area.clientHeight - footer - 24;
+	return room > 120 ? Math.max(1, Math.min(width, room * WIDTH / HEIGHT)) : width;
 }

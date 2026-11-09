@@ -4803,13 +4803,15 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 /* P11: one filled primary per screen (Submit, Send). Attach page is the
    notebook's main action but sits beside a question's Submit, so it is
    tonal: tinted and outlined, never a second filled button. */
+/* E8 (round 16): quiet, like the notebook's other header actions — the
+   screen's one primary stays the question's Submit (or Send). */
 :root .hw-notebookHeader [data-testid="notebook-attach"] {
-	border: 1px solid color-mix(in oklab, var(--primary) 55%, transparent);
-	background: color-mix(in oklab, var(--primary) 16%, transparent);
-	color: color-mix(in oklab, var(--primary) 70%, var(--foreground));
+	border: 1px solid var(--border);
+	background: transparent;
+	color: var(--foreground);
 }
 :root .hw-notebookHeader [data-testid="notebook-attach"]:hover:not(:disabled) {
-	background: color-mix(in oklab, var(--primary) 26%, transparent);
+	background: var(--accent);
 	color: var(--foreground);
 }
 
@@ -5348,3 +5350,39 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 @media (max-width: 767px) {
 	.lh-nb-bar-slot > .lh-movable[data-input-owner="tutor"] { border: 1px solid var(--border); border-radius: 14px; background: var(--card); }
 }
+
+/* R8 (tablet): the wheel is a 56px puck by default — the current tool, with
+   Undo beside it; drag the puck to move it, tap it to open the wheel. The
+   opened wheel has no big disc behind it: each control is its own button. */
+:root .hw-overlay[data-variant="wheel"] .hw-arc[data-folded] { width: 108px; height: 56px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc::before { content: none; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc[data-folded] .hw-wheelHub {
+	left: 52px; top: 0; width: 56px; height: 56px; gap: 1px; border: 1px solid var(--tool-edge); background: var(--tool-surface); box-shadow: var(--tool-shadow); touch-action: none;
+}
+:root .hw-overlay[data-variant="wheel"] .hw-arc[data-folded] .hw-wheelHub .hw-toolGlyph { width: 20px; height: 24px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo > .hw-iconButton:first-child {
+	left: 0; top: 6px; width: 44px; height: 44px; border: 1px solid var(--tool-edge); border-radius: 50%; background: var(--tool-surface); box-shadow: var(--tool-shadow);
+}
+:root .hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo > .hw-iconButton:last-child { display: none; }
+:root .hw-overlay[data-variant="wheel"][data-spot$="-left"] .hw-arc[data-folded] .hw-wheelHub { left: 0; }
+:root .hw-overlay[data-variant="wheel"][data-spot$="-left"] .hw-arc[data-folded] > .hw-arcUndo > .hw-iconButton:first-child { left: 64px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > :is(.hw-toolButton, .hw-wheelHub),
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-arcUndo > .hw-iconButton,
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-wheelGrip {
+	border: 1px solid var(--tool-edge); background: var(--tool-surface); box-shadow: var(--tool-shadow);
+}
+.hw-overlay[data-look="glass"] .hw-arc > :is(.hw-toolButton, .hw-wheelHub), .hw-overlay[data-look="glass"] .hw-arcUndo > .hw-iconButton { -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2); }
+
+/* R7 (touch screens): every control at least 44px — Submit in question
+   cards, the reasoning menu, the sessions sidebar's own controls, the
+   session title. */
+@media (pointer: coarse) {
+	:root .lh-question-submit > button { min-height: 44px; }
+	:root [data-testid^="thinking-option-"] { min-height: 44px; }
+	:root .lh-sessions-header :is(a, button) { min-width: 44px; min-height: 44px; }
+	:root .lh-sessions-search input.lh-sessions-search-input { height: 44px; }
+	:root .lh-topbar .lh-session-title { min-height: 44px; display: inline-flex; align-items: center; }
+}
+
+/* R7: the fitted page sits centred, its page controls right under it. */
+.hw-paperStack { margin-inline: auto; }

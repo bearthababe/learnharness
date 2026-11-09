@@ -77,8 +77,10 @@ export function HandwritingToolbar(p: Props) {
 	const variant = p.variant ?? "wheel";
 	// The wheel can fold down to a small bar (remembered on this device), so
 	// the paper is all page; its button shows the current tool and unfolds it.
-	const [folded, setFolded] = useState(false);
-	useEffect(() => { try { setFolded(window.localStorage.getItem(FOLD_KEY) === "1"); } catch { /* default open */ } }, []);
+	// R8 (round 16): the wheel starts as a compact puck showing the current
+	// tool; a tap opens it, and the choice is remembered on this device.
+	const [folded, setFolded] = useState(true);
+	useEffect(() => { try { setFolded(window.localStorage.getItem(FOLD_KEY) !== "0"); } catch { /* default: the puck */ } }, []);
 	const spot = useWheelSpot(), look = useWheelLook();
 	const arcRef = useRef<HTMLDivElement>(null), overlayRef = useRef<HTMLDivElement>(null);
 	const drag = useRef<{ id: number; x: number; y: number } | null>(null);
@@ -132,6 +134,35 @@ export function HandwritingToolbar(p: Props) {
 		}
 		if (arc) arc.style.translate = "";
 	};
+	// The puck moves like the grip — drag it anywhere; a plain tap opens it.
+	const puck = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+	const puckSkipClick = useRef(false);
+	const puckDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+		if (p.disabled || event.pointerType === "pen" || (event.pointerType === "mouse" && event.button !== 0)) return;
+		puck.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+	};
+	const puckMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+		const start = puck.current; if (!start || start.id !== event.pointerId || !arcRef.current) return;
+		if (!start.moved) {
+			if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < 8) return;
+			start.moved = true; setDragging(true);
+			try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* synthetic */ }
+		}
+		event.preventDefault();
+		arcRef.current.style.translate = `${event.clientX - start.x}px ${event.clientY - start.y}px`;
+	};
+	const puckUp = (event: ReactPointerEvent<HTMLButtonElement>, keep: boolean) => {
+		const start = puck.current; if (!start || start.id !== event.pointerId) return;
+		puck.current = null;
+		if (!start.moved) return;
+		setDragging(false); puckSkipClick.current = true;
+		const arc = arcRef.current, page = overlayRef.current;
+		if (arc && page && keep) {
+			const a = arc.getBoundingClientRect(), r = page.getBoundingClientRect();
+			setWheelSpot(nearestWheelSpot(a.left + a.width / 2 - r.left, a.top + a.height / 2 - r.top, r.width, r.height));
+		}
+		if (arc) arc.style.translate = "";
+	};
 	const gripKey = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
 		const [row, side] = spot.split("-") as [typeof ROWS[number], "left" | "right"];
 		const index = ROWS.indexOf(row);
@@ -153,15 +184,24 @@ export function HandwritingToolbar(p: Props) {
 				<ToolGlyph tool={tool.id} colour={tool.id === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.colour} dim={p.dimPaper} /><span className="hw-toolName">{tool.label}</span>
 				{variant === "wheel" && <span className="hw-ringLabel" aria-hidden="true">{tool.short}</span>}
 			</button>)}
-			{variant === "wheel" && <button type="button" className="hw-wheelHub" title={hubTitle} aria-label={isFolded ? "Show writing tools" : "Tool settings"} aria-expanded={isFolded ? false : expanded} disabled={p.disabled} {...p.handlers(isFolded ? "Show writing tools" : "Tool settings", () => { if (isFolded) fold(false); else setExpanded(v => !v); })}>
+			{variant === "wheel" && (() => {
+				const tap = p.handlers(isFolded ? "Show writing tools" : "Tool settings", () => { if (puckSkipClick.current) { puckSkipClick.current = false; return; } if (isFolded) fold(false); else setExpanded(v => !v); });
+				return <button type="button" className="hw-wheelHub" data-testid={isFolded ? "wheel-puck" : "wheel-hub"} title={hubTitle} aria-label={isFolded ? `Writing tools: ${label}. Open the wheel` : "Tool settings"} aria-expanded={isFolded ? false : expanded} disabled={p.disabled}
+					{...tap}
+					onPointerDown={event => { tap.onPointerDown?.(event); if (isFolded) puckDown(event); }}
+					onPointerMove={isFolded ? puckMove : undefined}
+					onPointerUp={event => { tap.onPointerUp?.(event); if (isFolded) puckUp(event, true); }}
+					onPointerCancel={event => { tap.onPointerCancel?.(event); if (isFolded) puckUp(event, false); }}
+					onKeyDown={isFolded ? gripKey : undefined}>
 				{isFolded
 					? <ToolGlyph tool={p.tool} colour={p.tool === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.colour} dim={p.dimPaper} />
 					: <span className="hw-wheelSwatch" style={{ backgroundColor: p.tool === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.tool === "eraser" ? "transparent" : p.colour, filter: p.dimPaper ? "var(--lh-dim-paper-filter)" : undefined }} data-tool={p.tool} />}
 				{/* The ring names the tools; the hub says the current size (R6).
 				    Folded, the button names the tool it will write with. */}
 				<span className="hw-wheelSize">{isFolded ? TOOLS.find(t => t.id === p.tool)!.short : current ?? TOOLS.find(t => t.id === p.tool)!.short}</span>
-			</button>}
-			{variant === "wheel" && <button type="button" className="hw-wheelGrip" data-testid="wheel-grip" aria-label="Move the wheel" title="Drag to move the wheel · arrow keys move it too" disabled={p.disabled}
+			</button>;
+			})()}
+			{variant === "wheel" && !isFolded && <button type="button" className="hw-wheelGrip" data-testid="wheel-grip" aria-label="Move the wheel" title="Drag to move the wheel · arrow keys move it too" disabled={p.disabled}
 				onPointerDown={gripDown} onPointerMove={gripMove} onPointerUp={event => gripEnd(event, true)} onPointerCancel={event => gripEnd(event, false)} onLostPointerCapture={event => gripEnd(event, true)} onKeyDown={gripKey}>
 				<GripHorizontalIcon aria-hidden size={18} />
 			</button>}
@@ -177,8 +217,8 @@ export function HandwritingToolbar(p: Props) {
 				</button>)}</div>
 				{p.tool === "pen" && <><div className="hw-sectionLabel">Ink</div><div role="group" aria-label="Pen colour" className="hw-colours">{p.colours.map(item => <button key={item.name} type="button" className="hw-colourChoice" aria-label={`${item.name} pen`} aria-pressed={p.colour === item.value} disabled={p.disabled}
 					{...p.handlers(`${item.name} pen`, () => { p.selectColour(item.value); setExpanded(false); })}><span style={{ backgroundColor: item.value, filter: p.dimPaper ? "var(--lh-dim-paper-filter)" : undefined }} /></button>)}</div></>}
-				<p>{variant === "wheel" ? "Tap the centre of the wheel to adjust." : "Tap the active tool to adjust."}</p>
-				{variant === "wheel" && <button type="button" className="hw-foldWheel" data-testid="fold-wheel" {...p.handlers("Fold the wheel", () => fold(true))}><Minimize2Icon aria-hidden size={16} /><span>Fold the wheel</span></button>}
+				{variant !== "wheel" && <p>Tap the active tool to adjust.</p>}
+				{variant === "wheel" && <button type="button" className="hw-foldWheel" data-testid="fold-wheel" {...p.handlers("Fold the wheel", () => fold(true))}><Minimize2Icon aria-hidden size={16} /><span>Back to the small puck</span></button>}
 			</div>}
 		</div>
 	</div>;

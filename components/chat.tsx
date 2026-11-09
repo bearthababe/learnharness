@@ -3347,7 +3347,7 @@ function DockOverlay({
 				    the flank; below MARGIN_MIN_W it FADES (never pops away — no
 				    mid-question unmount), and widening past the floor fades it
 				    back in. */}
-				{pending && plan && !wideQuestion && (
+				{pending && plan && !wideQuestion && flankW >= 44 && (
 					<Hint label="Open the full plan" side="bottom">
 <button
 						type="button"
