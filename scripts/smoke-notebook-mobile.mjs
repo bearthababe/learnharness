@@ -14,7 +14,7 @@ export async function openNotebookMenu(page, section) {
 
 /** Round 16 (R6/P3): with the notebook open, a phone shows one chat box at a
  *  time; the docked variant switches it with "Tutor | Notebook". */
-async function useTutor(page) {
+export async function useTutor(page) {
 	if (await page.$eval('[data-testid="nb-mode-tutor"]', e => e.checkVisibility()).catch(() => false)) await page.click('[data-testid="nb-mode-tutor"]');
 }
 

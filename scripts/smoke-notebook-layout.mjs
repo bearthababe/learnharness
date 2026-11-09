@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import path from "node:path";
-import { openNotebookMenu } from "./smoke-notebook-mobile.mjs";
+import { openNotebookMenu, useTutor } from "./smoke-notebook-mobile.mjs";
 
 /** Real presentation controls and persisted drafts; no external generation. */
 export async function verifyNotebookLayout(browser, origin, artifacts) {
@@ -59,13 +59,18 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	assert.equal(await page.$eval('[role="separator"]', e => e.getAttribute("aria-valuenow")), twoLines, "Home returns to the two-line size");
 	// A tap on the grip swaps the focus: working, then lesson, then working.
 	const grip = (await rects()).divider;
-	for (const share of ["40", "72", "40"]) {
+	// Round 16 (R6/P3): with the docked chat box under the notebook the two-line
+	// opening share is lower; the tap swaps to whichever end is further away.
+	const start = Number(await page.$eval('[role="separator"]', e => e.getAttribute("aria-valuenow")));
+	const sequence = start >= 56 ? ["40", "72", "40"] : ["72", "40", "72"];
+	for (const share of sequence) {
 		await page.mouse.click(grip.x + grip.width / 2, (await rects()).divider.y + 10);
 		await page.waitForFunction(value => document.querySelector('[role="separator"]').getAttribute("aria-valuenow") === value, {}, share);
 	}
 	await page.focus('[aria-label="Resize Tutor and Notebook"]');
 	await page.keyboard.press("Home");
 	const tutor = '[data-testid="composer"] [data-file-path-input]';
+	await useTutor(page);
 	await page.type(tutor, "My independent Tutor draft.");
 	await page.waitForFunction(() => !document.querySelector(".session-workspace").inert);
 	await page.evaluate(() => { window.layoutTutor = document.querySelector('[data-testid="composer"] [data-file-path-input]'); window.layoutNotebook = document.querySelector('#notebook-instruction'); });
