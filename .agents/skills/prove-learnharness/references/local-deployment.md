@@ -261,6 +261,11 @@ Server work must keep refusing preparation/freeze after the old page departs;
 completing that work must return to idle with only the Home client remaining.
 Contrast departure with real drafts, dictation or attachments, which must keep
 refusing cutover. A transient tutor busy flag is not an unsent learner draft.
+Finish real microphone capture with an ASR timing failure that leaves unplaced
+words in Dictation recovery and both editors empty. Preparation and freeze must
+remain refused after recording ends and after navigating Home. Explicitly
+discarding those words must restore idle and retain their discarded identity;
+already placed/discarded speech history must not permanently block a clean client.
 The scoped activity matrix is not handwritten-snapshot transfer, actual package
 cutover, physical iOS or live-provider proof. Complete all required row surfaces
 independently before accepting the row.

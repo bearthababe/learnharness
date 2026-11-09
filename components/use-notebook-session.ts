@@ -8,7 +8,8 @@ import { useDeploymentActivity } from "./deployment-activity";
 export function useNotebookSession(chatId: string) {
 	const session = useMemo(() => createNotebookSession(chatId), [chatId]);
 	const state = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
-	useDeploymentActivity("notebook", () => !state.view || state.saving || state.editing || state.inputLocked || !!state.draftText.trim());
+	useDeploymentActivity("notebook", () => !state.view || state.saving || state.editing || state.inputLocked || !!state.draftText.trim()
+		|| !!state.view.speechRuns?.some(run => run.fragments.some(fragment => !!fragment.text.trim() && run.unplaced?.includes(fragment.id) && !run.discarded?.includes(fragment.id))));
 	const hub = useNotifyHub();
 	useEffect(() => {
 		let timer: ReturnType<typeof setTimeout> | undefined;
