@@ -3526,9 +3526,10 @@ button[role="switch"][aria-checked="true"] > span {
 		min-height: 42px;
 		padding-block: 9px;
 	}
-	/* E1 (round 16): the reasoning field keeps its one name on phones too —
-	   and the label row carries "Thinking while reading is attached". */
-	[data-testid="thinking-field"] > .lh-input-label { display: flex; padding: 2px 4px 0; }
+	[data-testid="thinking-field"] > .lh-input-label { display: none; }
+	/* E1 (round 16): with a reading note, the label row comes back on phones
+	   to say "Thinking while reading is attached" beside "Your reasoning". */
+	[data-testid="thinking-field"] > .lh-input-label:has(.lh-reading-attached) { display: flex; padding: 2px 4px 0; }
 }
 
 /* Tablets and laptops: the phase reads as a subtitle under the title (as
