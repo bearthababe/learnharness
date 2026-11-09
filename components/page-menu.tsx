@@ -9,7 +9,7 @@ import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
 import { installKeyboardGuard, KEYBOARD_HINT_EVENT, setKeyboardOff, useKeyboardOff } from "@/components/device-prefs";
 import { useCoarsePointer, usePhoneLayout } from "@/components/use-phone-viewport";
 import { useSettingsDialog } from "@/components/settings/settings-dialog";
-import { ActivitySection } from "@/components/activity-dock";
+import { ActivitySection, HELPERS_DESCRIPTION } from "@/components/activity-dock";
 
 /**
  * The app menu (round 14, owner M1): one icon-only ⋯ at the right of the
@@ -45,7 +45,7 @@ export const OPEN_HELPERS_EVENT = "lh:open-helpers";
 export const OPEN_IMPORT_EVENT = "lh:open-import";
 export const OPEN_GRAPH_DISPLAY_EVENT = "lh:open-graph-display";
 
-export type PageMenuRow = { id: string; label: string; value?: string; open: () => void };
+export type PageMenuRow = { id: string; label: string; value?: string; hint?: string; open: () => void };
 
 export function PageMenuButton({ extraRows = [], placement = "page" }: {
 	/** Rows of this page placed after Usage (Home: import, graph display). */
@@ -102,13 +102,16 @@ export function PageMenuButton({ extraRows = [], placement = "page" }: {
 			...extraRows,
 		],
 		[
-			{ id: "helpers", label: "Helpers", open: () => setHelpers(true) },
+			{ id: "helpers", label: "Helpers", hint: HELPERS_DESCRIPTION, open: () => setHelpers(true) },
 			{ id: "settings", label: "Settings", open: () => openSettings() },
 		],
 	];
 	const row = (item: PageMenuRow) => (
 		<button key={item.id} type="button" role="menuitem" className="lh-page-menu-row" data-testid={`page-menu-${item.id}`} onClick={() => choose(item.open)}>
-			<span className="lh-page-menu-label">{item.label}</span>
+			{item.hint ? <span className="lh-page-menu-switch-text">
+				<span className="lh-page-menu-label">{item.label}</span>
+				<span className="lh-page-menu-switch-hint">{item.hint}</span>
+			</span> : <span className="lh-page-menu-label">{item.label}</span>}
 			{item.value !== undefined && <span className="lh-page-menu-value">{item.value}</span>}
 			<ChevronRightIcon aria-hidden />
 		</button>

@@ -215,6 +215,9 @@ export function useActivity(): { feed: ActivityFeed; refresh: () => void } {
 	return useContext(ActivityContext);
 }
 
+/** R12 (round 16): one line saying what Helpers are (the sheet, ⋯). */
+export const HELPERS_DESCRIPTION = "Background work the tutor started for your lessons";
+
 // ─── Pure presentation helpers (exported for tests) ──────────────────────────
 
 /** One dock blob: the unified view of a job or an extraction run. */
@@ -469,6 +472,8 @@ export function ActivitySection({ feed: feedProp, trailing, sheet = false }: {
 			</button>
 			{trailing}
 			</div>
+			{/* R12 (round 16): what Helpers are, in one line. */}
+			{(sheet || historyOpen) && <p className="lh-activity-desc" data-testid="helpers-description">{HELPERS_DESCRIPTION}</p>}
 			{sheet && recent.length === 0 && blobs.length === 0 && (
 				<p className="lh-activity-empty">No helpers have run yet. When the tutor sends one off (an import, a search), it shows here.</p>
 			)}

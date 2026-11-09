@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { useFocusMode } from "@/components/focus-mode";
 import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
@@ -537,6 +538,31 @@ function SessionsSidebar() {
 			.map((r) => r.c);
 	}, [chats, query, kindFilter]);
 
+	// R4 (round 16): the session on screen is never hidden by the list's
+	// filter or search. When it would be — a new session under a Practice
+	// filter, say — the list shows All (or drops the search), the row is
+	// highlighted, and one line says why. Checked when the session changes
+	// or first appears, never when the learner picks a filter on purpose.
+	const currentId = pathname.startsWith("/chat/") ? decodeURIComponent(pathname.slice(6)) : null;
+	const [revealNote, setRevealNote] = useState<string | null>(null);
+	const revealedFor = useRef<string | null>(null);
+	useEffect(() => {
+		if (!currentId || !chats) return;
+		const current = chats.find((c) => c.id === currentId);
+		if (!current || revealedFor.current === currentId) return;
+		revealedFor.current = currentId;
+		const hiddenByFilter = kindFilter !== "all" && (current.kind ?? "teach") !== kindFilter;
+		const hiddenBySearch = query.trim() !== "" && fuzzyScore(query.trim(), current.title) === null;
+		if (!hiddenByFilter && !hiddenBySearch) { setRevealNote(null); return; }
+		if (hiddenByFilter) setFilter("all");
+		if (hiddenBySearch) { setQuery(""); setKbdIndex(null); }
+		setRevealNote(hiddenByFilter
+			? `Showing all sessions, so “${current.title || "this session"}” is in the list.`
+			: `Search cleared, so “${current.title || "this session"}” is in the list.`);
+		requestAnimationFrame(() => listRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" }));
+	}, [currentId, chats, kindFilter, query, setFilter]);
+	useEffect(() => { if (!revealNote) return; const timer = window.setTimeout(() => setRevealNote(null), 9000); return () => window.clearTimeout(timer); }, [revealNote]);
+
 	const refreshInFlightRef = useRef(false);
 	const refresh = useCallback(async () => {
 		// In-flight coalesce (S6): event bursts may land several refresh
@@ -984,6 +1010,7 @@ function SessionsSidebar() {
 					{yourTurn === 1 ? "Your turn in 1 session" : `Your turn in ${yourTurn} sessions`}
 					<span className="lh-your-turn-note">The number on Sessions counts only these.</span>
 				</p>}
+				{revealNote && <p className="lh-list-reveal" role="status" data-testid="session-reveal-note">{revealNote}</p>}
 				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 pt-1">
 					{shown === null ? (
 						<div className="px-2 py-4 text-sm text-muted-foreground">Loading…</div>
@@ -1150,12 +1177,32 @@ function SessionsSidebar() {
 export function AppShell({ children }: { children: React.ReactNode }) {
 	const { phone, open, drawer, toggle } = useSidebar();
 	const pathname = usePathname();
+	// R9 (round 16): focus mode folds a docked sessions sidebar away and
+	// brings it back on exit, as it was.
+	const focusMode = useFocusMode();
+	const foldedForFocus = useRef(false);
+	const focusState = useRef({ open, phone, drawer, toggle }); focusState.current = { open, phone, drawer, toggle };
+	useEffect(() => {
+		const now = focusState.current;
+		if (focusMode) {
+			if (now.open && !now.phone && !now.drawer) { foldedForFocus.current = true; now.toggle(); }
+		} else if (foldedForFocus.current) {
+			foldedForFocus.current = false;
+			if (!now.open) now.toggle();
+		}
+	}, [focusMode]);
 	// Throwaway whole-shell comparison: its navigation is the subject of the trial.
 	if (process.env.NODE_ENV !== "production" && pathname.startsWith("/prototype/mobile-ui")) return <>{children}</>;
 	return (
 		<SettingsDialogProvider>
 			<SessionsSidebar />
-			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open}>{children}</FilePathDropZone>
+			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open}>
+				{/* R9 (round 16): the first stop for a keyboard — straight to the sessions. */}
+				<div className="lh-skip-links">
+					<a href="#sessions" data-testid="skip-to-sessions" onClick={(event) => { event.preventDefault(); window.dispatchEvent(new CustomEvent("lh:kbd-sessions-search")); }}>Skip to sessions</a>
+				</div>
+				{children}
+			</FilePathDropZone>
 			{drawer && open && <div className="lh-drawer-scrim" aria-hidden="true" data-testid="sessions-drawer-scrim" onClick={toggle} />}
 			{/* The single document-level keydown listener (keyboard wave A) —
 			    after the content in the tree, but it's window-level so order only

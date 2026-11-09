@@ -43,6 +43,42 @@ import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 // spelling here is how the ⌘B bug happened.
 export { kbdEventForAction };
 
+/** R9 (round 16): the page's Tab order, region by region. Anything a
+ *  region does not contain (menus, panes, dialogs) keeps the browser's order. */
+const TAB_REGIONS: readonly string[] = [
+	".lh-skip-links",
+	"header.lh-topbar, .lh-session-head, .lh-home-navigation, .lh-home-toolbar, .lh-map-toggle",
+	".lh-sessions-panel",
+	".lh-dock-overlay, .lh-home-dock",
+	".lh-app-main",
+];
+// The composer (index 3) comes after the lesson (index 4 matches the rest of
+// the page): the walk visits regions in this order.
+const REGION_ORDER = [0, 1, 2, 4, 3];
+const TABBABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
+function regionOf(el: Element): number {
+	for (let i = 0; i < TAB_REGIONS.length; i++) if (el.closest(TAB_REGIONS[i]!)) return i;
+	return -1;
+}
+export function moveFocusByRegion(step: 1 | -1): boolean {
+	if (typeof document === "undefined") return false;
+	const active = document.activeElement as HTMLElement | null;
+	const inPage = !active || active === document.body || active === document.documentElement;
+	if (!inPage && regionOf(active!) < 0) return false;
+	if (active?.closest('[role="menu"], [role="listbox"], [data-lh-menu]')) return false;
+	const list = [...document.querySelectorAll<HTMLElement>(TABBABLE)]
+		.filter((el) => el.tabIndex >= 0 && regionOf(el) >= 0 && !el.closest("[inert], [aria-hidden='true']") && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden")
+		.map((el, index) => ({ el, index, rank: REGION_ORDER.indexOf(regionOf(el)) }))
+		.sort((a, b) => a.rank - b.rank || a.index - b.index)
+		.map((item) => item.el);
+	if (list.length === 0) return false;
+	const at = inPage ? -1 : list.findIndex((el) => el === active || el.contains(active!));
+	if (!inPage && at < 0) return false;
+	const next = at < 0 ? (step === 1 ? list[0] : list.at(-1)) : list[(at + step + list.length) % list.length];
+	next?.focus();
+	return !!next;
+}
+
 export function KeyboardShortcuts() {
 	const router = useRouter();
 	const [cheatOpen, setCheatOpen] = useState(false);
@@ -72,11 +108,17 @@ export function KeyboardShortcuts() {
 				// Tab moves on normally so every control stays reachable. The
 				// quiz dock's rows↔thinking claim stops propagation at document
 				// level, so a claimed Tab never reaches this dispatch.
-				if (e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+				if (e.metaKey || e.ctrlKey || e.altKey) return;
 				if (document.querySelector('[aria-modal="true"]')) return;
-				const cycle = new CustomEvent("lh:kbd-cycle-fields", { cancelable: true });
-				window.dispatchEvent(cycle);
-				if (cycle.defaultPrevented) e.preventDefault();
+				if (!e.shiftKey) {
+					const cycle = new CustomEvent("lh:kbd-cycle-fields", { cancelable: true });
+					window.dispatchEvent(cycle);
+					if (cycle.defaultPrevented) { e.preventDefault(); return; }
+				}
+				// R9 (round 16): past the text fields, Tab walks the whole page
+				// in one order — header, sessions, lesson, composer — and wraps
+				// to the start, never looping inside the composer.
+				if (moveFocusByRegion(e.shiftKey ? -1 : 1)) e.preventDefault();
 				return;
 			}
 
