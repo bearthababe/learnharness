@@ -5,13 +5,20 @@ import net from "node:net";
 import path from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
-import { choosePort, delay, freePort, locked, readState } from "../../scripts/lib/ticket-state.mjs";
+import { choosePort, delay, freePort, git, locked, readState } from "../../scripts/lib/ticket-state.mjs";
 
 test("CLI uses an external disposable registry, rejects stale release, preserves unowned listeners and blocks tailnet allocation", async () => {
-	const root = path.resolve(import.meta.dirname, "../..");
-	const directory = fs.mkdtempSync("/tmp/lh-cli-preview-");
+	const source = path.resolve(import.meta.dirname, "../..");
+	const parent = fs.mkdtempSync("/tmp/lh-cli-preview-");
+	const root = path.join(parent, "repository");
+	const worktree = path.join(parent, "worktree");
+	const directory = path.join(parent, "state");
+	fs.mkdirSync(root);
+	git(root, "init", "--initial-branch=main");
+	git(root, "-c", "user.name=CLI Proof", "-c", "user.email=cli-proof@example.invalid", "commit", "--allow-empty", "-m", "Disposable CLI fixture");
+	git(root, "worktree", "add", "--detach", worktree, "HEAD");
 	const execute = promisify(execFile);
-	const cli = async (...args) => JSON.parse((await execute(process.execPath, [path.join(root, "scripts", "ticket.mjs"), ...args, "--root", root, "--state-dir", directory])).stdout);
+	const cli = async (...args) => JSON.parse((await execute(process.execPath, [path.join(source, "scripts", "ticket.mjs"), ...args, "--root", root, "--state-dir", directory])).stdout);
 	const ports = [];
 	const listeners = [];
 	for (let index = 0; index < 3; index++) {
@@ -22,12 +29,16 @@ test("CLI uses an external disposable registry, rejects stale release, preserves
 		listeners.push(listener);
 	}
 	try {
-		await cli("init", "--ports", ports.join(","), "--origin-port", "28900");
-		await cli("preview", "cli-check", "--worktree", root);
+		git(root, "checkout", "--detach", "HEAD");
+		await assert.rejects(cli("init", "--ports", ports.join(","), "--origin-port", "28900", "--repository", "zz-prove-it/project"), /Project root must stay on main/);
+		assert.equal(fs.existsSync(path.join(directory, "registry.json")), false);
+		git(root, "checkout", "main");
+		await cli("init", "--ports", ports.join(","), "--origin-port", "28900", "--repository", "zz-prove-it/project");
+		await cli("preview", "cli-check", "--worktree", worktree);
 		const queued = await cli("status");
 		assert.deepEqual(queued.queue, ["cli-check"]);
 		assert.match(queued.deploymentAcceptance, /BLOCKED/);
-		assert.equal(queued.tickets["cli-check"].worktree, root);
+		assert.equal(queued.tickets["cli-check"].worktree, worktree);
 		assert.equal(queued.tickets["cli-check"].servingRevision, null);
 		assert.equal(queued.tickets["cli-check"].servingSourceHash, null);
 		await assert.rejects(cli("release", "cli-check", "--lease", "stale-notification"), /Stale preview lease/);
@@ -48,10 +59,14 @@ test("CLI uses an external disposable registry, rejects stale release, preserves
 		await cli("stop");
 		assert.equal(await freePort(ports[1]), false);
 		assert.equal(await freePort(ports[2]), false);
+		assert.equal(git(root, "branch", "--show-current"), "main");
 		fs.writeFileSync(path.join(directory, "proof.json"), JSON.stringify({ queued, refused, unownedListenersPreserved: ports.slice(1) }, null, 2));
 		console.log(`CLI fixture evidence: ${directory}/proof.json`);
 	} finally {
-		await cli("stop");
-		await Promise.all(listeners.filter(listener => listener.listening).map(listener => new Promise(resolve => listener.close(resolve))));
+		try {
+			if (fs.existsSync(path.join(directory, "registry.json"))) await cli("stop");
+		} finally {
+			await Promise.all(listeners.filter(listener => listener.listening).map(listener => new Promise(resolve => listener.close(resolve))));
+		}
 	}
 });
