@@ -58,8 +58,12 @@ node scripts/local-deployment.mjs restore COPY_ID --approve-local-restore
 ```
 
 Migration is explicit, requires the selected repository's `.git` marker,
-`data/` and `auth.json`, refuses any existing target, copies without changing
-source bytes, and never combines a desktop profile. Rehearsals must select only
+`data/` and `auth.json`, refuses any existing target, and includes any selected
+repository `chatgpt-credentials.json`, `github-copilot-credentials.json` and
+`xai-credentials.json` files under the same exclusive ownership and verified
+private copy. Unsafe entries or a conflicting credential writer refuse migration.
+It preserves source bytes, excludes unrelated files, and never combines a desktop
+profile. Rehearsals must select only
 synthetic fixtures, not real profiles. Profile administration refuses legacy
 split-path layouts rather than guessing a migration or backup boundary.
 

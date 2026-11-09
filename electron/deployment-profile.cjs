@@ -240,4 +240,4 @@ function ownServerProfile(profile) {
 	return owner;
 }
 
-module.exports = { resolveProfile, acquireProfile, acquireCredentialFiles, isCredentialConflict, ownServerProfile, processIdentity, inspectPath, containsPath, privateDirectory };
+module.exports = { resolveProfile, acquireProfile, acquireCredentialFiles, credentialFiles, isCredentialConflict, ownServerProfile, processIdentity, inspectPath, containsPath, privateDirectory };

@@ -201,6 +201,81 @@ test("migration copies only the selected repository, preserving originals and re
 	assert.deepEqual(treeIdentity(repository), before);
 });
 
+test("migration preserves selected repository subscription files privately without adopting unrelated files", context => {
+	const { directory, profile } = fixture(context);
+	const repository = path.join(directory, "repository");
+	fs.mkdirSync(path.join(repository, ".git"), { recursive: true });
+	fs.mkdirSync(path.join(repository, "data"));
+	fs.writeFileSync(path.join(repository, "data/learning.json"), "selected learning");
+	fs.writeFileSync(path.join(repository, "auth.json"), '{"SYNTHETIC":"fixture-only"}');
+	const names = ["chatgpt-credentials.json", "github-copilot-credentials.json", "xai-credentials.json"];
+	for (const name of names) fs.writeFileSync(path.join(repository, name), Buffer.from(`{"synthetic":"${name}"}\n`));
+	fs.writeFileSync(path.join(repository, ".env"), "MUST_NOT_MIGRATE=synthetic");
+	const before = treeIdentity(repository);
+	assert.equal(migrateRepository(repository, profile).migrated, true);
+	assert.deepEqual(treeIdentity(repository), before);
+	assert.deepEqual(fs.readdirSync(profile.root).sort(), ["auth.json", "data", ...names].sort());
+	for (const name of names) {
+		assert.deepEqual(fs.readFileSync(path.join(profile.root, name)), fs.readFileSync(path.join(repository, name)));
+		assert.equal(fs.statSync(path.join(profile.root, name)).mode & 0o777, 0o600);
+	}
+	assert.equal(fs.statSync(profile.root).mode & 0o777, 0o700);
+});
+
+test("migration refuses unsafe subscription entries and never commits an incomplete credential copy", context => {
+	const { directory, profile } = fixture(context);
+	const repository = path.join(directory, "repository");
+	fs.mkdirSync(path.join(repository, ".git"), { recursive: true });
+	fs.mkdirSync(path.join(repository, "data"));
+	fs.writeFileSync(path.join(repository, "auth.json"), "synthetic auth");
+	const credential = path.join(repository, "chatgpt-credentials.json");
+	const outside = path.join(directory, "outside");
+	fs.writeFileSync(outside, "must not adopt");
+	const failures = [
+		() => fs.symlinkSync(outside, credential),
+		() => fs.linkSync(outside, credential),
+		() => fs.mkdirSync(credential),
+		() => execFileSync("mkfifo", [credential]),
+	];
+	for (const prepare of failures) {
+		prepare();
+		assert.throws(() => migrateRepository(repository, profile), /Unsafe profile path|Unsupported profile entry|regular files/);
+		assert.equal(fs.existsSync(profile.root), false);
+		fs.rmSync(credential, { recursive: true });
+	}
+	fs.writeFileSync(credential, "synthetic saved connection");
+	const before = treeIdentity(repository);
+	assert.throws(() => migrateRepository(repository, profile, { io: { ...profileIO,
+		copyTree(source, destination) {
+			profileIO.copyTree(source, destination);
+			if (source === credential) fs.writeFileSync(destination, "incomplete copy");
+		},
+	} }), /verification failed/);
+	assert.deepEqual(treeIdentity(repository), before);
+	assert.equal(fs.existsSync(profile.root), false);
+	assert.equal(fs.readdirSync(directory).some(name => name.includes(".migration-")), false);
+	assert.equal(migrateRepository(repository, profile).migrated, true);
+});
+
+test("migration refuses a concurrent owner of a selected repository subscription file", async context => {
+	const { directory, profile } = fixture(context);
+	const repository = path.join(directory, "repository");
+	fs.mkdirSync(path.join(repository, ".git"), { recursive: true });
+	fs.mkdirSync(path.join(repository, "data"));
+	fs.writeFileSync(path.join(repository, "auth.json"), "synthetic auth");
+	const credential = path.join(repository, "xai-credentials.json");
+	fs.writeFileSync(credential, "synthetic saved connection");
+	const before = treeIdentity(repository);
+	const owner = await childOwner(context, { managed: false, dataDir: path.join(directory, "other-data"), authFile: credential });
+	assert.ok(owner.record.lease);
+	assert.throws(() => migrateRepository(repository, profile), /live writer/);
+	assert.deepEqual(treeIdentity(repository), before);
+	assert.equal(fs.existsSync(profile.root), false);
+	owner.child.send("release");
+	assert.deepEqual((await once(owner.child, "message"))[0], { released: true });
+	assert.equal(migrateRepository(repository, profile).migrated, true);
+});
+
 test("symlinks, hardlinks and special entries are refused, not followed or merged", context => {
 	const { directory, profile, seed } = fixture(context);
 	seed();
@@ -531,10 +606,18 @@ test("public local CLI migrates, backs up, lists and explicitly restores only sy
 	fs.mkdirSync(path.join(repository, "data"));
 	fs.writeFileSync(path.join(repository, "data/learning.json"), "CLI-original");
 	fs.writeFileSync(path.join(repository, "auth.json"), '{"SYNTHETIC":"never-print-fixture-value"}');
+	const credentials = ["chatgpt-credentials.json", "github-copilot-credentials.json", "xai-credentials.json"];
+	for (const name of credentials) fs.writeFileSync(path.join(repository, name), `{"synthetic":"never-print-${name}"}`);
 	const environment = { PATH: process.env.PATH, HOME: directory, LH_PROFILE_DIR: profile.root };
 	const cli = (...argumentsList) => execFileSync(process.execPath, ["scripts/local-deployment.mjs", ...argumentsList], { cwd: code, env: environment, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 	const source = treeIdentity(repository);
-	assert.equal(JSON.parse(cli("migrate", "--source-repository", repository)).migrated, true);
+	const migration = cli("migrate", "--source-repository", repository);
+	assert.equal(JSON.parse(migration).migrated, true);
+	assert.ok(!migration.includes("never-print"));
+	for (const name of credentials) {
+		assert.deepEqual(fs.readFileSync(path.join(profile.root, name)), fs.readFileSync(path.join(repository, name)));
+		assert.equal(fs.statSync(path.join(profile.root, name)).mode & 0o777, 0o600);
+	}
 	const output = cli("backup", "--reason", "update");
 	assert.ok(!output.includes("never-print-fixture-value"));
 	const copy = JSON.parse(output);
@@ -547,6 +630,7 @@ test("public local CLI migrates, backs up, lists and explicitly restores only sy
 	assert.deepEqual(treeIdentity(`${profile.root}.backups`), inventory);
 	assert.equal(JSON.parse(cli("restore", copy.id, "--approve-local-restore")).restored, copy.id);
 	assert.equal(fs.readFileSync(path.join(profile.dataDir, "learning.json"), "utf8"), "CLI-original");
+	for (const name of credentials) assert.deepEqual(fs.readFileSync(path.join(profile.root, name)), fs.readFileSync(path.join(repository, name)));
 	assert.deepEqual(treeIdentity(repository), source);
 });
 

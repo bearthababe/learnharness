@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { acquireProfile, containsPath, inspectPath, privateDirectory, resolveProfile } from "../../electron/deployment-profile.cjs";
+import { acquireProfile, containsPath, credentialFiles, inspectPath, privateDirectory, resolveProfile } from "../../electron/deployment-profile.cjs";
 
 const digest = contents => createHash("sha256").update(contents).digest("hex");
 const exists = filename => fs.existsSync(filename);
@@ -369,25 +369,37 @@ export function migrateRepository(source, profile, { io = profileIO } = {}) {
 	const dataDir = inspectPath(path.join(repository, "data"));
 	const authFile = inspectPath(path.join(repository, "auth.json"));
 	if (!fs.lstatSync(dataDir).isDirectory() || !fs.lstatSync(authFile).isFile()) throw new Error("Repository migration requires data/ and auth.json");
-	const sourceOwner = acquireProfile({ managed: false, dataDir, authFile });
+	const credentials = credentialFiles(repository);
+	const sourceOwner = acquireProfile({ managed: false, dataDir, authFile }, { additionalFiles: credentials });
 	try {
 		return withOwner(profile, (resolved, owner) => {
 			if (containsPath(repository, resolved.root) || containsPath(resolved.root, repository)) throw new Error("Migration source and destination must be separate");
 			if (exists(resolved.root)) throw new Error("Migration target already exists; refusing to merge");
 			const dataIdentity = treeIdentity(dataDir);
 			const authIdentity = treeIdentity(authFile);
+			const credentialIdentities = credentials.filter(exists).map(filename => {
+				if (!fs.lstatSync(filename).isFile()) throw new Error("Repository subscription credentials must be regular files");
+				return { filename, entries: treeIdentity(filename) };
+			});
 			inspectPath(path.dirname(resolved.root));
 			fs.mkdirSync(path.dirname(resolved.root), { recursive: true, mode: 0o700 });
-			io.checkSpace(path.dirname(resolved.root), [...dataIdentity, ...authIdentity]);
+			io.checkSpace(path.dirname(resolved.root), [...dataIdentity, ...authIdentity, ...credentialIdentities.flatMap(credential => credential.entries)]);
 			const staged = `${resolved.root}.migration-${randomUUID()}`;
 			privateDirectory(staged);
 			try {
 				io.copyTree(dataDir, path.join(staged, "data"));
 				writePrivate(path.join(staged, "auth.json"), fs.readFileSync(authFile));
+				for (const credential of credentialIdentities) {
+					const destination = path.join(staged, path.basename(credential.filename));
+					io.copyTree(credential.filename, destination);
+					io.verifyTree(destination, credential.entries);
+					io.verifyTree(credential.filename, credential.entries);
+				}
 				io.verifyTree(path.join(staged, "data"), dataIdentity);
 				io.verifyTree(path.join(staged, "auth.json"), authIdentity);
 				io.verifyTree(dataDir, dataIdentity);
 				io.verifyTree(authFile, authIdentity);
+				if (JSON.stringify(credentials.filter(exists)) !== JSON.stringify(credentialIdentities.map(credential => credential.filename))) throw new Error("Repository subscription credentials changed during migration");
 				sourceOwner.assertOwner();
 				owner.assertOwner();
 				if (exists(resolved.root)) throw new Error("Migration target appeared; refusing to replace");
