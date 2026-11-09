@@ -5386,3 +5386,9 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 
 /* R7: the fitted page sits centred, its page controls right under it. */
 .hw-paperStack { margin-inline: auto; }
+/* F2: while the search field covers the header row, the row's own items step
+   out of sight (and out of reach) — they keep their places for Cancel. */
+@media (max-width: 767px) {
+	:root:has(.lh-graph-search[data-over]) :is(.lh-home-navigation, .lh-home-page-menu, .lh-home-toolbar-actions > :not(.lh-graph-search)) { visibility: hidden; }
+	:root:has(.lh-chains-search[data-over]) [data-testid="chain-table"] .lh-topbar > :not(.lh-chains-search) { visibility: hidden; }
+}

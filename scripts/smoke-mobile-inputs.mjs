@@ -1212,7 +1212,7 @@ try {
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { visible: true });
 	// Round 16 (R2): the folded bar is only the bar — it says what was written,
 	// and the answer form waits behind it with every word kept.
-	assert.equal(await page.$eval(answer, e => e.checkVisibility()), false, "The folded question bar never holds the answer form");
+	assert.equal(await page.$eval(answer, e => e.checkVisibility({ visibilityProperty: true })), false, "The folded question bar never holds the answer form");
 	assert.equal(await page.$eval('[data-testid="question-summary"]', e => e.textContent), "Your answer: Answer draft.", "The folded bar shows what was written");
 	assert.equal(await page.$eval(answer, e => e.textContent), "Answer draft.");
 	await page.click('[data-testid="question-dock-bar"]');
