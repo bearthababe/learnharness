@@ -462,7 +462,7 @@ try {
 		const recover = async () => {
 			const previousSocket = speechSocket;
 			const previousBytes = audioBytes;
-			await page.click('[data-testid="dictation-toggle"][aria-label="Start dictation"]');
+			await page.click('[data-testid="dictation-toggle"]:is([aria-label="Start dictation"], [aria-label^="Dictation failed: "])');
 			await waitFor("fresh real microphone/worklet frames before ASR timing failure", () => speechSocket !== previousSocket && audioBytes > previousBytes);
 			speechSocket.send(JSON.stringify({ type: "Results", is_final: true, speech_final: true, start: 0, duration: 3600, channel: { alternatives: [{ transcript: "ZZ_ACTIVITY retained unsubmitted recovery words", words: [{ word: "words", punctuated_word: "words", start: 0, end: 3600 }] }] } }));
 			await busy("recording-or-finishing-speech");
