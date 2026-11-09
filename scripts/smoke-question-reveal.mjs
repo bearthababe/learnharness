@@ -76,7 +76,7 @@ try {
 	await page.goto(`${origin}/chat/${chatId}`, { waitUntil: "networkidle2" });
 	await page.waitForSelector(reveal, { visible: true });
 	// Round 15 (F6): phones keep the reading note in a slide-in pane, opened
-	// from a labelled button; the pane carries its own Show question.
+	// from a labelled button.
 	const paneOpener = await page.$('[data-testid="reading-pane-open"]');
 	const paned = !!paneOpener && await paneOpener.isVisible();
 	if (paned) { await paneOpener.tap(); await page.waitForSelector('[data-testid="reading-pane"][data-open]'); }
@@ -85,7 +85,10 @@ try {
 	await page.waitForFunction(() => window.__revealFrames > 0);
 	await page.evaluate(() => window.__revealSpeech.final("First spoken thought."));
 	assert.equal(await page.$eval(reading, e => e.textContent), "Existing reading thoughts.", "Speech stays buffered until recording finishes");
-	await page.tap(paned ? '[data-testid="reading-pane-show-question"]' : reveal);
+	// Round 16 (F4): the pane has no Show question; back to the lesson (the
+	// recording carries on into the note), then the lesson's Show question.
+	if (paned) { await page.tap('[data-testid="reading-pane-close"]'); await page.waitForSelector('[data-testid="reading-pane"]:not([data-open])'); }
+	await page.tap(paned ? '.lh-reading-entry [data-testid="teach-check-reveal"]' : reveal);
 	// Allow the tap's React update to paint, but hold the recognizer's final response.
 	await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 	const stopping = await page.evaluate(() => ({

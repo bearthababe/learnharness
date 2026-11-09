@@ -1183,7 +1183,11 @@ try {
 	await page.click('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
 	await page.waitForFunction(() => window.speech?.readyState === 1);
 	await page.evaluate(() => window.speech.final("Before reveal."));
-	await page.click('[data-testid="reading-pane-show-question"]');
+	// Round 16 (F4): the pane has no Show question of its own — back to the
+	// lesson (dictation keeps going into the note), then the lesson's Show question.
+	await page.click('[data-testid="reading-pane-close"]');
+	await page.waitForSelector('[data-testid="reading-pane"]:not([data-open])');
+	await page.click('.lh-reading-entry [data-testid="teach-check-reveal"]');
 	await page.waitForFunction(() => window.speech.finishing);
 	assert.ok(await page.$('[data-testid="teach-check-reveal"]'), "Reveal waits for final speech");
 	await page.evaluate(() => { window.speech.final("Late reading thought."); window.speech.close(); });
@@ -1206,7 +1210,10 @@ try {
 	}), true, "The open question owns the lesson area below the page bar");
 	await page.click('[data-testid="question-back"]');
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { visible: true });
-	assert.ok(await page.$eval(answer, e => e.checkVisibility()), "A revealed question keeps its answer input visible when Back to lesson folds the question");
+	// Round 16 (R2): the folded bar is only the bar — it says what was written,
+	// and the answer form waits behind it with every word kept.
+	assert.equal(await page.$eval(answer, e => e.checkVisibility()), false, "The folded question bar never holds the answer form");
+	assert.equal(await page.$eval('[data-testid="question-summary"]', e => e.textContent), "Your answer: Answer draft.", "The folded bar shows what was written");
 	assert.equal(await page.$eval(answer, e => e.textContent), "Answer draft.");
 	await page.click('[data-testid="question-dock-bar"]');
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { hidden: true });
