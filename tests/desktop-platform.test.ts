@@ -179,12 +179,14 @@ describe("desktop packaging policy", () => {
 describe("workflow action versions", () => {
 	type Step = { uses?: string; with?: Record<string, unknown> };
 	type Workflow = { jobs: Record<string, { steps: Step[] }> };
-	const yaml = require("js-yaml") as { load(source: string): Workflow };
+	type Composite = { runs: { using: string; steps: (Step & { shell?: string; run?: string })[] } };
+	const yaml = require("js-yaml") as { load(source: string): Workflow & Composite };
 
 	for (const filename of ["ci.yml", "release.yml"]) {
 		it(`${filename} uses supported Action runtimes without changing the app's Node 26`, () => {
 			const workflow = yaml.load(readFileSync(new URL(`../.github/workflows/${filename}`, import.meta.url), "utf8"));
 			const expected = ["actions/checkout@v7", "actions/setup-node@v7", "actions/upload-artifact@v7"];
+			if (filename === "ci.yml") expected.push("./.github/actions/setup-preview-sandbox");
 			if (filename === "release.yml") {
 				expected.push("actions/github-script@v9", "maxim-lobanov/setup-xcode@v1");
 			}
@@ -206,6 +208,18 @@ describe("workflow action versions", () => {
 			assert.deepEqual([...observed].sort(), expected.sort());
 		});
 	}
+
+	it("the local sandbox Action runs inline Bash without undeclared external Actions", () => {
+		const action = yaml.load(readFileSync(new URL("../.github/actions/setup-preview-sandbox/action.yml", import.meta.url), "utf8"));
+		assert.equal(action.runs.using, "composite");
+		assert.ok(action.runs.steps.length > 0);
+		for (const step of action.runs.steps) {
+			assert.equal(step.uses, undefined);
+			assert.equal(step.shell, "bash");
+			assert.equal(typeof step.run, "string");
+			assert.ok(step.run?.trim());
+		}
+	});
 });
 
 describe("desktop release workflow", () => {

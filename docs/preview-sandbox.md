@@ -16,6 +16,10 @@ The ELF interpreter comes from the runtime binaries. Dependency basenames resolv
 through flat or `x86_64-linux-gnu` system-library layouts; every selected file must
 still resolve beneath `/usr/lib`. A valid multiarch file can replace an unrelated
 flat alias, but an outside-only dependency or interpreter remains refused.
+ELF headers restrict dependency discovery to the supported Linux x64 runtime:
+bundled ia32/ARM addons cannot load in that runtime and do not authorize extra
+system-library mounts. Runtime executables and selected system libraries must
+themselves identify as ELF64 x86-64.
 Dependency installation/provisioning is outside this launcher. Arbitrarily named
 secrets intentionally placed in code/dependency files cannot be classified by a
 filename denylist: only synthetic, audited dependency/source trees may be used.

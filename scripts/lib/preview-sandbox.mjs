@@ -36,11 +36,15 @@ export function inspectDependencies(directory) {
 
 export function runtimeLibraries(dependencies) {
 	const pending = [process.execPath, "/usr/bin/sh", "/usr/bin/env"];
+	const optionalNative = new Set();
 	function nativeFiles(directory) {
 		for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
 			const filename = path.join(directory, entry.name);
 			if (entry.isDirectory()) nativeFiles(filename);
-			else if (entry.isFile() && /\.(node|so)(\.|$)/.test(entry.name)) pending.push(filename);
+			else if (entry.isFile() && /\.(node|so)(\.|$)/.test(entry.name)) {
+				pending.push(filename);
+				optionalNative.add(filename);
+			}
 		}
 	}
 	nativeFiles(dependencies);
@@ -59,8 +63,12 @@ export function runtimeLibraries(dependencies) {
 		if (inspected.has(filename)) continue;
 		inspected.add(filename);
 		let metadata;
-		try { metadata = execFileSync("/usr/bin/readelf", ["--program-headers", "--dynamic", "--wide", filename], { encoding: "utf8", env: { PATH: "/usr/bin", LANG: "C" }, stdio: ["ignore", "pipe", "ignore"], timeout: 5000, maxBuffer: 1024 * 1024 }); }
+		try { metadata = execFileSync("/usr/bin/readelf", ["--file-header", "--program-headers", "--dynamic", "--wide", filename], { encoding: "utf8", env: { PATH: "/usr/bin", LANG: "C" }, stdio: ["ignore", "pipe", "ignore"], timeout: 5000, maxBuffer: 1024 * 1024 }); }
 		catch { continue; }
+		if (!/^\s*Class:\s+ELF64\s*$/m.test(metadata) || !/^\s*Machine:\s+Advanced Micro Devices X86-64\s*$/m.test(metadata)) {
+			assert.ok(optionalNative.has(filename), `Unsupported Linux runtime architecture: ${filename}`);
+			continue;
+		}
 		for (const match of metadata.matchAll(/Requesting program interpreter:\s*([^\]]+)\]/g)) {
 			const interpreter = match[1];
 			assert.match(interpreter, /^\/(?:lib(?:64)?|usr\/lib)\/(?:x86_64-linux-gnu\/)?ld-linux-x86-64\.so\.2$/, "Unsupported Linux runtime interpreter");

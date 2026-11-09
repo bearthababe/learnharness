@@ -13,9 +13,11 @@ const soname = "libpreview-ci-test.so.1";
 const multiarch = `/usr/lib/x86_64-linux-gnu/${soname}`;
 const flat = `/usr/lib/${soname}`;
 const metadata = names => names.map(name => `(NEEDED) Shared library: [${name}]`).join("\n");
+const header = (format = "ELF64", machine = "Advanced Micro Devices X86-64") => `Class: ${format}\nMachine: ${machine}\n`;
 
-function inspect(libraries, details, operation) {
+function inspect(libraries, details, operation, native = []) {
 	const directory = fs.mkdtempSync(path.join(os.tmpdir(), "lh-runtime-libraries-"));
+	for (const filename of native) fs.writeFileSync(path.join(directory, filename), "synthetic native module");
 	const original = { exists: fs.existsSync, realpath: fs.realpathSync, stat: fs.statSync };
 	const system = filename => ["/usr/lib/", "/lib/", "/lib64/"].some(prefix => String(filename).startsWith(prefix));
 	const entries = new Map([[interpreter, loader], ...libraries]);
@@ -26,8 +28,10 @@ function inspect(libraries, details, operation) {
 		assert.equal(command, "/usr/bin/readelf");
 		assert.deepEqual(options.env, { PATH: "/usr/bin", LANG: "C" });
 		const filename = argumentsList.at(-1);
-		if (filename === process.execPath) return details[filename] ?? `Requesting program interpreter: ${interpreter}]\n${metadata([soname])}`;
-		return details[filename] ?? "";
+		const contents = details[filename] ?? details[path.basename(filename)];
+		if (contents?.startsWith("Class:")) return contents;
+		if (filename === process.execPath) return header() + (contents ?? `Requesting program interpreter: ${interpreter}]\n${metadata([soname])}`);
+		return header() + (contents ?? "");
 	});
 	syncBuiltinESMExports();
 	try { operation(() => runtimeLibraries(directory)); }
@@ -87,5 +91,30 @@ test("an interpreter in a private directory is refused", () => {
 test("a supported interpreter path cannot resolve outside trusted system libraries", () => {
 	inspect([[interpreter, "/opt/private/ld-linux-x86-64.so.2"], [multiarch, multiarch]], {}, discover => {
 		assert.throws(discover, /Runtime dependency escaped the system library directory/);
+	});
+});
+
+test("bundled ia32 and ARM native modules cannot require foreign system libraries", () => {
+	inspect([[multiarch, multiarch], ["/usr/lib/ld-linux.so.2", "/usr/lib32/ld-linux.so.2"]], {
+		"ia32.node": header("ELF32", "Intel 80386") + metadata(["ld-linux.so.2"]),
+		"arm64.node": header("ELF64", "AArch64") + metadata(["libforeign.so.1"]),
+	}, discover => assert.deepEqual(discover(), [interpreter, multiarch].sort()), ["ia32.node", "arm64.node"]);
+});
+
+test("x64 native modules still refuse escaped system dependencies", () => {
+	inspect([[multiarch, multiarch], ["/usr/lib/libforeign.so.1", "/home/synthetic-owner/libforeign.so.1"]], {
+		"native.node": metadata(["libforeign.so.1"]),
+	}, discover => assert.throws(discover, /Runtime dependency escaped the system library directory/), ["native.node"]);
+});
+
+test("the actual runtime cannot silently use a foreign architecture", () => {
+	inspect([[multiarch, multiarch]], { [process.execPath]: header("ELF32", "Intel 80386") }, discover => {
+		assert.throws(discover, /Unsupported Linux runtime architecture/);
+	});
+});
+
+test("selected system libraries cannot silently use a foreign architecture", () => {
+	inspect([[multiarch, multiarch]], { [multiarch]: header("ELF64", "AArch64") }, discover => {
+		assert.throws(discover, /Unsupported Linux runtime architecture/);
 	});
 });
