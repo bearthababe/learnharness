@@ -301,7 +301,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 
 	const modelMenu = <>
 		{error && <div className="mb-1.5 text-destructive">{error}</div>}
-		<ModelMenuList models={catalog?.models} effectiveId={effectiveId} effectiveProvider={effectiveProvider} onPick={pickModel} focusSearch={!phone}
+		<ModelMenuList models={catalog?.models} effectiveId={effectiveId} effectiveProvider={effectiveProvider} onPick={pickModel} focusSearch={!touch}
 			footer={catalog && catalog.models.length === 0 ? "No models — add a provider key in Keys" : chatId ? "This session's model" : "Strong tier — the default for new sessions"} />
 	</>;
 	return (

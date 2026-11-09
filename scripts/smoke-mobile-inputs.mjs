@@ -1127,13 +1127,14 @@ try {
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0);
 	await page.keyboard.press("Escape");
 	assert.equal(await page.evaluate(() => document.body.style.overflow), "", "Phone modal releases its background lock on desktop");
-	// A fresh desktop open retains the inherited search-focus behavior. Round
-	// 14 (M4): a touch screen of any width opens Model from ⋯, so "desktop"
-	// here is a fine pointer.
-	await page.setViewport({ width: 1100, height: 800 });
-	await page.waitForSelector('[data-testid="stats-model"]', { visible: true });
-	await page.click('[data-testid="stats-model"]');
-	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
+	// Round 14 (M4): a touch screen of any width opens Model from ⋯ and never
+	// raises the keyboard on open (a fine pointer keeps the row and search
+	// focus; changing touch emulation here would reload the page).
+	await page.click('[data-testid="page-menu-button"]');
+	await page.waitForSelector('[data-testid="page-menu-model"]', { visible: true });
+	await page.click('[data-testid="page-menu-model"]');
+	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
+	assert.notEqual(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), "model-search", "A touch open does not raise the keyboard");
 	await page.keyboard.press("Escape");
 	console.log("PASS: linear fixed-edge 400ms opening/closing and blur with no separate line phase, normal-sized text, selection exits, quick-close continuity, repeated-close guards, viewport interruption/reduced motion, safe taps, stationary lesson, keyboard/query/results, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
