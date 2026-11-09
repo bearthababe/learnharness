@@ -293,7 +293,11 @@ export function ReadingThinkingField({
 			<div ref={paneRef} id={paneId} {...ownerProps} data-reading-pane-for={workspaceId} role="dialog" aria-modal="true" aria-label="Thinking while reading" data-testid="reading-pane"
 				data-open={paneOpen || undefined} data-peeking={peeking || undefined} data-controls={controls} data-peek-style={peekStyle} inert={!paneOpen || peeking} className="lh-reading-pane"
 				onPointerDown={swipeDown} onPointerMove={swipeMove} onPointerUp={swipeEnd} onPointerCancel={swipeEnd}
-				onKeyDown={(event) => { if (event.key === "Escape" && !dictation?.active) { event.preventDefault(); event.stopPropagation(); closePane(); } }}>
+				onKeyDown={(event) => {
+					// One Escape, one layer: a menu opened from the pane's bar closes first.
+					if (event.key !== "Escape" || dictation?.active || event.defaultPrevented || (event.target as Element | null)?.closest?.('[role="menu"], [data-lh-menu], [data-testid="page-menu"], [data-testid="helpers-sheet"]')) return;
+					event.preventDefault(); event.stopPropagation(); closePane();
+				}}>
 				{peekStyle === "strip" && strip ? (
 					<div className="lh-reading-strip" data-testid="reading-pane-strip" data-expanded={stripOpen || undefined}>
 						<button type="button" className="lh-reading-strip-toggle" data-testid="reading-pane-strip-toggle" aria-expanded={stripOpen} onClick={() => setStripOpen((open) => !open)}>

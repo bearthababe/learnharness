@@ -1197,7 +1197,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 		<SettingsDialogProvider>
 			{/* R9 (round 16): the first stop for a keyboard — straight to the sessions. */}
 			<div className="lh-skip-links">
-				<a href="#sessions" data-testid="skip-to-sessions" onClick={(event) => { event.preventDefault(); window.dispatchEvent(new CustomEvent("lh:kbd-sessions-search")); }}>Skip to sessions</a>
+				<a href="#sessions" data-testid="skip-to-sessions"
+					onClick={(event) => { event.preventDefault(); window.dispatchEvent(new CustomEvent("lh:kbd-sessions-search")); }}
+					onKeyDown={(event) => { if (event.key !== "Enter") return; event.preventDefault(); event.stopPropagation(); window.dispatchEvent(new CustomEvent("lh:kbd-sessions-search")); }}>Skip to sessions</a>
 			</div>
 			<SessionsSidebar />
 			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open}>{children}</FilePathDropZone>

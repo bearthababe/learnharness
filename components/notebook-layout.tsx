@@ -44,10 +44,19 @@ function storedShares(): Shares {
 		return { row: fits(value?.row, "row") ? value!.row as number : DEFAULT_ROW, column: fits(value?.column, "column") ? value!.column as number : null };
 	} catch { return { row: DEFAULT_ROW, column: null }; }
 }
-/** The tutor's share that leaves the notebook about two lines tall. */
-export function twoLineShare(layoutHeight: number): number {
+/** The tutor's share that leaves the notebook about two lines tall. `below`
+ *  is room taken under the notebook by the phone's one chat box (R6/P3,
+ *  round 16), less the instruction row that then sits there instead. */
+export function twoLineShare(layoutHeight: number, below = 0): number {
 	if (!(layoutHeight > 0)) return 58;
-	return Math.max(BOUNDS.column[0], Math.min(BOUNDS.column[1], 100 * (layoutHeight - TWO_LINES_PX) / layoutHeight));
+	return Math.max(BOUNDS.column[0], Math.min(BOUNDS.column[1], 100 * (layoutHeight - TWO_LINES_PX - below) / layoutHeight));
+}
+/** The docked chat box's height beyond the instruction row it took over. */
+function oneBoxExtra(layout: HTMLElement): number {
+	const bar = layout.querySelector<HTMLElement>(".lh-nb-bar");
+	if (!bar) return 0;
+	const moved = bar.querySelector<HTMLElement>(".notebook-instruction-form")?.offsetHeight ?? 0;
+	return Math.max(0, bar.offsetHeight - moved);
 }
 function saveShares(shares: Shares) {
 	try { window.localStorage.setItem(SPLIT_KEY, JSON.stringify(shares.column === null ? { row: shares.row } : shares)); } catch { /* this view only */ }
@@ -76,9 +85,9 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 			// Back to the two-line opening size; nothing chosen is kept.
 			if (direction === "column") { current.column = null; saveShares(current); }
 			else { current.row = DEFAULT_ROW; saveShares(current); }
-			share = direction === "column" ? twoLineShare(layout.getBoundingClientRect().height) : DEFAULT_ROW;
+			share = direction === "column" ? twoLineShare(layout.getBoundingClientRect().height, oneBoxExtra(layout)) : DEFAULT_ROW;
 		} else if (next === undefined) {
-			share = direction === "row" ? current.row : current.column ?? twoLineShare(layout.getBoundingClientRect().height);
+			share = direction === "row" ? current.row : current.column ?? twoLineShare(layout.getBoundingClientRect().height, oneBoxExtra(layout));
 		} else {
 			share = Math.max(BOUNDS[direction][0], Math.min(BOUNDS[direction][1], next));
 			const before = direction === "row" ? current.row : current.column;

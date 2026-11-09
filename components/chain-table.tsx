@@ -185,6 +185,7 @@ export function ChainTableBody({
 		const timer = window.setTimeout(() => setUndoNote(null), 8000);
 		return () => window.clearTimeout(timer);
 	}, [undoNote]);
+	const expandedNow = useRef(expandedClusters); expandedNow.current = expandedClusters;
 	const moveItems = (items: MoveItem[], parentId: string | null) => {
 		if (!onOrganizationChange || !fullDirectory) return;
 		const state = fullDirectory.organization;
@@ -195,7 +196,9 @@ export function ChainTableBody({
 		void (async () => {
 			try { for (const item of moving) await onOrganizationChange({ action: "move", kind: item.kind, id: item.id, parentId }); }
 			catch { return; }
-			if (parentId !== null && !expandedClusters.has(parentId)) onToggleCluster(parentId);
+			// The destination opens to show what arrived (it may already be open
+			// from the drag's hover).
+			if (parentId !== null && !expandedNow.current.has(parentId)) onToggleCluster(parentId);
 			setUndoNote({
 				text: `Moved ${moving.length === 1 ? `“${moving[0]!.name}”` : `${moving.length} items`} to ${where}`,
 				undo: () => {

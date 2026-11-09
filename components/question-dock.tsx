@@ -117,6 +117,8 @@ export interface QuestionDockProps {
 	 *  and say so in the hint row. The server registry is the real gate;
 	 *  this is the affordance. */
 	compactionRunning?: boolean;
+	/** E1 (round 16): the reading note has words (it goes with the answer). */
+	readingAttached?: boolean;
 }
 
 export function QuestionDock({
@@ -141,6 +143,7 @@ export function QuestionDock({
 	phase = "probe",
 	dictationClaim = true,
 	compactionRunning = false,
+	readingAttached,
 }: QuestionDockProps) {
 	// The probe-phase names (owner, 2026-10-09) canonicalize onto their
 	// teach twins for every dock concern — parse dispatch, labels, kinds:
@@ -205,6 +208,7 @@ export function QuestionDock({
 					dictationClaim={dictationClaim}
 					compactionRunning={compactionRunning}
 					onSummary={setSummary}
+					readingAttached={readingAttached}
 				/>
 			</div>
 		</>
@@ -300,6 +304,7 @@ function QuestionDockForm({
 	dictationClaim = true,
 	compactionRunning = false,
 	onSummary,
+	readingAttached,
 }: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal"> & { onSummary?: (summary: string | null) => void }) {
 	const kind = toolQuestionKind(toolName);
 
@@ -994,7 +999,7 @@ function QuestionDockForm({
 					<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 						{qd.mode === "text" ? "Your answer" : "YOUR REASONING"}
 					</div>
-					{readingThinking.trim() && <p className="lh-reading-attached" data-testid="reading-attached">
+					{(readingAttached ?? !!(readingThinkingNow?.() ?? readingThinking).trim()) && <p className="lh-reading-attached" data-testid="reading-attached">
 						<PaperclipIcon aria-hidden /><span><span className="lh-reading-attached-label">Thinking while reading is attached</span> — it goes with this answer.</span>
 					</p>}
 					<CompactLearningInput dictation={dictationClaim ? dictation : undefined}>{qd.mode === "text" ? (

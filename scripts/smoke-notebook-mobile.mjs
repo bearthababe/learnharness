@@ -12,6 +12,12 @@ export async function openNotebookMenu(page, section) {
 	}
 }
 
+/** Round 16 (R6/P3): with the notebook open, a phone shows one chat box at a
+ *  time; the docked variant switches it with "Tutor | Notebook". */
+async function useTutor(page) {
+	if (await page.$eval('[data-testid="nb-mode-tutor"]', e => e.checkVisibility()).catch(() => false)) await page.click('[data-testid="nb-mode-tutor"]');
+}
+
 /** Combined real mobile UI + Notebook service in the disposable smoke app.
  * Speech transport and editor/tutor responses are scripted; no live calls. */
 export async function verifyNotebookMobile(browser, origin) {
@@ -85,7 +91,7 @@ export async function verifyNotebookMobile(browser, origin) {
 	assert.equal(before.candidate, "terra-off", "Picker choice is saved before Apply");
 	assert.equal(before.usage.calls, 0, "Changing candidates never applies");
 	await page.type("#notebook-instruction", "Write pressure equals force over area.");
-	await page.locator('.notebook-panel button[type="submit"]').click();
+	await page.locator('.notebook-instruction-form button[type="submit"]').click();
 	await page.waitForSelector('[data-notebook-scroll] [aria-label="Select line 1"]');
 	await page.waitForFunction(() => !document.querySelector('.session-workspace').inert);
 	assert.deepEqual((await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json()).lines, [{ id: "L1", latex: "p=F/A" }]);
@@ -95,7 +101,7 @@ export async function verifyNotebookMobile(browser, origin) {
 	assert.equal(await page.$eval('.notebook-expression-number', e => getComputedStyle(e).fontSize), '13px');
 	await page.tap('[data-notebook-scroll] [aria-label="Select line 1"]');
 	assert.equal(await page.$eval('[data-notebook-scroll] [aria-label="Select expression 2 on line 1"]', e => e.getAttribute('aria-pressed')), 'false');
-	const mic = '.notebook-panel [aria-label="Start dictation"]';
+	const mic = '.notebook-instruction-form [aria-label="Start dictation"]';
 	await page.click(mic);
 	await page.waitForFunction(() => notebookSmoke.sockets.length === 1 && notebookSmoke.worklet);
 	assert.equal(await page.$('[data-testid="composer"] [aria-label="Stop dictation"]'), null, "Tutor does not display another destination's recording controls");
@@ -106,12 +112,14 @@ export async function verifyNotebookMobile(browser, origin) {
 	assert.equal(await page.evaluate(() => notebookSmoke.closes), 0, "Browsing menus does not finalize the recording");
 	assert.equal(await page.$eval('.session-workspace', e => e.dataset.sessionDestination), "notebook");
 	await page.evaluate(() => { notebookSmoke.audio(); notebookSmoke.time = 14; notebookSmoke.final("Keep this unfinished instruction."); });
-	await page.click('.notebook-panel [aria-label="Stop dictation"]');
+	await page.click('.notebook-instruction-form [aria-label="Stop dictation"]');
 	await page.waitForFunction(() => notebookSmoke.closes === 1);
 	await page.evaluate(() => notebookSmoke.end());
 	await page.waitForSelector(mic, { visible: true });
 	assert.equal(await page.$eval("#notebook-instruction", e => e.value), "Keep this unfinished instruction.");
 	assert.equal((await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json()).usage.calls, 1, "Stop does not Apply");
+	// Round 16 (R6/P3): the phone's one chat box — switch it to the Tutor first.
+	await useTutor(page);
 	await page.click(tutor);
 	await page.waitForFunction(() => !document.querySelector(".session-workspace").inert && document.querySelector(".session-workspace").dataset.sessionDestination === "tutor");
 	assert.equal(await page.evaluate(() => notebookSmoke.captures), 1, "Return never starts another recording");
@@ -171,6 +179,7 @@ export async function verifyNotebookMobile(browser, origin) {
 	assert.equal(await page.evaluate(() => notebookSmoke.captures), 1, 'Selecting review text does not start another recording');
 	assert.deepEqual(await page.evaluate(() => notebookSmoke.sends), []);
 	await page.keyboard.press('Escape');
+	await useTutor(page);
 	await page.click('[data-testid="composer"] [aria-label="Send"]');
 	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
 	const saved = await (await fetch(`${origin}/api/chats/mobile_other`)).json();
@@ -185,11 +194,11 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.click('[aria-label="Open notebook"]');
 	await page.waitForSelector('#notebook-instruction', { visible: true });
 	await page.type('#notebook-instruction', 'Write pressure.');
-	await page.click('.notebook-panel button[type="submit"]');
+	await page.click('.notebook-instruction-form button[type="submit"]');
 	await page.waitForSelector('[data-notebook-scroll] [aria-label="Select line 1"]');
-	await page.waitForFunction(() => !document.querySelector('.notebook-panel button[type="submit"]').disabled || !document.querySelector('#notebook-instruction').value);
+	await page.waitForFunction(() => !document.querySelector('.notebook-instruction-form button[type="submit"]').disabled || !document.querySelector('#notebook-instruction').value);
 	await page.type('#notebook-instruction', 'Clarify fixture target');
-	await page.click('.notebook-panel button[type="submit"]');
+	await page.click('.notebook-instruction-form button[type="submit"]');
 	await page.waitForSelector('.notebook-notice summary');
 	await page.reload({ waitUntil: 'networkidle2' });
 	await page.waitForSelector('.notebook-notice summary');
@@ -227,7 +236,7 @@ export async function verifyNotebookMobile(browser, origin) {
 		}
 	});
 	await page.type('#notebook-instruction', 'Remove this expression fixture');
-	await page.click('.notebook-panel button[type="submit"]');
+	await page.click('.notebook-instruction-form button[type="submit"]');
 	await page.waitForFunction(() => !document.querySelector('[data-notebook-scroll] [aria-label="Select expression 4 on line 1"]'));
 	assert.deepEqual(applies[0].expressionSelection, { lineId: 'L1', number: 2, text: 'F/A', lineSource: 'p=F/A=2+2=' });
 	assert.equal(await page.$eval(expression(2), e => e.getAttribute('aria-pressed')), 'false');

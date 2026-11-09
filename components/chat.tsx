@@ -2921,6 +2921,9 @@ function DockOverlay({
 	// render-time measurement went stale during drag-resizes and the mount
 	// decision popped late).
 	const [flankW, setFlankW] = useState(0);
+	// E1 (round 16): the card shows the reading note as attached — live.
+	const [readingAttached, setReadingAttached] = useState(() => !!(readingThinkingNow?.() ?? readingThinking).trim());
+	useEffect(() => { setReadingAttached(!!(readingThinkingNow?.() ?? readingThinking).trim()); }, [pending?.toolCallId, readingThinking, readingThinkingNow]);
 	const flankWRef = useRef(0);
 	// Part A of the same round (the resize mute): any block size change
 	// stamps this — the fold machine ignores scroll events for a beat after,
@@ -3232,7 +3235,7 @@ function DockOverlay({
 							dictation={dictation}
 							value={readingThinking}
 							revision={readingThinkingRevision}
-							onChange={onReadingThinking}
+							onChange={(value: string) => { onReadingThinking(value); setReadingAttached(!!value.trim()); }}
 							onEscape={dictationCancel}
 							onOpen={
 								!expanded
@@ -3260,6 +3263,7 @@ function DockOverlay({
 									notebook={notebook}
 									readingThinking={readingThinking}
 									readingThinkingNow={readingThinkingNow}
+									readingAttached={readingAttached}
 									onRestoreReadingThinking={onReadingThinking}
 									dictation={dictation}
 									hasSharedWriting={hasSharedWriting}
