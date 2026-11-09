@@ -4576,28 +4576,31 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 }
 @media (min-width: 768px) { .lh-graph-scrim { height: 84px; } }
 
-/* P7: the knowledge map full screen (phones). */
-.lh-map-open, .lh-map-bar { display: none; }
-@media (max-width: 767px) {
-	:root .lh-map-open {
-		position: absolute; top: 66px; right: 16px; z-index: 10;
-		display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px;
-		border: 1px solid var(--border); border-radius: 999px; background: color-mix(in oklab, var(--card) 88%, transparent);
-		color: var(--foreground); font-size: 13px; font-weight: 600;
+/* P7: the knowledge map full screen (phones; tablets too since round 16).
+   F3 (round 16): Full map and Done are one toggle in one spot — top right,
+   under the bar — expand / collapse; Fit is a map control at the bottom right. */
+.lh-map-toggle, .lh-map-fit { display: none; }
+@media (max-width: 767px), (pointer: coarse) {
+	:root .lh-map-toggle {
+		position: absolute; top: 66px; right: 16px; z-index: 12;
+		display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 112px; height: 44px; padding: 0 14px;
+		border: 1px solid var(--border); border-radius: 999px; background: color-mix(in oklab, var(--card) 92%, transparent);
+		color: var(--foreground); font-size: 14px; font-weight: 600;
 	}
-	:root .lh-map-open svg { width: 15px; height: 15px; color: var(--muted-foreground); }
-	:root[data-graph-full] :is(.lh-home-navigation, .lh-home-dock, .lh-home-toolbar .lh-graph-chains) { display: none; }
-	:root[data-graph-full] .lh-map-bar {
-		position: absolute; top: 8px; left: 16px; right: 16px; z-index: 11; pointer-events: none;
-		display: flex; justify-content: space-between; gap: 8px;
+	:root .lh-map-toggle svg { width: 16px; height: 16px; color: var(--muted-foreground); }
+	:root .lh-map-toggle[aria-pressed="true"] { border-color: color-mix(in oklab, var(--primary) 45%, var(--border)); background: color-mix(in oklab, var(--primary) 14%, var(--card)); }
+	:root .lh-map-fit {
+		position: absolute; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 12;
+		display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid var(--border); border-radius: 999px;
+		background: var(--card); color: var(--foreground); box-shadow: 0 2px 10px rgb(0 0 0 / .3);
 	}
-	:root[data-graph-full] .lh-map-bar > button {
-		pointer-events: auto; display: inline-flex; align-items: center; gap: 4px; height: 48px; padding: 0 12px;
-		border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--foreground);
-		font-size: 15px; font-weight: 600;
-	}
-	:root[data-graph-full] .lh-map-bar svg { width: 18px; height: 18px; }
-	:root[data-graph-full] .lh-home-toolbar { left: 112px; right: 92px; }
+	:root .lh-map-fit svg { width: 20px; height: 20px; }
+	:root[data-graph-full] :is(.lh-home-navigation, .lh-home-dock, .lh-home-page-menu) { display: none; }
+	/* Ideas keeps its slot (unseen), so Search stays exactly where it was. */
+	:root[data-graph-full] .lh-home-toolbar .lh-graph-chains { visibility: hidden; }
+}
+@media (min-width: 768px) and (pointer: coarse) {
+	:root .lh-map-toggle { top: 72px; }
 }
 /* Home's bar stays above its scrim (and the map's own toolbar band). */
 :root .lh-home-navigation { z-index: 20; }
@@ -4967,12 +4970,12 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 .lh-home-status { display: none; }
 @media (max-width: 767px) {
 	:root .lh-home-status {
-		position: absolute; top: 112px; left: 12px; right: 12px; z-index: 22;
+		position: absolute; top: 118px; left: 12px; right: 12px; z-index: 22;
 		display: flex; flex-direction: column; align-items: stretch; gap: 8px; pointer-events: none;
 	}
 	:root .lh-home-status:empty { display: none; }
 	:root .lh-home-status > * { width: auto; max-width: none; pointer-events: auto; }
-	:root[data-graph-full] .lh-home-status { top: 64px; }
+	:root[data-graph-full] .lh-home-status { top: 118px; }
 }
 
 /* R2: the import menu's explanation is quiet; its two actions lead. */
@@ -5108,4 +5111,160 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	}
 	:root .lh-focus-exit svg { width: 18px; height: 18px; }
 	:root .lh-focus-exit-more { display: none; }
+}
+
+/* E6 (phones): stable toolbar slots. The two middle slots (a session's Plan
+   and Notebook; Home's Search and Ideas) share the space between Home and
+   ⋯ evenly, so nothing leaves a hole and every page puts each slot in the
+   same place. A session always has its Plan slot (see chat.tsx). */
+@media (max-width: 767px) {
+	:root .lh-topbar > div.min-w-4.flex-1[aria-hidden="true"] { display: none; }
+	:root .lh-topbar > .lh-header-chip, :root .lh-topbar > .lh-notebook-opener { flex: 1 1 64px; min-width: 0; max-width: 96px; }
+	:root .lh-topbar > .lh-header-chip:first-of-type { margin-left: auto; }
+	:root .lh-topbar > .lh-notebook-opener > .lh-notebook-toggle { width: 100%; }
+	:root .lh-topbar > .lh-header-chip[data-empty] { color: var(--muted-foreground); }
+	:root .lh-topbar > .lh-header-chip[data-empty] svg { opacity: .7; }
+}
+
+/* F2 (phones): Search is a bar item (icon over its label) in the slot after
+   Home; it opens a full-width field with Cancel over the header row. */
+.lh-search-icon { display: none; }
+@media (max-width: 767px) {
+	:root .lh-home-toolbar-actions > :is(.lh-search-icon, .lh-graph-chains) { flex: 1 1 64px; min-width: 0; max-width: 96px; }
+	:root .lh-home-toolbar .lh-graph-chains button { width: 100%; }
+	:root .lh-search-icon {
+		display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 48px; padding: 0 6px;
+		border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--foreground); font-size: 13px; font-weight: 600; line-height: 1;
+	}
+	:root .lh-search-icon svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+	:root .lh-graph-search[data-over] {
+		position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 16px; right: 16px; z-index: 45; margin: 0;
+		display: flex; align-items: center; gap: 8px; height: 48px; padding: 0; border: 0; border-radius: 0; background: var(--background); box-shadow: none;
+		-webkit-backdrop-filter: none; backdrop-filter: none;
+	}
+	:root .lh-graph-search[data-over] > :first-child { flex: 1; min-width: 0; }
+	:root .lh-graph-search[data-over] input { height: 48px; padding-left: 40px; border-radius: 12px; background: var(--card); font-size: 16px; }
+	:root .lh-graph-search[data-over] .lh-graph-search-field > svg { left: 14px; width: 18px; height: 18px; }
+	:root .lh-search-cancel { flex: none; min-height: 44px; padding: 0 6px; color: var(--foreground); font-size: 16px; font-weight: 600; }
+	:root .lh-graph-search[data-over] .lh-graph-results { top: calc(100% + 8px); left: 0 !important; right: 0 !important; width: auto; }
+	:root .lh-graph-search[data-over] .lh-graph-nomatch { position: absolute; top: calc(100% + 8px); left: 0; right: 0; }
+}
+/* E5: no match keeps the map, dimmed, and says so in learner words. */
+.lh-graph-nomatch {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 10px 12px; margin-top: 6px;
+	border: 1px solid var(--border); border-radius: 12px; background: var(--popover); box-shadow: var(--lh-shadow-pop);
+	color: var(--foreground); font-size: 14px; line-height: 1.4;
+}
+.lh-graph-nomatch > button { min-height: 36px; color: color-mix(in oklab, var(--primary) 75%, var(--foreground)); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+@media (pointer: coarse) { .lh-graph-nomatch > button { min-height: 44px; } }
+[data-no-match] > canvas { opacity: .3; filter: saturate(.5); transition: opacity .2s ease, filter .2s ease; }
+
+/* F1/E2–E4 (round 16): the Ideas list. Each row: a 44px checkbox cell, the
+   title (a button that opens the row; on phones the counts sit under it, so
+   the title keeps its width), the columns on wider screens, and the 44px
+   drag handle at the right end — always shown. */
+.lh-idea-row { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 4px 0 12px; }
+.lh-row-check { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 32px; height: 44px; margin-left: -9px; cursor: pointer; }
+.lh-row-check input { width: 16px; height: 16px; }
+.lh-row-open {
+	display: flex; flex: 1 1 auto; align-items: center; gap: 8px; min-width: 0; min-height: 44px; padding: 4px 6px; border-radius: 10px;
+	color: var(--foreground); text-align: left;
+}
+.lh-row-open:hover { background: color-mix(in oklab, var(--accent) 60%, transparent); }
+.lh-row-renaming { cursor: text; }
+.lh-row-renaming:hover { background: none; }
+.lh-row-icon { display: inline-flex; flex: none; color: var(--muted-foreground); }
+.lh-row-text { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+.lh-row-name { overflow: hidden; font-size: 14.5px; font-weight: 550; line-height: 1.3; white-space: nowrap; text-overflow: ellipsis; }
+.lh-row-meta { display: none; color: var(--muted-foreground); font-size: 13px; line-height: 1.3; }
+.lh-drag-handle {
+	display: inline-flex; flex: none; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 10px;
+	color: var(--muted-foreground); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.lh-drag-handle:hover { background: var(--accent); color: var(--foreground); }
+.lh-drag-handle:active { cursor: grabbing; }
+.lh-drag-handle svg { width: 18px; height: 18px; }
+.lh-drag-handle-off { cursor: default; visibility: hidden; }
+.lh-row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding-block: 0 4px; }
+.lh-row-actions > :is(button, a) { display: inline-flex; align-items: center; min-height: 36px; color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); font-size: 13.5px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+@media (pointer: coarse) { .lh-row-actions > :is(button, a) { min-height: 44px; } }
+.lh-row-empty-note { margin: 0 0 6px; color: var(--muted-foreground); font-size: 13px; }
+@media (max-width: 767px) {
+	.lh-row-meta { display: block; }
+	.lh-idea-row > :is(.lh-row-count, .lh-row-date, .lh-source-chip) { display: none; }
+	.lh-row-name { font-size: 15px; }
+}
+/* While a row is dragged: valid folders outlined, the one under the finger
+   filled and named, invalid ones dimmed, the dragged row faded. */
+[data-ideas-dragging] [data-drop-valid] { outline: 1.5px dashed color-mix(in oklab, var(--primary) 55%, var(--border)); outline-offset: -2px; border-radius: 10px; }
+[data-ideas-dragging] [data-drop-hover] { outline: 2px solid var(--primary); background: color-mix(in oklab, var(--primary) 16%, transparent); }
+[data-ideas-dragging] [data-drop-invalid] { opacity: .4; }
+[data-ideas-dragging] [data-dragging] { opacity: .45; }
+.lh-drop-label { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 12.5px; font-weight: 650; }
+.lh-drop-top {
+	position: sticky; top: 0; z-index: 12; display: flex; align-items: center; justify-content: center; min-height: 52px; margin: 0 8px 4px;
+	border: 1.5px dashed color-mix(in oklab, var(--primary) 55%, var(--border)); border-radius: 12px; background: var(--background);
+	color: var(--foreground); font-size: 14px; font-weight: 600;
+}
+.lh-drop-top[data-drop-hover] { border-style: solid; border-color: var(--primary); background: color-mix(in oklab, var(--primary) 16%, var(--background)); }
+.lh-drag-ghost {
+	position: fixed; z-index: 70; display: flex; flex-direction: column; gap: 2px; max-width: 240px; padding: 6px 10px; pointer-events: none;
+	border: 1px solid var(--border); border-radius: 10px; background: var(--popover); box-shadow: var(--lh-shadow-pop, 0 8px 24px rgb(0 0 0 / .35));
+}
+.lh-drag-ghost-name { overflow: hidden; font-size: 14px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.lh-drag-ghost-target { color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); font-size: 13px; font-weight: 600; }
+.lh-show-empty {
+	display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 44px; margin: 6px 12px; padding: 4px 6px;
+	color: var(--foreground); font-size: 14px; font-weight: 600; text-align: left;
+}
+.lh-show-empty-note { color: var(--muted-foreground); font-size: 13px; font-weight: 500; }
+.lh-ideas-bottom-room { flex: none; height: 96px; }
+/* The undo note sits above the selection bar's place, never over a row's controls for long. */
+.lh-undo-note {
+	position: absolute; left: 50%; bottom: 84px; z-index: 12; translate: -50% 0; display: flex; align-items: center; gap: 14px; max-width: calc(100% - 24px);
+	padding: 8px 8px 8px 16px; border: 1px solid var(--border); border-radius: 999px; background: var(--popover); box-shadow: var(--lh-shadow-pop, 0 8px 24px rgb(0 0 0 / .35));
+	font-size: 14px;
+}
+.lh-undo-note > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.lh-undo-note > button { flex: none; min-height: 36px; padding: 0 12px; border-radius: 999px; color: color-mix(in oklab, var(--primary) 75%, var(--foreground)); font-weight: 650; }
+@media (pointer: coarse) { .lh-undo-note > button { min-height: 44px; } }
+.lh-chain-move { min-height: 32px; }
+@media (pointer: coarse) { :root [data-testid="chain-selection-bar"] > button { min-height: 44px; } }
+/* The Move to… sheet: a bottom sheet on phones, a small card elsewhere. */
+.lh-move-backdrop { position: fixed; inset: 0; z-index: 55; display: flex; align-items: center; justify-content: center; padding: 16px; background: color-mix(in oklab, var(--background) 70%, transparent); }
+.lh-move-sheet { display: flex; flex-direction: column; width: min(420px, 100%); max-height: min(560px, 80dvh); border: 1px solid var(--border); border-radius: 16px; background: var(--card); box-shadow: var(--lh-shadow-pop, 0 8px 24px rgb(0 0 0 / .35)); }
+.lh-move-head { display: flex; align-items: center; gap: 8px; padding: 10px 8px 6px 16px; border-bottom: 1px solid var(--border); }
+.lh-move-head h2 { flex: 1; min-width: 0; margin: 0; overflow: hidden; font-size: 16px; font-weight: 650; white-space: nowrap; text-overflow: ellipsis; }
+.lh-move-close { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 10px; color: var(--muted-foreground); }
+.lh-move-close svg { width: 18px; height: 18px; }
+.lh-move-list { display: flex; flex-direction: column; gap: 2px; padding: 6px; overflow-y: auto; }
+.lh-move-option { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 14px; border-radius: 10px; color: var(--foreground); font-size: 15px; text-align: left; }
+.lh-move-option:hover:not(:disabled), .lh-move-option:focus-visible { background: var(--accent); }
+.lh-move-option:disabled { opacity: .45; cursor: not-allowed; }
+.lh-move-option svg { width: 18px; height: 18px; flex: none; color: var(--muted-foreground); }
+.lh-move-option-new { color: color-mix(in oklab, var(--primary) 75%, var(--foreground)); font-weight: 600; }
+.lh-move-new { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 8px; }
+.lh-move-new input { flex: 1 1 12rem; min-width: 0; height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--background); font-size: 16px; }
+.lh-move-new button { min-height: 44px; padding: 0 14px; border-radius: 10px; background: var(--primary); color: var(--primary-foreground); font-weight: 650; }
+.lh-move-new button:disabled { opacity: .5; }
+.lh-move-new p { flex-basis: 100%; margin: 0; color: var(--destructive); font-size: 13px; }
+@media (max-width: 767px) {
+	.lh-move-backdrop { align-items: flex-end; padding: 0; }
+	.lh-move-sheet { width: 100%; max-height: 75dvh; border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
+/* F2 (phones): the Ideas view's search, like Home's — an icon in the bar,
+   a full-width field with Cancel over the bar when open. */
+@media (max-width: 767px) {
+	:root [data-testid="chain-table"] .lh-topbar .lh-chains-count { display: none; }
+	:root .lh-ideas-search-open { display: inline-flex; flex: 1 1 64px; max-width: 96px; margin-left: auto; }
+	:root .lh-chains-search[data-over] {
+		position: absolute; inset: 8px 16px auto 16px; z-index: 30; display: flex; align-items: center; gap: 8px; height: 48px; background: var(--background);
+	}
+	:root .lh-chains-search[data-over] input { width: 100%; height: 48px; padding-left: 40px; border-radius: 12px; background: var(--card); font-size: 16px; }
+	:root .lh-chains-search[data-over] svg { left: 14px; width: 18px; height: 18px; }
+}
+@media (max-width: 767px) {
+	:root [data-testid="chain-table"] .lh-topbar :is([data-testid="add-source-folder"], [data-testid="chain-table-close"], .lh-ideas-import) {
+		display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 12px;
+	}
 }

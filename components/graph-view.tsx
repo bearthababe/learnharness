@@ -69,7 +69,7 @@ import { sourceFileLabel } from "@/src/core";
 import { ImportNotesLink, NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
-import { ChevronLeftIcon, FileTextIcon, ListTreeIcon, Loader2Icon, Maximize2Icon, ScanIcon, SearchIcon, SlidersHorizontalIcon, WaypointsIcon, XIcon } from "lucide-react";
+import { FileTextIcon, ListTreeIcon, Loader2Icon, Maximize2Icon, Minimize2Icon, ScanIcon, SearchIcon, SlidersHorizontalIcon, WaypointsIcon, XIcon } from "lucide-react";
 import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
 import { planCostLabel } from "@/components/usage-format";
 import { GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
@@ -80,6 +80,7 @@ import { useServerEvent, useServerResync } from "@/components/server-events";
 import { MenuShell } from "@/components/menu-shell.tsx";
 import { OPEN_GRAPH_DISPLAY_EVENT, publishPageMenu } from "@/components/page-menu";
 import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
+import { useDeviceClass } from "@/components/device-features";
 import { DeleteNodeDialog } from "@/components/delete-node-dialog.tsx";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { Hint } from "@/components/ui/hint";
@@ -914,6 +915,8 @@ export function GraphChromeRow({
 }) {
 	const { phone } = useSidebar();
 	const touch = useTouchLayout();
+	const [searchOpen, setSearchOpen] = useState(false);
+	const searching = phone && (searchOpen || query !== "");
 	// R8 (phones): the results list spans the screen, 12px from each edge,
 	// wherever the search field sits in the bar.
 	const resultsRef = useRef<HTMLUListElement>(null);
@@ -935,8 +938,18 @@ export function GraphChromeRow({
 	}, [phone, showing]);
 	return (
 		<>
-			{!isEmpty && (
-				<div className="lh-graph-search graph-chrome-fade-in w-56 min-w-0 shrink rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
+			{/* F2 (round 16, phones): search is an icon in the bar; it opens a
+			    full-width field with Cancel over the header row (the Sessions
+			    search pattern). Cancel restores the bar exactly. */}
+			{!isEmpty && phone && (
+				<button type="button" className="lh-search-icon graph-chrome-fade-in" aria-label="Search ideas" data-testid="graph-search-open"
+					aria-expanded={searching} onClick={() => { setSearchOpen(true); requestAnimationFrame(() => searchInputRef.current?.focus()); }}>
+					<SearchIcon aria-hidden /><span className="lh-search-icon-label" aria-hidden="true">Search</span>
+				</button>
+			)}
+			{!isEmpty && (!phone || searching) && (
+				<div className="lh-graph-search graph-chrome-fade-in w-56 min-w-0 shrink rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur"
+					data-over={phone || undefined} data-testid="graph-search">
 					<Hint
 						// ⌘F focuses node search (surface-scoped registry action).
 						label="Search ideas"
@@ -944,21 +957,31 @@ export function GraphChromeRow({
 						side="bottom"
 						disabled={phone}
 					>
-					<div className="relative">
+					<div className="relative lh-graph-search-field">
 						<SearchIcon className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
 						<input
 							ref={searchInputRef}
 							value={query}
 							onChange={(e) => onQuery(e.target.value)}
-							placeholder={phone ? "Search" : "Search ideas…"}
+							onKeyDown={(e) => { if (e.key === "Escape" && phone) { e.stopPropagation(); onQuery(""); setSearchOpen(false); } }}
+							placeholder="Search ideas…"
 							aria-label="Search ideas"
 							spellCheck={false}
+							enterKeyHint="search"
 							className="h-7 w-full rounded-lg border bg-background pl-8 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
 						/>
 					</div>
 					</Hint>
+					{phone && <button type="button" className="lh-search-cancel" data-testid="graph-search-cancel" onClick={() => { onQuery(""); setSearchOpen(false); }}>Cancel</button>}
+					{/* E5 (round 16): learner words, the map dimmed (not blanked),
+					    and a way on to the sessions. */}
 					{noMatch && (
-						<div className="px-1.5 pt-1 text-[11px] text-muted-foreground">No matching nodes.</div>
+						<div className="lh-graph-nomatch" role="status" data-testid="graph-no-match">
+							<span>No ideas match “{query.trim()}”.</span>
+							<button type="button" data-testid="graph-search-sessions" onClick={() => {
+								window.dispatchEvent(new CustomEvent("lh:kbd-sessions-search", { detail: { query: query.trim() } }));
+							}}>Search sessions instead</button>
+						</div>
 					)}
 					{results.length > 0 && (
 						<ul ref={resultsRef} className="lh-graph-results" role="listbox" aria-label="Matching nodes" data-testid="graph-search-results"
@@ -1029,6 +1052,8 @@ export function GraphView({
 	// Fit and a labelled exit stay; the composer, resume cards and the bar
 	// step away. It is the same graph, so zoom and selection carry over.
 	const phoneMap = usePhoneLayout();
+	const device = useDeviceClass();
+	const mapToggle = phoneMap || device === "tablet";
 	const [fullMap, setFullMap] = useState(false);
 	useEffect(() => {
 		if (!fullMap) return;
@@ -1038,7 +1063,7 @@ export function GraphView({
 		window.addEventListener("keydown", onKey);
 		return () => { delete root.dataset.graphFull; window.removeEventListener("keydown", onKey); };
 	}, [fullMap]);
-	useEffect(() => { if (!phoneMap) setFullMap(false); }, [phoneMap]);
+	useEffect(() => { if (!mapToggle) setFullMap(false); }, [mapToggle]);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const cardRef = useRef<HTMLDivElement | null>(null);
 	const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
@@ -1544,7 +1569,9 @@ export function GraphView({
 	// Feed #3 — visibility: hidden nodes drop out of rendering, picking,
 	// hover, AND labels; edges drop when either endpoint is hidden.
 	useEffect(() => {
-		rendererRef.current?.setVisible(query.trim() ? visibleIds : null);
+		// E5 (round 16): a search with no match keeps the whole map, dimmed
+		// (the container's data-no-match), rather than blanking it.
+		rendererRef.current?.setVisible(query.trim() && visibleIds.size > 0 ? visibleIds : null);
 		// The open detail card cannot outlive its node's visibility.
 		setSelected((sel) => (sel && visibleIds.has(sel.node.id) ? sel : null));
 	}, [visibleIds, query]);
@@ -1623,7 +1650,7 @@ export function GraphView({
 					</div>
 				</div>
 			) : (
-				<div ref={containerRef} className="relative h-full w-full">
+				<div ref={containerRef} className="relative h-full w-full" data-no-match={(query.trim() !== "" && visibleIds.size === 0) || undefined}>
 					{/* THE single canvas: every layer (hulls, edges, nodes, both
 					    label systems, hover) draws into it, once per frame. */}
 					<canvas ref={canvasRef} className="block h-full w-full touch-none" />
@@ -1756,15 +1783,21 @@ export function GraphView({
 			    pipelines, get a full-width row of their own under the bar and
 			    Full map, never squeezed into the bar's narrow column. */}
 			{phoneMap && <div className="lh-home-status" data-testid="home-status-row">{importStatus}{pipelinePills}</div>}
-			{phoneMap && !isEmpty && (fullMap ? (
-				<div className="lh-map-bar lh-no-drag" data-testid="map-bar">
-					<button type="button" className="lh-map-exit" data-testid="map-exit" onClick={() => setFullMap(false)}><ChevronLeftIcon aria-hidden />Done</button>
-					<button type="button" className="lh-map-fit" data-testid="map-fit" onClick={() => rendererRef.current?.fit()}><ScanIcon aria-hidden />Fit</button>
-				</div>
-			) : (
-				<button type="button" className="lh-map-open lh-no-drag" data-testid="map-open" onClick={() => setFullMap(true)}
-					aria-label="Show the knowledge map full screen"><Maximize2Icon aria-hidden />Full map</button>
-			))}
+			{/* F3 (round 16): Full map and Done are one control in one spot (top
+			    right, under the bar) — expand / collapse — on phones and
+			    tablets; Fit is a map control at the bottom right. Search, the
+			    map position, zoom and selection carry over both ways. */}
+			{mapToggle && !isEmpty && (
+				<button type="button" className="lh-map-toggle lh-no-drag" data-testid={fullMap ? "map-exit" : "map-open"} aria-pressed={fullMap}
+					aria-label={fullMap ? "Done: leave the full-screen map" : "Show the knowledge map full screen"} onClick={() => setFullMap((full) => !full)}>
+					{fullMap ? <Minimize2Icon aria-hidden /> : <Maximize2Icon aria-hidden />}<span>{fullMap ? "Done" : "Full map"}</span>
+				</button>
+			)}
+			{mapToggle && !isEmpty && fullMap && (
+				<button type="button" className="lh-map-fit lh-no-drag" data-testid="map-fit" aria-label="Fit the map to the screen" title="Fit the map to the screen" onClick={() => rendererRef.current?.fit()}>
+					<ScanIcon aria-hidden />
+				</button>
+			)}
 
 			{selected && !isEmpty && (
 				<div

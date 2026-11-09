@@ -735,7 +735,10 @@ function SessionsSidebar() {
 	);
 
 	useEffect(() => {
-		const onFocusSearch = () => {
+		const onFocusSearch = (event: Event) => {
+			// E5 (round 16): "Search sessions instead" carries its words along.
+			const carried = (event as CustomEvent<{ query?: string }>).detail?.query;
+			if (typeof carried === "string") { setQuery(carried); setKbdIndex(null); if (phone) setSearchMode(true); }
 			if (!open) toggle();
 			// A clipped (overflow-hidden) input still focuses — the sidebar's
 			// slide-in doesn't gate the keystroke.
@@ -743,7 +746,7 @@ function SessionsSidebar() {
 		};
 		window.addEventListener("lh:kbd-sessions-search", onFocusSearch);
 		return () => window.removeEventListener("lh:kbd-sessions-search", onFocusSearch);
-	}, [open, toggle]);
+	}, [open, toggle, phone]);
 
 	// Keep the kbd-selected row in view (the rows are the container's only
 	// buttons, so the index matches).

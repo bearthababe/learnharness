@@ -62,15 +62,18 @@ import {
 	DumbbellIcon,
 	BookIcon,
 	BookOpenIcon,
+	FolderIcon,
+	FolderInputIcon,
 	FolderPlusIcon,
 	Trash2Icon,
 	ListTreeIcon,
 	SearchIcon,
 	XIcon,
 } from "lucide-react";
-import { chainsForSelection, chainSourceDirectory, folderEntryCheck, toggleSourceEntries, formatChainLine, fuzzyScore, sourceFileLabel } from "@/src/core";
+import { canMoveFolder, chainsForSelection, chainSourceDirectory, folderEntryCheck, placementOf, toggleSourceEntries, formatChainLine, fuzzyScore, sourceFileLabel } from "@/src/core";
 import type { GraphChain, GraphNode, SourceDirectory, SourceEntry, SourceFolder, SourceEntrySelection } from "@/src/core";
-import { EditableSourceName, SourceDragRow, sourceNameMatches, SourceFolderTree, type OrganizationChange } from "./source-folder-tree";
+import { DragHandle, EditableSourceName, RowActions, RowTitle, SourceDragRow, sourceNameMatches, SourceFolderTree, type MoveItem, type OrganizationChange } from "./source-folder-tree";
+import Link from "next/link";
 import { chainRow, useChainNavigation } from "./chain-navigation";
 import { useServerEvent, useServerResync } from "./server-events";
 import { TopBar } from "@/components/top-bar";
@@ -169,6 +172,39 @@ export function ChainTableBody({
 	const tableRef = useRef<HTMLDivElement>(null);
 	const searchRef = useRef<HTMLInputElement>(null);
 	const phone = usePhoneLayout();
+	// E3 (round 16): the row being renamed — started from its Rename action.
+	const [renaming, setRenaming] = useState<string | null>(null);
+	// F2 (round 16, phones): search opens over the bar from its icon.
+	const [searchOpen, setSearchOpen] = useState(false);
+	const searchOver = phone && (searchOpen || query !== "");
+	// F1 (round 16): every move ends with "Moved to … · Undo".
+	const [moveSheet, setMoveSheet] = useState<MoveItem[] | null>(null);
+	const [undoNote, setUndoNote] = useState<{ text: string; undo: () => void } | null>(null);
+	useEffect(() => {
+		if (!undoNote) return;
+		const timer = window.setTimeout(() => setUndoNote(null), 8000);
+		return () => window.clearTimeout(timer);
+	}, [undoNote]);
+	const moveItems = (items: MoveItem[], parentId: string | null) => {
+		if (!onOrganizationChange || !fullDirectory) return;
+		const state = fullDirectory.organization;
+		const before = items.map((item) => ({ ...item, parentId: item.kind === "source" ? placementOf(state, item.id)?.folderId ?? null : state.folders.find((f) => f.id === item.id)?.parentId ?? null }));
+		const moving = before.filter((item) => item.parentId !== parentId && (item.kind === "source" || canMoveFolder(state, item.id, parentId)));
+		if (moving.length === 0) return;
+		const where = parentId === null ? "the top level" : state.folders.find((f) => f.id === parentId)?.name ?? "the folder";
+		void (async () => {
+			try { for (const item of moving) await onOrganizationChange({ action: "move", kind: item.kind, id: item.id, parentId }); }
+			catch { return; }
+			if (parentId !== null && !expandedClusters.has(parentId)) onToggleCluster(parentId);
+			setUndoNote({
+				text: `Moved ${moving.length === 1 ? `“${moving[0]!.name}”` : `${moving.length} items`} to ${where}`,
+				undo: () => {
+					setUndoNote(null);
+					void (async () => { for (const item of moving) await onOrganizationChange({ action: "move", kind: item.kind, id: item.id, parentId: item.parentId }); })().catch(() => {});
+				},
+			});
+		})();
+	};
 	const navigation = useChainNavigation(tableRef, searchRef, keyboardActive);
 	// Searches still expand sources/folders by default, but explicit keyboard
 	// or pointer collapses remain effective until the search changes.
@@ -325,19 +361,28 @@ export function ChainTableBody({
 				{!selectMode && <ImportNotesLink testid="ideas-import" label="Import" className="lh-ideas-import lh-no-drag" />}
 				{onOrganizationChange && <button type="button" aria-label="Add folder" data-testid="add-source-folder"
 					onClick={() => setCreatingFolder(true)} className="lh-no-drag rounded-lg p-2 text-muted-foreground hover:bg-accent"><FolderPlusIcon className="size-4" /></button>}
-				<div className="lh-chains-search relative shrink-0">
+				{phone && <button type="button" className="lh-search-icon lh-ideas-search-open lh-no-drag" aria-label="Search ideas" data-testid="chain-table-search-open"
+					aria-expanded={searchOver} onClick={() => { setSearchOpen(true); requestAnimationFrame(() => searchRef.current?.focus()); }}>
+					<SearchIcon aria-hidden /><span aria-hidden="true">Search</span>
+				</button>}
+				{(!phone || searchOver) && <div className="lh-chains-search relative shrink-0" data-over={phone || undefined}>
+					<div className="relative min-w-0 flex-1">
 					<SearchIcon className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
 					<input
 						ref={searchRef}
 						value={query}
 						data-testid="chain-table-search"
 						onChange={(e) => onQuery(e.target.value)}
-						placeholder={phone ? "Search" : "Search ideas…"}
+						onKeyDown={(e) => { if (e.key === "Escape" && phone) { e.preventDefault(); e.stopPropagation(); onQuery(""); setSearchOpen(false); } }}
+						placeholder="Search ideas…"
 						aria-label="Search ideas"
 						spellCheck={false}
+						enterKeyHint="search"
 						className="lh-no-drag h-8 w-56 rounded-lg border bg-background pl-8 pr-3 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
 					/>
-				</div>
+					</div>
+					{phone && <button type="button" className="lh-search-cancel lh-no-drag" data-testid="chain-table-search-cancel" onClick={() => { onQuery(""); setSearchOpen(false); }}>Cancel</button>}
+				</div>}
 			<button
 					type="button"
 					data-testid="chain-table-close"
@@ -355,10 +400,11 @@ export function ChainTableBody({
 			    two-column steps — chains pl-12 aligned with the folder icon,
 			    statements pl-21 where a chain icon would sit).
 			    All three columns sort, small chevron on active. */}
-			<div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+			<div className="lh-ideas-scroll flex min-h-0 flex-1 flex-col overflow-y-auto" data-ideas-scroll="">
 				{/* The TOP rule (owner round 5: the table is framed — a line under
 			    the header, a line under the last group, lines between groups). */}
-				<div className="sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b border-border/60 bg-background/80 px-3 py-1.5 text-[11px] uppercase tracking-widest text-muted-foreground/70 backdrop-blur">
+				{/* E2 (round 16): the sticky header is opaque — rows never show through. */}
+				<div className="lh-ideas-head sticky top-0 z-10 flex shrink-0 items-center gap-1 border-b border-border/60 bg-background px-3 py-1.5 text-[11px] uppercase tracking-widest text-muted-foreground/70">
 					<button
 						type="button"
 						data-testid="sort-name"
@@ -405,6 +451,7 @@ export function ChainTableBody({
 					sourceSelection={selectMode ? undefined : { sources: selectedSources, folders: selectedFolders }}
 					expanded={expandedClusters} collapsedForSearch={foldedClusters} onToggleExpanded={toggleCluster} selection={selection} selectedFolders={selectedFolders}
 					onToggleNodes={onToggleNodes} onToggleFolder={onToggleFolder} allowEmptySelection={!selectMode} allSourceNodes={allSourceNodes}
+					renaming={renaming} onRename={setRenaming} onMove={selectMode ? undefined : moveItems} onMoveTo={selectMode ? undefined : setMoveSheet}
 					renderSource={(group, depth) => {
 					const open = searching ? !foldedClusters.has(group.key) : expandedClusters.has(group.key);
 					const selectedCount = group.nodeIds.filter((id) => selection.has(id)).length;
@@ -432,8 +479,11 @@ export function ChainTableBody({
 									className="pointer-events-none absolute bottom-[8px] left-[37px] top-[23px] w-px bg-border/50"
 								/>
 							)}
-							{/* The cluster row: birth-session group header. */}
-							<SourceDragRow {...chainRow(["source", group.key], depth, open)} kind="source" id={group.key} name={group.label ?? "unlabeled"} enabled={Boolean(onOrganizationChange && group.birth)} className="flex items-center gap-1 px-3 py-1.5">
+							{/* The cluster row: birth-session group header. Round 16: the
+							    title opens it (E3), the 44px handle at the right moves it (F1),
+							    and on phones the counts sit under the title so it keeps its width. */}
+							<SourceDragRow {...chainRow(["source", group.key], depth, open)} kind="source" id={group.key} name={group.label ?? "unlabeled"} enabled={Boolean(onOrganizationChange && group.birth)} className="lh-idea-row">
+								<label className="lh-row-check">
 								<RowCheckbox
 									disabled={selectMode ? group.nodeIds.length === 0 : !directory?.sources.some((s) => s.id === group.birth)}
 									checked={selectMode ? selectedCount === group.nodeIds.length && group.nodeIds.length > 0 : group.birth !== null && selectedSources.has(group.birth)}
@@ -442,22 +492,27 @@ export function ChainTableBody({
 									testid={`cluster-checkbox-${group.key}`}
 									label={selectMode ? `Select everything born in ${group.label ?? "unlabeled"}` : `Select source ${group.label ?? "unlabeled"}`}
 								/>
-								<Expander open={open} onClick={() => toggleCluster(group.key)} testid={`cluster-toggle-${group.key}`} label={`Expand cluster ${group.label ?? "unlabeled"}`} />
-								<button type="button" data-source-icon data-testid={`source-icon-${group.key}`} aria-expanded={open} aria-label={`Expand source ${group.label ?? "unlabeled"}`}
-									onClick={() => toggleCluster(group.key)} className={`flex h-5 w-3.5 shrink-0 items-center justify-center rounded ${empty ? "text-muted-foreground/60" : "text-muted-foreground"} transition-colors hover:bg-accent hover:text-foreground`}>
-									{open ? <BookOpenIcon className="size-3.5 shrink-0" /> : <BookIcon className="size-3.5 shrink-0" />}
-								</button>
-								{onOrganizationChange && group.birth && group.kind !== null
-									? <EditableSourceName name={group.label ?? ""} muted={empty} onSave={(name) => onOrganizationChange({ action: "rename-source", id: group.birth!, name })} />
-									: <span className={`min-w-0 flex-1 truncate text-sm font-medium${empty ? " text-muted-foreground/60" : ""}`}>{group.label ?? <span className="text-muted-foreground/60">Ungrouped ideas</span>}</span>}
+								</label>
+								<RowTitle id={group.key} name={group.label ?? "Ungrouped ideas"} open={open} onToggle={() => toggleCluster(group.key)} muted={empty || group.label === null}
+									testid={`cluster-toggle-${group.key}`} iconTestid={`source-icon-${group.key}`}
+									icon={open ? <BookOpenIcon className="size-4 shrink-0" /> : <BookIcon className="size-4 shrink-0" />}
+									meta={<>{group.nodeIds.length} {group.nodeIds.length === 1 ? "idea" : "ideas"}{group.newestCreatedAt && ` · ${group.newestCreatedAt.slice(0, 10)}`}{group.kind === "notes" && " · Notes"}</>}
+									renaming={renaming === group.key} onRename={setRenaming}
+									onSave={onOrganizationChange && group.birth && group.kind !== null ? (name) => onOrganizationChange({ action: "rename-source", id: group.birth!, name }) : undefined} />
 								{group.kind === "notes" && <span className="lh-source-chip text-[11px] text-muted-foreground/80">Notes</span>}
-								<span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+								<span className="lh-row-count w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
 									{group.nodeIds.length}
 								</span>
-								<span className="w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+								<span className="lh-row-date w-20 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
 									{group.newestCreatedAt.slice(0, 10)}
 								</span>
+								<DragHandle kind="source" id={group.birth ?? group.key} name={group.label ?? "unlabeled"} enabled={Boolean(onOrganizationChange && group.birth && !selectMode)} />
 							</SourceDragRow>
+							{open && !selectMode && renaming !== group.key && (onOrganizationChange && group.birth && group.kind !== null || group.kind === "chat") && <RowActions depth={depth}>
+								{onOrganizationChange && group.birth && group.kind !== null && <button type="button" title="Rename" data-testid={`source-rename-${group.key}`} onClick={() => setRenaming(group.key)}>Rename</button>}
+								{group.kind === "chat" && group.birth && <Link href={`/chat/${group.birth}`} data-testid={`source-open-${group.key}`} onClick={onClose}>Open session</Link>}
+							</RowActions>}
+							{open && empty && <p className="lh-row-empty-note" style={{ paddingLeft: 12 + 44 + depth * 36 }}>No ideas from this source yet.</p>}
 
 							{/* The chain rows — clearly indented under the folder
 							    (owner ruling); visible only when the cluster is open
@@ -577,6 +632,9 @@ export function ChainTableBody({
 						</div>
 					);
 				}} />
+				{/* E2 (round 16): room below the last row, so the selection bar
+				    never covers it. */}
+				<div className="lh-ideas-bottom-room" aria-hidden="true" />
 			</div>
 
 			{/* The floating selection bar (owner ruling: never shifts layout —
@@ -613,6 +671,18 @@ export function ChainTableBody({
 							</button>
 						) : (
 							<>
+							{onOrganizationChange && <button
+								type="button"
+								data-testid="chain-move"
+								onClick={() => setMoveSheet([
+									...[...fullySelectedFolders].map((id) => ({ kind: "folder" as const, id, name: fullDirectory?.organization.folders.find((f) => f.id === id)?.name ?? "folder" })),
+									...[...selectedSources].map((id) => ({ kind: "source" as const, id, name: fullDirectory?.sources.find((x) => x.id === id)?.label ?? "source" })),
+								])}
+								className="lh-chain-move flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
+							>
+								<FolderInputIcon aria-hidden="true" className="size-3.5" />
+								Move to…
+							</button>}
 							{/* The danger fence (owner ruling): a divider quarantines
 								    the destructive action at the bar's right end — the
 								    safe actions and the kill switch never blend. The
@@ -633,8 +703,75 @@ export function ChainTableBody({
 					</div>
 				</div>
 			)}
+			{undoNote && <div className="lh-undo-note" role="status" data-testid="ideas-undo-note">
+				<span>{undoNote.text}</span>
+				<button type="button" data-testid="ideas-undo" onClick={undoNote.undo}>Undo</button>
+			</div>}
+			{moveSheet && fullDirectory && <MoveToSheet items={moveSheet} directory={fullDirectory} onClose={() => setMoveSheet(null)}
+				onPick={(parentId) => { const items = moveSheet; setMoveSheet(null); moveItems(items, parentId); onClear(); }}
+				onCreate={async (name) => { const id = await onOrganizationChange?.({ action: "create-folder", name, parentId: null }); return typeof id === "string" ? id : null; }} />}
 		</div>
 	);
+}
+
+/** F1 (round 16): "Move to…" — the top level, every folder (indented), or
+ *  a new folder. Works for several items at once, and from the keyboard. */
+function MoveToSheet({ items, directory, onPick, onCreate, onClose }: {
+	items: MoveItem[]; directory: SourceDirectory; onPick: (parentId: string | null) => void;
+	onCreate: (name: string) => Promise<string | null>; onClose: () => void;
+}) {
+	const state = directory.organization;
+	const ref = useRef<HTMLDivElement>(null);
+	const [naming, setNaming] = useState(false);
+	const [name, setName] = useState("");
+	const [failure, setFailure] = useState("");
+	useEffect(() => {
+		ref.current?.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key !== "Escape") return;
+			event.preventDefault(); event.stopPropagation(); onClose();
+		};
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [onClose]);
+	const parentOf = (item: MoveItem) => item.kind === "source" ? placementOf(state, item.id)?.folderId ?? null : state.folders.find((f) => f.id === item.id)?.parentId ?? null;
+	const allowed = (target: string | null) => items.some((item) => parentOf(item) !== target && (item.kind === "source" || canMoveFolder(state, item.id, target)));
+	const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+	const tree: { id: string; name: string; depth: number }[] = [];
+	const walk = (parentId: string | null, depth: number) => {
+		for (const folder of state.folders.filter((f) => f.parentId === parentId).sort((a, b) => collator.compare(a.name, b.name))) {
+			tree.push({ id: folder.id, name: folder.name, depth });
+			walk(folder.id, depth + 1);
+		}
+	};
+	walk(null, 0);
+	const title = items.length === 1 ? `Move “${items[0]!.name}” to…` : `Move ${items.length} items to…`;
+	return <div className="lh-move-backdrop" data-testid="move-to-backdrop" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+		<div ref={ref} className="lh-move-sheet" role="dialog" aria-modal="true" aria-label={title} data-testid="move-to-sheet">
+			<div className="lh-move-head"><h2>{title}</h2><button type="button" className="lh-move-close" aria-label="Close" onClick={onClose}><XIcon aria-hidden /></button></div>
+			<div className="lh-move-list" role="list">
+				<button type="button" role="listitem" className="lh-move-option" data-testid="move-to-top" disabled={!allowed(null)} onClick={() => onPick(null)}>
+					<ListTreeIcon aria-hidden />Top level (no folder)
+				</button>
+				{tree.map((folder) => <button key={folder.id} type="button" role="listitem" className="lh-move-option" data-testid={`move-to-${folder.id}`}
+					style={{ paddingLeft: 14 + folder.depth * 20 }} disabled={!allowed(folder.id)} onClick={() => onPick(folder.id)}>
+					<FolderIcon aria-hidden />{folder.name}
+				</button>)}
+				{naming ? <form className="lh-move-new" onSubmit={(event) => {
+					event.preventDefault();
+					const value = name.trim();
+					if (!value) return;
+					void onCreate(value).then((id) => { if (id) onPick(id); else setFailure("The folder could not be made."); }).catch((error) => setFailure(error instanceof Error ? error.message : String(error)));
+				}}>
+					<input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Folder name" aria-label="New folder name" data-testid="move-to-new-name" />
+					<button type="submit" data-testid="move-to-create" disabled={!name.trim()}>Create and move</button>
+					{failure && <p role="alert">{failure}</p>}
+				</form> : <button type="button" role="listitem" className="lh-move-option lh-move-option-new" data-testid="move-to-new" onClick={() => setNaming(true)}>
+					<FolderPlusIcon aria-hidden />New folder…
+				</button>}
+			</div>
+		</div>
+	</div>;
 }
 
 /** The rotating chevron — collapsed points right, expanded rotates down
