@@ -21,7 +21,7 @@ function jobStatusText(job: { status: string; error?: string }): string {
  *  causes say what happened and how to recover; anything else is shown
  *  cleaned, never cut to a fragment. */
 const JOB_ERRORS: [RegExp, string][] = [
-	[/ENOENT|no such file|not found on disk|file .* (?:missing|not found)/i, "The file it needed is no longer where it was imported from. Import it again with Extract files, then retry."],
+	[/ENOENT|no such file|not found on disk|file .* (?:missing|not found)/i, "The file it needed is no longer where it was imported from. Import it again (Import to knowledge map, on Home), then retry."],
 	[/EACCES|EPERM|permission denied/i, "LearnHarness isn't allowed to read that file. Check the file's permissions, then retry."],
 	[/invalid pdf|pdf structure|bad xref|not a pdf|pdf.*(?:corrupt|damaged)/i, "This PDF couldn't be read; it may be damaged. Export or download it again, then retry."],
 	[/aborted by learner|cancell?ed/i, "You stopped this job."],
@@ -361,11 +361,17 @@ function settledAgo(iso: string, now = Date.now()): string {
 
 /** `trailing` shares the header row (the sidebar puts Settings there: one
  *  quiet footer row instead of two, so the sessions get the room). */
-export function ActivitySection({ feed: feedProp, trailing }: { feed?: ActivityFeed; trailing?: ReactNode }) {
+export function ActivitySection({ feed: feedProp, trailing, sheet = false }: {
+	feed?: ActivityFeed;
+	trailing?: ReactNode;
+	/** The ⋯ menu's own sheet (phones and tablets, round 14 P14): the list
+	 *  opens expanded, under its name. */
+	sheet?: boolean;
+}) {
 	const ctx = useContext(ActivityContext);
 	const feed = feedProp ?? ctx.feed;
 	const recent = feed.recent ?? [];
-	const [historyOpen, setHistoryOpen] = useState(false);
+	const [historyOpen, setHistoryOpen] = useState(sheet);
 	const refresh = ctx.refresh;
 	// Failures that can still be retried are what the header reports first.
 	const failedCount = recent.filter((job) => job.status === "error" && job.canRetry && jobStatusText(job) === "Failed").length;
@@ -434,21 +440,21 @@ export function ActivitySection({ feed: feedProp, trailing }: { feed?: ActivityF
 	// rows match the session rows' hover. Empty means empty: the header sits
 	// alone (the cost span is population, not decoration).
 	return (
-		<section data-testid="activity-section" className="lh-activity-section border-t border-border px-3 pb-2 pt-2">
+		<section data-testid="activity-section" data-sheet={sheet || undefined} className="lh-activity-section border-t border-border px-3 pb-2 pt-2">
 			<div className="lh-activity-bar">
 			<button
 				type="button"
 				className="lh-activity-header flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm text-muted-foreground"
 				aria-expanded={recent.length > 0 ? historyOpen : undefined}
 				data-testid="activity-history-toggle"
-				title="Background agents"
+				title="Tutor helpers"
 				onClick={() => { if (recent.length > 0) setHistoryOpen((v) => !v); }}
 			>
 				<ActivityIcon className="size-4 shrink-0" />
-				{/* R10 (round 13): "Agents" keeps the footer on one line beside
-				    Settings; the full name stays in its accessible name. */}
-				<span className="truncate" aria-hidden="true">Agents</span>
-				<span className="sr-only">Background agents</span>
+				{/* Round 14 (P14): the tutor's background helpers, in words —
+				    "Helpers · 1 failed"; the full name is the accessible name. */}
+				<span className="truncate" aria-hidden="true">{sheet ? "Tutor helpers" : "Helpers"}</span>
+				<span className="sr-only">Tutor helpers</span>
 				{blobs.length === 0 && (
 					<span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground/80">
 						{failedCount > 0 ? `${failedCount} failed` : recent.length > 0 ? `${recent.length} recent` : "Idle"}
@@ -463,8 +469,11 @@ export function ActivitySection({ feed: feedProp, trailing }: { feed?: ActivityF
 			</button>
 			{trailing}
 			</div>
+			{sheet && recent.length === 0 && blobs.length === 0 && (
+				<p className="lh-activity-empty">No helpers have run yet. When the tutor sends one off (an import, a search), it shows here.</p>
+			)}
 			{historyOpen && recent.length > 0 && (
-				<ul className="lh-activity-history" data-testid="activity-history" aria-label="Recent background jobs">
+				<ul className="lh-activity-history" data-testid="activity-history" aria-label="Recent tutor helpers">
 					{recent.map((job) => {
 						const Icon = KIND_ICON[job.kind] ?? BotIcon;
 						const status = jobStatusText(job);
@@ -640,6 +649,47 @@ function ActivityBlobRow({
 				</div>
 				</div>
 			)}
+		</div>
+	);
+}
+/**
+ * A tutor helper's failure, shown in the session it affects (round 14,
+ * P14): the reason in plain words, one tap to try again, and the full list
+ * one step away (Tutor helpers, in ⋯). The list stays the advanced view;
+ * this note is what the learner needs here.
+ */
+export function SessionHelperFailures({ chatId, onOpenHelpers }: { chatId: string; onOpenHelpers?: () => void }) {
+	const { feed, refresh } = useContext(ActivityContext);
+	const failed = (feed.recent ?? []).filter((job) => job.chatId === chatId && job.status === "error" && job.canRetry && jobStatusText(job) === "Failed");
+	const [retrying, setRetrying] = useState<Record<string, "pending" | "failed">>({});
+	if (!failed.length) return null;
+	const retry = async (jobId: string) => {
+		setRetrying((s) => ({ ...s, [jobId]: "pending" }));
+		try {
+			const res = await fetch("/api/activity/retry", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: jobId }) });
+			if (!res.ok && res.status !== 409) throw new Error(String(res.status));
+			setRetrying((s) => { const { [jobId]: _done, ...rest } = s; return rest; });
+			refresh();
+		} catch {
+			setRetrying((s) => ({ ...s, [jobId]: "failed" }));
+		}
+	};
+	return (
+		<div className="lh-helper-failures" data-testid="session-helper-failures">
+			{failed.map((job) => (
+				<div key={job.id} role="status" className="lh-helper-failure">
+					<span className="lh-helper-failure-text">
+						<strong>A tutor helper couldn&apos;t finish</strong> ({KIND_LABEL[job.kind] ?? "Helper"} · {job.title}). {readableJobError(job.error ?? "")}
+						{retrying[job.id] === "failed" && " Couldn't start it again — ask the tutor instead."}
+					</span>
+					<span className="lh-helper-failure-actions">
+						<button type="button" className="lh-activity-action" data-testid="session-helper-retry" disabled={retrying[job.id] === "pending"} onClick={() => void retry(job.id)}>
+							<RotateCwIcon aria-hidden />{retrying[job.id] === "pending" ? "Retrying…" : "Retry"}
+						</button>
+						{onOpenHelpers && <button type="button" className="lh-activity-action" onClick={onOpenHelpers}>Tutor helpers<ChevronRightIcon aria-hidden /></button>}
+					</span>
+				</div>
+			))}
 		</div>
 	);
 }

@@ -93,10 +93,9 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	assert.ok(await page.evaluate(() => layoutTutor === document.querySelector('[data-testid="composer"] [data-file-path-input]') && layoutNotebook === document.querySelector('#notebook-instruction')), "View switches keep both editors mounted");
 	assert.equal(await page.$eval('#notebook-instruction', e => e.value), "Keep this equation instruction.");
 	assert.equal(await page.$('[data-snapshot-id]'), null, "Snapshots are absent from the inline input");
-	// Round 13 (owner P2): on phones the Notebook toggle is in the page bar's
-	// toolbar (Sessions, Home, Notebook, Plan, More); wider screens keep it in
-	// the row below the active input.
-	assert.equal(await page.$eval('button[data-input-owner="notebook"][aria-expanded]', e => innerWidth < 768 ? !!e.closest('.lh-topbar') : !!e.closest('[data-testid="stats-bar"]')), true, "Notebook toggle: page bar on phones, below the active input otherwise");
+	// Round 14 (T1/P1): the one Notebook button sits in the page bar on every
+	// device ([Sessions Home] · [Plan Notebook ⋯]).
+	assert.equal(await page.$eval('button[data-input-owner="notebook"][aria-expanded]', e => !!e.closest('.lh-topbar')), true, "Notebook button: in the page bar on every device");
 	await openNotebookMenu(page, "Review attached working");
 	assert.ok(await page.$eval('[aria-label="Earlier explanation"]', e => e.value.includes("My independent Tutor draft.")), "Tutor prose survives snapshot handoff and is available in review");
 	await page.click('[aria-label="Earlier explanation"]');

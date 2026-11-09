@@ -18,7 +18,10 @@ export interface DockHeightMeasurements {
 	questionPaddingHeight: number;
 }
 
-export function dockHeightBudget(m: DockHeightMeasurements) {
+/** `wholeContent`: scroll the question and its response controls together
+ *  (a tablet with a notebook open, round 14 T6), so the choices are never
+ *  squeezed into a sliver above controls pinned below them. */
+export function dockHeightBudget(m: DockHeightMeasurements, wholeContent = false) {
 	const available = Math.max(m.columnHeight - 32, 0);
 	const viewportMaxHeight = Math.max(available - m.outsideHeight, 0);
 	const shellMaxHeight = Math.max(viewportMaxHeight - m.beforeShellHeight, 0);
@@ -29,7 +32,7 @@ export function dockHeightBudget(m: DockHeightMeasurements) {
 	// A cap smaller than the question's padding leaves no content viewport.
 	// Deliberately uncap the question and scroll the whole content instead;
 	// do not confuse a measured zero with an unmeasured CSS fallback.
-	const scrollWholeContent = questionMaxHeight === null
+	const scrollWholeContent = questionMaxHeight === null || wholeContent
 		? naturalHeight > viewportMaxHeight
 		: questionMaxHeight <= m.questionPaddingHeight;
 	return { viewportMaxHeight, shellMaxHeight, questionMaxHeight, scrollWholeContent };
@@ -45,6 +48,12 @@ interface DockHeightElements {
 }
 
 const pixels = (value: string) => Number.parseFloat(value) || 0;
+/** A tablet with a notebook (handwriting or equations) open below the
+ *  lesson: the question pane is short, so it scrolls as one. */
+function wholeContentScroll(column: HTMLElement) {
+	return typeof window !== "undefined" && !!window.matchMedia?.("(min-width: 768px) and (max-width: 1023px)").matches
+		&& !!column.closest('.hw-splitLayout, .session-panes[data-notebook-open="true"]');
+}
 
 /** Read natural geometry before writing any constraints. Cancel the shell's
  * animated height out of both ancestor measurements, then substitute its
@@ -68,7 +77,7 @@ export function syncDockHeight(elements: DockHeightElements, expanded: boolean) 
 		questionPaddingHeight: questionStyle
 			? pixels(questionStyle.paddingTop) + pixels(questionStyle.paddingBottom)
 			: 0,
-	});
+	}, wholeContentScroll(column));
 	if (budget.questionMaxHeight === null) block.style.removeProperty("--dock-max-h");
 	else block.style.setProperty("--dock-max-h", budget.scrollWholeContent ? "none" : `${budget.questionMaxHeight}px`);
 	viewport.style.maxHeight = `${budget.viewportMaxHeight}px`;

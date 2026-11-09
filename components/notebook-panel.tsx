@@ -153,7 +153,12 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 		</form>
 		<div data-notebook-scroll="" className="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
 			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} expressionSelection={expressionSelection} onSelect={session.selectLine} onSelectExpression={session.selectExpression} changedIds={changed} />
-			{view?.lines.length === 0 && <p className="text-sm text-muted-foreground">Your working appears here.</p>}
+			{/* Round 14 (E1): what the instruction and Apply do, with an
+			    example, and when the tutor gets to see the working. */}
+			{view?.lines.length === 0 && <div className="notebook-empty" data-testid="notebook-empty">
+				<p>Say or type what to write, then <strong>Apply</strong>. For example: “Write p = F/A, then put in F = 600 N and A = 0.2 m².”</p>
+				<p>Your working is saved here as it changes. When you go back to your message or answer, or close the notebook, it is attached there, and the tutor sees it when you send.</p>
+			</div>}
 			{!!view?.lines.length && <p className="notebook-numbers-hint">The small tags number each term. Tap a term or a line number to aim your next instruction there.</p>}
 		</div>
 	</section>;

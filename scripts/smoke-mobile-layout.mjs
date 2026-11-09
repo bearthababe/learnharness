@@ -57,10 +57,12 @@ try {
 		if (window === window.top) localStorage.setItem("lh:sidebar-open", "1");
 	});
 	await page.goto(origin, { waitUntil: "networkidle2" });
-	await page.waitForSelector('[data-testid="import-notes"]');
+	await page.waitForSelector('[data-testid="page-menu-button"]');
 	for (const width of [320, 375, 430]) {
 		await page.setViewport({ width, height: 667, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-		const controls = await page.evaluate(() => [...document.querySelectorAll('.lh-home-toolbar-actions button, .lh-graph-search input, .lh-home-navigation button[data-testid="open-sidebar"]')].map(e => {
+		// Round 14 (P5): Import and Graph display live in ⋯ on touch screens;
+		// only the controls actually on the bar are measured.
+		const controls = await page.evaluate(() => [...document.querySelectorAll('.lh-home-toolbar-actions button, .lh-graph-search input, .lh-home-navigation button[data-testid="open-sidebar"], [data-testid="page-menu-button"]')].filter(e => e.checkVisibility()).map(e => {
 			const r = e.getBoundingClientRect();
 			const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
 			return { label: e.getAttribute("aria-label") ?? e.textContent.trim(), x: r.x, right: r.right, y: r.y, bottom: r.bottom, width: r.width, height: r.height, reachable: hit === e || e.contains(hit) };
@@ -74,13 +76,20 @@ try {
 	await page.click('button[aria-label="Close sidebar"]');
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "true");
 	check(true, "Home toolbar leaves session navigation reachable");
-	if (await page.$('button[aria-label="Graph display settings"]')) {
-		await page.click('button[aria-label="Graph display settings"]');
-		check(await page.$eval('button[aria-label="Graph display settings"]', e => e.getAttribute("aria-expanded") === "true"), "Graph settings opens from the mobile action row");
-		await page.click('button[aria-label="Graph display settings"]');
+	const fromMore = async (row, menu) => {
+		await page.click('[data-testid="page-menu-button"]');
+		await page.waitForSelector(`[data-testid="page-menu-${row}"]`, { visible: true });
+		await page.click(`[data-testid="page-menu-${row}"]`);
+		await page.waitForSelector(`[data-testid="${menu}"]`, { visible: true });
+	};
+	if (await page.$('[data-testid="graph-settings"], button[aria-label="Graph display settings"]')) {
+		await fromMore("graph-display", "graph-display");
+		check(true, "Graph display opens from ⋯ on the phone");
+		await page.keyboard.press("Escape");
+		await page.waitForFunction(() => !document.querySelector('[data-testid="graph-display"]'));
 	}
-	await page.click('[data-testid="import-notes"]');
-	const [chooser] = await Promise.all([page.waitForFileChooser(), page.locator('[role="menuitem"]').filter(button => button.textContent === "Files").click()]);
+	await fromMore("import", "import-menu");
+	const [chooser] = await Promise.all([page.waitForFileChooser(), page.locator('[role="menuitem"]').filter(button => button.textContent === "Files…").click()]);
 	await chooser.cancel();
 	check(true, "Import notes opens the native file chooser (cancelled without an upload)");
 	await page.goto(`${origin}/chat/${chatId}`, { waitUntil: "networkidle2" });

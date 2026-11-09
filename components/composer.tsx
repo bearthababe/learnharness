@@ -5,7 +5,7 @@ import { ArrowRightIcon, ArrowUpIcon, SquareIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PathInput } from "@/components/path-input";
 import { AttachFilesButton } from "@/components/attach-files-button";
-import { CompactLearningInput } from "@/components/compact-learning-input";
+import { CompactLearningInput, useFocusWithin } from "@/components/compact-learning-input";
 import type { Dictation } from "@/components/dictation";
 
 /**
@@ -156,16 +156,21 @@ export function Composer({
 	};
 	const ownInputRef = useRef<HTMLDivElement>(null);
 	const editorRef = inputRef ?? ownInputRef;
+	// M6 (round 14): Send keeps its place and fades in once there is
+	// something to send or the box is in use (focus is tracked here, never
+	// guessed from the keyboard).
+	const [focused, focusHandlers] = useFocusWithin();
 	return (
 		<form
 			data-testid="composer"
 			className={cn("flex items-end gap-1.5 p-1.5", dictation && "lh-compact-row")}
+			{...focusHandlers}
 			onSubmit={(e) => {
 				e.preventDefault();
 				act();
 			}}
 		>
-			<CompactLearningInput dictation={dictation} enabled={!!dictation} keyboardToggle><PathInput
+			<CompactLearningInput dictation={dictation} enabled={!!dictation}><PathInput
 				ref={editorRef}
 				value={value}
 				onValueChange={onChange}
@@ -223,6 +228,7 @@ export function Composer({
 						type="submit"
 						aria-label={busy && !canSend ? "Stop" : "Send"}
 						disabled={!busy && !canSend}
+						data-ready={(busy || canSend || focused) || undefined}
 						className={cn(
 							"lh-send-button flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
 							busy && !canSend

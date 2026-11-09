@@ -83,7 +83,7 @@ export function KnowledgeSummary({
 					    in a browser, notes come in through Extract files. */}
 					{desktop
 						? <p className="mt-1">Attach your material with the paperclip or drag and drop.</p>
-						: <p className="mt-1">Bring in your own notes with Extract files… above.</p>}
+						: <p className="mt-1">Bring in your own notes with Import to knowledge map.</p>}
 				</div>
 			)}
 		</div>

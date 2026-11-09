@@ -30,6 +30,28 @@ export function usePhoneLayout() {
 	return useSyncExternalStore(subscribePhoneLayout, () => window.matchMedia?.(PHONE_MEDIA).matches ?? false, () => false);
 }
 
+/** Phones and tablets (round 14, owner M1–M4): one control model — the ⋯
+ *  app menu holds Model, Reasoning, Usage, Tutor helpers and Settings, and
+ *  the mic sits inside every field. Laptops keep the row under the composer
+ *  and the sidebar footer. Keep in sync with the touch rules in globals.css. */
+export const TOUCH_MEDIA = "(max-width: 1023px), (pointer: coarse)";
+function subscribeTouchLayout(update: () => void) {
+	const media = window.matchMedia?.(TOUCH_MEDIA);
+	media?.addEventListener("change", update);
+	return () => media?.removeEventListener("change", update);
+}
+export function useTouchLayout() {
+	return useSyncExternalStore(subscribeTouchLayout, () => window.matchMedia?.(TOUCH_MEDIA).matches ?? false, () => false);
+}
+/** A touch screen (an on-screen keyboard is possible). */
+export function useCoarsePointer() {
+	return useSyncExternalStore((update) => {
+		const media = window.matchMedia?.("(pointer: coarse)");
+		media?.addEventListener("change", update);
+		return () => media?.removeEventListener("change", update);
+	}, () => window.matchMedia?.("(pointer: coarse)").matches ?? false, () => false);
+}
+
 /** The visual viewport shrinks for the iOS keyboard; 100dvh alone does not.
  * Leave zoomed viewports alone so pinch/pan remains native. */
 export function usePhoneViewport() {

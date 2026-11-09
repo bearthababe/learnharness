@@ -4,13 +4,13 @@
  * Only completed strokes touch recovery. No React/storage work on movement. */
 import { useCallback, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { FilesIcon, Maximize2Icon, Minimize2Icon, MoreHorizontalIcon, PaperclipIcon, XIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, FilesIcon, Maximize2Icon, Minimize2Icon, MoreHorizontalIcon, PaperclipIcon, PlusIcon, XIcon } from "lucide-react";
 import { useSidebar } from "@/components/sidebar";
 import { HandwritingPages, type PagesState } from "./pages";
 import { handwritingPagesDevice } from "./pages-device";
 import { externalBackground, prepareHandwritingPage, preparedBackground, pageThumbnail } from "./pages-render";
 import type { HandwritingPage, PageSummary } from "@/src/core";
-import { HandwritingToolbar } from "./toolbar";
+import { HandwritingToolbar, setWheelSpot, useWheelSpot } from "./toolbar";
 import { useWritingPalette } from "@/components/device-features";
 import { HANDWRITING_DELETED_EVENT } from "./device";
 import { notebookSource, normalizeHandwriting, replayHandwriting, HANDWRITING_PAGE, HANDWRITING_PEN_COLOURS, HANDWRITING_PEN_SCALES, HANDWRITING_BROAD_WIDTHS, HANDWRITING_HIGHLIGHT_COLOUR, type HandwritingStroke as Stroke } from "@/src/core";
@@ -29,8 +29,11 @@ const BROAD_SIZES = ["Small", "Medium", "Large"].map((name, i) => ({ name, value
 type Point = Stroke["points"][number];
 export type HandwritingHandle = { canResize: () => boolean };
 
-export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExpanded, onClose, review, onReview, register }: {
+export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExpanded, onClose, review, onReview, register, origin = "lesson" }: {
 	ref?: Ref<HandwritingHandle>; chatId: string; hidden: boolean; expanded: boolean; onToggleExpanded: () => void; onClose: () => void; review: () => Promise<AttachmentReview>; onReview: () => void; register: (model: HandwritingPages) => () => void;
+	/** What the expanded notebook returns to (round 14, C4): named by where
+	 *  the learner came from, never a question that is not there. */
+	origin?: "lesson" | "question" | "practice" | "drill";
 }) {
 	const submission = useContext(HandwritingSubmissionContext), submissionRef = useRef(submission); submissionRef.current = submission;
 	const callbacks = useRef({ review, onReview }); callbacks.current = { review, onReview };
@@ -63,8 +66,19 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const palette = useWritingPalette();
 	// Handedness: the tool palette sits on the right by default; left-handed
 	// writers can move it to the left (stored on this device).
-	const [toolsLeft, setToolsLeft] = useState(false);
+	// The wheel goes wherever the learner drags it (round 14, T2), so its
+	// side follows its spot; the arc keeps the left-handed option.
+	const [arcLeft, setToolsLeft] = useState(false);
 	useEffect(() => { try { setToolsLeft(localStorage.getItem("lh:writing-tools-side") === "left"); } catch { /* storage blocked */ } }, []);
+	const wheelSpot = useWheelSpot();
+	const toolsLeft = palette === "wheel" ? wheelSpot.endsWith("left") : arcLeft;
+	// Clear says so and offers Undo right there (round 14, T3).
+	const [clearedAt, setClearedAt] = useState<number | null>(null);
+	useEffect(() => {
+		if (clearedAt === null) return;
+		const timer = window.setTimeout(() => setClearedAt(null), 8000);
+		return () => window.clearTimeout(timer);
+	}, [clearedAt]);
 	const toggleToolsSide = () => setToolsLeft((left) => {
 		try { localStorage.setItem("lh:writing-tools-side", left ? "right" : "left"); } catch { /* storage blocked */ }
 		return !left;
@@ -274,7 +288,11 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		if (reviewDeferred.current) { reviewDeferred.current = false; callbacks.current.onReview(); }
 	}
 	function undoLast() { recovery.current?.undo(); }
-	function clear() { recovery.current?.clear(); }
+	function clear() {
+		const content = recovery.current ? replayHandwriting(recovery.current.getSnapshot().working) : null;
+		recovery.current?.clear();
+		if (content && (content.strokes.length || content.background)) setClearedAt(Date.now());
+	}
 	function startToolTap(event: ReactPointerEvent<HTMLButtonElement>) {
 		penToolClick.current = null;
 		if (event.pointerType !== "pen" || event.button !== 0 || active.current) return;
@@ -302,17 +320,28 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		style={{ position: expanded ? "absolute" : "relative", inset: expanded ? 0 : undefined, flex: "1 1 0px", minWidth: 0, minHeight: 0, boxSizing: "border-box", padding: 16, overflow: "hidden" }}>
 		<aside ref={controlsRef} className="rounded-2xl border bg-card shadow-lg hw-notebook" aria-label="Handwriting notebook" data-testid="handwriting-notebook" data-ready={saved.ready} data-page-id={pageId} data-expanded={expanded} data-tools-side={toolsLeft ? "left" : "right"}
 			style={{ position: "absolute", inset: 16, margin: 0, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
-			<header className="hw-notebookHeader"><h2>Writing</h2>
-				<Button variant="ghost" size="sm" className="hw-headerAction" disabled={!saved.ready || submission?.preparing} {...handlers("Attach snapshot", () => { void attachSnapshot(); })} data-testid="notebook-attach"><PaperclipIcon aria-hidden />Attach page</Button>
+			{/* One order in the side-by-side and the expanded view (round 14,
+			    T5): the notebook's own controls, its primary action, then the
+			    view controls with Close at the far right. */}
+			<header className="hw-notebookHeader"><h2>Notebook</h2>
 				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Pages" aria-expanded={pagesOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Pages", () => { setPagesOpen(value => !value); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); void recovery.current?.refreshPages().catch(() => {}); })}><FilesIcon aria-hidden />Pages</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? "Back to question" : "Expand notebook"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? "Back to question" : "Expand"}</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Notebook options" aria-expanded={optionsOpen} {...handlers("Notebook options", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); setConceptsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction" disabled={!saved.ready || submission?.preparing} {...handlers("Attach snapshot", () => { void attachSnapshot(); })} data-testid="notebook-attach"><PaperclipIcon aria-hidden />Attach page</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? `Back to ${origin}` : "Expand notebook"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? `Back to ${origin}` : "Expand"}</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close notebook" {...handlers("Close writing", () => { if (expanded) prepareViewChange(false); onClose(); })}><XIcon aria-hidden />Close</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" {...handlers("Chat", onClose)} data-testid="open-notebook-chat">Chat</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Notebook options" aria-expanded={optionsOpen} {...handlers("Notebook options", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); setConceptsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
 			</header>
-			{optionsOpen && <div className="hw-toolsPanel" data-testid="notebook-options">
-				<Button variant="ghost" disabled={!saved.ready || submission?.preparing} {...handlers("Duplicate", () => { setOptionsOpen(false); void recovery.current?.duplicateWorking(); })}>Duplicate</Button><hr />
-				<Button variant="ghost" {...handlers("Tools side", () => { setOptionsOpen(false); toggleToolsSide(); })} data-testid="notebook-tools-side">{toolsLeft ? "Tools on the right" : "Tools on the left (left-handed)"}</Button><hr />
+			{optionsOpen && <div className="hw-toolsPanel hw-optionsPanel" data-testid="notebook-options">
+				{/* The page's own actions live here (round 14, T3): there is no
+				    separate Page button on the paper any more. */}
+				<div className="hw-optionsSection" role="group" aria-labelledby="hw-current-page"><h3 id="hw-current-page">Current page</h3>
+					<Button variant="ghost" disabled={!saved.ready || submission?.preparing} {...handlers("Duplicate", () => { setOptionsOpen(false); void recovery.current?.duplicateWorking(); })} data-testid="notebook-duplicate">Duplicate</Button>
+					<Button variant="ghost" role="switch" aria-checked={dimPaper} {...handlers("Dim paper", () => setDimPaper(v => !v))} data-testid="notebook-paper-mode">Dim paper<span className="hw-optionValue">{dimPaper ? "On" : "Off"}</span></Button>
+					<Button variant="ghost" aria-label="Clear page" disabled={!saved.ready} {...handlers("Clear", () => { setOptionsOpen(false); clear(); })} data-testid="notebook-clear">Clear page</Button>
+				</div><hr />
+				{palette === "wheel"
+					? <Button variant="ghost" {...handlers("Reset wheel position", () => { setOptionsOpen(false); setWheelSpot(null); })} data-testid="wheel-reset">Reset wheel position<span className="hw-optionValue">{wheelSpot === "top-right" ? "Top right" : "Moved"}</span></Button>
+					: <Button variant="ghost" {...handlers("Tools side", () => { setOptionsOpen(false); toggleToolsSide(); })} data-testid="notebook-tools-side">{toolsLeft ? "Tools on the right" : "Tools on the left (left-handed)"}</Button>}<hr />
 				<Button variant="ghost" {...handlers("Tools and help", () => { setOptionsOpen(false); setToolsOpen(true); })} data-testid="notebook-tools-toggle">Tools and help</Button><hr />
 				<Button variant="ghost" {...handlers("Concepts setup", () => { setOptionsOpen(false); setConceptsOpen(true); })} data-testid="notebook-concepts-toggle">Send pages from the Concepts app</Button>
 			</div>}
@@ -322,7 +351,13 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 			</div>}
 			{pagesOpen && <div className="hw-toolsPanel hw-pagesPanel" data-testid="notebook-pages">
 				<div className="hw-toolsHeading"><h3>Pages</h3><Button variant="ghost" aria-label="Close pages" {...handlers("Close pages", () => { setPagesOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Pages"]')?.focus(); })}><XIcon /></Button></div>
-				{pages.map((page, index) => <PageRow key={page.id} page={page} index={index} pages={pages} current={pageId} revision={page.id === pageId ? recovery.current?.getSnapshot().working.head : undefined} model={recovery.current!} disabled={!saved.ready || !!submission?.preparing} choose={() => { void recovery.current?.switchPage(page.id).then(opened => { if (opened) { setPagesOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Pages"]')?.focus(); } }); }} />)}
+				<div className="hw-pageGrid">
+					{pages.map((page, index) => <PageRow key={page.id} page={page} index={index} pages={pages} current={pageId} revision={page.id === pageId ? recovery.current?.getSnapshot().working.head : undefined} model={recovery.current!} disabled={!saved.ready || !!submission?.preparing} choose={() => { void recovery.current?.switchPage(page.id).then(opened => { if (opened) { setPagesOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Pages"]')?.focus(); } }); }} />)}
+					{/* Round 14 (T4): a blank page after the others, opened at once. */}
+					<div className="hw-pageRow hw-addPage"><button type="button" data-testid="notebook-add-page" disabled={!saved.ready || !!submission?.preparing} {...handlers("Add page", () => { void recovery.current?.addBlankPage().then(opened => { if (opened) { setPagesOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Pages"]')?.focus(); } }); })}>
+						<span className="hw-addPageMark" aria-hidden><PlusIcon /></span><span>Add page</span>
+					</button></div>
+				</div>
 			</div>}
 			{toolsOpen && <div id="handwriting-tools" className="hw-toolsPanel" role="group" aria-label="Notebook tools">
 				<div className="hw-toolsHeading"><span>Notebook tools</span><Button variant="ghost" size="icon" aria-label="Close notebook tools" {...handlers("Close tools", () => { setToolsOpen(false); controlsRef.current?.querySelector<HTMLButtonElement>('[aria-label="Notebook options"]')?.focus(); })}><XIcon /></Button></div>
@@ -337,7 +372,18 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 					<canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="hw-paper" style={{ cursor: tool === "eraser" ? "cell" : "crosshair" }} aria-label="Handwriting page — use Pencil or mouse; fingers do not draw" data-testid="notebook-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onContextMenu={e => e.preventDefault()} />
 					<canvas ref={highlightRef} width={WIDTH} height={HEIGHT} className="hw-highlightOverlay" style={{ opacity: HIGHLIGHT_OPACITY }} aria-hidden="true" data-testid="notebook-highlight-overlay" />
 				</div>
-			</div>{fingerHint && <p className="hw-fingerHint" role="status" data-testid="finger-hint">Write with your pen · fingers scroll the page</p>}<HandwritingToolbar variant={palette} tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} clear={clear} togglePaper={() => setDimPaper(v => !v)} /></div></div>
+				{(() => {
+					const at = Math.max(0, pages.findIndex(page => page.id === pageId)), count = Math.max(1, pages.length), busy = !saved.ready || !!submission?.preparing;
+					const go = (index: number) => { const target = pages[index]; if (target) void recovery.current?.switchPage(target.id); };
+					return <nav className="hw-pageFooter" aria-label="Page navigation" data-testid="notebook-page-footer">
+						<button type="button" aria-label="Previous page" disabled={busy || at === 0} {...handlers("Previous page", () => go(at - 1))}><ChevronLeftIcon aria-hidden /></button>
+						<span>Page {at + 1} of {count}</span>
+						<button type="button" aria-label="Next page" disabled={busy || at >= count - 1} {...handlers("Next page", () => go(at + 1))}><ChevronRightIcon aria-hidden /></button>
+						<button type="button" className="hw-footerAdd" disabled={busy} {...handlers("Add page", () => { void recovery.current?.addBlankPage(); })} data-testid="notebook-footer-add-page"><PlusIcon aria-hidden />Add page</button>
+					</nav>;
+				})()}
+			</div>{fingerHint && <p className="hw-fingerHint" role="status" data-testid="finger-hint">Write with your pen · fingers scroll the page</p>}<HandwritingToolbar variant={palette} tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} /></div></div>
+			{clearedAt !== null && !saved.notice && <div className="hw-notice hw-clearedNotice" role="status" data-testid="notebook-cleared">Page cleared<button type="button" className="min-h-11 px-3 underline" {...handlers("Undo clear", () => { setClearedAt(null); undoLast(); })}>Undo</button></div>}
 			{saved.notice && <div className="hw-notice" role="status">{saved.notice}{saved.notice !== "Opening notebook…" && <button type="button" className="min-h-11 px-3 underline" {...handlers("Retry", () => { void recovery.current?.retry().then(() => refreshStatus.current()); })}>Retry</button>}</div>}
 			{shownNotice && <div className="hw-notice" role="status">{shownNotice.text}{shownNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
 		</aside>

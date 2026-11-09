@@ -7,7 +7,7 @@ import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import { forgetHandwritingOnDevice } from "@/components/handwriting/device";
 import type { ChatDeleteMode } from "@/src/core";
-import { BookOpenIcon, DumbbellIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, DumbbellIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PlusIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon, XIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -26,6 +26,7 @@ import { notifySettingsSaved } from "@/components/settings-signal";
 import { usePhoneViewport } from "@/components/use-phone-viewport";
 import { bindSidebarSwipe } from "@/components/sidebar-swipe";
 import { publishWaitingCount, useWaitingCount } from "@/components/sessions-summary";
+import { hasNewResult, useSessionSeen } from "@/components/session-seen";
 
 /**
  * Desktop navigation sits inline and retains its open preference. On phones
@@ -257,7 +258,7 @@ export function SidebarToggle() {
 				data-testid="open-sidebar"
 				aria-label="Open sessions"
 				aria-describedby={waiting > 0 ? "lh-waiting-description" : undefined}
-				title={waiting > 0 ? (waiting === 1 ? "1 session waiting for you" : `${waiting} sessions waiting for you`) : undefined}
+				title={waiting > 0 ? (waiting === 1 ? "Your turn in 1 session" : `Your turn in ${waiting} sessions`) : undefined}
 				aria-hidden={open}
 				tabIndex={open ? -1 : 0}
 				onClick={toggle}
@@ -271,7 +272,7 @@ export function SidebarToggle() {
 				<span className="lh-nav-chip-label">Sessions</span>
 				{/* Sessions waiting for an answer stay visible while the list is closed. */}
 				{waiting > 0 && <span className="lh-waiting-badge" aria-hidden="true" data-testid="sessions-waiting-badge">{waiting}</span>}
-				{waiting > 0 && <span id="lh-waiting-description" className="sr-only">{waiting === 1 ? "1 session is waiting for your answer" : `${waiting} sessions are waiting for your answer`}</span>}
+				{waiting > 0 && <span id="lh-waiting-description" className="sr-only">{waiting === 1 ? "Your turn in 1 session (the count shows only sessions waiting for your answer)" : `Your turn in ${waiting} sessions (the count shows only sessions waiting for your answer)`}</span>}
 			</Button>
 			</Hint>
 		</span>
@@ -323,10 +324,9 @@ export function timeAgo(iso: string, now = new Date()): string {
  *  ever wanted. */
 function sessionMeta(chat: ChatListItem): string {
 	if (chat.compacting) return `Compacting context · ${timeAgo(chat.updatedAt)}`;
-	if (chat.pendingQuestion) return `Waiting for input · ${timeAgo(chat.updatedAt)}`;
-	if ((chat.kind ?? "teach") === "practice" && chat.pendingProblem) {
-		return `Problem waiting · ${timeAgo(chat.updatedAt)}`;
-	}
+	// Round 14 (P12): one wording wherever the tutor waits for the learner —
+	// a question or a problem alike is "Your turn" (as on Home's cards).
+	if (chat.pendingQuestion || ((chat.kind ?? "teach") === "practice" && chat.pendingProblem)) return `Your turn · ${timeAgo(chat.updatedAt)}`;
 	if (chat.busy) return "Working…";
 	return timeAgo(chat.updatedAt);
 }
@@ -354,6 +354,9 @@ export function SessionRow({
 }) {
 	const kind = chat.kind === "practice" ? (chat.practiceMode === "drill" ? "drill" : "practice") : "teach";
 	const state = chat.busy || chat.compacting ? "working" : chat.pendingQuestion || (kind !== "teach" && chat.pendingProblem) ? "waiting" : "idle";
+	// P15 (round 14): a helper's result not yet seen — its own mark, not
+	// "your turn", and never part of the Sessions badge.
+	const fresh = hasNewResult(chat, useSessionSeen()) && !active;
 	return (
 		<button
 			type="button"
@@ -386,6 +389,7 @@ export function SessionRow({
 			<span className="min-w-0 flex-1">
 				<span className="lh-session-name block truncate">{chat.title}</span>
 				<span className="lh-session-meta block truncate">
+					{fresh && <span className="lh-new-result" data-testid="session-new-result">New result</span>}
 					{sessionMeta(chat)}
 					{kind === "drill" && <span className="sr-only">Drill</span>}
 				</span>
@@ -467,6 +471,15 @@ function SessionsSidebar() {
 		};
 	}, [phone, open]);
 	const [chats, setChats] = useState<ChatListItem[] | null>(null);
+	const [ctxChatId, setCtxChatId] = useState<string | null>(null);
+	// P15 (round 14): nothing reorders while the list is in use — the drawer
+	// is open, a session's menu is open, or the pointer is over the list.
+	// Updates keep their places until it is let go; new sessions lead.
+	const [listHover, setListHover] = useState(false);
+	const listInUse = (drawer && open) || ctxChatId !== null || listHover;
+	const frozenOrder = useRef<Map<string, number> | null>(null);
+	if (!listInUse) frozenOrder.current = null;
+	else if (!frozenOrder.current && chats) frozenOrder.current = new Map(chats.map((c, i) => [c.id, i]));
 	useEffect(() => {
 		publishWaitingCount((chats ?? []).filter((c) => c.pendingQuestion || ((c.kind ?? "teach") === "practice" && c.pendingProblem)).length);
 	}, [chats]);
@@ -510,7 +523,8 @@ function SessionsSidebar() {
 	 * keeps the natural list order (scores are all 0, sort is stable). */
 	const shown = useMemo(() => {
 		const q = query.trim();
-		let list = chats;
+		const order = frozenOrder.current;
+		let list = chats && order ? [...chats].sort((a, b) => (order.get(a.id) ?? -1) - (order.get(b.id) ?? -1)) : chats;
 		if (list && kindFilter !== "all") {
 			list = list.filter((c) => (c.kind ?? "teach") === kindFilter);
 		}
@@ -521,7 +535,7 @@ function SessionsSidebar() {
 			.filter((r): r is { c: (typeof list)[number]; score: number } => r.score !== null)
 			.sort((a, b) => b.score - a.score)
 			.map((r) => r.c);
-	}, [chats, query, kindFilter]);
+	}, [chats, query, kindFilter, listInUse]);
 
 	const refreshInFlightRef = useRef(false);
 	const refresh = useCallback(async () => {
@@ -637,7 +651,6 @@ function SessionsSidebar() {
 	   affordance at the bottom). The anchor is the row that was
 	   right-clicked — assigned into a ref before the state flip so the
 	   shell measures it on its first (hidden) pass. */
-	const [ctxChatId, setCtxChatId] = useState<string | null>(null);
 	const ctxAnchorRef = useRef<HTMLElement | null>(null);
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [deleting, setDeleting] = useState<ChatListItem | null>(null);
@@ -823,17 +836,18 @@ function SessionsSidebar() {
 				    half/half row): full-width rows read cleaner and give the
 				    labels room; teaching keeps the original draft route,
 				    practice carries its mode. */}
-				<div className="lh-sessions-create-label">New session</div>
-				<div className="lh-sessions-create">
+				{/* Round 14 (owner P3): no heading — the "+" says these start
+				    something new (on Home, in that mode); the list follows. */}
+				<div className="lh-sessions-create" role="group" aria-label="Start a new session">
 					<button
 						type="button"
 						data-testid="new-session"
 						data-kind="teach"
 						onClick={() => newSession("teach")}
 					>
-						<BookOpenIcon aria-hidden />
+						<PlusIcon aria-hidden />
 						Teach
-						<span className="sr-only">create a new teaching session</span>
+						<span className="sr-only">: start a new teaching session</span>
 					</button>
 					<button
 						type="button"
@@ -841,9 +855,9 @@ function SessionsSidebar() {
 						data-kind="practice"
 						onClick={() => newSession("practice")}
 					>
-						<DumbbellIcon aria-hidden />
+						<PlusIcon aria-hidden />
 						Practice
-						<span className="sr-only">create a new practice session</span>
+						<span className="sr-only">: start a new practice session</span>
 					</button>
 					<button
 						type="button"
@@ -851,9 +865,9 @@ function SessionsSidebar() {
 						data-kind="drill"
 						onClick={() => newSession("drill")}
 					>
-						<TargetIcon aria-hidden />
+						<PlusIcon aria-hidden />
 						Drill
-						<span className="sr-only">create a new drill</span>
+						<span className="sr-only">: start a new drill</span>
 					</button>
 				</div>
 
@@ -960,7 +974,8 @@ function SessionsSidebar() {
 				</div>
 
 				{deletedNotice && <p role="status" data-testid="session-deleted-notice" className="lh-deleted-notice">{deletedNotice}</p>}
-				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 pt-1">
+				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 pt-1"
+					onPointerEnter={(event) => { if (event.pointerType === "mouse") setListHover(true); }} onPointerLeave={() => setListHover(false)}>
 					{shown === null ? (
 						<div className="px-2 py-4 text-sm text-muted-foreground">Loading…</div>
 					) : shown.length === 0 ? (

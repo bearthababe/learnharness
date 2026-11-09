@@ -78,14 +78,17 @@ describe("stats bar", () => {
 	});
 
 	it("unknown context is explicit; changing the selected limit preserves the measurement", () => {
-		assert.equal(formatContextMeasurement(null, 100_000), "? / 100k");
+		assert.equal(formatContextMeasurement(null, 100_000), "—", "round 14 (C6): nothing measured reads \"—\", never \"? / 100k\"");
 		assert.equal(formatContextMeasurement(83_000, 100_000), "83k / 100k");
 		assert.equal(formatContextMeasurement(83_000, 200_000), "83k / 200k");
 		assert.equal(formatContextMeasurement(83_000, null), "83k");
+		// Round 14 (C6): an unmeasured context is left out of the row (only what
+		// is known shows); the Usage card says "Not measured yet".
 		const html = renderToStaticMarkup(<StatsBar chatId="fixture" turns={[turn()]} contextTokens={null} />);
-		assert.match(html, /data-testid="stats-context">\?</);
+		assert.ok(!html.includes('data-testid="stats-context"') && !html.includes("? /"), "no \"? / …\" while nothing is measured");
+		assert.match(html, /data-testid="stats-cost"/);
 		const empty = renderToStaticMarkup(<StatsBar chatId="fixture" turns={[]} />);
-		assert.match(empty, /data-testid="stats-context">\?</);
+		assert.ok(!empty.includes('data-testid="stats-context"') && !empty.includes("? /"));
 	});
 
 	it("prettyModel strips only the vendor path, preserving versions, dates and variants", () => {

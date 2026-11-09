@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRightIcon, ArrowUpIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { finishDictation, dictationCheckpoint, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
@@ -226,7 +226,7 @@ export function PracticeDock({ chatId, dictation, problemCallId, input, expanded
 						onClick={() => submit()}
 						className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 					>
-						<span className="lh-wide-submit-label">Submit thinking</span><ArrowUpIcon className="lh-phone-submit-icon" size={20} />
+						{/* P10 (round 14): one labelled Submit, the screen's one filled primary, on every device. */}<span className="lh-submit-label">Submit</span>
 					</Button>
 				</div>
 			</div>

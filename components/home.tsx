@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpIcon, BookOpenIcon, DumbbellIcon, TargetIcon } from "lucide-react";
-import { CompactLearningInput } from "@/components/compact-learning-input";
+import { CompactLearningInput, useFocusWithin } from "@/components/compact-learning-input";
 import { ResumeStrip } from "@/components/resume-strip";
 import { GraphView } from "@/components/graph-view";
 import { MinimalHome } from "@/components/minimal-home";
 import { SetupDialog } from "@/components/setup-dialog";
-import { ComposerActions, NodePickerControl } from "@/components/composer-actions";
+import { ComposerActions } from "@/components/composer-actions";
 import { useModelSetup, selectedModelUnavailable, openModelPicker, ZeroKeysPill } from "@/components/setup-cta";
 import { DictationBar, joinDictation, useDictation } from "@/components/dictation";
 import { useFieldCycle } from "@/components/field-cycle";
@@ -31,7 +31,7 @@ import type { TurnUsage } from "@/src/core";
 /** One line per mode (R7): what starting it here does. */
 const MODE_HINT = {
 	teach: "The tutor starts by finding out what you already know.",
-	practice: "Problems on ideas you pick, describe or bring yourself.",
+	practice: "Describe what to practise, or",
 	drill: "Short, repeated exercises on one skill.",
 } as const;
 
@@ -66,6 +66,7 @@ export function Home({
 }) {
 	const router = useRouter();
 	const [topic, setTopic] = useState("");
+	const [composerFocused, composerFocusHandlers] = useFocusWithin();
 	/* The topic MIRROR ("nothing gets lost" round, 2026-10-01 — same
 	 * mechanics as the chat composer, owner's consistency ruling): a
 	 * dictation flush lands via setState, invisible to a closure that
@@ -250,7 +251,7 @@ export function Home({
 			    OVER the graph (no gradient: the graph runs clean under it to the
 			    bottom edge). Matches chat.tsx's DOCK geometry (max-w-[46rem]
 			    px-4) so nothing shifts when a session starts (owner). */}
-			<div className="pointer-events-none absolute inset-x-0 bottom-0 pb-5">
+			<div className="lh-home-dock pointer-events-none absolute inset-x-0 bottom-0 pb-5">
 				<div className="pointer-events-auto mx-auto w-full max-w-[46rem] px-4">
 					{/* The pick bar (owner vision, 2026-10-04): the chain
 					    table's selection is PERSISTENT — picked
@@ -277,19 +278,22 @@ export function Home({
 									</button>
 								))}
 							</div>
-						{/* Beside the mode, never below it: choosing Practice must not
-						    move the screen (owner B9). */}
-						{(practiceProps.length > 0 || mode === "practice") && (
-							<NodePickerControl
-								count={practiceProps.length}
-								onOpen={() => setChainSelectOpen(true)}
-								onClear={() => setPracticeProps([])}
-							/>
-						)}
 					</div>
 					{/* R7 (round 13): what the chosen mode does, in one line — the
-					    same height for every mode, so switching never moves anything. */}
-					<p className="lh-mode-hint" data-testid="mode-hint" data-kind={mode}>{MODE_HINT[mode]}</p>
+					    same height for every mode, so switching never moves anything.
+					    Round 14 (P4): choosing ideas is a link in this line (the
+					    squashed badge beside the modes is gone); chosen ideas show
+					    here in any mode, since every start takes them along. */}
+					<p className="lh-mode-hint" data-testid="mode-hint" data-kind={mode}>
+						{practiceProps.length > 0 ? <>
+							<span>{practiceProps.length} {practiceProps.length === 1 ? "idea" : "ideas"} chosen</span>
+							<button type="button" className="lh-hint-link" data-testid="practice-props-chip" onClick={() => setChainSelectOpen(true)}>Change ›</button>
+							<button type="button" className="lh-hint-link" data-testid="practice-props-clear" aria-label="Clear chosen ideas" onClick={() => setPracticeProps([])}>Clear</button>
+						</> : mode === "practice" ? <>
+							<span>{MODE_HINT.practice}</span>
+							<button type="button" className="lh-hint-link" data-testid="practice-props-chip" onClick={() => setChainSelectOpen(true)}>choose ideas ›</button>
+						</> : MODE_HINT[mode]}
+					</p>
 					<ComposerActions
 						setup={zeroKeys ? (
 							<ZeroKeysPill inline onOpen={() => setSetupOpen(true)} />
@@ -310,12 +314,13 @@ export function Home({
 					<form
 						data-attachment-composer=""
 						className="lh-composer-shell lh-compact-row flex items-end gap-1.5 rounded-2xl border bg-card p-1.5 shadow-lg"
+						{...composerFocusHandlers}
 					onSubmit={(e) => {
 						e.preventDefault();
 						void start();
 					}}
 				>
-					<CompactLearningInput dictation={dictation} keyboardToggle><PathInput
+					<CompactLearningInput dictation={dictation}><PathInput
 						ref={topicInputRef}
 						value={topic}
 						onValueChange={(value) => {
@@ -349,6 +354,7 @@ export function Home({
 						type="submit"
 						aria-label="Start session"
 						disabled={(!topic.trim() && !dictation.active) || busy}
+						data-ready={(!!topic.trim() || dictation.active || composerFocused) || undefined}
 						className="lh-send-button flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-40"
 					>
 						<ArrowUpIcon className="size-5" />

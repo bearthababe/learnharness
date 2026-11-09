@@ -6,22 +6,25 @@ import { formatTokens, formatUsd, planCostLabel, prettyModel } from "@/component
 import { ModelControl, catalogLimits, useModelCatalog } from "@/components/model-picker";
 import { MenuShell } from "@/components/menu-shell";
 import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
-import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
 import { useOneMenu } from "@/components/one-menu";
 import { OPEN_USAGE_EVENT, publishPageMenu } from "@/components/page-menu";
 
 function UsagePanel({ children, anchorRef, onClose, closing, onClosed }: { children: ReactNode; anchorRef: RefObject<HTMLDivElement | null>; onClose: () => void; closing: boolean; onClosed: () => void }) {
 	const phone = usePhoneLayout();
-	// Phones (R2): Usage opens from the page menu's More button.
-	if (phone) return <MenuShell anchorTestid="page-menu-button" testid="stats-detail" preferredSide="down" align="right"
+	// Phones and tablets (R2; round 14, M4): Usage opens from the ⋯ app menu.
+	const touch = useTouchLayout();
+	if (touch) return <MenuShell anchorTestid="page-menu-button" testid="stats-detail" preferredSide="down" align="right"
 		closing={closing} onClosed={onClosed}
-		fitVisualViewport onClose={onClose} phoneTriggerTestid="page-menu-button"
+		fitVisualViewport={phone} onClose={onClose} phoneTriggerTestid="page-menu-button"
 		menuClass="w-[22rem] max-w-[calc(100vw-24px)] rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</MenuShell>;
 	return <div data-testid="stats-detail" className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</div>;
 }
 
 export function formatContextMeasurement(tokens: number | null, limit: number | null): string {
-	const numerator = tokens === null ? "?" : formatTokens(tokens);
+	// Round 14 (C6): nothing measured yet reads "—", never "? / 1M".
+	if (tokens === null) return "—";
+	const numerator = formatTokens(tokens);
 	return limit === null ? numerator : `${numerator} / ${formatTokens(limit)}`;
 }
 
@@ -138,7 +141,10 @@ export function StatsBar({
 	const costLabel = planCostLabel(pricedCount > 0 ? cost : null, cliBilled ? [...providers, "CLI"] : providers);
 	// The phone page menu (owner O1) shows Usage and opens this card.
 	const hasUsage = !!chatId || turns.length > 0;
-	const usageLabel = hasUsage ? `${contextLabel} · ${costLabel === "—" ? "cost not reported" : costLabel}` : null;
+	const contextKnown = contextTokens !== null;
+	const usageLabel = !hasUsage ? null
+		: contextKnown ? `${contextLabel} · ${costLabel === "—" ? "cost not reported" : costLabel}`
+		: costLabel === "—" ? "Not measured yet" : costLabel;
 	useEffect(() => { publishPageMenu({ usage: usageLabel }); }, [usageLabel]);
 	useEffect(() => () => publishPageMenu({ usage: null }), []);
 	useEffect(() => {
@@ -185,10 +191,10 @@ export function StatsBar({
 				className="flex items-center gap-1.5 tabular-nums transition-colors hover:text-foreground"
 			>
 				<span className="lh-phone-usage-label">Usage</span>
-				<span className="lh-usage-numbers contents"><span data-testid="stats-context">
+				<span className="lh-usage-numbers contents">{contextKnown && <><span data-testid="stats-context">
 					{contextLabel}
 				</span>
-				<span aria-hidden>·</span>
+				<span aria-hidden>·</span></>}
 				<span data-testid="stats-cost">{costLabel}</span>
 				</span>
 			</button>
@@ -201,7 +207,7 @@ export function StatsBar({
 							<div className="flex justify-between gap-2">
 								<span>Context (last call)</span>
 								<span className="tabular-nums text-card-foreground">
-									{contextLabel}
+									{contextKnown ? contextLabel : "Not measured yet"}
 								</span>
 							</div>
 							{selectedModel?.startsWith(`${CLAUDE_CODE_PROVIDER}:`) && (

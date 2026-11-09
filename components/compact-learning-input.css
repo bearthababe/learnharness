@@ -119,3 +119,39 @@
 .lh-phone-panel-body { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 12px; overflow: auto; overscroll-behavior: contain; font-size: 14px; }
 .lh-phone-panel [data-testid="plan-popup"] .lh-phone-panel-body { overflow: hidden; }
 .lh-phone-panel [data-testid="plan-popup"] .pointer-events-auto { min-height: 44px; min-width: 44px; }
+
+/* Tablets (round 14, owner M3): the mic sits inside every chat box and
+   answer field, as on phones, and never moves when other controls appear.
+   Only the field and its speech controls change; the wider layouts around
+   them (question cards, the composer pill) stay as they are. */
+@media (min-width: 768px) and (pointer: coarse) {
+	.lh-compact-field { display: flex; position: relative; flex: 1 1 auto; min-width: 0; align-self: stretch; }
+	.lh-compact-field > :is(textarea, [data-file-path-input]) { flex: 1 1 auto; width: 100%; min-width: 0; }
+	.lh-compact-field[data-has-mic] > :is(textarea, [data-file-path-input]) { padding-right: 52px; }
+	.lh-compact-field[data-has-mic][data-type-instead] > :is(textarea, [data-file-path-input]) { padding-right: 100px; }
+	.lh-compact-field[data-recording] > :is(textarea, [data-file-path-input]) {
+		visibility: hidden;
+		height: var(--lh-capture-height);
+		min-height: var(--lh-capture-height, 52px);
+	}
+	/* Centred on the first line's height and anchored to the bottom, so the
+	   mic lines up with a one-line field and never moves as it grows. */
+	.lh-compact-speech { display: block; position: absolute; right: 4px; bottom: calc(min(100%, 48px) / 2 - 22px); }
+	.lh-compact-field[data-recording] .lh-compact-speech { left: 4px; }
+	.lh-compact-speech button {
+		display: inline-flex; align-items: center; justify-content: center;
+		min-width: 44px; min-height: 44px; flex-shrink: 0; border-radius: 10px;
+	}
+	.lh-compact-speech button:disabled { opacity: .4; }
+	.lh-compact-speech button:focus-visible { outline: 2px solid var(--primary); }
+	.lh-compact-recording { display: flex; align-items: center; min-width: 0; }
+	.lh-compact-feedback { display: flex; align-items: center; gap: 5px; min-width: 0; flex: 1; padding-left: 5px; }
+	.lh-compact-timer { font-size: 13px; font-variant-numeric: tabular-nums; }
+	.lh-compact-meter { display: flex; align-items: center; height: 24px; flex: 1; min-width: 0; gap: 2px; overflow: hidden; }
+	.lh-compact-meter > span { flex: 1; min-width: 1px; background: var(--foreground); border-radius: 2px; }
+	.lh-compact-status { display: flex; align-items: center; gap: 4px; font-size: 13px; overflow-wrap: anywhere; }
+	.lh-compact-error { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0 6px 4px; color: var(--destructive); font-size: 14px; overflow-wrap: anywhere; }
+	.lh-compact-error > span { flex: 1; min-width: 0; }
+	.lh-compact-error button { min-height: 44px; min-width: 44px; text-decoration: underline; }
+	form.lh-compact-row { flex-wrap: wrap; }
+}

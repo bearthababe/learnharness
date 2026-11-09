@@ -1127,7 +1127,11 @@ try {
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0);
 	await page.keyboard.press("Escape");
 	assert.equal(await page.evaluate(() => document.body.style.overflow), "", "Phone modal releases its background lock on desktop");
-	// A fresh desktop open retains the inherited search-focus behavior.
+	// A fresh desktop open retains the inherited search-focus behavior. Round
+	// 14 (M4): a touch screen of any width opens Model from ⋯, so "desktop"
+	// here is a fine pointer.
+	await page.setViewport({ width: 1100, height: 800 });
+	await page.waitForSelector('[data-testid="stats-model"]', { visible: true });
 	await page.click('[data-testid="stats-model"]');
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
 	await page.keyboard.press("Escape");

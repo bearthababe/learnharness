@@ -287,8 +287,12 @@ export interface ChatSummary {
 	/** An unanswered quiz/ask question is waiting for the learner. */
 	pendingQuestion: boolean;
 	/** Practice sessions (2026-10-04): a posed problem with no conclude —
-	 *  the sidebar meta's "Problem waiting". False on teaching sessions. */
+	 *  the sidebar meta's "Your turn". False on teaching sessions. */
 	pendingProblem: boolean;
+	/** When a tutor helper last delivered a result here (round 14, P15):
+	 *  the sessions list marks "New result" until the learner has seen it.
+	 *  Absent when no helper has delivered. */
+	resultAt?: string;
 	/** The record's model-control settings — rides the list payload via the
 	 *  summary spread (the picker never needs it from here; the full record
 	 *  is its source). */

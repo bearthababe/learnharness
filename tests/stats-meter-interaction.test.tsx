@@ -36,7 +36,8 @@ test("meter keeps its measured numerator across selected-model/catalog changes, 
 		await act(async () => notifySettingsSaved("models"));
 		assert.equal(context(), "83k / 200k", "only denominator changes");
 		await act(async () => root.render(<StatsBar chatId="fixture" turns={[turn]} contextTokens={null} pricing={pricing} />));
-		assert.equal(context(), "? / 200k");
+		// Round 14 (C6): an unknown measurement is never shown as "? / …".
+		assert.equal(context(), undefined, "post-compaction unknown hides the meter rather than showing '?'");
 		assert.equal(host.querySelector('[data-testid="stats-cost"]')?.textContent, "$0.0030", "summary spending is still visible");
 		await act(async () => root.render(<StatsBar chatId="fixture" turns={[turn]} contextTokens={72_000} pricing={pricing} />));
 		assert.equal(context(), "72k / 200k");

@@ -3,8 +3,12 @@ import { SharedWritingImages, SharedWritingPanel, useSharedWriting } from "@/com
 import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
 import { HandwritingNotebook } from "@/components/handwriting/notebook";
 import { HandwritingPagesContext } from "@/components/handwriting/pages-context";
-import { OPEN_WRITE_EVENT, PageMenuButton, publishPageMenu } from "@/components/page-menu";
-import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { OPEN_HELPERS_EVENT, PageMenuButton } from "@/components/page-menu";
+import { SessionHelperFailures } from "@/components/activity-dock";
+import { NotebookOpener } from "@/components/notebook-opener";
+import { useMarkSessionSeen } from "@/components/session-seen";
+import { FocusModeExit, setFocusMode } from "@/components/focus-mode";
+import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
 import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
 import type { SharedWriting } from "@/src/core";
@@ -82,7 +86,7 @@ import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
 import { SessionMessageNavigation } from "@/components/session-navigation";
 import { friendlyProviderError } from "@/components/friendly-error";
-import { deliveredIn, friendlyNetworkError, listUnsent, newUnsentId, putUnsent, removeUnsent, type UnsentEntry } from "@/components/unsent-message";
+import { deliveredEntries, friendlyNetworkError, learnerTextCount, listUnsent, newUnsentId, putUnsent, removeUnsent, type UnsentEntry } from "@/components/unsent-message";
 import { useDeviceFeature } from "@/components/device-features";
 import { PracticeDock } from "@/components/practice-dock";
 import { ActiveProblemContext, ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
@@ -90,7 +94,7 @@ import { GraphContextCard, type GraphContextData } from "@/components/graph-cont
 import { TopBar } from "@/components/top-bar";
 import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
 import type { LhViewMessage } from "@/src/core";
-import { PhaseChip, phaseLabel, PhaseDivider } from "@/components/phase-divider";
+import { PhaseChip, phaseLabel, PhaseDivider, tutorProgressLabel } from "@/components/phase-divider";
 import {
 	CompactionCutDivider,
 	CompactionMomentDivider,
@@ -336,15 +340,6 @@ export function Chat({
 	// Switching the canvas off closes it (its pages stay saved).
 	useEffect(() => {
 		if (!writingOn && handwriting.open) handwriting.show(false);
-	}, [writingOn, handwriting]);
-	// Phones (round 13): when the canvas is switched on, Write is a row in
-	// More, so the page bar stays one row; wider screens keep the Write chip.
-	useEffect(() => {
-		if (!writingOn) return;
-		publishPageMenu({ write: true });
-		const open = () => handwriting.show(true);
-		window.addEventListener(OPEN_WRITE_EVENT, open);
-		return () => { publishPageMenu({ write: false }); window.removeEventListener(OPEN_WRITE_EVENT, open); };
 	}, [writingOn, handwriting]);
 	const notebookLayout = useNotebookLayout(notebookVisible);
 	const notebookSpeech = useSyncExternalStore(notebook.session.speech.subscribe, notebook.session.speech.getSnapshot, notebook.session.speech.getSnapshot);
@@ -596,6 +591,13 @@ export function Chat({
 	// append-only, and only while nothing has happened locally yet.
 	const nativeCountRef = useRef(nativeMessages.length);
 	nativeCountRef.current = nativeMessages.length;
+	// The conversation as this view holds it (accepted-but-not-yet-adopted
+	// bubbles included): a kept attempt's `seen` count is taken from it.
+	const touchLayout = useTouchLayout();
+	const nativeMessagesRef = useRef(nativeMessages);
+	nativeMessagesRef.current = nativeMessages;
+	// P15 (round 14): being in the session sees what lands in it.
+	useMarkSessionSeen(chatId, recordMessages.length);
 	const mountFreshness = useRef(false);
 	useEffect(() => {
 		if (mountFreshness.current) return;
@@ -820,8 +822,10 @@ export function Chat({
 		const restore = () => {
 			if (unsentRestored.current) return;
 			unsentRestored.current = true;
-			const entries = listUnsent(chatId).filter((entry) => {
-				if (!deliveredIn(initialMessages, entry)) return true;
+			const kept = listUnsent(chatId);
+			const landed = deliveredEntries(initialMessages, kept);
+			const entries = kept.filter((entry) => {
+				if (!landed.has(entry.id)) return true;
 				removeUnsent(chatId, entry.id); // a lost acknowledgement that did land
 				return false;
 			});
@@ -1564,7 +1568,9 @@ export function Chat({
 	// A lost acknowledgement that did land: once the record shows the
 	// message, the copy (and an unchanged restored draft) is retired.
 	useEffect(() => {
-		const delivered = listUnsent(chatId).filter((entry) => deliveredIn(recordMessages, entry));
+		const kept = listUnsent(chatId);
+		const landed = deliveredEntries(recordMessages, kept);
+		const delivered = kept.filter((entry) => landed.has(entry.id));
 		if (!delivered.length) return;
 		const ids = new Set(delivered.map((entry) => entry.id));
 		for (const entry of delivered) removeUnsent(chatId, entry.id);
@@ -1623,7 +1629,7 @@ export function Chat({
 	const sendText = (t: string, fromBox: boolean, entryId?: string | null) => {
 		const id = entryId ?? newUnsentId();
 		draftRef.current = t; // the refusal flow's preserve-and-replay seam
-		putUnsent(chatId, { id, text: t, at: Date.now() });
+		putUnsent(chatId, { id, text: t, at: Date.now(), seen: learnerTextCount(nativeMessagesRef.current, t) });
 		setUnsentShown((shown) => shown.filter((entry) => entry.id !== id));
 		if (fromBox) {
 			boxEntryRef.current = null;
@@ -1654,7 +1660,7 @@ export function Chat({
 		const box = textRef.current.trim();
 		const next = box ? `${entry.text}\n\n${box}` : entry.text;
 		applyText(next);
-		putUnsent(chatId, { ...entry, text: next });
+		putUnsent(chatId, { ...entry, text: next, seen: learnerTextCount(nativeMessagesRef.current, next) });
 		boxEntryRef.current = entry.id;
 		setBoxEntryId(entry.id);
 		setUnsentShown((shown) => shown.map((item) => (item.id === entry.id ? { ...item, text: next } : item)));
@@ -1690,10 +1696,15 @@ export function Chat({
 					else {
 						// The same honest recovery as plain sends: a device copy until
 						// acknowledged; not acknowledged → "Not sent", still in the box.
-						const id = newUnsentId(), words = input.text.trim();
-						if (words) { putUnsent(chatId, { id, text: words, at: Date.now() }); recorded = true; }
+						// The words already back in the box keep their own copy (one note, never two).
+						const id = boxEntryRef.current ?? newUnsentId(), words = input.text.trim();
+						if (words) { putUnsent(chatId, { id, text: words, at: Date.now(), seen: learnerTextCount(nativeMessagesRef.current, words) }); recorded = true; }
 						const accepted = await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission });
-						if (accepted) { if (words) removeUnsent(chatId, id); }
+						if (accepted) {
+							if (words) removeUnsent(chatId, id);
+							if (boxEntryRef.current === id) { boxEntryRef.current = null; setBoxEntryId(null); }
+							setUnsentShown((shown) => shown.filter((entry) => entry.id !== id));
+						}
 						else if (words) {
 							boxEntryRef.current = id;
 							setBoxEntryId(id);
@@ -1708,7 +1719,7 @@ export function Chat({
 				const words = textRef.current.trim();
 				if (recorded || !words || boxEntryRef.current) return;
 				const id = newUnsentId();
-				putUnsent(chatId, { id, text: words, at: Date.now() });
+				putUnsent(chatId, { id, text: words, at: Date.now(), seen: learnerTextCount(nativeMessagesRef.current, words) });
 				boxEntryRef.current = id;
 				setBoxEntryId(id);
 				setUnsentShown((shown) => [...shown.filter((entry) => entry.id !== id), { id, text: words, at: Date.now(), kind: "failed" }]);
@@ -1725,19 +1736,20 @@ export function Chat({
 		doSend(reviewed, recovery);
 	};
 	useHandwritingEditor("composer", () => ({ text: textRef.current }), draft => applyText(draft.text ?? ""), !pending && !activeProblemRef.current, handwritingSubmission);
-	// The Notebook toggle: under the composer on tablets and laptops; on
-	// phones it is part of the page toolbar (owner P2, round 13).
-	const notebookToggleEl = <>{notebookOn && <span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
-						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
-						className="lh-notebook-toggle pointer-events-auto inline-flex shrink-0 items-center justify-center text-muted-foreground"
-						onClick={() => {
-							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
-							if (notebookVisible && workspaceRef.current) {
-								void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
-							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
-						}}><NotebookPenIcon className="size-4" aria-hidden /><span className="lh-notebook-toggle-label" aria-hidden>Notebook</span></button>
-						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="text-muted-foreground"><PaperclipIcon className="size-3" aria-hidden="true" /></span>}
-					</span>}</>;
+	// The one "Notebook" button (round 14, T1): in the page bar on every
+	// device, after Plan (P1: [Sessions Home] · [Plan Notebook ⋯]). The
+	// equation notebook and the handwriting canvas share it.
+	const toggleEquations = () => {
+		if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
+		if (notebookVisible && workspaceRef.current) {
+			void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
+		} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
+	};
+	const notebookOpenerEl = <NotebookOpener
+		equations={notebookOn ? { open: notebookVisible, toggle: toggleEquations } : undefined}
+		handwriting={writingOn ? { open: handwriting.open, toggle: () => handwriting.show(!handwriting.open) } : undefined}
+		workingAttached={notebookOn && workingAttached}
+	/>;
 
 	return (
 		<HandwritingSubmissionContext.Provider value={handwritingSubmission}>
@@ -1856,8 +1868,6 @@ export function Chat({
 					{/* The plan chip (owner, plan-placement round): session-level
 					    structure beside the phase chip — access to the full-DAG popup
 					    at every width; the marginalia is the wide-screen glance view. */}
-					{/* Phones (P2): Notebook joins the toolbar row of the page bar. */}
-					{phoneLayout && notebookToggleEl}
 					<NotebookSpeechDestination session={notebook.session} />
 					{planTree && (
 						<Hint label="Open the full plan" side="bottom">
@@ -1899,10 +1909,11 @@ export function Chat({
 					) : (
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
 					)}
-					{writingOn && <Button variant="outline" size="sm" className="lh-header-write shrink-0" onClick={() => handwriting.show(true)} data-testid="open-notebook" aria-label="Write"><PenLineIcon aria-hidden /><span className="lh-header-write-label">Write</span></Button>}
+					{notebookOpenerEl}
 					{/* Phones: model, reasoning and Usage live here (owner O1). */}
-					<PageMenuButton />
+					<PageMenuButton extraRows={[{ id: "focus", label: "Focus on the lesson", value: "Hides this bar", open: () => setFocusMode(true) }]} />
 				</TopBar>
+				<FocusModeExit />
 				{!notebookVisible && notebook.error && (friendlyNetworkError(notebook.error)
 					? <p role="status" className="lh-quiet-status px-3 py-1">Offline — your notebook working is kept and syncs when you're back.</p>
 					: <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>)}
@@ -2176,14 +2187,16 @@ export function Chat({
 								</span>
 							)}
 							{(status === "submitted" || turnInFlight) && (
-								<span className="flex items-center gap-2 font-ui text-xs font-medium uppercase tracking-wide text-muted-foreground">
-									<BrailleSpinner label="Thinking" />
+								<span data-testid="tutor-progress" className="lh-tutor-progress flex items-center gap-2 font-ui text-sm font-medium text-muted-foreground">
+									<BrailleSpinner label={tutorProgressLabel(phases.at(-1) ?? "probe", kind === "practice")} />
 									<Shimmer duration={1}>
-										THINKING…
+										{tutorProgressLabel(phases.at(-1) ?? "probe", kind === "practice")}
 									</Shimmer>
 								</span>
 							)}
 							{openingError && <p role="alert" className="text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
+							{/* P14 (round 14): a helper that failed for this session says so here. */}
+							<SessionHelperFailures chatId={chatId} onOpenHelpers={touchLayout ? () => window.dispatchEvent(new CustomEvent(OPEN_HELPERS_EVENT)) : undefined} />
 							{unsentShown.length > 0 && (
 								<div role="status" data-testid="unsent-notice" className="lh-unsent-notice" data-several={quotedUnsent > 1 || undefined}>
 									{/* Several failed messages: one header, one compact line each
@@ -2276,7 +2289,7 @@ export function Chat({
 					contextTokens={contextTokens}
 					cliContextWindow={cliContextWindowOf(nativeMessages)}
 					pricing={pricing}
-					notebookToggle={phoneLayout ? null : notebookToggleEl}
+					notebookToggle={null}
 					onReserve={setDockReserve}
 					dictationSlot={<DictationBar dictation={dictation} />}
 					dictation={tutorDictation}
@@ -2416,7 +2429,8 @@ export function Chat({
 			</div>
 			</div>
 			{handwriting.mounted && <HandwritingSplit hidden={!handwriting.open} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
-			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
+			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded}
+				origin={pending ? "question" : activeProblem ? (practiceMode === "drill" ? "drill" : "practice") : "lesson"} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
 		</div>
 		</div>
 		</ActiveProblemContext.Provider>
@@ -2682,6 +2696,10 @@ function DockOverlay({
 		setExpanded(true);
 	}, [questionOpenRequest]); // the request number is the trigger; pending is read as it is now
 	const revealPending = requiresReveal && !revealed;
+	// C2 (round 14): where the learner was reading when the question opened.
+	// On phones the question then owns the screen, and "Back to lesson"
+	// returns to exactly this place (the reveal scroll behind it is undone).
+	const readingTopRef = useRef<number | null>(null);
 
 	const pendingId = pending?.key ?? null;
 	const initialPendingRef = useRef(pendingId);
@@ -2699,6 +2717,7 @@ function DockOverlay({
 	if (pendingId !== prevPendingIdRef.current) {
 		const wasQuestion = prevPendingIdRef.current !== null;
 		prevPendingIdRef.current = pendingId;
+		readingTopRef.current = null; // a new question: no reading place of its own yet
 		const returning = !!pendingId && !!returningQuestionIds?.current.has(pendingId);
 		if (pendingId && requiresReveal) {
 			const arrival = returning ? { expanded: true, revealed: true } : revealArrival(wasQuestion);
@@ -2736,6 +2755,8 @@ function DockOverlay({
 	// replaces the composer and owns the band.
 	const pendingRef = useRef(!!pending || !!practice);
 	pendingRef.current = !!pending || !!practice;
+	const questionDockRef = useRef(!!pending);
+	questionDockRef.current = !!pending;
 	const requiresRevealRef = useRef(requiresReveal);
 	requiresRevealRef.current = requiresReveal;
 	const revealedRef = useRef(revealed);
@@ -2790,8 +2811,18 @@ function DockOverlay({
 		setExpanded(false);
 		const settle = () => {
 			const view = scrollRef.current, block = blockRef.current;
-			const spacer = view?.querySelector<HTMLElement>('[data-testid="dock-spacer"]');
-			if (!view || !block || !spacer) return;
+			if (!view || !block) return;
+			// C2: back to exactly where the learner was reading when the
+			// question opened (a question that arrived open has no such
+			// place: the lesson's end then sits just above the bar).
+			const reading = readingTopRef.current;
+			if (reading !== null) {
+				stopScroll();
+				view.scrollTop = Math.min(reading, view.scrollHeight - view.clientHeight);
+				return;
+			}
+			const spacer = view.querySelector<HTMLElement>('[data-testid="dock-spacer"]');
+			if (!spacer) return;
 			const gap = block.getBoundingClientRect().top - 12 - spacer.getBoundingClientRect().top;
 			if (gap <= 0) return;
 			stopScroll();
@@ -2944,6 +2975,8 @@ function DockOverlay({
 		});
 	};
 	const expandAndReveal = () => {
+		const view = scrollRef.current;
+		if (view && !expandedRef.current) readingTopRef.current = view.scrollTop;
 		setRevealed(true); // the teach-check invitation was accepted (W5)
 		setExpanded(true);
 		void suppressFoldDuringReveal();
@@ -2989,6 +3022,11 @@ function DockOverlay({
 		const onScroll = () => {
 			if (el.closest('[data-input-focused="tutor"]')) return;
 			if (!pendingRef.current) return;
+			// C2/C3 (round 14): a question is opened and closed only by the
+			// learner (its bar, Show question, Back to lesson) — scrolling the
+			// lesson never opens or folds it, on any device. Practice problems
+			// keep their fold.
+			if (questionDockRef.current) return;
 			// Resize mute (owner, resize round): a geometry change re-clamps
 			// scrollTop and the browser emits the clamp as a scroll event —
 			// reading the transient position folded the box to the bar for a

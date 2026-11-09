@@ -2763,8 +2763,7 @@ body:has(.lh-graph-results, [data-testid="graph-node-card"]) .lh-resume {
 	height: 16px;
 }
 .hw-notebookHeader [data-testid="notebook-attach"] {
-	order: 10;
-	margin-left: 4px;
+	margin-inline: 4px;
 	padding-inline: 14px;
 	border-radius: 999px;
 	background: var(--primary);
@@ -2773,9 +2772,6 @@ body:has(.lh-graph-results, [data-testid="graph-node-card"]) .lh-resume {
 .hw-notebookHeader [data-testid="notebook-attach"]:hover:not(:disabled) {
 	background: color-mix(in oklab, var(--primary) 88%, white);
 	color: var(--primary-foreground);
-}
-.hw-notebookHeader [data-testid="notebook-options-toggle"] {
-	order: 9;
 }
 @media (pointer: coarse) {
 	.hw-headerAction { height: 44px; }
@@ -4287,25 +4283,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	:root .lh-topbar .lh-notebook-toggle[aria-expanded="true"] { border-color: color-mix(in oklab, var(--primary) 45%, var(--border)); background: color-mix(in oklab, var(--primary) 14%, var(--card)); }
 }
 
-/* P3: keyboard on / off is an icon inside the chat box, beside the mic. */
-.lh-compact-keyboard { display: none; }
-:root .lh-keyboard-toggle {
-	display: inline-flex; align-items: center; justify-content: center;
-	width: 44px; height: 44px; flex: none; border: 0; border-radius: 999px;
-	background: transparent; color: var(--muted-foreground);
-}
-:root .lh-keyboard-toggle:hover { background: var(--lh-quiet-bg); color: var(--foreground); }
-:root .lh-keyboard-toggle[data-off] { background: color-mix(in oklab, var(--primary) 18%, transparent); color: var(--foreground); }
-:root .lh-keyboard-toggle svg { width: 20px; height: 20px; }
-@media (pointer: coarse) {
-	:root .lh-compact-keyboard { display: flex; align-items: center; align-self: flex-end; }
-}
-@media (max-width: 767px) {
-	:root .lh-compact-field[data-has-keyboard] > .lh-compact-keyboard { position: absolute; right: 47px; bottom: 3px; }
-	/* While recording, the strip (meter, cancel, stop) is the whole box. */
-	:root .lh-compact-field[data-recording] > .lh-compact-keyboard { visibility: hidden; }
-	:root .lh-compact-field[data-has-keyboard][data-has-mic] > :is(textarea, [data-file-path-input]) { width: calc(100% - 92px); }
-}
+/* (Round 13 P3, the in-box keyboard switch, moved to the ⋯ menu in round 14: see M2.) */
 
 /* P5: the mode bar stays put — centred in its own column, the ideas
    picker in the next, whatever the mode. */
@@ -4439,8 +4417,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	/* The flexible gap between Home and the right-hand group may close to
 	   nothing, so the phone toolbar is always one row. */
 	:root .lh-topbar > .flex-1[aria-hidden="true"] { min-width: 0; }
-	/* The optional drawing canvas opens from More on phones (one row of five). */
-	:root .lh-topbar .lh-header-write { display: none; }
+
 }
 /* Narrow phones (under 360px): the same five, a little tighter, still one
    row — and Home's bar the same, so Home keeps one size and place. */
@@ -4457,4 +4434,349 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	:root .lh-graph-search input { height: 48px; }
 	:root .lh-home-toolbar :is(.lh-graph-chains, .lh-graph-import, .lh-graph-chains button, .lh-graph-import button),
 	:root .lh-graph-settings button[aria-label="Graph display settings"] { border-radius: 12px; }
+}
+
+/* ============================================================
+ * ROUND 14
+ * ============================================================ */
+/* M1: the ⋯ app menu — phones and tablets, icon only, 44px target. Keep
+   the touch query in step with TOUCH_MEDIA (use-phone-viewport.ts). */
+.lh-page-menu-button { display: none !important; }
+@media (max-width: 1023px), (pointer: coarse) {
+	:root .lh-page-menu-button { display: inline-flex !important; width: 44px; min-width: 44px; padding: 0; }
+	:root .lh-page-menu-button svg { width: 20px; height: 20px; color: var(--foreground); }
+	/* M4: model, reasoning, Usage and dictation leave the row under the
+	   composer (the controls stay mounted, hidden, for the send guard,
+	   the shortcuts and their cards, which open from ⋯). */
+	:root .lh-stats-bar {
+		position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; overflow: hidden;
+		visibility: hidden; pointer-events: none; clip-path: inset(50%);
+	}
+	/* M5: Settings, and the Tutor helpers list, live in ⋯ on touch screens. */
+	:root .lh-sessions-content [data-testid="activity-section"] { display: none; }
+}
+@media (min-width: 768px) and (pointer: coarse) {
+	:root .lh-page-menu-button { height: 44px; border-radius: 999px; }
+}
+/* The menu itself. */
+.lh-page-menu-divider { height: 1px; margin: 4px 8px; background: var(--border); }
+:root .lh-page-menu-switch { align-items: center; }
+.lh-page-menu-switch-hint { flex: 1; min-width: 0; text-align: right; font-size: 13px; color: var(--muted-foreground); }
+.lh-switch { position: relative; flex: none; width: 40px; height: 24px; border-radius: 999px; background: var(--muted); transition: background-color .15s; }
+.lh-switch > span { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 999px; background: var(--background); box-shadow: 0 1px 2px rgb(0 0 0 / .3); transition: transform .15s; }
+.lh-switch[data-on] { background: var(--primary); }
+.lh-switch[data-on] > span { transform: translateX(16px); }
+.lh-helpers-sheet [data-testid="activity-section"] { border-top: 0; padding: 4px; }
+.lh-helpers-sheet .lh-activity-history { max-height: min(60dvh, 420px); overflow-y: auto; }
+.lh-activity-empty { margin: 4px 8px 8px; color: var(--muted-foreground); font-size: 14px; line-height: 1.45; }
+
+/* M2: "Type instead" — a keyboard key inside each dictation field while
+   the keyboard is kept closed; it sits beside the mic, never moving it. */
+.lh-type-instead { display: none; }
+:root .lh-compact-field[data-type-instead] > .lh-type-instead {
+	position: absolute; right: 50px; bottom: 3px; z-index: 1;
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 44px; height: 44px; border-radius: 10px;
+	background: color-mix(in oklab, var(--primary) 16%, transparent); color: var(--foreground);
+}
+:root .lh-compact-field[data-type-instead] > .lh-type-instead svg { width: 20px; height: 20px; }
+:root .lh-compact-field[data-recording] > .lh-type-instead { visibility: hidden; }
+@media (max-width: 767px) {
+	:root .lh-compact-field[data-type-instead][data-has-mic] > :is(textarea, [data-file-path-input]) { width: calc(100% - 96px); }
+}
+
+/* M6: Send keeps its place and fades in when there is something to send,
+   the box is in use, or a turn can be stopped. */
+:root .lh-send-button { transition: opacity .18s ease, background-color .15s, color .15s; }
+:root .lh-send-button:not([data-ready]) { opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { :root .lh-send-button { transition: none; } }
+
+/* T1: one Notebook button; a small mark says a press-and-hold offers both. */
+.lh-notebook-opener { position: relative; }
+.lh-notebook-choice-mark {
+	position: absolute; right: 5px; bottom: 5px; width: 6px; height: 6px; border-radius: 999px;
+	background: var(--muted-foreground); opacity: .8;
+}
+:root .lh-notebook-toggle[data-open] { border-color: color-mix(in oklab, var(--primary) 45%, var(--border)); background: color-mix(in oklab, var(--primary) 14%, var(--card)); }
+.lh-notebook-choice { align-items: flex-start; }
+.lh-notebook-choice-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; text-align: left; }
+.lh-notebook-choice-detail { font-size: 13px; color: var(--muted-foreground); }
+
+/* G1: glass on menus and popovers only — mostly opaque, a light blur, and
+   opaque where transparency is reduced. Never on text, answers or paper. */
+:root .lh-glass {
+	background: color-mix(in oklab, var(--card) 88%, transparent);
+	-webkit-backdrop-filter: blur(10px) saturate(1.2);
+	backdrop-filter: blur(10px) saturate(1.2);
+}
+@media (prefers-reduced-transparency: reduce) {
+	:root .lh-glass { background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* P5: a calmer Home bar on phones and tablets — [Sessions Home] · [Search
+   Ideas ⋯]. Import and Graph display open from ⋯ (with the graph's costs
+   inside Graph display), so the stray cost label goes too (M4). */
+@media (max-width: 1023px), (pointer: coarse) {
+	:root .lh-home-toolbar :is(.lh-graph-import, .lh-graph-settings) { display: none; }
+	:root .lh-graph-cost-pill { display: none; }
+}
+@media (max-width: 767px) {
+	:root .lh-home-toolbar {
+		top: 8px; left: 146px; right: 68px;
+		flex-direction: row; align-items: center; justify-content: flex-end; gap: 8px;
+	}
+	:root .lh-graph-search { flex: 1 1 auto; width: auto; min-width: 0; margin: 0; }
+	:root .lh-graph-search input { height: 48px; }
+	:root .lh-home-toolbar-actions, :root .lh-home-toolbar-actions[data-empty="true"] {
+		display: flex; flex: 1 1 auto; justify-content: flex-end; width: auto; min-width: 0; margin: 0; gap: 8px;
+	}
+	/* Ideas joins the bar as one of its items: icon over a 13px label. */
+	:root .lh-home-toolbar .lh-graph-chains { padding: 0; border-radius: 12px; }
+	:root .lh-home-toolbar .lh-graph-chains button {
+		flex-direction: column; gap: 3px; min-width: 52px; width: auto; height: 48px; min-height: 48px; padding: 0 6px;
+		border-radius: 12px; font-size: 13px; font-weight: 600; color: var(--foreground);
+	}
+	:root .lh-home-toolbar .lh-graph-chains svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+}
+@media (max-width: 359px) {
+	:root .lh-home-toolbar { left: 117px; right: 58px; gap: 4px; }
+	:root .lh-home-toolbar .lh-graph-chains button { min-width: 46px; padding: 0 4px; font-size: 12px; }
+}
+@media (min-width: 768px) and (pointer: coarse) {
+	:root .lh-home-toolbar { right: 68px; }
+}
+
+/* T1/P1: the Notebook button is one of the bar's chips — the same type,
+   colour and icon tint as Plan beside it, on every device. */
+:root .lh-topbar .lh-notebook-toggle { color: var(--foreground); font-weight: 550; }
+:root .lh-topbar .lh-notebook-toggle svg { color: var(--lh-brand-ink); }
+@media (max-width: 767px) {
+	:root .lh-topbar .lh-notebook-toggle { font-weight: 600; }
+}
+
+/* P6: Home's bar sits on a tinted band (no blur over the graph). */
+.lh-graph-scrim {
+	position: absolute; inset: 0 0 auto 0; height: 112px; z-index: 5; pointer-events: none;
+	background: linear-gradient(to bottom, color-mix(in oklab, var(--background) 94%, transparent) 0%, color-mix(in oklab, var(--background) 72%, transparent) 55%, transparent 100%);
+}
+@media (min-width: 768px) { .lh-graph-scrim { height: 84px; } }
+
+/* P7: the knowledge map full screen (phones). */
+.lh-map-open, .lh-map-bar { display: none; }
+@media (max-width: 767px) {
+	:root .lh-map-open {
+		position: absolute; top: 66px; right: 16px; z-index: 10;
+		display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px;
+		border: 1px solid var(--border); border-radius: 999px; background: color-mix(in oklab, var(--card) 88%, transparent);
+		color: var(--foreground); font-size: 13px; font-weight: 600;
+	}
+	:root .lh-map-open svg { width: 15px; height: 15px; color: var(--muted-foreground); }
+	:root[data-graph-full] :is(.lh-home-navigation, .lh-home-dock, .lh-home-toolbar .lh-graph-chains) { display: none; }
+	:root[data-graph-full] .lh-map-bar {
+		position: absolute; top: 8px; left: 16px; right: 16px; z-index: 11; pointer-events: none;
+		display: flex; justify-content: space-between; gap: 8px;
+	}
+	:root[data-graph-full] .lh-map-bar > button {
+		pointer-events: auto; display: inline-flex; align-items: center; gap: 4px; height: 48px; padding: 0 12px;
+		border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--foreground);
+		font-size: 15px; font-weight: 600;
+	}
+	:root[data-graph-full] .lh-map-bar svg { width: 18px; height: 18px; }
+	:root[data-graph-full] .lh-home-toolbar { left: 112px; right: 92px; }
+}
+/* Home's bar stays above its scrim (and the map's own toolbar band). */
+:root .lh-home-navigation { z-index: 20; }
+
+/* P4: "choose ideas ›" lives in the mode line (the badge beside the modes
+   is gone); the line keeps its fixed height in every mode. */
+:root .lh-mode-hint { pointer-events: auto; display: flex; align-items: center; justify-content: center; gap: 6px; }
+:root .lh-mode-hint > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lh-hint-link {
+	position: relative; flex: none; padding: 0 2px; border: 0; background: none;
+	color: var(--lh-brand-ink); font: inherit; font-weight: 600; cursor: pointer;
+}
+.lh-hint-link::after { content: ""; position: absolute; inset: -12px -6px; } /* a 44px target around the words */
+.lh-hint-link:hover { text-decoration: underline; }
+@media (max-width: 359px) {
+	:root .lh-mode-hint { display: flex; flex-wrap: wrap; -webkit-line-clamp: unset; }
+}
+
+/* P8 (phones, before the question opens): "Thinking while reading" is one
+   line — its placeholder names the step, the mic is inside, and "Show
+   question ›" sits beside it. It grows while in use and otherwise shows
+   the thought on one line. The step itself stays (a teaching rule). */
+@media (max-width: 767px) {
+	:root .lh-reading-input[data-reading-claim="true"] { padding: 6px; }
+	:root .lh-reading-input[data-reading-claim="true"]:has(.lh-phone-reveal) > div:first-child { display: none; }
+	:root .lh-reading-input[data-reading-claim="true"] .lh-compact-row:has(> .lh-phone-reveal) {
+		grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px;
+	}
+	:root .lh-reading-input[data-reading-claim="true"] .lh-compact-row > .lh-phone-reveal {
+		position: static; height: 44px; min-height: 44px; margin-bottom: 4px; padding: 0 8px 0 12px;
+	}
+	:root .lh-reading-input[data-reading-claim="true"] .lh-compact-field { min-height: 52px; }
+	:root .lh-reading-input[data-reading-claim="true"]:not([data-focused]) .lh-compact-field > [data-file-path-input] {
+		max-height: 52px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+	}
+}
+/* P9: "Show question ›" — the same pill wherever a question waits. */
+.lh-show-question {
+	display: inline-flex; flex: none; align-items: center; gap: 2px; height: 36px; padding: 0 8px 0 12px; border-radius: 999px;
+	border: 1px solid color-mix(in oklab, var(--primary) 55%, var(--border));
+	background: color-mix(in oklab, var(--primary) 8%, var(--card));
+	color: color-mix(in oklab, var(--primary) 70%, var(--foreground));
+	font-size: 14.5px; font-weight: 600;
+}
+.lh-show-question svg { width: 18px; height: 18px; }
+.lh-show-question[data-style="prominent"] { border-color: var(--primary); background: var(--primary); color: var(--primary-foreground); }
+@media (pointer: coarse) { .lh-show-question { height: 44px; } }
+
+/* P10: the labelled Submit fits beside the phone's answer field. */
+@media (max-width: 767px) {
+	:root .lh-question-submit > button { padding: 0 16px; border-radius: 999px; font-size: 15px; font-weight: 600; }
+}
+
+/* P15: a helper's new result — its own mark (teal, a word), never "your
+   turn" and never in the badge. */
+.lh-new-result {
+	display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; padding: 0 6px; border-radius: 999px;
+	background: color-mix(in oklab, var(--lh-kind-practice, #2dd4bf) 18%, transparent);
+	color: color-mix(in oklab, var(--lh-kind-practice, #2dd4bf) 75%, var(--foreground));
+	font-size: 12px; font-weight: 600;
+}
+/* P14: a helper's failure inside the session it affects. */
+.lh-helper-failures { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.lh-helper-failure {
+	display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px;
+	border: 1px solid color-mix(in oklab, var(--destructive) 35%, var(--border));
+	background: color-mix(in oklab, var(--destructive) 8%, var(--card));
+	font-size: 14px; line-height: 1.45;
+}
+.lh-helper-failure-text { flex: 1 1 16rem; min-width: 0; color: var(--foreground); }
+.lh-helper-failure-actions { display: flex; flex: none; gap: 6px; }
+
+/* P2: focus mode — the session bar steps away until "Exit focus". */
+:root[data-focus-mode] .lh-topbar { display: none; }
+.lh-focus-exit {
+	position: fixed; top: calc(env(safe-area-inset-top) + 8px); right: 12px; z-index: 46;
+	display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; border-radius: 999px;
+	border: 1px solid var(--border); color: var(--foreground); font-size: 14px; font-weight: 600; box-shadow: var(--lh-shadow-pop, 0 4px 16px rgb(0 0 0 / .3));
+}
+.lh-focus-exit svg { width: 16px; height: 16px; }
+@media (min-width: 1024px) { .lh-focus-exit { top: 12px; right: 16px; } }
+
+/* ── Round 14: the handwriting notebook ─────────────────────────────── */
+/* T3: the notebook ⋯ holds the current page's actions. */
+.hw-optionsPanel > button, .hw-optionsSection > button { display: flex; width: 100%; justify-content: space-between; min-height: 44px; }
+.hw-optionsSection { display: flex; flex-direction: column; align-items: stretch; }
+.hw-optionsSection h3 { margin: 0 0 4px; padding: 0 12px; color: var(--muted-foreground); font-size: 13px; font-weight: 600; }
+.hw-optionValue { color: var(--muted-foreground); font-size: 13px; font-weight: 500; }
+.hw-optionsPanel hr { margin: 6px 0; border-color: var(--border); }
+/* T4: pages as a grid of thumbnails, then "Add page". */
+:root .hw-pagesPanel { width: min(520px, calc(100% - 16px)); }
+.hw-pageGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; margin-top: 8px; }
+.hw-pageGrid .hw-pageRow > button:first-child {
+	display: flex; flex-direction: column; align-items: stretch; gap: 6px; height: 100%; padding: 6px;
+	border: 1px solid transparent; border-radius: 12px; text-align: left; font-size: 13.5px;
+}
+.hw-pageGrid .hw-pageRow > button:first-child:hover:not(:disabled) { background: var(--accent); }
+.hw-pageGrid .hw-pageRow img { width: 100%; height: auto; aspect-ratio: 140 / 180; border-radius: 6px; background: var(--background); }
+.hw-pageGrid .hw-pageRow small { color: var(--muted-foreground); font-size: 12.5px; }
+.hw-pageGrid .hw-pageRow > button:not(:first-child) { min-height: 44px; font-size: 13px; text-decoration: underline; }
+.hw-addPage > button:first-child { justify-content: flex-start; color: var(--muted-foreground); }
+.hw-addPageMark {
+	display: grid; place-items: center; width: 100%; aspect-ratio: 140 / 180; border: 1.5px dashed var(--border); border-radius: 6px;
+}
+.hw-addPageMark svg { width: 28px; height: 28px; }
+.hw-addPage > button:hover:not(:disabled) .hw-addPageMark { border-color: var(--foreground); color: var(--foreground); }
+.hw-addPage > button:hover:not(:disabled) { color: var(--foreground); }
+
+/* T2: the wheel sits where it was put — four corners or mid-side — and
+   moves by its grip. Its settings open on the side with room. */
+:root .hw-overlay[data-spot] .hw-arc { top: auto; right: auto; bottom: auto; left: auto; transform: none; }
+:root .hw-overlay[data-spot$="-right"] .hw-arc { right: 10px; }
+:root .hw-overlay[data-spot$="-left"] .hw-arc { left: 10px; }
+:root .hw-overlay[data-spot^="top-"] .hw-arc { top: 10px; }
+:root .hw-overlay[data-spot^="bottom-"] .hw-arc { bottom: 16px; }
+:root .hw-overlay[data-spot^="middle-"] .hw-arc { top: calc(50% - 100px); }
+:root .hw-overlay[data-spot^="middle-"] .hw-arc[data-folded] { top: calc(50% - 32px); }
+:root:root .hw-notebook .hw-overlay[data-spot] .hw-arcInspector { top: 240px; bottom: auto; }
+:root:root .hw-notebook .hw-overlay[data-spot$="-right"] .hw-arcInspector { right: 0; left: auto; }
+:root:root .hw-notebook .hw-overlay[data-spot$="-left"] .hw-arcInspector { left: 0; right: auto; }
+:root:root .hw-notebook .hw-overlay[data-spot^="bottom-"] .hw-arcInspector { top: auto; bottom: 240px; }
+:root:root .hw-notebook .hw-overlay[data-spot^="middle-"] .hw-arcInspector { top: 0; }
+:root:root .hw-notebook .hw-overlay[data-spot="middle-right"] .hw-arcInspector { right: 212px; }
+:root:root .hw-notebook .hw-overlay[data-spot="middle-left"] .hw-arcInspector { left: 212px; }
+.hw-wheelGrip {
+	position: absolute; left: 50%; top: calc(100% + 4px); translate: -50% 0;
+	display: grid; place-items: center; width: 56px; height: 28px; border-radius: 14px;
+	border: 1px solid var(--tool-edge); background: var(--tool-surface); box-shadow: var(--tool-shadow);
+	color: var(--muted-foreground); pointer-events: auto; touch-action: none; cursor: grab;
+}
+.hw-wheelGrip::after { content: ""; position: absolute; inset: -8px -4px; }
+.hw-overlay button.hw-wheelGrip { touch-action: none; }
+.hw-overlay[data-spot^="bottom-"] .hw-wheelGrip { top: auto; bottom: calc(100% + 4px); }
+.hw-overlay[data-dragging] .hw-wheelGrip { cursor: grabbing; color: var(--foreground); }
+.hw-overlay[data-dragging] .hw-arc { opacity: .9; transition: none; }
+.hw-wheelGrip:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+/* T2: folded, the wheel is a button naming its tool (with Undo/Redo). */
+.hw-arc[data-folded] .hw-wheelHub .hw-toolGlyph { width: 20px; height: 24px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc[data-folded] .hw-wheelHub { width: 60px; height: 60px; gap: 1px; }
+/* G1/T2: glass only by its switch (Settings → Wheel look), opaque when
+   the system asks for less transparency. Only the disc blurs. */
+.hw-overlay[data-look="glass"] { --tool-surface: color-mix(in srgb, var(--card) 70%, transparent); }
+.hw-overlay[data-look="glass"] .hw-arc::before, .hw-overlay[data-look="glass"] .hw-wheelGrip { -webkit-backdrop-filter: blur(10px) saturate(1.2); backdrop-filter: blur(10px) saturate(1.2); }
+@media (prefers-reduced-transparency: reduce) {
+	.hw-overlay[data-look="glass"] { --tool-surface: var(--card); }
+	.hw-overlay[data-look="glass"] .hw-arc::before, .hw-overlay[data-look="glass"] .hw-wheelGrip { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+/* T5: under the paper, the way to the next page (and a new one): the
+   space below the page in the expanded view is the page's footer. */
+.hw-pageFooter {
+	display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; padding: 0 8px 8px;
+	color: var(--muted-foreground); font-size: 14px;
+}
+.hw-pageFooter > span { min-width: 7.5em; text-align: center; font-variant-numeric: tabular-nums; }
+.hw-pageFooter button { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px; border-radius: 10px; color: var(--foreground); }
+.hw-pageFooter button:hover:not(:disabled) { background: var(--accent); }
+.hw-pageFooter button:disabled { opacity: .4; }
+.hw-pageFooter button svg { width: 18px; height: 18px; }
+.hw-pageFooter .hw-footerAdd { margin-left: 8px; border: 1px solid var(--border); }
+/* T2: folded is a small bar — the tool's button with Undo and Redo. */
+:root .hw-overlay[data-variant="wheel"] .hw-arc[data-folded] { width: 168px; height: 64px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo > .hw-iconButton { width: 48px; height: 48px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo > .hw-iconButton:first-child { left: 4px; top: 8px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc[data-folded] > .hw-arcUndo > .hw-iconButton:last-child { left: 116px; top: 8px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc[data-folded] .hw-wheelHub { left: 54px; top: 2px; }
+
+/* T6: on a tablet with a notebook open, the question above it scrolls as
+   one pane (question, choices, confidence, thinking, Submit) and its
+   response controls take one row each, so the choices stay in view. */
+@media (min-width: 768px) and (max-width: 1023px) {
+	:root :is(.hw-splitLayout, .session-panes[data-notebook-open="true"]) [data-testid="question-dock"] .lh-option { min-height: 44px; padding-block: 6px; }
+	:root :is(.hw-splitLayout, .session-panes[data-notebook-open="true"]) .lh-question-confidence { padding-block: 0; }
+	:root :is(.hw-splitLayout, .session-panes[data-notebook-open="true"]) .lh-question-input {
+		position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px;
+	}
+	:root :is(.hw-splitLayout, .session-panes[data-notebook-open="true"]) .lh-question-input > .lh-input-label {
+		position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+	}
+	:root :is(.hw-splitLayout, .session-panes[data-notebook-open="true"]) .lh-question-input .lh-compact-field { min-height: 48px; }
+	:root :is(.hw-splitLayout, .session-panes[data-notebook-open="true"]) .lh-question-input .lh-compact-field :is(textarea, [contenteditable="true"]) { min-height: 24px; }
+	:root :is(.hw-splitLayout, .session-panes[data-notebook-open="true"]) .lh-question-submit { padding: 2px; }
+}
+/* E1: the equation notebook explains itself until it has working. */
+.notebook-empty { display: flex; flex-direction: column; gap: 6px; max-width: 34rem; color: var(--muted-foreground); font-size: 14px; line-height: 1.5; }
+.notebook-empty strong { color: var(--foreground); font-weight: 600; }
+/* P11: one filled primary per screen (Submit, Send). Attach page is the
+   notebook's main action but sits beside a question's Submit, so it is
+   tonal: tinted and outlined, never a second filled button. */
+:root .hw-notebookHeader [data-testid="notebook-attach"] {
+	border: 1px solid color-mix(in oklab, var(--primary) 55%, transparent);
+	background: color-mix(in oklab, var(--primary) 16%, transparent);
+	color: color-mix(in oklab, var(--primary) 70%, var(--foreground));
+}
+:root .hw-notebookHeader [data-testid="notebook-attach"]:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--primary) 26%, transparent);
+	color: var(--foreground);
 }

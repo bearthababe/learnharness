@@ -6,7 +6,8 @@ import { useHandwritingEditor } from "./handwriting/submission";
 import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import type { NotebookSession } from "./notebook-session";
 import { useNotebookActivityDraft } from "./notebook-activity-draft";
-import { CompactLearningInput } from "@/components/compact-learning-input";
+import { CompactLearningInput, useFocusWithin } from "@/components/compact-learning-input";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { ChevronRightIcon } from "lucide-react";
 import { useRevealStyle } from "@/components/device-prefs";
 
@@ -58,6 +59,10 @@ export function ReadingThinkingField({
 	// Phones fold the notes while the question is open (owner B12): the
 	// step stays, the box steps back; one tap unfolds it to re-read or add.
 	const [unfolded, setUnfolded] = useState(false);
+	// P8: it grows while the learner is in it, and otherwise previews the
+	// thought on one line — it never shrinks while they type.
+	const [focused, focusHandlers] = useFocusWithin();
+	const phone = usePhoneLayout();
 	const revealStyle = useRevealStyle();
 	useLayoutEffect(() => { setDraft(value); }, [revision, value]);
 	const owner = { kind: "question" as const, toolCallId, channel: "reading-thinking" as const };
@@ -96,6 +101,8 @@ export function ReadingThinkingField({
 			data-reading-claim={claim}
 			data-testid="reading-thinking-field"
 			data-folded={!claim && !unfolded ? "true" : undefined}
+			data-focused={focused || undefined}
+			{...focusHandlers}
 			className="lh-reading-input pointer-events-auto mb-2 rounded-2xl border bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50"
 		>
 			{!claim && <button type="button" className="lh-reading-fold" aria-expanded={unfolded} data-testid="reading-thinking-fold" onClick={() => setUnfolded((open) => !open)}>
@@ -148,7 +155,9 @@ export function ReadingThinkingField({
 						e.currentTarget.blur();
 					}
 				}}
-				placeholder="Whatever comes to mind as you read."
+				// P8 (round 14): on phones the field is a one-line invitation whose
+				// placeholder carries the step's name (the label row steps back).
+				placeholder={phone && claim ? "Thinking while reading" : "Whatever comes to mind as you read."}
 				className="field-sizing-content lh-input max-h-40 w-full resize-none bg-transparent py-0.5 outline-none placeholder:text-muted-foreground/70"
 			/></CompactLearningInput>
 			{claim && onOpen && <button type="button" className="lh-phone-reveal" data-style={revealStyle} aria-label="Show question" data-testid="teach-check-reveal" onClick={onOpen}><span className="lh-phone-reveal-label" aria-hidden="true">Show question</span><ChevronRightIcon size={18} /></button>}

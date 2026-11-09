@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { computeMenuPlacement, computeVisibleMenuPlacement, type MenuSide } from "../components/menu-shell.tsx";
+import { clampMenuPlacement, computeMenuPlacement, computeVisibleMenuPlacement, type MenuSide } from "../components/menu-shell.tsx";
 
 /**
  * The shared menu shell's placement decision (fix wave chunk B): the
@@ -115,5 +115,33 @@ describe("computeMenuPlacement — cap + position", () => {
 		const p = computeMenuPlacement(rect(400, 440), viewport(800), 300, "down", "left");
 		assert.equal(p.style.left, 100);
 		assert.ok(!("right" in p.style));
+	});
+});
+
+describe("C5 (round 14): a placed menu always stays on screen", () => {
+	const view = { width: 1440, height: 900 };
+	it("never runs past the right or left edge", () => {
+		// A 240px menu left-aligned to a row near the right edge.
+		const right = clampMenuPlacement(computeMenuPlacement({ top: 100, bottom: 130, left: 1400, right: 1430 }, view, 200, "down", "left"), 240, view);
+		assert.equal(right.style.left, 1440 - 8 - 240);
+		assert.equal(right.style.right, undefined);
+		// Right-aligned to an anchor near the left edge.
+		const left = clampMenuPlacement(computeMenuPlacement({ top: 100, bottom: 130, left: 10, right: 60 }, view, 200, "down", "right"), 240, view);
+		assert.equal(left.style.left, 8);
+	});
+	it("a menu wider than the screen starts at the edge and is capped to it", () => {
+		const phone = { width: 375, height: 667 };
+		const p = clampMenuPlacement(computeMenuPlacement({ top: 100, bottom: 130, left: 200, right: 360 }, phone, 200, "down", "right"), 420, phone);
+		assert.equal(p.style.left, 8);
+		assert.equal(p.style.maxWidth, 375 - 16);
+	});
+	it("never hangs below or above the screen: the cap shrinks, or the menu moves inside", () => {
+		// Anchor at the very bottom, both sides cramped: the floor would hang off.
+		const low = clampMenuPlacement({ side: "down", style: { left: 100, top: 880 }, maxHeight: 96 }, 200, view);
+		assert.ok(Number(low.style.top) + low.maxHeight <= 900 - 8, JSON.stringify(low));
+		const roomy = clampMenuPlacement({ side: "down", style: { left: 100, top: 700 }, maxHeight: 540 }, 200, view);
+		assert.equal(roomy.maxHeight, 900 - 8 - 700, "the cap shrinks to the room below");
+		const high = clampMenuPlacement({ side: "up", style: { left: 100, bottom: 880 }, maxHeight: 96 }, 200, view);
+		assert.ok(900 - Number(high.style.bottom) - high.maxHeight >= 8, JSON.stringify(high));
 	});
 });

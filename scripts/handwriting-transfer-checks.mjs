@@ -5,12 +5,13 @@ import assert from "node:assert/strict";
 export async function checkHandwritingTransfers({ page, origin, transferFaults }) {
 	const fill = async (selector, text) => { await page.focus(selector); await page.keyboard.down("Control"); await page.keyboard.press("KeyA"); await page.keyboard.up("Control"); await page.keyboard.sendCharacter(text); };
 	const ready = () => page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]')?.dataset.ready === "true");
-	// Round 13: phones open the optional drawing canvas from More (the page bar keeps one row); wider screens keep the Write chip.
+	// Round 14 (T1): one Notebook button. When handwriting is not its default
+	// (phones default to equations), a press and hold offers both notebooks.
 	const openWrite = async () => {
 		if (await page.$eval('[data-testid="open-notebook"]', element => element.checkVisibility()).catch(() => false)) return page.click('[data-testid="open-notebook"]');
-		await page.click('[data-testid="page-menu-button"]');
-		await page.waitForSelector('[data-testid="page-menu-write"]', { visible: true });
-		await page.click('[data-testid="page-menu-write"]');
+		await page.click('.lh-notebook-toggle', { button: "right" });
+		await page.waitForSelector('[data-testid="notebook-open-handwriting"]', { visible: true });
+		await page.click('[data-testid="notebook-open-handwriting"]');
 	};
 	const open = async () => { if (await page.$eval('[data-testid="notebook-slot"]', element => element.hidden).catch(() => true)) await openWrite(); await ready(); };
 	const cdp = await page.createCDPSession();

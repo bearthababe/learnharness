@@ -109,6 +109,16 @@ function getChat(id: string): ChatRecord | null {
 	return parsed as ChatRecord;
 }
 
+/** Round 14 (P15): when the last tutor-helper result landed in a record
+ *  (the delivered "subagent-steer" card), for the list's "New result". */
+function latestResultAt(messages: readonly LhMessage[]): { resultAt?: string } {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i] as { role?: string; customType?: string; timestamp?: unknown };
+		if (message.role === "custom" && message.customType === "subagent-steer" && typeof message.timestamp === "number") return { resultAt: new Date(message.timestamp).toISOString() };
+	}
+	return {};
+}
+
 function listChats(): ChatSummary[] {
 	try {
 		fs.mkdirSync(PATHS.chats, { recursive: true });
@@ -144,6 +154,7 @@ function listChats(): ChatSummary[] {
 						// "Problem waiting"); false on teaching sessions, which
 						// have no problem tool.
 						pendingProblem: activeProblemOf(messages) !== null,
+						...latestResultAt(messages),
 					};
 				} catch (err) {
 					console.error(`[chat ${summary.id}] summary projection failed:`, err);

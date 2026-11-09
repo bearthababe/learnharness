@@ -8,7 +8,7 @@ import { ModelMenuList, ThinkingMenuList } from "@/components/settings/model-men
 import { composeSlotModel } from "@/components/settings/agent-section";
 import { MenuShell } from "@/components/menu-shell";
 import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
-import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
 import { Hint } from "@/components/ui/hint";
 import { notifySettingsSaved, useSettingsSaved } from "@/components/settings-signal";
 import { useModelCatalog } from "@/components/model-catalog";
@@ -43,6 +43,9 @@ export function catalogLimits(catalog: Pick<ModelCatalogResponse, "models">): Ma
  */
 export function ModelControl({ chatId, onModelChange }: { chatId?: string; onModelChange?: (model: string | undefined) => void }) {
 	const phone = usePhoneLayout();
+	// Phones and tablets (round 14, M1/M4): the cards open from the ⋯ app
+	// menu they were chosen in; laptops keep them on the row's controls.
+	const touch = useTouchLayout();
 	const { catalog, refresh } = useModelCatalog();
 	const [models, setModels] = useState<ModelsSettings | undefined>();
 	// The settings record has been read (a first run has no models key at
@@ -364,13 +367,13 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 					closing={presence.closing} onClosed={presence.onClosed}
 					// Phones (R2, round 13): the card opens from the page menu's
 					// More button it was chosen in, not from the hidden row.
-					{...(phone ? { anchorTestid: "page-menu-button" } : { anchorRef: containerRef })}
+					{...(touch ? { anchorTestid: "page-menu-button" } : { anchorRef: containerRef })}
 					testid="model-menu"
-					phoneTriggerTestid={phone ? "page-menu-button" : "stats-model"}
-					focusSearch={!phone}
+					phoneTriggerTestid={touch ? "page-menu-button" : "stats-model"}
+					focusSearch={!touch}
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
-					preferredSide={phone ? "down" : "up"}
+					preferredSide={touch ? "down" : "up"}
 					menuClass="lh-model-menu flex w-[24rem] flex-col rounded-xl border bg-card p-2 text-[13.5px] shadow-xl"
 				>
 					{modelMenu}
@@ -380,12 +383,12 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			{presence.value === "thinking" && (
 				<MenuShell
 					closing={presence.closing} onClosed={presence.onClosed}
-					{...(phone ? { anchorTestid: "page-menu-button" } : { anchorRef: containerRef })}
+					{...(touch ? { anchorTestid: "page-menu-button" } : { anchorRef: containerRef })}
 					testid="thinking-menu"
-					phoneTriggerTestid={phone ? "page-menu-button" : "stats-thinking"}
+					phoneTriggerTestid={touch ? "page-menu-button" : "stats-thinking"}
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
-					preferredSide={phone ? "down" : "up"}
+					preferredSide={touch ? "down" : "up"}
 					menuClass="flex w-44 flex-col gap-0.5 rounded-xl border bg-card p-2 text-xs shadow-xl"
 				>
 					<ThinkingMenuList

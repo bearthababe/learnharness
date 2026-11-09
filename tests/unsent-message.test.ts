@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { SessionModel } from "../components/session-core.ts";
-import { deliveredIn, friendlyNetworkError, listUnsent, putUnsent, removeUnsent } from "../components/unsent-message.ts";
+import { deliveredEntries, deliveredIn, friendlyNetworkError, learnerTextCount, listUnsent, putUnsent, removeUnsent } from "../components/unsent-message.ts";
 import { newUserMessage } from "../src/core/native-messages.ts";
 
 it("a send that is never acknowledged leaves no 'sent' bubble behind once its text goes back to the composer", async () => {
@@ -55,4 +55,24 @@ it("each unsent message keeps its own copy: a newer draft never replaces an olde
 	} finally {
 		(globalThis as { localStorage?: unknown }).localStorage = previous;
 	}
+});
+
+it("C1 (round 14): resending the same words as an earlier message is not mistaken for delivery", () => {
+	const earlier = { ...newUserMessage("Same words"), id: "msg_1", timestamp: Date.now() - 5_000 };
+	const attempt = { id: "u_retry", text: "Same words", at: Date.now(), seen: learnerTextCount([earlier], "Same words") };
+	assert.equal(attempt.seen, 1);
+	assert.equal(deliveredEntries([earlier], [attempt]).size, 0, "the earlier identical message proves nothing about this attempt");
+	const landed = { ...newUserMessage("Same words"), id: "msg_2", timestamp: Date.now() };
+	assert.deepEqual([...deliveredEntries([earlier, landed], [attempt])], ["u_retry"], "a new copy in the record is this attempt landing");
+	assert.equal(deliveredEntries([earlier, { ...landed, id: "c_local" }], [attempt]).size, 0, "the page's own optimistic bubble is not delivery");
+});
+
+it("C1: two identical failed attempts are matched to deliveries one by one, in order", () => {
+	const earlier = { ...newUserMessage("Again"), id: "msg_1" };
+	const first = { id: "u_a", text: "Again", at: 1, seen: 1 }, second = { id: "u_b", text: "Again", at: 2, seen: 1 };
+	const one = { ...newUserMessage("Again"), id: "msg_2" };
+	assert.deepEqual([...deliveredEntries([earlier, one], [second, first])], ["u_a"], "one delivery retires only the first attempt");
+	const two = { ...newUserMessage("Again"), id: "msg_3" };
+	assert.deepEqual([...deliveredEntries([earlier, one, two], [first, second])].sort(), ["u_a", "u_b"]);
+	assert.deepEqual([...deliveredEntries([one], [{ id: "u_old", text: "Again", at: Date.now() - 1000 }])], ["u_old"], "copies from earlier builds keep the timestamp rule");
 });

@@ -54,8 +54,10 @@ export function useKeyboardOff(): boolean {
 	return useSyncExternalStore(subscribe, () => read("keyboardOff"), () => DEFAULTS.keyboardOff);
 }
 
-/** Text fields that take typing or dictation. */
-const EDITABLE = 'textarea, input[type="text"], input:not([type]), [contenteditable="true"], [data-file-path-input]';
+/** The fields that take dictation (each sits in a compact field with its
+ *  mic). Round 14 (M2): search, renaming and Settings always type — the
+ *  switch is about dictating, and those fields have no mic. */
+const EDITABLE = '.lh-compact-field :is(textarea, [contenteditable="true"], [data-file-path-input])';
 
 /** Apply the keyboard choice to every field (and to fields that appear
  *  later, on focus). With the keyboard off, fields are marked

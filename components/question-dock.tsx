@@ -1,14 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
+import { ArrowDownIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useRevealStyle } from "@/components/device-prefs";
 import { PathInput } from "@/components/path-input";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { dictationCheckpoint, finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
 import { CompactLearningInput } from "@/components/compact-learning-input";
-import { ArrowUpIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
 import { useHandwritingEditor } from "./handwriting/submission";
@@ -245,45 +245,29 @@ export function QuestionDockBar({
 	 *  label Probe/Recall — the phase boundary visible in the composer. */
 	toolLabel?: string;
 }) {
-	if (variant === "reveal") {
-		return (
-			<button
-				type="button"
-				data-testid="teach-check-reveal"
-				onClick={onExpand}
-				className="lh-question-reveal dock-variant flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40"
-			>
-				<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
-					<PlayIcon className="size-3.5" />
-				</span>
-				<span className="min-w-0 flex-1">
-					<span className="block text-sm font-medium">Check your understanding</span>
-					<span className="block truncate text-xs text-muted-foreground">{teaserText(question)}</span>
-				</span>
-				<span className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary">
-					Open <ChevronRightIcon className="size-3.5" />
-				</span>
-			</button>
-		);
-	}
+	// P9 (round 14): one look and one label for opening a question, on every
+	// device and in every state — the waiting invitation, the folded bar and
+	// the phone's reading line all end in the same "Show question ›".
+	const kind = label ?? toolLabel ?? (toolName === "quiz" ? "Check" : toolName === "explain" ? "Explain" : "Question");
 	return (
 		<button
 			type="button"
-			data-testid="question-dock-bar"
+			data-testid={variant === "reveal" ? "teach-check-reveal" : "question-dock-bar"}
 			onClick={onExpand}
-			className="dock-variant flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent/40"
+			className={`${variant === "reveal" ? "lh-question-reveal " : ""}lh-question-opener dock-variant flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm transition-colors hover:bg-accent/40`}
 		>
-			<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-				{label ??
-							toolLabel ??
-							(toolName === "quiz" ? "Check" : toolName === "explain" ? "Explain" : "Question")}
-			</span>
+			<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">{kind}</span>
 			<span className="min-w-0 flex-1 truncate text-muted-foreground">{teaserText(question)}</span>
-			<span className="flex shrink-0 items-center gap-1 text-xs font-medium">
-				Answer <ArrowDownIcon className="size-3.5" />
-			</span>
+			<ShowQuestionLabel />
 		</button>
 	);
+}
+
+/** "Show question ›" — the one opener label (P9), quiet by default with the
+ *  Prominent option from Settings (round 12, O5). */
+export function ShowQuestionLabel() {
+	const style = useRevealStyle();
+	return <span className="lh-show-question" data-style={style}>Show question<ChevronRightIcon aria-hidden /></span>;
 }
 
 /** The expanded question: label, question, options, and the unified bottom row. */
@@ -1063,7 +1047,7 @@ function QuestionDockForm({
 							aria-label="Submit answer"
 							className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 						>
-							<span className="lh-wide-submit-label">Submit answer</span><ArrowUpIcon className="lh-phone-submit-icon" size={20} />
+							{/* P10 (round 14): one labelled Submit, the screen's one filled primary, on every device. */}<span className="lh-submit-label">Submit</span>
 						</Button>
 					</div>
 				</div>

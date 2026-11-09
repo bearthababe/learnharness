@@ -43,6 +43,14 @@ export function phaseLabel(phase: Phase3): string {
 	return CHIP_LABEL[phase];
 }
 
+/** What the learner reads while the tutor works (round 14, P13): progress
+ *  in the learner's terms for the phase it is in. Display only — the tutor
+ *  and everything it records are unchanged. */
+export function tutorProgressLabel(phase: Phase3, practice = false): string {
+	if (practice) return "Preparing your problem…";
+	return phase === "probe" ? "Checking what you already know…" : phase === "plan" ? "Planning your lesson…" : "Preparing the next step…";
+}
+
 export function PhaseChip({ phase }: { phase: Phase3 }) {
 	return (
 		<span

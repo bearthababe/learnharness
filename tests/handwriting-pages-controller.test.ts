@@ -304,3 +304,22 @@ it("deletion invalidates both idle and held-ACK page controllers and admitted co
 		assert.deepEqual([...f.local], [["other-session", "untouched"]]); assert.equal(f.device.value.pages.length, 0); model.dispose();
 	}
 });
+
+it("Add page (round 14, T4) creates, opens and syncs an empty page of its own; a forged blank seed is refused", async () => {
+	const f = fixture("blank"), model = new HandwritingPages("test", f.deps); await model.open();
+	model.draw(ink); await model.retry();
+	assert.equal(await model.addBlankPage(), true);
+	const id = model.getSnapshot().working.pageId;
+	assert.notEqual(id, "page_initial");
+	assert.equal(replayHandwriting(model.getSnapshot().working).strokes.length, 0, "the new page is empty");
+	assert.equal(model.getSnapshot().readingPosition, "top");
+	await model.retry();
+	const saved = f.store.readPage("test", id)!;
+	assert.deepEqual(saved.origin, { kind: "blank" });
+	assert.equal(replayHandwriting(f.store.readPage("test", "page_initial")!.journal).strokes.length, 1, "the earlier page keeps its ink");
+	model.draw(ink); await model.retry();
+	assert.equal(replayHandwriting(f.store.readPage("test", id)!.journal).strokes.length, 1, "later ink on the new page syncs");
+	model.dispose();
+	const forged = { ...saved, id: "page_22222222-2222-4222-8222-222222222222", journal: copyHandwriting(appendHandwriting({ version: 1, operations: [] }, { id: "x", kind: "stroke", stroke: ink }), "page_22222222-2222-4222-8222-222222222222") };
+	assert.throws(() => f.store.createPageIfAbsent("test", forged, { id: "forged", kind: "blank", seedFingerprint: "a".repeat(64), from: { kind: "working", pageId: forged.id } }), "a blank page cannot start with ink");
+});

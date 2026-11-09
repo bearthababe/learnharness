@@ -58,7 +58,7 @@ describe("SessionRow", () => {
 		const html = render(item({ phase: "teach", pendingQuestion: true }));
 		assert.ok(!html.includes("session-dot"), "no dots");
 		assert.ok(!html.includes("braille-spinner"), "motion is reserved for working");
-		assert.ok(html.includes("Waiting for input"), "the meta line's text");
+		assert.ok(html.includes("Your turn"), "the meta line's text (round 14, P12: one wording)");
 		assert.ok(!html.includes("Waiting for your answer"), "old wording is gone");
 	});
 
@@ -85,7 +85,7 @@ describe("SessionRow", () => {
 		// Local noon: timeAgo renders the local date, so a fixed UTC instant
 		// lands on 2026-01-01 west of UTC.
 		const awaiting = render(item({ pendingQuestion: true, updatedAt: new Date(2026, 0, 2, 12).toISOString() }));
-		assert.ok(awaiting.includes("Waiting for input · 2026-01-02"), "awaiting meta keeps the existing date");
+		assert.ok(awaiting.includes("Your turn · 2026-01-02"), "awaiting meta keeps the existing date");
 		assert.ok(!awaiting.includes("messages"), "count yields to the state");
 		assert.ok(!awaiting.includes("braille-spinner"), "…and the spinner stays off");
 
@@ -104,7 +104,7 @@ describe("SessionRow", () => {
 		for (const kind of ["teach", "practice"] as const) {
 			for (const updatedAt of [new Date().toISOString(), "2025-06-02T12:00:00.000Z"]) {
 				const html = render(item({ kind, pendingQuestion: true, updatedAt }));
-				assert.ok(html.includes(`Waiting for input · ${timeAgo(updatedAt)}`));
+				assert.ok(html.includes(`Your turn · ${timeAgo(updatedAt)}`));
 				assert.ok(!html.includes("Waiting for your answer"));
 			}
 		}
@@ -113,7 +113,7 @@ describe("SessionRow", () => {
 	it("compacting retains priority over pending input", () => {
 		const html = render(item({ compacting: true, pendingQuestion: true }));
 		assert.match(html, /Compacting context ·/);
-		assert.doesNotMatch(html, /Waiting for input/);
+		assert.doesNotMatch(html, /Your turn/);
 	});
 
 	it("active row is visually marked by the background alone (owner, round 5: no weight change)", () => {
@@ -146,7 +146,7 @@ describe("SessionRow practice badge (practice sessions, 2026-10-04)", () => {
 		const html = render(item({ title: "Volume conversions", kind: "practice", practiceMode: "drill", pendingProblem: true }));
 		assert.match(html, /Volume conversions/);
 		assert.match(html, />Drill<\/span>/);
-		assert.match(html, /Problem waiting/);
+		assert.match(html, /Your turn/);
 		assert.doesNotMatch(html, /aria-label="Practice session"/);
 	});
 	it("a practice row carries the dumbbell badge and the unified Working meta while busy (owner, 2026-10-10)", () => {
@@ -167,8 +167,8 @@ describe("SessionRow practice badge (practice sessions, 2026-10-04)", () => {
 		assert.match(html, /Working…/);
 	});
 
-	it("a practice row with a posed problem says the problem is waiting", () => {
+	it("a practice row with a posed problem says it is the learner's turn (round 14, P12)", () => {
 		const html = render(item({ kind: "practice", pendingProblem: true }));
-		assert.match(html, /Problem waiting ·/);
+		assert.match(html, /Your turn ·/);
 	});
 });

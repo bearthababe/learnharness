@@ -177,6 +177,35 @@ export function computeMenuPlacement(
 	return { side, style: { ...horizontal, ...vertical }, maxHeight };
 }
 
+/** Round 14 (C5): a placed menu always stays on screen — never past an
+ *  edge horizontally (a wide menu starts at the left edge and is capped to
+ *  the screen), never below or above the screen vertically (its cap shrinks
+ *  to the room, and when even the usable floor does not fit, the menu moves
+ *  inside instead of hanging off). It scrolls inside its cap. Pure. */
+export function clampMenuPlacement(p: MenuPlacement, menuWidth: number, viewport: { width: number; height: number }): MenuPlacement {
+	const style: Record<string, string | number> = { ...p.style };
+	const width = Math.min(menuWidth, viewport.width - 2 * EDGE);
+	const wantedLeft = typeof style.right === "number" ? viewport.width - style.right - menuWidth : typeof style.left === "number" ? style.left : EDGE;
+	delete style.right;
+	style.left = Math.max(EDGE, Math.min(viewport.width - EDGE - width, wantedLeft));
+	style.maxWidth = viewport.width - 2 * EDGE;
+	let maxHeight = Math.min(p.maxHeight, viewport.height - 2 * EDGE);
+	if (typeof style.top === "number") {
+		const room = viewport.height - EDGE - style.top;
+		if (room < maxHeight) {
+			if (room >= MIN_USABLE) maxHeight = room;
+			else style.top = Math.max(EDGE, viewport.height - EDGE - maxHeight);
+		}
+	} else if (typeof style.bottom === "number") {
+		const room = viewport.height - style.bottom - EDGE;
+		if (room < maxHeight) {
+			if (room >= MIN_USABLE) maxHeight = room;
+			else style.bottom = Math.max(EDGE, viewport.height - EDGE - maxHeight);
+		}
+	}
+	return { ...p, style, maxHeight };
+}
+
 /** Phone keyboards can cover the anchor without resizing the layout viewport.
  * Clamp that anchor into the visible area and never apply the desktop overflow
  * floor. Keep the same compact cap, gap and side preference. */
@@ -494,14 +523,15 @@ export function MenuShell({
 		const place = () => {
 			const el = anchor();
 			if (!el || !menuRef.current) return;
+			const view = { width: window.innerWidth, height: window.innerHeight };
 			const p = computeMenuPlacement(
 				el.getBoundingClientRect(),
-				{ width: window.innerWidth, height: window.innerHeight },
+				view,
 				menuRef.current.scrollHeight,
 				preferredSide,
 				align,
 			);
-			setPlaced(p);
+			setPlaced(clampMenuPlacement(p, menuRef.current.offsetWidth, view));
 		};
 		place();
 		const rePlace = () => {
@@ -551,7 +581,7 @@ export function MenuShell({
 			// default blue ring around it must not draw (owner, polish
 			// round). Arrow cycling moves DOM focus to the buttons, which
 			// carry their own hover/highlight; the ring is pure noise.
-			className={`${menuClass} outline-none`}
+			className={`${menuClass} lh-glass outline-none`}
 		>
 			<div ref={motionContentRef} style={{ display: "contents" }}>
 			{fitVisualViewport && !focusSearch && (

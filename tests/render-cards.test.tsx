@@ -440,9 +440,9 @@ describe("teach-check reveal (W5 phase separation)", () => {
 				/>,
 		);
 		assert.ok(html.includes('data-testid="teach-check-reveal"'), "invitation affordance present");
-		assert.match(html, /Check your understanding/);
+		// Round 14 (P9): one look and label for opening a question everywhere.
+		assert.match(html, /Show question/, "the one opener label");
 		assert.match(html, /Which planet is closest/, "question teaser invites, not minimizes");
-		assert.match(html, /Open/, "a clear reveal action");
 	});
 
 	it("probe questions keep the plain collapsed bar (no invitation copy)", () => {
@@ -457,8 +457,8 @@ describe("teach-check reveal (W5 phase separation)", () => {
 				/>,
 		);
 		assert.ok(html.includes('data-testid="question-dock-bar"'), "the scroll-collapse strip");
-		assert.ok(!html.includes("Check your understanding"), "no invitation copy outside teach phase");
-		assert.match(html, /Answer/, "the strip keeps its Answer affordance");
+		assert.match(html, /Show question/, "the same opener label as the invitation (round 14, P9)");
+		assert.ok(!/Answer\b/.test(html.replace(/data-testid="[^"]*"/g, "")), "no \"Answer ↓\" that suggests scrolling");
 	});
 
 	it("after the reveal, the teach check renders the full form (probe default, unchanged)", () => {
@@ -499,8 +499,11 @@ describe("probe-done card", () => {
 		const echoless = renderToStaticMarkup(
 			<ProbeDoneCard part={{ state: "output-available", output: { ok: true } } as never} />,
 		);
-		assert.match(echoless, /No written assessment was recorded/); // settled: never a pending state that cannot finish
-		assert.ok(!echoless.includes("modal logic basics"), "no assessment echo in the result");
+		// Round 14 (P13): a settled call with no readable assessment shows
+		// nothing to the learner (the record keeps it; never a pending state
+		// that cannot finish).
+		assert.equal(echoless, "", "an empty assessment card is hidden");
+		assert.match(html, /What the tutor noticed/, "a real assessment, in the learner's words");
 	});
 
 	it("previews the assessment from a PENDING (validated) input", () => {
@@ -522,8 +525,9 @@ describe("probe-done card", () => {
 				} as never}
 			/>,
 		);
-		assert.match(html, /malformed/);
-		assert.match(html, /retried/);
+		// Round 14 (P13): the tutor's own retry bookkeeping is not shown to the
+		// learner (it stays in the record).
+		assert.equal(html, "", "nothing renders for a rejected call");
 		assert.ok(!html.includes("strands:"), "the rejected input never renders");
 	});
 
@@ -531,7 +535,7 @@ describe("probe-done card", () => {
 		const html = renderToStaticMarkup(
 			<ProbeDoneCard part={{ state: "input-streaming", input: { assessment: { summary: "…" } } } as never} />,
 		);
-		assert.match(html, /Writing the assessment/);
+		assert.match(html, /Checking what you already know…/, "learner-facing progress while it is written (round 14, P13)");
 	});
 });
 

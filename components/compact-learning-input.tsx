@@ -1,20 +1,36 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Loader2Icon, MicIcon, SquareIcon, XIcon } from "lucide-react";
-import { KeyboardToggle } from "@/components/keyboard-toggle";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type ReactNode } from "react";
+import { KeyboardIcon, Loader2Icon, MicIcon, SquareIcon, XIcon } from "lucide-react";
+import { setKeyboardOff, useKeyboardOff } from "@/components/device-prefs";
+import { useCoarsePointer } from "@/components/use-phone-viewport";
 import { DICTATION_KEYLESS, sampleDictationMeter, useDictationRecovery, type Dictation } from "@/components/dictation";
 import { readPathInput, readPathSelection, restorePathSelection, type TextSelection } from "./path-input-dom";
 
+/** Whether focus is inside an element (a composer), from focus events —
+ *  never a guess about the on-screen keyboard (round 14, M6). */
+export function useFocusWithin(): [boolean, { onFocus: () => void; onBlur: (event: FocusEvent<HTMLElement>) => void }] {
+	const [focused, setFocused] = useState(false);
+	const onFocus = useCallback(() => setFocused(true), []);
+	const onBlur = useCallback((event: FocusEvent<HTMLElement>) => {
+		if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
+	}, []);
+	return [focused, useMemo(() => ({ onFocus, onBlur }), [onFocus, onBlur])];
+}
+
 /** Presentation around the existing, always-mounted editor. Capture, ownership
- * and submission stay with the caller. Wide layouts use display:contents. */
-export function CompactLearningInput({ children, dictation, enabled = true, keyboardToggle = false }: {
+ * and submission stay with the caller. Laptop layouts use display:contents;
+ * phones and tablets put the mic inside the field (round 14, M3). */
+export function CompactLearningInput({ children, dictation, enabled = true }: {
 	children: ReactNode;
 	dictation?: Dictation;
-	/** The chat box's "keyboard on / off" icon beside the mic (owner P3, touch screens). */
-	keyboardToggle?: boolean;
 	enabled?: boolean;
 }) {
+	// M2 (round 14): while "Keep keyboard closed" (⋯) is on, every dictation
+	// field shows a small keyboard key — the state is visible, and one tap
+	// brings typing back (switch off, field focused, keyboard up).
+	const keyboardOff = useKeyboardOff();
+	const touch = useCoarsePointer();
 	const field = useRef<HTMLDivElement>(null);
 	const saved = useRef<{ value: string; start: number; end: number; direction: "forward" | "backward" | "none"; scroll: number } | null>(null);
 	const savedPath = useRef<{ value: string; selection: TextSelection | null; scroll: number } | null>(null);
@@ -92,11 +108,17 @@ export function CompactLearningInput({ children, dictation, enabled = true, keyb
 			<span>{dictation.error}</span>
 			<button type="button" onClick={recover}>{dictation.error === DICTATION_KEYLESS ? "Settings" : "Retry"}</button>
 		</div>}
-		<div ref={field} className={enabled ? "lh-compact-field" : "contents"} data-recording={active || undefined} data-has-mic={!!dictation || undefined} data-has-keyboard={(enabled && keyboardToggle && !!dictation) || undefined}>
+		<div ref={field} className={enabled ? "lh-compact-field" : "contents"} data-recording={active || undefined} data-has-mic={!!dictation || undefined} data-type-instead={(enabled && touch && keyboardOff) || undefined}>
 			{children}
-			{/* Mounted while dictating too (R5): nothing beside the field moves
-			    when speech starts; a phone's recording strip covers it by CSS. */}
-			{enabled && keyboardToggle && dictation && <div className="lh-compact-keyboard"><KeyboardToggle /></div>}
+			{enabled && touch && keyboardOff && <button type="button" className="lh-type-instead" data-testid="type-instead" aria-label="Type instead (turns the keyboard back on)" title="Type instead"
+				onPointerDown={(event) => event.preventDefault()}
+				onClick={() => {
+					setKeyboardOff(false);
+					const editor = field.current?.querySelector<HTMLElement>("[data-file-path-input], textarea");
+					editor?.focus();
+				}}>
+				<KeyboardIcon aria-hidden />
+			</button>}
 			{enabled && dictation && <div className="lh-compact-speech">
 				{active ? <Recording dictation={dictation} /> : <button type="button" aria-label="Start dictation" data-testid="compact-dictation-toggle" onPointerDown={remember} onClick={recover}>
 					<MicIcon size={20} />

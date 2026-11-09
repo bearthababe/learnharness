@@ -69,7 +69,7 @@ import { sourceFileLabel } from "@/src/core";
 import { NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
-import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SlidersHorizontalIcon, WaypointsIcon, XIcon } from "lucide-react";
+import { ChevronLeftIcon, FileTextIcon, ListTreeIcon, Loader2Icon, Maximize2Icon, ScanIcon, SearchIcon, SlidersHorizontalIcon, WaypointsIcon, XIcon } from "lucide-react";
 import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
 import { planCostLabel } from "@/components/usage-format";
 import { GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
@@ -77,6 +77,8 @@ import { usePopoverDismiss } from "@/components/popover-dismiss";
 import { useActivity } from "@/components/activity-dock";
 import { useServerEvent, useServerResync } from "@/components/server-events";
 import { MenuShell } from "@/components/menu-shell.tsx";
+import { OPEN_GRAPH_DISPLAY_EVENT, publishPageMenu } from "@/components/page-menu";
+import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
 import { DeleteNodeDialog } from "@/components/delete-node-dialog.tsx";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { Hint } from "@/components/ui/hint";
@@ -466,8 +468,17 @@ function GraphSettingsControl({
 	// Click anywhere outside (or Escape) closes the panel (2026-09-17) —
 	// the root wraps button + panel, so the toggle itself keeps working.
 	const rootRef = useRef<HTMLDivElement>(null);
-	usePopoverDismiss(rootRef, open, () => setOpen(false));
+	// Phones and tablets (round 14, P5): Graph display is a row in the ⋯
+	// menu; its panel then opens from ⋯ (this button is not shown there).
+	const touch = useTouchLayout();
+	usePopoverDismiss(rootRef, open && !touch, () => setOpen(false));
 	useOneMenu(`graph-popover:${useId()}`, open, () => setOpen(false));
+	useEffect(() => {
+		const onOpen = () => setOpen(true);
+		window.addEventListener(OPEN_GRAPH_DISPLAY_EVENT, onOpen);
+		publishPageMenu({ graphDisplay: true });
+		return () => { window.removeEventListener(OPEN_GRAPH_DISPLAY_EVENT, onOpen); publishPageMenu({ graphDisplay: false }); };
+	}, []);
 	const regionTuning = settings.regions;
 	const physicsTuning = settings.physics;
 	return (
@@ -502,7 +513,7 @@ function GraphSettingsControl({
 				// (pr-2.5) -> scrollbar -> 10px (p-2.5) -> panel edge. The
 				// scrollbar itself does NOT move: it stays pinned at the same
 				// distance from the panel's right border.
-				<div className="absolute right-0 top-full mt-2 flex max-h-[60vh] w-72 flex-col rounded-xl border bg-card/85 p-2.5 shadow-lg backdrop-blur">
+				<GraphDisplayFrame touch={touch} onClose={() => setOpen(false)}>
 					<div className="flex flex-col gap-2 overflow-y-auto pr-2.5">
 							{costs && costs.runs.length > 0 && <div className="lh-graph-costs-in-settings" data-testid="graph-costs-in-settings"><div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Graph costs · {graphUsageLabel(costs)}</div><GraphCostPanel costs={costs} /></div>}
 							{/* Size/zoom/region sliders: LADDER-mapped 0-100, step 10 (11
@@ -835,10 +846,23 @@ function GraphSettingsControl({
 							/>
 						</div>
 					</div>
-				</div>
+				</GraphDisplayFrame>
 			)}
 		</div>
 	);
+}
+
+/** Graph display's panel: under its own button on laptops; on phones and
+ *  tablets a card opened from the ⋯ menu (round 14, P5). */
+function GraphDisplayFrame({ touch, onClose, children }: { touch: boolean; onClose: () => void; children: React.ReactNode }) {
+	if (touch) return (
+		<MenuShell anchorTestid="page-menu-button" testid="graph-display" preferredSide="down" align="right" onClose={onClose}
+			menuClass="lh-glass flex max-h-[70dvh] w-80 max-w-[calc(100vw-24px)] flex-col rounded-xl border bg-card p-2.5 shadow-xl">
+			<div className="mb-1 px-1 text-sm font-medium">Graph display</div>
+			{children}
+		</MenuShell>
+	);
+	return <div className="absolute right-0 top-full mt-2 flex max-h-[60vh] w-72 flex-col rounded-xl border bg-card/85 p-2.5 shadow-lg backdrop-blur">{children}</div>;
 }
 
 /** The top-chrome actions row's body (empty-graph chrome wave, owner
@@ -886,13 +910,14 @@ export function GraphChromeRow({
 	onOpenChains: () => void;
 }) {
 	const { phone } = useSidebar();
+	const touch = useTouchLayout();
 	return (
 		<>
 			{!isEmpty && (
 				<div className="lh-graph-search graph-chrome-fade-in w-56 min-w-0 shrink rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
 					<Hint
 						// ⌘F focuses node search (surface-scoped registry action).
-						label="Search nodes"
+						label="Search ideas"
 						action="find"
 						side="bottom"
 						disabled={phone}
@@ -903,8 +928,8 @@ export function GraphChromeRow({
 							ref={searchInputRef}
 							value={query}
 							onChange={(e) => onQuery(e.target.value)}
-							placeholder="Search nodes…"
-							aria-label="Search nodes"
+							placeholder={phone ? "Search" : "Search ideas…"}
+							aria-label="Search ideas"
 							spellCheck={false}
 							className="h-7 w-full rounded-lg border bg-background pl-8 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
 						/>
@@ -952,7 +977,7 @@ export function GraphChromeRow({
 				// is a plain shrink-0 flex child — the panel itself positions
 				// within GraphSettingsControl's own relative root, unaffected.
 				<div className="lh-graph-settings graph-chrome-fade-in shrink-0">
-					<GraphSettingsControl settings={settings} changeSettings={changeSettings} costs={phone ? costs : null} />
+					<GraphSettingsControl settings={settings} changeSettings={changeSettings} costs={touch ? costs : null} />
 				</div>
 			)}
 		</>
@@ -977,6 +1002,20 @@ export function GraphView({
 }) {
 	const desktop = useDesktopPaths();
 	const containerRef = useRef<HTMLDivElement | null>(null);
+	// P7 (round 14): on phones the knowledge map opens full screen — Search,
+	// Fit and a labelled exit stay; the composer, resume cards and the bar
+	// step away. It is the same graph, so zoom and selection carry over.
+	const phoneMap = usePhoneLayout();
+	const [fullMap, setFullMap] = useState(false);
+	useEffect(() => {
+		if (!fullMap) return;
+		const root = document.documentElement;
+		root.dataset.graphFull = "true";
+		const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setFullMap(false); };
+		window.addEventListener("keydown", onKey);
+		return () => { delete root.dataset.graphFull; window.removeEventListener("keydown", onKey); };
+	}, [fullMap]);
+	useEffect(() => { if (!phoneMap) setFullMap(false); }, [phoneMap]);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const cardRef = useRef<HTMLDivElement | null>(null);
 	const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
@@ -1538,7 +1577,7 @@ export function GraphView({
 							<p>Start a session to begin learning.</p>
 							{desktop
 								? <p className="mt-1.5">Attach your material with the paperclip or drag and drop.</p>
-								: <p className="mt-1.5">Bring in your own notes with Extract files… above.</p>}
+								: <p className="mt-1.5">Bring in your own notes with Import to knowledge map.</p>}
 						</div>
 					</div>
 				</div>
@@ -1629,6 +1668,9 @@ export function GraphView({
 			    against the full-bleed parent) — the row NEVER wraps (owner
 			    rejected the two-row fold); in narrow windows the search is
 			    the flexible element and shrinks instead. */}
+			{/* P6 (round 14): a tinted band behind the bar where the map pans
+			    under it — a scrim, never a blur over the graph. */}
+			<div className="lh-graph-scrim" aria-hidden="true" />
 			<div className="lh-home-toolbar lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
 			{/* z-20 (2026-09-20): the row paints above the cost number below
 			    it — without this, the later-in-DOM cost control layered over
@@ -1678,6 +1720,16 @@ export function GraphView({
 				</div>
 			))}
 			</div>
+
+			{phoneMap && !isEmpty && (fullMap ? (
+				<div className="lh-map-bar lh-no-drag" data-testid="map-bar">
+					<button type="button" className="lh-map-exit" data-testid="map-exit" onClick={() => setFullMap(false)}><ChevronLeftIcon aria-hidden />Done</button>
+					<button type="button" className="lh-map-fit" data-testid="map-fit" onClick={() => rendererRef.current?.fit()}><ScanIcon aria-hidden />Fit</button>
+				</div>
+			) : (
+				<button type="button" className="lh-map-open lh-no-drag" data-testid="map-open" onClick={() => setFullMap(true)}
+					aria-label="Show the knowledge map full screen"><Maximize2Icon aria-hidden />Full map</button>
+			))}
 
 			{selected && !isEmpty && (
 				<div

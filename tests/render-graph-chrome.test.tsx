@@ -38,10 +38,10 @@ describe("GraphChromeRow — the empty-graph ruling (owner, 2026-09-25)", () => 
 	it("EMPTY graph: Import and source inventory render; canvas search/settings stay absent", () => {
 		const html = renderToStaticMarkup(createElement(GraphChromeRow, { ...PROPS, isEmpty: true }));
 		assert.ok(html.includes('data-testid="import-notes"'));
-		assert.ok(html.includes("Extract files…"));
+		assert.ok(html.includes("Import to knowledge map"));
 		assert.ok(html.includes("lucide-waypoints"));
 		assert.ok(!html.includes("lucide-upload"));
-		assert.ok(!html.includes("Search nodes…"), "search is a lie on an empty graph");
+		assert.ok(!html.includes("Search ideas…"), "search is a lie on an empty graph");
 		// the settings gear is the lucide-settings svg (tooltip wave: its old
 		// native title is gone — the styled tooltip carries the label now)
 		assert.ok(!html.includes("lucide-sliders-horizontal"), "display settings are a lie on an empty graph");
@@ -52,9 +52,9 @@ describe("GraphChromeRow — the empty-graph ruling (owner, 2026-09-25)", () => 
 	it("empty graph uses the same session-first lead and secondary material guidance as home", () => {
 		const html = renderToStaticMarkup(createElement(ServerEventsProvider, { children: createElement(GraphView, {}) }));
 		assert.ok(html.includes("<p>Start a session to begin learning.</p>"));
-		// A browser (and the server render) points to Extract files: the
-		// paperclip attaches local files only in the desktop app.
-		assert.ok(html.includes("Bring in your own notes with Extract files… above.</p>"));
+		// A browser (and the server render) points to the knowledge-map import:
+		// the paperclip attaches local files only in the desktop app.
+		assert.ok(html.includes("Bring in your own notes with Import to knowledge map.</p>"));
 		assert.ok(!html.includes("paperclip"));
 		assert.ok(!html.includes("import notes to build"));
 	});
@@ -62,7 +62,7 @@ describe("GraphChromeRow — the empty-graph ruling (owner, 2026-09-25)", () => 
 	it("POPULATED graph: all four render, the gated trio carries the fade", () => {
 		const html = renderToStaticMarkup(createElement(GraphChromeRow, { ...PROPS, isEmpty: false }));
 		assert.ok(html.includes('data-testid="import-notes"'));
-		assert.ok(html.includes("Search nodes…"));
+		assert.ok(html.includes("Search ideas…"));
 		// Round 12: graph display uses sliders; the gear means the app's Settings only.
 		assert.ok(html.includes("lucide-sliders-horizontal"), "the graph display control renders");
 		assert.ok(html.includes('data-testid="open-chain-table"'), "the chains entry renders");

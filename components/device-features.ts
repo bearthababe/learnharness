@@ -23,7 +23,7 @@ const DEFAULTS: Record<DeviceFeature, Record<DeviceClass, boolean>> = {
 };
 
 export const DEVICE_FEATURE_LABEL: Record<DeviceFeature, string> = {
-	writing: "Drawing canvas",
+	writing: "Handwriting notebook",
 	notebook: "Equation notebook",
 };
 
@@ -112,4 +112,19 @@ export function setWritingPalette(value: WritingPalette) {
 }
 export function useWritingPalette(): WritingPalette {
 	return useSyncExternalStore(subscribe, () => (void version, writingPalette()), () => "wheel");
+}
+
+/** The writing wheel's look on this device (round 14, T2): solid by
+ *  default; glass lets the page show through, softened. */
+export type WheelLook = "solid" | "glass";
+const LOOK_KEY = "lh:writing-wheel-look";
+export function wheelLook(): WheelLook {
+	try { return window.localStorage.getItem(LOOK_KEY) === "glass" ? "glass" : "solid"; } catch { return "solid"; }
+}
+export function setWheelLook(value: WheelLook) {
+	try { window.localStorage.setItem(LOOK_KEY, value); } catch { /* storage blocked: this view only */ }
+	notify();
+}
+export function useWheelLook(): WheelLook {
+	return useSyncExternalStore(subscribe, () => (void version, wheelLook()), () => "solid");
 }

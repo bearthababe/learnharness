@@ -76,6 +76,7 @@ import { useServerEvent, useServerResync } from "./server-events";
 import { TopBar } from "@/components/top-bar";
 import { DeleteSourceDialog } from "@/components/delete-source-dialog";
 import { LatexGlyph } from "@/components/latex-glyph";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
 
 /** The sortable columns (owner ruling: all three — consistency). */
 export type ChainSortCol = "name" | "props" | "created";
@@ -166,6 +167,7 @@ export function ChainTableBody({
 	const [creatingFolder, setCreatingFolder] = useState(false);
 	const tableRef = useRef<HTMLDivElement>(null);
 	const searchRef = useRef<HTMLInputElement>(null);
+	const phone = usePhoneLayout();
 	const navigation = useChainNavigation(tableRef, searchRef, keyboardActive);
 	// Searches still expand sources/folders by default, but explicit keyboard
 	// or pointer collapses remain effective until the search changes.
@@ -327,8 +329,8 @@ export function ChainTableBody({
 						value={query}
 						data-testid="chain-table-search"
 						onChange={(e) => onQuery(e.target.value)}
-						placeholder="Search nodes…"
-						aria-label="Search nodes"
+						placeholder={phone ? "Search" : "Search ideas…"}
+						aria-label="Search ideas"
 						spellCheck={false}
 						className="lh-no-drag h-8 w-56 rounded-lg border bg-background pl-8 pr-3 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
 					/>

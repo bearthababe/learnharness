@@ -157,7 +157,7 @@ try {
 	await page.reload({ waitUntil: "networkidle2" });
 	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]')?.getAttribute("data-ready") === "true");
 	assert.equal(await bitmap(), ink, "Completed editable ink is restored on reload");
-	await page.click('[aria-label="Page options"]'); await page.click('[aria-label="Clear"]');
+	await page.click('[aria-label="Notebook options"]'); await page.click('[aria-label="Clear page"]');
 	const cleared = await bitmap(); assert.notEqual(cleared, ink);
 	await page.reload({ waitUntil: "networkidle2" });
 	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]')?.getAttribute("data-ready") === "true");
@@ -239,7 +239,7 @@ try {
 	const pendingInk = await bitmap();
 	await page.reload({ waitUntil: "networkidle2" }); await ready();
 	assert.equal(await bitmap(), pendingInk, "Failed server save recovers the completed local working");
-	await action("Page options"); await action("Clear");
+	await action("Notebook options"); await action("Clear page");
 	await page.reload({ waitUntil: "networkidle2" }); await ready();
 	assert.equal(await bitmap(), cleared, "Immediate reload after Clear uses the device journal");
 	await pencilTap("Undo"); assert.equal(await bitmap(), pendingInk);
