@@ -1,0 +1,31 @@
+name: Set up preview sandbox
+description: Install and validate fail-closed Linux preview isolation prerequisites
+runs:
+  using: composite
+  steps:
+    - name: Install namespace and ELF inspection tools
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends bubblewrap binutils apparmor
+    - name: Allow bubblewrap namespaces under Ubuntu AppArmor restrictions
+      shell: bash
+      run: |
+        /usr/bin/bwrap --version
+        policy=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
+        if [[ -r "$policy" ]]; then
+          printf 'AppArmor unprivileged user namespace restriction: %s\n' "$(cat "$policy")"
+          if [[ "$(cat "$policy")" == "1" ]]; then
+            sudo tee /etc/apparmor.d/learnharness-preview-bwrap > /dev/null <<'PROFILE'
+        abi <abi/4.0>,
+        include <tunables/global>
+        profile learnharness-preview-bwrap /usr/bin/bwrap flags=(unconfined) {
+          userns,
+        }
+        PROFILE
+            sudo apparmor_parser --replace /etc/apparmor.d/learnharness-preview-bwrap
+          fi
+        fi
+    - name: Verify actual isolated namespace startup
+      shell: bash
+      run: /usr/bin/bwrap --unshare-all --unshare-net --die-with-parent --new-session --cap-drop ALL --ro-bind / / --proc /proc --dev /dev -- /usr/bin/true
