@@ -54,7 +54,8 @@ describe("GraphChromeRow — the empty-graph ruling (owner, 2026-09-25)", () => 
 		assert.ok(html.includes("<p>Start a session to begin learning.</p>"));
 		// A browser (and the server render) points to the knowledge-map import:
 		// the paperclip attaches local files only in the desktop app.
-		assert.ok(html.includes("Bring in your own notes with Import to knowledge map.</p>"));
+		// Round 15 (R3): the hint's import is a button that opens the import menu.
+		assert.ok(html.includes("Bring in your own notes: ") && html.includes('data-testid="import-link"') && html.includes("Import to knowledge map"));
 		assert.ok(!html.includes("paperclip"));
 		assert.ok(!html.includes("import notes to build"));
 	});

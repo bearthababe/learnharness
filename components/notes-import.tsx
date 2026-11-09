@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
-import { FileTextIcon, FolderOpenIcon, WaypointsIcon } from "lucide-react";
+import { FileTextIcon, FolderOpenIcon, ImportIcon, WaypointsIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { usePhoneLayout, useTouchLayout } from "./use-phone-viewport";
 import { MenuShell } from "./menu-shell";
@@ -164,7 +164,7 @@ export function ImportNotesLink({ className = "", label = "Import to knowledge m
 	return (
 		<button type="button" className={`lh-import-link ${className}`} data-testid={testid} aria-label="Import to knowledge map"
 			onClick={(event) => window.dispatchEvent(new CustomEvent(OPEN_IMPORT_EVENT, { detail: { anchor: event.currentTarget } }))}>
-			<WaypointsIcon aria-hidden /><span>{label}</span>
+			<ImportIcon aria-hidden /><span>{label}</span>
 		</button>
 	);
 }

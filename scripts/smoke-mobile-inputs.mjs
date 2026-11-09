@@ -1158,6 +1158,10 @@ try {
 	await page.goto(`${origin}/chat/mobile_teaching`, { waitUntil: "networkidle2" });
 	const reading = '[data-testid="reading-thinking-field"] [data-file-path-input]';
 	await page.waitForSelector('[data-testid="teach-check-reveal"]', { visible: true });
+	// Round 15 (F6): on phones the reading note is a full-screen pane that
+	// slides in from the right; the lesson keeps a labelled button for it.
+	await page.click('[data-testid="reading-pane-open"]');
+	await page.waitForSelector('[data-testid="reading-pane"][data-open]');
 	assert.ok(await page.$('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]'), "Before reveal, the reading input owns the in-field microphone");
 	await assertMicSpace(reading);
 	for (let run = 1; run <= 2; run++) {
@@ -1177,7 +1181,7 @@ try {
 	await page.click('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
 	await page.waitForFunction(() => window.speech?.readyState === 1);
 	await page.evaluate(() => window.speech.final("Before reveal."));
-	await page.click('[data-testid="teach-check-reveal"]');
+	await page.click('[data-testid="reading-pane-show-question"]');
 	await page.waitForFunction(() => window.speech.finishing);
 	assert.ok(await page.$('[data-testid="teach-check-reveal"]'), "Reveal waits for final speech");
 	await page.evaluate(() => { window.speech.final("Late reading thought."); window.speech.close(); });
@@ -1186,7 +1190,10 @@ try {
 	const answer = '[data-testid="answer-field"] [data-file-path-input]';
 	assert.equal(await page.$eval(answer, e => e.textContent), "", "Reading speech is separate from the newly revealed answer");
 	assert.equal(await page.$eval('[data-testid="question-dock"] button[type="submit"]', e => e.disabled), true, "Empty text questions keep their existing submit gate");
-	assert.equal(await page.$('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]'), null, "Secondary reading input must not imply that it owns speech after reveal");
+	// Round 15 (F4): every field has its mic; after reveal the reading pane is
+	// closed and the answer field's mic is the one in view.
+	assert.equal(await page.$eval('[data-testid="reading-pane"]', e => e.hasAttribute("data-open")), false, "The reading pane closes when the question opens");
+	assert.ok(await page.$eval('[data-testid="answer-field"] [aria-label="Start dictation"]', e => e.checkVisibility({ visibilityProperty: true })), "The answer field shows its own mic");
 	await checkPhoneInput('[data-testid="answer-field"]');
 	await fill(answer, "Answer draft.");
 	// Round 13 (owner P7): on phones an open question owns the screen, so the
@@ -1216,7 +1223,7 @@ try {
 	assert.ok(answerRecord.writingSubmission && answerRecord.sharedWriting.length === 1, "Actual free-text adapter carries receipt and image");
 	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-attempt-review"]'));
 	await page.goto(`${origin}/chat/mobile_selection`, { waitUntil: "networkidle2" });
-	await page.click('[data-testid="reading-thinking-field"] [data-testid="teach-check-reveal"]');
+	await page.click('.lh-reading-entry [data-testid="teach-check-reveal"]');
 	// Phones take a check in two steps (owner ruling 3): pick first, then
 	// confidence and "why" open beneath the choices.
 	await page.waitForSelector('[data-testid="question-pick-hint"]', { visible: true });

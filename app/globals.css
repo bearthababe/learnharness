@@ -4968,3 +4968,5 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	display: inline-block; margin-inline: 2px; padding: 1px 5px; border-radius: 6px; font: 600 12px/1.25 var(--font-sans);
 	background: color-mix(in oklab, var(--primary) 18%, transparent); color: color-mix(in oklab, var(--primary) 70%, var(--foreground));
 }
+/* R9: the "You" label above the learner's messages is a label, at 13px. */
+:root [data-testid="user-message"] .uppercase { font-size: 13px; }
