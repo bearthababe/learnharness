@@ -118,6 +118,13 @@ node scripts/ticket.mjs configure-tailnet --tailnet-host YOUR-NODE.YOUR-TAILNET.
 node scripts/ticket.mjs preview my-experiment --worktree /path/to/worktree --tailnet-socket /private/preview-node/tailscaled.sock
 ```
 
+For unattended enrollment, configure the one-time trusted OAuth credential with
+`ticket configure-enrollment --secret-file /private/file` after configuring review
+routes and stopping this registry's manager. Subsequent sources use the ordinary
+`preview` command without a per-PR login or `--tailnet-socket`. The credential and
+persistent daemon state stay outside previews. See `docs/preview-enrollment.md`.
+Explicit manual socket bindings remain supported and are not replaced.
+
 Use the actual previously authorized ports and hostname, not these illustrative
 values. Every source needs a distinct explicitly provisioned node/HTTPS hostname;
 different ports on the normal or another preview's hostname are refused. The

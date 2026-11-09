@@ -9,6 +9,7 @@ import { proxyFor } from "./preview-proxy.mjs";
 import { leaseExpired, newLaunch, supervisorPath } from "./preview-supervisor.mjs";
 import { createPreviewTransport, verifyReviewRoutes } from "./preview-tailnet.mjs";
 import { stopPreviewDesktop } from "./preview-desktop.mjs";
+import { ensurePreviewNode } from "./preview-enrollment.mjs";
 
 const listen = (server, port) => new Promise((resolve, reject) => {
 	server.once("error", reject);
@@ -76,7 +77,10 @@ export async function runManager(directory, { helper = null, transport = createP
 		await locked(directory, async current => {
 			if (current.tickets[id]?.claim !== entry.claim) return;
 			await stopPreviewDesktop(current.tickets[id].desktop, entry.claim);
-			if (entry.route) await transport.stop(current.tickets[id].previewHost, entry.route);
+			if (entry.route) {
+				if (current.tickets[id].previewHost?.managedEnrollment) await ensurePreviewNode(directory, current, current.tickets[id]);
+				await transport.stop(current.tickets[id].previewHost, entry.route);
+			}
 			if (clearLease(current, id, entry.claim)) current.tickets[id].stopReason = reason;
 		});
 		if (runtime.get(id)?.claim === entry.claim) runtime.delete(id);
@@ -117,6 +121,7 @@ export async function runManager(directory, { helper = null, transport = createP
 					const entry = { claim, launch: newLaunch() };
 					try {
 						if (current.tailnetHost) {
+							await ensurePreviewNode(directory, current, ticket);
 							assert.ok(ticket.previewHost, "BLOCKED: a dedicated per-preview hostname is required; bind its private daemon using preview --tailnet-socket PATH; same-host ports do not isolate browser sessions");
 							assert.equal(ticket.origin, ticket.previewHost.origin, "Preview origin no longer matches its dedicated hostname");
 							await verifyReviewRoutes(current.tailnetHost, current.slots);

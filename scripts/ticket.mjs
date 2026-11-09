@@ -8,10 +8,12 @@ import { alive, choosePort, cliPath, ensureManager, git, locked, prView, checkPR
 import { createPreviewTransport, verifyReviewRoutes } from "./lib/preview-tailnet.mjs";
 import { validatePreviewHelper } from "./lib/preview-helper-config.mjs";
 import { launchPreviewDesktop } from "./lib/preview-desktop.mjs";
+import { createPreviewEnrollment, enrollmentProtectedRoots, ensurePreviewNode } from "./lib/preview-enrollment.mjs";
 
 const { values, positionals } = parseArgs({ allowPositionals: true, options: Object.fromEntries([
 	["root", "string"], ["state-dir", "string"], ["delivery", "string"], ["worktree", "string"], ["thread", "string"], ["ports", "string"],
 	["origin-port", "string"], ["observe-ms", "string"], ["repository", "string"], ["pr", "string"], ["archive", "string"], ["tailnet-host", "string"], ["https-ports", "string"], ["tailnet-socket", "string"], ["helper-directory", "string"], ["service-config", "string"], ["normal-origin", "string"], ["lease", "string"], ["help", "boolean"],
+	["secret-file", "string"], ["preview-tag", "string"],
 ].map(([name, type]) => [name, { type }])) });
 const [command, identifier] = positionals;
 const help = `Ticket workflow (POSIX, Git, Node, gh; T3 for worktree binding)
@@ -27,6 +29,8 @@ const help = `Ticket workflow (POSIX, Git, Node, gh; T3 for worktree binding)
                                  verify existing private review routes; no route writes
   configure-helper --helper-directory PATH
                                  connect stopped manager to existing trusted helper
+  configure-enrollment --secret-file FILE [--preview-tag tag:learnharness-preview]
+                                 one-time private OAuth setup; automatic source nodes
   desktop NAME --service-config FILE --normal-origin ORIGIN
                                  open the accepted shell on a running isolated preview
   release NAME [--lease LEASE]    stop only matching preview; retain its profile/worktree
@@ -111,6 +115,15 @@ async function main() {
 	return locked(directory, async state => {
 		assert.ok(state, "Run ticket init first");
 		assert.equal(state.root, root, "Registry belongs to another repository root");
+		if (command === "configure-enrollment") {
+			assert.ok(!alive(state.manager) && state.slots.every(slot => !slot.ticket) && state.queue.length === 0, "Stop this registry's manager before configuring enrollment");
+			assert.ok(values["secret-file"], "Provide the OAuth secret in a private --secret-file, never a command-line value");
+			assert.ok(state.tailnetHost, "Configure the existing private review host before enabling automatic enrollment");
+			const enrollment = createPreviewEnrollment(directory, { protectedRoots: enrollmentProtectedRoots(state) });
+			const configured = enrollment.configure(values["secret-file"], values["preview-tag"] ?? "tag:learnharness-preview");
+			state.previewEnrollment = true;
+			return configured;
+		}
 		if (command === "configure-helper") {
 			assert.ok(!alive(state.manager) && state.slots.every(slot => !slot.ticket) && state.queue.length === 0, "Stop this registry's manager before changing helper configuration");
 			state.helperDirectory = validatePreviewHelper(values["helper-directory"], state);
@@ -155,6 +168,7 @@ async function main() {
 				fs.mkdirSync(path.dirname(profile), { recursive: true, mode: 0o700 });
 				fs.mkdirSync(profile, { recursive: false, mode: 0o700 });
 				ticket = state.tickets[id] = { id, kind: "exploration", branch: git(worktree, "branch", "--show-current") || null, base: git(worktree, "rev-parse", "HEAD"), delivery: null, skill: null, profile, worktree, thread: null, inUse: false, preview: "none", pr: null, merged: null };
+				writeState(directory, state);
 			}
 		}
 		assert.ok(ticket, "Unknown ticket/preview; use preview NAME --worktree PATH for exploratory work");
@@ -199,6 +213,7 @@ async function main() {
 		}
 		if (command === "preview") {
 			assert.ok(!ticket.merged, "Merged tickets cannot reclaim previews");
+			if (!values["tailnet-socket"] && ["none", "error"].includes(ticket.preview) && !ticket.claim) await ensurePreviewNode(directory, state, ticket);
 			if (values["tailnet-socket"]) {
 				assert.ok(["none", "error"].includes(ticket.preview) && !ticket.claim, "Release the preview before binding its dedicated hostname");
 				const transport = createPreviewTransport();

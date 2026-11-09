@@ -97,10 +97,15 @@ verifies their already-authorized HTTPS-to-loopback mappings and records them in
 the existing registry. It creates no routes, adopts no occupied listener, and
 requires all of this registry's previews to be released first.
 
-Each preview source additionally needs its own explicitly provisioned Tailscale
-node/socket. Pass `preview NAME --tailnet-socket /private/path/tailscaled.sock`
+Each preview source additionally needs its own Tailscale node/socket. With the
+one-time trusted `configure-enrollment` setup, normal `preview NAME` provisions
+it automatically and retains the source's private daemon state. This never
+enrolls from PR code or copies the automation credential into the sandbox; see
+`docs/preview-enrollment.md`. For an explicitly provisioned manual node, pass
+`preview NAME --tailnet-socket /private/path/tailscaled.sock`
 (and `--worktree PATH` when registering an exploration). This is not automatic
-node provisioning: account authentication, DNS and HTTPS prerequisites must exist.
+node provisioning without the opt-in setup: account authentication, DNS and HTTPS
+prerequisites must exist.
 The daemon socket directory must be private and user-owned. A binding pins the
 node identity and hostname, differs from the normal/review host and every other
 source, and persists across slot changes and reopening. It cannot silently adopt
