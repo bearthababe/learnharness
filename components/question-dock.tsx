@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownIcon, ChevronRightIcon } from "lucide-react";
+import { ArrowDownIcon, ChevronRightIcon, PaperclipIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRevealStyle } from "@/components/device-prefs";
 import { PathInput } from "@/components/path-input";
@@ -45,7 +45,6 @@ import {
 	type SharedWriting,
 } from "@/src/core";
 import { CONFIDENCE_COLORS, confidenceRailStyle } from "@/components/confidence-rail";
-import { usePhoneLayout } from "@/components/use-phone-viewport";
 import type { NotebookSession } from "./notebook-session";
 import { useNotebookQuestionDraft } from "./notebook-question-draft";
 
@@ -153,6 +152,8 @@ export function QuestionDock({
 	// 2026-10-09): probe-phase questions label Probe/Recall in the
 	// composer; teach tools keep the standing labels.
 	const toolLabel = toolName === "probe" ? "Probe" : toolName === "recall" ? "Recall" : undefined;
+	// R2 (round 16): the folded bar says what was chosen — reported by the form.
+	const [summary, setSummary] = useState<string | null>(null);
 	// Parse, don't cast (src/core/tool-parts.ts): the model authored this
 	// input, and only the schema the tool declared vouches for its shape.
 	// The dock mounts on input-available parts (already validated at the
@@ -170,6 +171,7 @@ export function QuestionDock({
 				<QuestionDockBar
 					toolName={canonical}
 					question={parsed.question}
+					summary={reveal ? null : summary}
 					onExpand={onExpand}
 					variant={reveal ? "reveal" : "collapsed"}
 					toolLabel={toolLabel}
@@ -202,6 +204,7 @@ export function QuestionDock({
 					onEscape={onEscape}
 					dictationClaim={dictationClaim}
 					compactionRunning={compactionRunning}
+					onSummary={setSummary}
 				/>
 			</div>
 		</>
@@ -228,6 +231,7 @@ function teaserText(q: string): string {
 export function QuestionDockBar({
 	toolName,
 	question,
+	summary = null,
 	onExpand,
 	variant = "collapsed",
 	label,
@@ -235,6 +239,9 @@ export function QuestionDockBar({
 }: {
 	toolName: "quiz" | "ask_user_question" | "explain";
 	question: string;
+	/** R2 (round 16): what the learner has chosen so far ("Selected: …"),
+	 *  shown in place of the question's first line; null before a choice. */
+	summary?: string | null;
 	onExpand: () => void;
 	variant?: "collapsed" | "reveal";
 	/** The kind chip's text (owner 2026-10-03): "Prediction" when a
@@ -257,8 +264,10 @@ export function QuestionDockBar({
 			className={`${variant === "reveal" ? "lh-question-reveal " : ""}lh-question-opener dock-variant flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm transition-colors hover:bg-accent/40`}
 		>
 			<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">{kind}</span>
-			<span className="min-w-0 flex-1 truncate text-muted-foreground">{teaserText(question)}</span>
-			<ShowQuestionLabel />
+			{summary
+				? <span className="lh-question-summary min-w-0 flex-1 text-foreground" data-testid="question-summary">{summary}</span>
+				: <span className="min-w-0 flex-1 truncate text-muted-foreground">{teaserText(question)}</span>}
+			{summary ? <span className="lh-show-question lh-change-answer" data-style="quiet">Change<ChevronRightIcon aria-hidden /></span> : <ShowQuestionLabel />}
 		</button>
 	);
 }
@@ -290,7 +299,8 @@ function QuestionDockForm({
 	onEscape,
 	dictationClaim = true,
 	compactionRunning = false,
-}: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal">) {
+	onSummary,
+}: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal"> & { onSummary?: (summary: string | null) => void }) {
 	const kind = toolQuestionKind(toolName);
 
 	// Canonical QuestionData, built once per question. Quiz options are
@@ -415,6 +425,17 @@ function QuestionDockForm({
 	);
 
 	const toggle = (idx: number) => setSel(toggleOption(selectMode, sel, idx));
+	// R2 (round 16): one line for the folded bar — what was chosen, and how sure.
+	const summaryText = (() => {
+		if (qd.mode === "text") return text.trim() ? `Your answer: ${teaserText(text.trim())}` : null;
+		const picked = [...sel.selected].sort((a, b) => a - b).map((i) => teaserText(qd.options[i]?.label ?? ""));
+		if (sel.otherSelected) picked.push(other.trim() ? `Other: ${other.trim()}` : "Other");
+		if (sel.dontKnow) return "Selected: I don't know";
+		if (picked.length === 0) return null;
+		const sure = kind === "quiz" ? ` · ${CONFIDENCE_STOPS[confIdx]}%` : "";
+		return picked.length === 1 ? `Selected: ${picked[0]}${sure}` : `${picked.length} chosen: ${picked.join(" · ")}${sure}`;
+	})();
+	useEffect(() => { onSummary?.(summaryText); }, [summaryText, onSummary]);
 
 	const canSubmit = transfer?.hasAttempt() || (
 		qd.mode === "text"
@@ -440,7 +461,6 @@ function QuestionDockForm({
 		saveDraftRef.current?.({ selection: { ...sel, selected: new Set(sel.selected) }, thinking, other, text, confidenceIndex: confIdx });
 	}, [draftContent, sel, thinking, other, text, confIdx]);
 	// Phones show a short "why" prompt so it never truncates.
-	const phone = usePhoneLayout();
 	const followUpOpen = qd.mode === "text" || sel.dontKnow || sel.otherSelected || sel.selected.size > 0 || thinking.trim().length > 0 || hasSharedWriting || !!transfer?.hasAttempt();
 
 	const submit = () => {
@@ -874,15 +894,11 @@ function QuestionDockForm({
 			</p>}
 			{kind === "quiz" && (
 				<div className="lh-question-confidence border-t border-border/60 px-4 py-2.5">
+					{/* E7 (round 16): what the slider means, beside it — no hover. */}
+					<p className={cn("lh-confidence-explain", sel.dontKnow && "opacity-50")} data-testid="confidence-explain">
+						<span className="lh-confidence-name">Confidence</span> — the chance your answer is correct
+					</p>
 					<div className="flex items-center gap-3">
-						<span
-							className={cn(
-								"shrink-0 text-xs font-medium uppercase tracking-wide",
-								sel.dontKnow ? "text-muted-foreground/50" : "text-muted-foreground",
-							)}
-						>
-							Confidence
-						</span>
 						<div
 							className={cn("relative h-4 min-w-0 flex-1", sel.dontKnow && "opacity-40")}
 							data-testid="confidence-track"
@@ -947,6 +963,9 @@ function QuestionDockForm({
 							{sel.dontKnow ? "—" : `${CONFIDENCE_STOPS[confIdx]}%`}
 						</span>
 					</div>
+					<div className={cn("lh-confidence-ends", sel.dontKnow && "opacity-50")} aria-hidden="true" data-testid="confidence-ends">
+						<span>0%</span><span>50% = a coin flip</span><span>100%</span>
+					</div>
 				</div>
 			)}
 
@@ -969,9 +988,15 @@ function QuestionDockForm({
 					data-testid={qd.mode === "text" ? "answer-field" : "thinking-field"}
 					className="lh-question-input rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
 				>
+					{/* E1 (round 16): the answer's reasoning has one name everywhere —
+					    "Your reasoning"; a reading note, when there is one, shows as
+					    attached (it goes with the answer, as before). */}
 					<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-						{qd.mode === "text" ? "Your answer" : "YOUR THINKING"}
+						{qd.mode === "text" ? "Your answer" : "YOUR REASONING"}
 					</div>
+					{readingThinking.trim() && <p className="lh-reading-attached" data-testid="reading-attached">
+						<PaperclipIcon aria-hidden /><span><span className="lh-reading-attached-label">Thinking while reading is attached</span> — it goes with this answer.</span>
+					</p>}
 					<CompactLearningInput dictation={dictationClaim ? dictation : undefined}>{qd.mode === "text" ? (
 						<PathInput
 							aria-label="Your answer"
@@ -1003,7 +1028,7 @@ function QuestionDockForm({
 					) : (
 						<PathInput
 							ref={thinkingRef}
-							aria-label="Your thinking"
+							aria-label="Your reasoning"
 							value={thinking}
 							onValueChange={(value) => {
 								thinkingTextRef.current = value;
@@ -1027,7 +1052,7 @@ function QuestionDockForm({
 									submit();
 								}
 							}}
-							placeholder={phone ? "Why this answer?" : "Why this answer? Whatever comes to mind."}
+							placeholder="Why this answer? Whatever comes to mind."
 							className={cn(
 								"field-sizing-content lh-input max-h-48 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground/70",
 								// Phase-scaled prominence: teaching invites depth,

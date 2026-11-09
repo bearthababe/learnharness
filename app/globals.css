@@ -5268,3 +5268,19 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 		display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 12px;
 	}
 }
+
+/* R2: the folded bar shows what was chosen (it wraps up to two lines). */
+.lh-question-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 14.5px; font-weight: 550; line-height: 1.35; }
+/* E1: the reading note shows as attached on the question card. */
+.lh-reading-attached { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 4px 10px 2px; color: var(--muted-foreground); font-size: 13.5px; line-height: 1.4; }
+.lh-reading-attached svg { flex: none; width: 15px; height: 15px; margin-top: 2px; }
+.lh-reading-attached-label { color: var(--foreground); font-weight: 600; }
+/* E7: the confidence slider explained beside it. */
+.lh-confidence-explain { margin: 0 0 6px; color: var(--muted-foreground); font-size: 13.5px; line-height: 1.4; }
+.lh-confidence-name { color: var(--foreground); font-weight: 600; }
+.lh-confidence-ends { display: flex; justify-content: space-between; gap: 6px; margin-top: 4px; padding-right: 48px; color: var(--muted-foreground); font-size: 13px; line-height: 1.3; }
+.lh-confidence-ends > span:nth-child(2) { text-align: center; }
+.lh-confidence-ends > span:last-child { text-align: right; }
+@media (max-width: 767px) {
+	.lh-confidence-ends > span:first-child, .lh-confidence-ends > span:last-child { max-width: 30%; }
+}

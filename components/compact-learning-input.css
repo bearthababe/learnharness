@@ -7,11 +7,13 @@
 	.lh-reading-input > div:first-child { padding: 0 4px 4px; }
 	.lh-compact-row > .lh-phone-reveal { display: inline-flex; }
 	.lh-question-reveal { display: none; }
-	.lh-question-collapsed { visibility: visible; height: auto; overflow: visible; }
-	.lh-question-collapsed [data-dock-scroll-area], .lh-question-collapsed .lh-question-confidence { display: none; }
-	.lh-question-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px; border: 0; background: none; }
+	/* R2 (round 16): the folded bar is only the bar (with what was chosen);
+	   the answer form never sits in it. */
+	/* R1 (round 16): the answer and reasoning fields take the card's full
+	   width; Submit has its own row below. */
+	.lh-question-input { display: flex; flex-direction: column; align-items: stretch; gap: 6px; border: 0; background: none; }
 	.lh-input-label { grid-column: 1 / -1; padding: 0 4px; }
-	.lh-question-submit { display: contents; }
+	.lh-question-submit { display: flex; justify-content: flex-end; padding: 0; }
 	.lh-question-submit > span, .lh-wide-submit-label { display: none; }
 	.lh-phone-submit-icon { display: block; }
 	.lh-question-submit > button { min-width: 44px; min-height: 44px; padding: 0; margin-bottom: 5px; }
