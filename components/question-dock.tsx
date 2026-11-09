@@ -899,14 +899,15 @@ function QuestionDockForm({
 			</p>}
 			{kind === "quiz" && (
 				<div className="lh-question-confidence border-t border-border/60 px-4 py-2.5">
-					{/* E7 (round 16): what the slider means, beside it — no hover — and
-					    its ends labelled under the track. The label is the
-					    explanation, so the row stays one row on wider screens. */}
-					<div className="lh-confidence-row flex items-start gap-3">
+					{/* E7 (round 16): what the slider means, beside it — no hover —
+					    with its ends labelled at the track's ends: one row on wider
+					    screens, so the card is no taller than before. */}
+					<div className="lh-confidence-row flex items-center gap-3">
 						<p className={cn("lh-confidence-explain", sel.dontKnow && "opacity-50")} data-testid="confidence-explain">
-							<span className="lh-confidence-name">Confidence</span> — the chance your answer is correct
+							<span className="lh-confidence-name">Confidence</span> — the chance your answer is correct <span className="whitespace-nowrap">(50% = a coin flip)</span>
 						</p>
-						<div className="lh-confidence-track min-w-0 flex-1">
+						<span className={cn("lh-confidence-end", sel.dontKnow && "opacity-50")} aria-hidden="true" data-testid="confidence-end-low">0%</span>
+						<div className="lh-confidence-track flex-1">
 						<div
 							className={cn("relative h-4 min-w-0 flex-1", sel.dontKnow && "opacity-40")}
 							data-testid="confidence-track"
@@ -961,10 +962,8 @@ function QuestionDockForm({
 								)}
 							/>
 						</div>
-							<div className={cn("lh-confidence-ends", sel.dontKnow && "opacity-50")} aria-hidden="true" data-testid="confidence-ends">
-								<span>0%</span><span>50% = a coin flip</span><span>100%</span>
-							</div>
 						</div>
+						<span className={cn("lh-confidence-end", sel.dontKnow && "opacity-50")} aria-hidden="true" data-testid="confidence-end-high">100%</span>
 						<span
 							data-testid="confidence-value"
 							className={cn(
