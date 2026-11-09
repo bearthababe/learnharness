@@ -124,7 +124,10 @@
    answer field, as on phones, and never moves when other controls appear.
    Only the field and its speech controls change; the wider layouts around
    them (question cards, the composer pill) stay as they are. */
-@media (min-width: 768px) and (pointer: coarse) {
+/* Round 14 (M3/M4): wherever the row under the composer is hidden (touch
+   screens, and any window up to 1023px — TOUCH_MEDIA), the mic sits in the
+   field. Phones are covered above. */
+@media (min-width: 768px) and (pointer: coarse), (min-width: 768px) and (max-width: 1023px) {
 	.lh-compact-field { display: flex; position: relative; flex: 1 1 auto; min-width: 0; align-self: stretch; }
 	.lh-compact-field > :is(textarea, [data-file-path-input]) { flex: 1 1 auto; width: 100%; min-width: 0; }
 	.lh-compact-field[data-has-mic] > :is(textarea, [data-file-path-input]) { padding-right: 52px; }

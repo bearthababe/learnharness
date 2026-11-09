@@ -1339,8 +1339,10 @@ try {
 	await page.setViewport({ width: 1100, height: 800, isMobile: true, hasTouch: true });
 	await page.waitForFunction(() => getComputedStyle(document.body).position !== "fixed");
 	assert.equal(await page.$eval(input, e => e.textContent), longDraft, "Wide-layout transition releases the focus lock without losing the draft");
-	assert.ok(await page.$eval('[data-testid="dictation-toggle"]', e => e.checkVisibility()), "Wide layouts retain their original dictation strip");
-	assert.equal(await page.$eval(mic, e => e.checkVisibility()), false, "Compact microphone stays phone-only");
+	// Round 14 (M3/M4): a touch screen of any width keeps one mic, inside the
+	// field; the row under the composer (and its dictation strip) is not shown.
+	assert.equal(await page.$eval('[data-testid="dictation-toggle"]', e => e.checkVisibility({ visibilityProperty: true })), false, "Touch screens do not show the row's dictation strip");
+	assert.equal(await page.$eval(mic, e => e.checkVisibility({ visibilityProperty: true })), true, "The in-field mic stays on wide touch screens");
 	await checkHandwritingMenus({ page, origin });
 	}
 	assert.deepEqual(errors, [], "No browser runtime errors");
