@@ -2616,6 +2616,10 @@ html[data-focus-source="keyboard"] [data-attachment-composer] :is(textarea, [con
 body:has(.lh-graph-results, [data-testid="graph-node-card"]) .lh-resume {
 	display: none;
 }
+/* Round 14 (P7): search results take the space; Full map steps aside. */
+body:has(.lh-graph-results) [data-testid="map-open"] {
+	display: none;
+}
 @media (max-width: 767px) {
 	.lh-graph-results {
 		left: 0;
@@ -4354,8 +4358,10 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 @media (max-width: 767px) {
 	:root .lh-home-toolbar-actions[data-empty="true"] { margin-top: 56px; width: 100%; justify-content: flex-start; }
 	:root .lh-home-page-menu { z-index: 30; }
-	/* R8: search results use the screen's width, not the narrow field's. */
-	:root .lh-graph-results { left: -124px; right: -60px; width: auto; max-width: none; }
+	/* R8: search results use the screen's width, not the narrow field's.
+	   Round 14: the field's place in the bar changes with the width and the
+	   full map, so the list's edges are measured (graph-view.tsx). */
+	:root .lh-graph-results { width: auto; max-width: none; }
 }
 
 /* R3: the grip's first-use hint, inside the grip band either side of it. */

@@ -914,6 +914,25 @@ export function GraphChromeRow({
 }) {
 	const { phone } = useSidebar();
 	const touch = useTouchLayout();
+	// R8 (phones): the results list spans the screen, 12px from each edge,
+	// wherever the search field sits in the bar.
+	const resultsRef = useRef<HTMLUListElement>(null);
+	const [edges, setEdges] = useState<{ left: number; right: number } | null>(null);
+	const showing = results.length > 0;
+	useLayoutEffect(() => {
+		if (!phone || !showing) return;
+		const place = () => {
+			const parent = (resultsRef.current?.offsetParent as HTMLElement | null)?.getBoundingClientRect();
+			if (parent) setEdges({ left: 12 - parent.left, right: 12 - (window.innerWidth - parent.right) });
+		};
+		place();
+		// The bar changes shape with the width and the full map: follow it.
+		const parent = resultsRef.current?.offsetParent;
+		const observer = typeof ResizeObserver === "function" && parent ? new ResizeObserver(place) : null;
+		if (observer && parent) observer.observe(parent);
+		window.addEventListener("resize", place);
+		return () => { observer?.disconnect(); window.removeEventListener("resize", place); };
+	}, [phone, showing]);
 	return (
 		<>
 			{!isEmpty && (
@@ -942,7 +961,8 @@ export function GraphChromeRow({
 						<div className="px-1.5 pt-1 text-[11px] text-muted-foreground">No matching nodes.</div>
 					)}
 					{results.length > 0 && (
-						<ul className="lh-graph-results" role="listbox" aria-label="Matching nodes" data-testid="graph-search-results">
+						<ul ref={resultsRef} className="lh-graph-results" role="listbox" aria-label="Matching nodes" data-testid="graph-search-results"
+							style={phone && edges ? { left: edges.left, right: edges.right } : undefined}>
 							{results.map((r) => (
 								<li key={r.id} role="option" aria-selected={false}>
 									<button type="button" data-testid="graph-search-result" onClick={() => onPickResult?.(r.id)}>
