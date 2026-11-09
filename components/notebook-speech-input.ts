@@ -9,7 +9,10 @@ function resolveTutorField(root: HTMLElement, target?: HTMLElement) {
 		?? root.querySelector<HTMLElement>('[data-testid="question-dock"]')
 		?? root.querySelector<HTMLElement>('[data-problem]')
 		?? root.querySelector<HTMLElement>('[data-testid="composer"]') ?? root;
-	const field = target?.closest<HTMLElement>('textarea,[data-file-path-input]') ?? scope.querySelector<HTMLElement>('textarea:not([aria-label="Earlier explanation"]),[data-file-path-input]');
+	const field = target?.closest<HTMLElement>('textarea,[data-file-path-input]') ?? scope.querySelector<HTMLElement>('textarea:not([aria-label="Earlier explanation"]),[data-file-path-input]')
+		// Round 15 (F6): on phones the reading note's button stands in the lesson
+		// and its one editor lives in the pane it opens.
+		?? (scope.dataset.readingPaneId ? root.ownerDocument.getElementById(scope.dataset.readingPaneId)?.querySelector<HTMLElement>('textarea,[data-file-path-input]') ?? null : null);
 	return { scope, field };
 }
 

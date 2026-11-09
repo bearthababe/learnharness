@@ -72,6 +72,12 @@ export function ReadingThinkingField({
 	const paneRef = useRef<HTMLDivElement>(null);
 	const place = useRef<{ selection: TextSelection | null; scroll: number } | null>(null);
 	const placeKey = `lh:reading-pane:${toolCallId || "page"}`;
+	const paneId = `lh-reading-pane-${toolCallId || "page"}`;
+	// The session workspace this note belongs to: the pane lives outside it
+	// (a full-screen layer) yet still counts as its field for focus and speech.
+	const entryRef = useRef<HTMLDivElement>(null);
+	const [workspaceId, setWorkspaceId] = useState<string | undefined>(undefined);
+	useEffect(() => { setWorkspaceId(entryRef.current?.closest<HTMLElement>("[data-session-workspace]")?.id || undefined); }, [phone]);
 	// F4 (round 15): the mic is in this field on every device. The field takes
 	// the mic while the learner is in it (or dictating into it), and hands it
 	// back to the question when they move on.
@@ -228,7 +234,7 @@ export function ReadingThinkingField({
 		// the pane holds the one editor, mounted throughout so the draft,
 		// cursor and scroll stay exactly where the learner left them.
 		const pane = (
-			<div ref={paneRef} {...ownerProps} role="dialog" aria-modal="true" aria-label="Thinking while reading" data-testid="reading-pane"
+			<div ref={paneRef} id={paneId} {...ownerProps} data-reading-pane-for={workspaceId} role="dialog" aria-modal="true" aria-label="Thinking while reading" data-testid="reading-pane"
 				data-open={paneOpen || undefined} inert={!paneOpen} className="lh-reading-pane"
 				onPointerDown={swipeDown} onPointerMove={swipeMove} onPointerUp={swipeEnd} onPointerCancel={swipeEnd}
 				onKeyDown={(event) => { if (event.key === "Escape" && !dictation?.active) { event.preventDefault(); event.stopPropagation(); closePane(); } }}>
@@ -249,7 +255,7 @@ export function ReadingThinkingField({
 			</div>
 		);
 		return (
-			<div className="lh-reading-entry pointer-events-auto" data-testid="reading-entry" data-reading-claim={claim}>
+			<div ref={entryRef} className="lh-reading-entry pointer-events-auto" data-testid="reading-entry" {...ownerProps} data-reading-claim={claim} data-reading-pane-id={paneId}>
 				<button type="button" className="lh-reading-open" data-testid="reading-pane-open" aria-haspopup="dialog" aria-expanded={paneOpen} onClick={openPane}>
 					<NotebookPenIcon aria-hidden />
 					<span className="lh-reading-open-text">
