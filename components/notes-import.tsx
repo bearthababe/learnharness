@@ -8,6 +8,7 @@ import { MenuShell } from "./menu-shell";
 import { OPEN_IMPORT_EVENT, publishPageMenu } from "./page-menu";
 import { createNotesImportQueue, EMPTY_IMPORT_QUEUE, notesPath, type ImportDone } from "./notes-import-queue";
 import { useOneMenu } from "./one-menu";
+import { useCardDismiss } from "./card-dismiss";
 
 export { MAX_IMPORT_BYTES } from "@/lib/notes-import-limits.ts";
 export { notesPath } from "./notes-import-queue";
@@ -108,6 +109,7 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	// Phones and tablets (round 14, P5): the import is a row in the ⋯ menu,
 	// and this menu opens from there.
 	const touch = useTouchLayout();
+	useCardDismiss(open && touch, () => setOpen(false), ['[data-testid="import-menu"]', '[data-testid="page-menu-button"]']);
 	useEffect(() => {
 		const onOpen = () => setOpen(true);
 		window.addEventListener(OPEN_IMPORT_EVENT, onOpen);

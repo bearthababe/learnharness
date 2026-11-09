@@ -74,6 +74,7 @@ import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type 
 import { planCostLabel } from "@/components/usage-format";
 import { GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
 import { usePopoverDismiss } from "@/components/popover-dismiss";
+import { useCardDismiss } from "@/components/card-dismiss";
 import { useActivity } from "@/components/activity-dock";
 import { useServerEvent, useServerResync } from "@/components/server-events";
 import { MenuShell } from "@/components/menu-shell.tsx";
@@ -472,6 +473,8 @@ function GraphSettingsControl({
 	// menu; its panel then opens from ⋯ (this button is not shown there).
 	const touch = useTouchLayout();
 	usePopoverDismiss(rootRef, open && !touch, () => setOpen(false));
+	// Touch: the card hangs from ⋯ (portaled), so it owns its own dismissal.
+	useCardDismiss(open && touch, () => setOpen(false), ['[data-testid="graph-display"]', '[data-testid="page-menu-button"]']);
 	useOneMenu(`graph-popover:${useId()}`, open, () => setOpen(false));
 	useEffect(() => {
 		const onOpen = () => setOpen(true);

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type React
 import { ChevronRightIcon, EllipsisIcon } from "lucide-react";
 import { MenuShell } from "@/components/menu-shell";
 import { useOneMenu } from "@/components/one-menu";
+import { useCardDismiss } from "@/components/card-dismiss";
 import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
 import { installKeyboardGuard, setKeyboardOff, useKeyboardOff } from "@/components/device-prefs";
 import { useCoarsePointer, usePhoneLayout } from "@/components/use-phone-viewport";
@@ -60,6 +61,8 @@ export function PageMenuButton({ extraRows = [] }: {
 	const { open: openSettings } = useSettingsDialog();
 	useOneMenu("page-menu", open, () => setOpen(false));
 	useOneMenu("helpers-sheet", helpers, () => setHelpers(false));
+	useCardDismiss(open, () => setOpen(false), ['[data-testid="page-menu"]', '[data-testid="page-menu-button"]']);
+	useCardDismiss(helpers, () => setHelpers(false), ['[data-testid="helpers-sheet"]', '[data-testid="page-menu-button"]']);
 	const helpersPresence = usePhoneMenuPresence(helpers ? "helpers" : null, phone);
 	useEffect(() => { installKeyboardGuard(); }, []);
 	useEffect(() => {

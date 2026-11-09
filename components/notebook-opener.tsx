@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } fro
 import { NotebookPenIcon, PaperclipIcon } from "lucide-react";
 import { MenuShell } from "@/components/menu-shell";
 import { useOneMenu } from "@/components/one-menu";
+import { useCardDismiss } from "@/components/card-dismiss";
 
 export type NotebookKind = "handwriting" | "equations";
 type Kind = { open: boolean; toggle: () => void };
@@ -52,6 +53,7 @@ export function NotebookOpener({ equations, handwriting, workingAttached = false
 	const kind: NotebookKind | null = both ? preferred : equations ? "equations" : handwriting ? "handwriting" : null;
 	const [choosing, setChoosing] = useState(false);
 	useOneMenu("notebook-chooser", choosing, () => setChoosing(false));
+	useCardDismiss(choosing, () => setChoosing(false), ['[data-testid="notebook-chooser"]', ".lh-notebook-toggle"]);
 	const button = useRef<HTMLButtonElement>(null);
 	const press = useRef<{ timer: number; long: boolean } | null>(null);
 	useEffect(() => () => { if (press.current) window.clearTimeout(press.current.timer); }, []);
