@@ -3526,7 +3526,9 @@ button[role="switch"][aria-checked="true"] > span {
 		min-height: 42px;
 		padding-block: 9px;
 	}
-	[data-testid="thinking-field"] > .lh-input-label { display: none; }
+	/* E1 (round 16): the reasoning field keeps its one name on phones too —
+	   and the label row carries "Thinking while reading is attached". */
+	[data-testid="thinking-field"] > .lh-input-label { display: flex; padding: 2px 4px 0; }
 }
 
 /* Tablets and laptops: the phase reads as a subtitle under the title (as
@@ -5385,7 +5387,11 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	:root [data-testid^="thinking-option-"] { min-height: 44px; }
 	:root .lh-sessions-header :is(a, button) { min-width: 44px; min-height: 44px; }
 	:root .lh-sessions-search input.lh-sessions-search-input { height: 44px; }
-	:root .lh-topbar .lh-session-title { min-height: 44px; display: inline-flex; align-items: center; }
+}
+/* R7 (tablets): the session title's tap area reaches 44px without moving
+   anything (padding taken back by margins), and it keeps its ellipsis. */
+@media (min-width: 768px) and (pointer: coarse) {
+	:root .lh-topbar button.lh-session-title { padding-block: 10px; margin-block: -10px; }
 }
 
 /* R7: the fitted page sits centred, its page controls right under it. */
