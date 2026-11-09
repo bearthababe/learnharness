@@ -12,8 +12,13 @@ import { MenuShell } from "./menu-shell";
 import { NotebookDraftReview } from "./learner-explanation";
 import { notebookActivityDrafts } from "./notebook-activity-draft";
 import { useOneMenu } from "./one-menu";
+import { MovableSlot } from "./movable-slot";
 
-export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string }) {
+export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId, oneBox }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string;
+	/** R6/P3 (round 16, phones): the instruction is the notebook half of the
+	 *  one chat box — moved to the bottom bar, or hidden while the tutor's
+	 *  box is in use. Absent: it stays here, always shown. */
+	oneBox?: { to: HTMLElement | null; hidden: boolean; label?: string } }) {
 	const { view, draftText, saving, editing, inputLocked, error, cursorLineId, expressionSelection } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
 	const speech = useSyncExternalStore(session.speech.subscribe, session.speech.getSnapshot, session.speech.getSnapshot);
 	const drafts = useSyncExternalStore(session.tutor.subscribe, session.tutor.getSnapshot, session.tutor.getSnapshot);
@@ -39,6 +44,13 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 	}, [view?.lines]);
 	const trigger = useRef<HTMLButtonElement>(null);
 	const applyWaiting = editing || inputLocked;
+	// R5 (round 16): once a line has been tapped, the learner knows; the hint goes.
+	const [hintSeen, setHintSeen] = useState(() => { try { return typeof window !== "undefined" && window.localStorage.getItem("lh:notebook-aim-hint-seen") === "1"; } catch { return false; } });
+	useEffect(() => {
+		if (!cursorLineId || hintSeen) return;
+		setHintSeen(true);
+		try { window.localStorage.setItem("lh:notebook-aim-hint-seen", "1"); } catch { /* this view only */ }
+	}, [cursorLineId, hintSeen]);
 	const modelLocked = !view || saving || applyWaiting || !!view.pending || speech.active;
 	const candidate = view?.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE;
 	const model = notebookPickerModel(candidate);
@@ -71,6 +83,29 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 	const scopeText = scopedLine === null || !view ? null : expressionSelection
 		? `Term ${expressionSelection.number} · line ${view.lines.findIndex(line => line.id === expressionSelection.lineId) + 1}`
 		: `Line ${scopedLine}`;
+	const instruction = <>
+		<form className="notebook-instruction-form" onSubmit={(event) => { event.preventDefault(); apply(); }}>
+			<div className="notebook-input-row">
+			<CompactLearningInput dictation={!dictation?.active || speech.destination === "notebook" ? dictation : undefined}>
+			<textarea id="notebook-instruction" aria-label="Notebook instruction" placeholder={scopeText ? (expressionSelection ? "Instruction for this term" : "Instruction for this line") : "e.g. Write p = F/A, put in F = 600 N"} value={draftText} rows={1}
+				className="lh-input w-full resize-none bg-transparent text-base"
+				onChange={(event) => { void session.dispatch({ type: "draft", text: event.target.value }).catch(() => {}); }}
+				onKeyDown={(event) => {
+					if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.stopPropagation(); apply(); }
+					if (event.key === "Tab") event.stopPropagation();
+				}} />
+			</CompactLearningInput>
+			<button type="submit" aria-label="Apply changes" disabled={!speech.active && !draftText.trim() || applyWaiting} className="notebook-apply">{editing ? <Loader2Icon className="animate-spin" /> : "Apply"}</button>
+			</div>
+			{(saving || editing) && <span className="sr-only" role="status">{editing ? view?.pending?.status === "awaiting-transcript" ? "Working pending…" : "Applying changes…" : "Saving…"}</span>}
+			{(error || view?.problem) && <details key={error ?? view?.problem?.operationId} className="notebook-notice" data-notebook-view-control="">
+				<summary role="status">{error ? "Not saved" : "Waiting for correction"}</summary>
+				{error && <p>{error}</p>}
+				{view?.problem && <p>{view.problem.message}</p>}
+				{error && <button type="button" onClick={() => { void session.refresh(); }}>Refresh</button>}
+			</details>}
+		</form>
+	</>;
 	return <section aria-label="Notebook" data-input-owner="notebook" className="notebook-panel flex min-h-0 min-w-0 flex-col border-border bg-background">
 		<header className="notebook-frame-header" data-notebook-view-control=""><h2 className={scopeText ? "sr-only" : undefined}>Notebook</h2>
 			{scopeText && <p className="notebook-scope" data-testid="notebook-scope">
@@ -78,9 +113,11 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 				<button type="button" aria-label="Clear selection" onClick={() => session.clearSelection()}><XIcon /></button>
 			</p>}
 			<button type="button" aria-label="Undo" title="Undo" disabled={applyWaiting || !!view?.pending || !view?.canUndo} onClick={() => command("undo")}><Undo2Icon /></button>
-			{viewControls && <button type="button" aria-label={viewControls.expanded ? "Back to split" : "Expand notebook"} title={viewControls.expanded ? "Back to split" : "Expand notebook"} onClick={viewControls.toggleExpanded}>
-				{viewControls.expanded ? <Minimize2Icon /> : <Maximize2Icon />}
-			</button>}
+			{viewControls && (viewControls.expanded
+				? <button type="button" className="notebook-back-lesson" data-testid="notebook-back-lesson" aria-label="Back to the lesson" title="Back to the lesson" onClick={viewControls.toggleExpanded}>
+					<Minimize2Icon /><span>Lesson</span>
+				</button>
+				: <button type="button" aria-label="Expand notebook" title="Expand notebook" onClick={viewControls.toggleExpanded}><Maximize2Icon /></button>)}
 			<div className="contents" onKeyDown={event => {
 				if (!menu) return;
 				if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeMenu(); }
@@ -130,38 +167,18 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 			</div>
 			{viewControls && <button type="button" aria-label="Hide notebook" title="Hide notebook" data-testid="notebook-close" onClick={viewControls.close}><XIcon /></button>}
 		</header>
-		<form className="notebook-instruction-form" onSubmit={(event) => { event.preventDefault(); apply(); }}>
-			<div className="notebook-input-row">
-			<CompactLearningInput dictation={!dictation?.active || speech.destination === "notebook" ? dictation : undefined}>
-			<textarea id="notebook-instruction" aria-label="Notebook instruction" placeholder={scopeText ? (expressionSelection ? "Instruction for this term" : "Instruction for this line") : "Notebook instruction"} value={draftText} rows={1}
-				className="lh-input w-full resize-none bg-transparent text-base"
-				onChange={(event) => { void session.dispatch({ type: "draft", text: event.target.value }).catch(() => {}); }}
-				onKeyDown={(event) => {
-					if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.stopPropagation(); apply(); }
-					if (event.key === "Tab") event.stopPropagation();
-				}} />
-			</CompactLearningInput>
-			<button type="submit" aria-label="Apply changes" disabled={!speech.active && !draftText.trim() || applyWaiting} className="notebook-apply">{editing ? <Loader2Icon className="animate-spin" /> : "Apply"}</button>
-			</div>
-			{(saving || editing) && <span className="sr-only" role="status">{editing ? view?.pending?.status === "awaiting-transcript" ? "Working pending…" : "Applying changes…" : "Saving…"}</span>}
-			{(error || view?.problem) && <details key={error ?? view?.problem?.operationId} className="notebook-notice" data-notebook-view-control="">
-				<summary role="status">{error ? "Not saved" : "Waiting for correction"}</summary>
-				{error && <p>{error}</p>}
-				{view?.problem && <p>{view.problem.message}</p>}
-				{error && <button type="button" onClick={() => { void session.refresh(); }}>Refresh</button>}
-			</details>}
-		</form>
+		{oneBox ? <MovableSlot to={oneBox.to} hidden={oneBox.hidden} owner="notebook" label={oneBox.label}>{instruction}</MovableSlot> : instruction}
 		<div data-notebook-scroll="" className="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
 			{/* R11 (round 15): the two kinds of number, explained beside the
 			    working (above it), each in its own look: lines in the margin,
 			    terms as #tags. */}
-			{!!view?.lines.length && <p className="notebook-numbers-hint" data-testid="notebook-numbers-hint">To aim an instruction, tap a line <span className="notebook-hint-line" aria-hidden>1</span> or a term <span className="notebook-hint-term" aria-hidden>1</span></p>}
+			{/* R5 (round 16): the "tap a line" hint shows until the first tap. */}
+			{!!view?.lines.length && !hintSeen && <p className="notebook-numbers-hint" data-testid="notebook-numbers-hint">To aim an instruction, tap a line <span className="notebook-hint-line" aria-hidden>1</span> or a term <span className="notebook-hint-term" aria-hidden>1</span></p>}
 			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} expressionSelection={expressionSelection} onSelect={session.selectLine} onSelectExpression={session.selectExpression} changedIds={changed} />
 			{/* Round 14 (E1): what the instruction and Apply do, with an
 			    example, and when the tutor gets to see the working. */}
 			{view?.lines.length === 0 && <div className="notebook-empty" data-testid="notebook-empty">
-				<p>Say or type what to write, then <strong>Apply</strong>. For example: “Write p = F/A, then put in F = 600 N and A = 0.2 m².”</p>
-				<p>Your working is saved here as it changes. When you go back to your message or answer, or close the notebook, it is attached there, and the tutor sees it when you send.</p>
+				<p>Say or type what to write, then <strong>Apply</strong>. Your working goes with your next message or answer.</p>
 			</div>}
 		</div>
 	</section>;

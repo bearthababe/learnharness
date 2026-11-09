@@ -5314,3 +5314,37 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	:root .lh-session-name { font-size: 15px; font-weight: 550; }
 	:root .lh-session-meta { font-size: 13px; }
 }
+
+/* R6/P3 (phones, equation notebook open): one chat box. P3-A docks it at the
+   bottom of the screen under a Tutor | Notebook switch; P3-B keeps it in the
+   area being worked in, its mode named at the field. The other input stays
+   mounted (its draft kept) but hidden; the tutor's empty dock steps aside. */
+.lh-nb-bar { display: none; }
+@media (max-width: 767px) {
+	.session-panes[data-one-box] .lh-movable[hidden] { display: none !important; }
+	.session-panes[data-one-box="docked"] .lh-dock-overlay[data-dock-kind="composer"] :is(.lh-dock-block, .lh-dock-fade),
+	.session-panes[data-one-box="follow"][data-nb-mode="notebook"] .lh-dock-overlay[data-dock-kind="composer"] :is(.lh-dock-block, .lh-dock-fade) { display: none; }
+	.session-panes[data-one-box="docked"] .lh-nb-bar {
+		display: flex; flex: none; flex-direction: column; gap: 6px; padding: 6px 12px calc(6px + var(--lh-safe-bottom, 0px));
+		border-top: 1px solid var(--border); background: var(--background);
+	}
+	.lh-nb-switch { align-self: flex-start; }
+	.lh-nb-switch > button { min-height: 36px; padding: 0 14px; font-size: 14px; }
+	.lh-nb-switch > button svg { width: 15px; height: 15px; }
+	.lh-nb-bar-slot { display: flex; flex-direction: column; min-width: 0; }
+	.lh-nb-bar-slot > .lh-movable { min-width: 0; }
+	.lh-nb-bar-slot .notebook-instruction-form { max-height: none; padding: 0; border: 0; overflow: visible; }
+	.lh-nb-bar-slot .lh-chat-composer-wrap, .lh-nb-bar-slot form { margin: 0; }
+	/* P3-B: the mode's name at the field. */
+	.session-panes[data-one-box="follow"] .lh-movable[data-label]::before {
+		content: attr(data-label); display: block; padding: 4px 4px 4px; color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); font-size: 13px; font-weight: 650;
+	}
+}
+/* R5: term chips (#n) only on the line being aimed at; the others keep no headroom for them. */
+:root .notebook-working-line:not([data-selected]) .notebook-expression-number { display: none; }
+:root .notebook-working-line:not([data-selected]) .notebook-expression { padding-top: 0; }
+/* R6: the expanded notebook's way back, labelled. */
+.notebook-back-lesson { display: inline-flex; align-items: center; gap: 6px; width: auto !important; padding: 0 12px !important; font-size: 14px; font-weight: 600; }
+@media (max-width: 767px) {
+	.lh-nb-bar-slot > .lh-movable[data-input-owner="tutor"] { border: 1px solid var(--border); border-radius: 14px; background: var(--card); }
+}

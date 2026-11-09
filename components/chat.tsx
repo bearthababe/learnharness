@@ -8,7 +8,8 @@ import { SessionHelperFailures } from "@/components/activity-dock";
 import { NotebookOpener } from "@/components/notebook-opener";
 import { useMarkSessionSeen } from "@/components/session-seen";
 import { FocusModeButton, FocusModeExit, FocusTitleButton, setFocusMode } from "@/components/focus-mode";
-import { useHeaderLook } from "@/components/device-prefs";
+import { useHeaderLook, useTryout } from "@/components/device-prefs";
+import { MovableSlot } from "@/components/movable-slot";
 import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
 import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
@@ -81,7 +82,7 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, ChevronLeftIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, TargetIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronLeftIcon, DumbbellIcon, MessageCircleIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, TargetIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -728,6 +729,28 @@ export function Chat({
 	const readingThinkingRef = useRef("");
 	const readingNow = useCallback(() => readingThinkingRef.current, []);
 	const phoneLayout = usePhoneLayout();
+	// R6/P3 (round 16, phones): one chat box while the equation notebook is
+	// open — for the tutor or for the notebook, one at a time, labelled.
+	// P3-A docks it at the bottom with a Tutor | Notebook switch; P3-B lets it
+	// follow the area being worked in. Each input keeps its own draft.
+	const notebookInputStyle = useTryout("notebookInput");
+	const oneBox = phoneLayout && notebookVisible;
+	const [nbMode, setNbMode] = useState<"tutor" | "notebook">("notebook");
+	useEffect(() => { if (notebookVisible) setNbMode("notebook"); }, [notebookVisible]);
+	const [nbBarSlot, setNbBarSlot] = useState<HTMLDivElement | null>(null);
+	const nbDocked = oneBox && notebookInputStyle === "docked";
+	useEffect(() => {
+		const root = workspaceRef.current;
+		if (!oneBox || notebookInputStyle !== "follow" || !root) return;
+		const pick = (event: Event) => {
+			const target = event.target as Element | null;
+			if (target?.closest?.('.notebook-slot, [data-testid="movable-notebook"]')) setNbMode("notebook");
+			else if (target?.closest?.('.session-tutor, [data-testid="movable-tutor"]')) setNbMode("tutor");
+		};
+		root.addEventListener("pointerdown", pick, true);
+		root.addEventListener("focusin", pick, true);
+		return () => { root.removeEventListener("pointerdown", pick, true); root.removeEventListener("focusin", pick, true); };
+	}, [oneBox, notebookInputStyle]);
 
 	// ⌘T (toggle-user-thinking, owner round 2026-10-07): set EVERY user
 	// thinking row to one state — transcript rows default open, so the
@@ -1772,6 +1795,41 @@ export function Chat({
 		workingAttached={notebookOn && workingAttached}
 	/>;
 
+	// The tutor composer, also placed by the phone's one chat box (R6/P3).
+	const tutorComposer = (
+						<div>
+						{tutorDraftState.error && (friendlyNetworkError(tutorDraftState.error)
+							? <p role="status" className="lh-quiet-status px-3">Draft kept on this device — it syncs when you're back online.</p>
+							: <p role="alert" className="px-3 text-xs text-destructive">Your draft couldn't be saved yet: {tutorDraftState.error}</p>)}
+						{tutorDraftState.saving && !tutorDraftState.error && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
+						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}
+						<ChatSessionComposer
+							dictation={tutorDictation}
+							hasContent={hasSharedWriting || handwritingSubmission.hasAttempt() || !!ordinaryDraft && explanationHasContent(ordinaryDraft.parts)}
+							// Stop aborts ANY in-flight turn (stream-reattach wave): the
+							// square renders while a reattached/wake turn runs too — the
+							// abort channel kills it server-side; stop() alone would
+							// only detach our view.
+							busy={busy}
+							value={textRef.current}
+							revision={composerDraftRevision}
+							onChange={recordComposerText}
+							inputRef={composerInputRef}
+							onSend={onSend}
+							onStop={abortInFlightTurn}
+							sendAllowed={sendAllowed}
+							dictationActive={dictation.active}
+							onEscape={dictation.active ? dictation.cancel : undefined}
+							// The pause affordance (owner round 16): the placeholder
+							// IS the hint — empty state, exactly where Enter-on-empty
+							// applies.
+							nextProblem={nextReady}
+							onNext={sendNext}
+							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : undefined}
+						/>
+						</div>
+	);
+
 	return (
 		<HandwritingSubmissionContext.Provider value={handwritingSubmission}>
 		<HandwritingPagesContext.Provider value={handwriting.actions}>
@@ -1802,7 +1860,8 @@ export function Chat({
 		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" data-writing-off={writingOn ? undefined : ""} className={`session-workspace flex h-dvh overflow-hidden ${handwriting.open ? "hw-workspace" : ""}`}>
 		<div className={handwriting.open ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
 			<div inert={handwriting.open && handwriting.expanded} className={handwriting.open ? "hw-chat hw-mobileHidden flex min-h-0 min-w-0 flex-1 flex-col" : "contents"}>
-			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
+			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}
+				data-one-box={oneBox ? notebookInputStyle : undefined} data-nb-mode={oneBox ? nbMode : undefined}>
 			<div ref={sessionTutorRef} className="session-tutor" inert={notebookLayout.expanded}>
 				{/* Round 15 (A6): the bar and the strips under it are one head; with
 				    the phone's Glass bar it floats over the lesson, which scrolls
@@ -2350,40 +2409,10 @@ export function Chat({
 							)
 						)
 					}
-					composer={
-						<div>
-						{tutorDraftState.error && (friendlyNetworkError(tutorDraftState.error)
-							? <p role="status" className="lh-quiet-status px-3">Draft kept on this device — it syncs when you're back online.</p>
-							: <p role="alert" className="px-3 text-xs text-destructive">Your draft couldn't be saved yet: {tutorDraftState.error}</p>)}
-						{tutorDraftState.saving && !tutorDraftState.error && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
-						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}
-						<ChatSessionComposer
-							dictation={tutorDictation}
-							hasContent={hasSharedWriting || handwritingSubmission.hasAttempt() || !!ordinaryDraft && explanationHasContent(ordinaryDraft.parts)}
-							// Stop aborts ANY in-flight turn (stream-reattach wave): the
-							// square renders while a reattached/wake turn runs too — the
-							// abort channel kills it server-side; stop() alone would
-							// only detach our view.
-							busy={busy}
-							value={textRef.current}
-							revision={composerDraftRevision}
-							onChange={recordComposerText}
-							inputRef={composerInputRef}
-							onSend={onSend}
-							onStop={abortInFlightTurn}
-							sendAllowed={sendAllowed}
-							dictationActive={dictation.active}
-							onEscape={dictation.active ? dictation.cancel : undefined}
-							// The pause affordance (owner round 16): the placeholder
-							// IS the hint — empty state, exactly where Enter-on-empty
-							// applies.
-							nextProblem={nextReady}
-							onNext={sendNext}
-							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : undefined}
-						/>
-						</div>
-					}
-					onSubmitAnswer={async (output, toolCallId, fields, reviewed) => {
+					composer={phoneLayout ? <MovableSlot to={nbDocked ? nbBarSlot : null} hidden={oneBox && nbMode !== "tutor"} owner="tutor" label={oneBox && notebookInputStyle === "follow" ? "Talking to the tutor" : undefined}>
+						{tutorComposer}
+					</MovableSlot> : tutorComposer}
+									onSubmitAnswer={async (output, toolCallId, fields, reviewed) => {
 						const pending = pendingRef.current;
 						if (!pending || pending.toolCallId !== toolCallId) return false;
 						followAnswer(toolCallId);
@@ -2458,8 +2487,16 @@ export function Chat({
 							}).catch(() => {});
 						}}>
 						{controls => <NotebookPanel session={notebook.session} dictation={dictation} viewControls={controls} workspaceId={workspaceId}
-							activity={notebookActivity} />}
+							activity={notebookActivity}
+							oneBox={phoneLayout ? { to: nbDocked ? nbBarSlot : null, hidden: oneBox && nbMode !== "notebook", label: oneBox && notebookInputStyle === "follow" ? "Instructing the notebook" : undefined } : undefined} />}
 					</NotebookFrame>
+					{nbDocked && <div className="lh-nb-bar" data-testid="nb-bar" data-mode={nbMode}>
+						<div className="lh-nb-switch lh-segmented" role="group" aria-label="The chat box is for">
+							<button type="button" data-active={nbMode === "tutor"} aria-pressed={nbMode === "tutor"} data-testid="nb-mode-tutor" onClick={() => setNbMode("tutor")}><MessageCircleIcon aria-hidden />Tutor</button>
+							<button type="button" data-active={nbMode === "notebook"} aria-pressed={nbMode === "notebook"} data-testid="nb-mode-notebook" onClick={() => setNbMode("notebook")}><NotebookPenIcon aria-hidden />Notebook</button>
+						</div>
+						<div ref={setNbBarSlot} className="lh-nb-bar-slot" />
+					</div>}
 				</>}
 			</div>
 			</div>
@@ -3158,7 +3195,8 @@ function DockOverlay({
 
 	const questionOpen = !!pending && expanded && !revealPending;
 	return (
-		<div ref={overlayRef} className="lh-dock-overlay pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }} data-question-open={questionOpen || undefined}>
+		<div ref={overlayRef} className="lh-dock-overlay pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }} data-question-open={questionOpen || undefined}
+			data-dock-kind={pending ? "question" : practice ? "practice" : "composer"}>
 			{/* Phones (owner P7): an open question owns the lesson area below the
 			    page bar — the CSS keys on data-question-open; "Back to lesson", first there,
 			    folds it to its bar with every pick and word kept. Hidden on wider

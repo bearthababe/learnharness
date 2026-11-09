@@ -119,7 +119,7 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 	return <div ref={divider} hidden={hidden} className="notebook-split-divider" role="separator" tabIndex={0} data-testid="notebook-grip"
 		aria-label="Resize Tutor and Notebook" aria-orientation={state.wide ? "vertical" : "horizontal"}
 		aria-describedby={hint ? "notebook-split-hint" : undefined}
-		title={state.wide ? undefined : "Drag to resize · tap to switch between lesson and working"}
+		title={state.wide ? undefined : "Drag to resize · tap to swap sizes"}
 		aria-valuemin={BOUNDS[state.wide ? "row" : "column"][0]} aria-valuemax={BOUNDS[state.wide ? "row" : "column"][1]} aria-valuenow={state.share} aria-valuetext={`${state.share}% Tutor`}
 		onPointerDown={event => {
 			if (event.button !== 0) return;
@@ -144,7 +144,7 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 			resize(event.currentTarget, event.key === "Home" ? "default" : state.share + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -5 : 5));
 		}}><span aria-hidden="true" />{/* R3 (round 13): the hint sits inside the grip band, either side of the
 		    bar — it covers neither the composer above nor the notebook below. */}
-		{hint && <span id="notebook-split-hint" className="notebook-split-hint" data-testid="notebook-grip-hint"><span>Drag to resize</span><span>Tap to swap</span></span>}</div>;
+		{hint && <span id="notebook-split-hint" className="notebook-split-hint" data-testid="notebook-grip-hint"><span>Drag to resize</span><span>Tap: swap sizes</span></span>}</div>;
 }
 
 /** The accepted four-corner frame and expanded overlay, independent of editor

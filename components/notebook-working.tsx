@@ -23,7 +23,7 @@ export function NotebookWorking({ lines, selectedLineId, expressionSelection, on
 			const rendered = expressions?.map(part => {
 				return { expression: renderWorking(part.text), relation: part.relationAfter ? katex.renderToString(part.relationAfter, { throwOnError: true, trust: false }) : "" };
 			});
-			if (expressions && rendered) return <li key={line.id} data-changed={changedIds?.has(line.id) || undefined} className="notebook-working-line flex min-w-0 items-center gap-2">
+			if (expressions && rendered) return <li key={line.id} data-changed={changedIds?.has(line.id) || undefined} data-selected={selectedLineId === line.id || expressionSelection?.lineId === line.id || undefined} className="notebook-working-line flex min-w-0 items-center gap-2">
 				{onSelect ? <button type="button" aria-label={`Select line ${index + 1}`} aria-pressed={selectedLineId === line.id && !expressionSelection} className="min-h-11 shrink-0 rounded px-2 text-xs text-muted-foreground hover:bg-accent aria-pressed:bg-accent" onClick={() => onSelect(line.id)}>{index + 1}.</button>
 					: <span className="shrink-0 px-2 text-xs text-muted-foreground">{index + 1}.</span>}
 				<span className="flex min-w-0 items-center overflow-x-auto py-1">{expressions.map((part, i) => {
