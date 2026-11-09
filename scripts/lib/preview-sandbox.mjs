@@ -34,7 +34,7 @@ export function inspectDependencies(directory) {
 	return root;
 }
 
-function runtimeLibraries(dependencies) {
+export function runtimeLibraries(dependencies) {
 	const pending = [process.execPath, "/usr/bin/sh", "/usr/bin/env"];
 	function nativeFiles(directory) {
 		for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -45,24 +45,38 @@ function runtimeLibraries(dependencies) {
 	}
 	nativeFiles(dependencies);
 	const inspected = new Set();
-	const libraries = new Set(["/usr/lib/ld-linux-x86-64.so.2"]);
+	const libraries = new Set();
+	const interpreters = new Set();
+	const trusted = filename => fs.realpathSync(filename).startsWith("/usr/lib/") && fs.statSync(filename).isFile();
+	const include = filename => {
+		assert.ok(trusted(filename), `Runtime dependency escaped the system library directory: ${filename}`);
+		if (libraries.has(filename)) return;
+		libraries.add(filename);
+		pending.push(filename);
+	};
 	while (pending.length) {
 		const filename = pending.pop();
 		if (inspected.has(filename)) continue;
 		inspected.add(filename);
 		let metadata;
-		try { metadata = execFileSync("/usr/bin/readelf", ["--dynamic", "--wide", filename], { encoding: "utf8", env: { PATH: "/usr/bin", LANG: "C" }, stdio: ["ignore", "pipe", "ignore"], timeout: 5000, maxBuffer: 1024 * 1024 }); }
+		try { metadata = execFileSync("/usr/bin/readelf", ["--program-headers", "--dynamic", "--wide", filename], { encoding: "utf8", env: { PATH: "/usr/bin", LANG: "C" }, stdio: ["ignore", "pipe", "ignore"], timeout: 5000, maxBuffer: 1024 * 1024 }); }
 		catch { continue; }
+		for (const match of metadata.matchAll(/Requesting program interpreter:\s*([^\]]+)\]/g)) {
+			const interpreter = match[1];
+			assert.match(interpreter, /^\/(?:lib(?:64)?|usr\/lib)\/(?:x86_64-linux-gnu\/)?ld-linux-x86-64\.so\.2$/, "Unsupported Linux runtime interpreter");
+			include(interpreter);
+			interpreters.add(interpreter);
+		}
 		for (const match of metadata.matchAll(/\(NEEDED\).*Shared library: \[([^\]]+)\]/g)) {
 			const name = match[1];
 			assert.match(name, /^[a-zA-Z0-9+_.-]+\.so(?:\.[a-zA-Z0-9+_.-]+)?$/, "Native dependency library name is not a basename");
-			const library = path.join("/usr/lib", name);
-			if (!fs.existsSync(library) || libraries.has(library)) continue;
-			assert.ok(fs.realpathSync(library).startsWith("/usr/lib/") && fs.statSync(library).isFile(), "Runtime dependency escaped the system library directory");
-			libraries.add(library);
-			pending.push(library);
+			const candidates = ["/usr/lib/x86_64-linux-gnu", "/lib/x86_64-linux-gnu", "/usr/lib"].map(directory => path.join(directory, name)).filter(candidate => fs.existsSync(candidate));
+			const library = candidates.find(candidate => trusted(candidate));
+			assert.ok(library || candidates.length === 0, `Runtime dependency escaped the system library directory: ${name}`);
+			if (library) include(library);
 		}
 	}
+	assert.ok(interpreters.size > 0, "Runtime dependency discovery requires readelf and a supported ELF interpreter");
 	return [...libraries].sort();
 }
 

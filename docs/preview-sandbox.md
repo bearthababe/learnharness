@@ -12,6 +12,10 @@ personal home, normal profiles or ambient Unix sockets. Installed dependencies
 are an explicit read-only mount, inspected for dotenv/credential files, escaping
 symlinks and sockets. Required ELF libraries are discovered with `readelf`, not
 by executing PR binaries with `ldd`; the host `/usr/lib` is not mounted wholesale.
+The ELF interpreter comes from the runtime binaries. Dependency basenames resolve
+through flat or `x86_64-linux-gnu` system-library layouts; every selected file must
+still resolve beneath `/usr/lib`. A valid multiarch file can replace an unrelated
+flat alias, but an outside-only dependency or interpreter remains refused.
 Dependency installation/provisioning is outside this launcher. Arbitrarily named
 secrets intentionally placed in code/dependency files cannot be classified by a
 filename denylist: only synthetic, audited dependency/source trees may be used.
@@ -25,6 +29,11 @@ Only retained synthetic `home`, `data`, `auth` and the lease's source/build outp
 are mutable. State belongs to the preview, not the reusable slot. Missing Linux,
 bubblewrap, namespaces, libraries or dependencies fails closed. There is no
 unsandboxed fallback, network access, native bridge or credential forwarding.
+
+CI installs `bubblewrap` and `binutils` and verifies actual namespace creation
+before the workflow checks. The Linux standalone job builds a current unpacked
+private package before running deployment tests; those tests refuse stale
+packages. Missing namespace permission stops the job instead of bypassing it.
 
 The trusted proxy connects to an inode-pinned Unix socket (`O_PATH|O_NOFOLLOW`
 and `/proc/self/fd/N`), preventing malicious socket-path symlinks from redirecting

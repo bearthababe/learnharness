@@ -23,6 +23,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - name: Install and verify preview sandbox prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap binutils
+          /usr/bin/bwrap --unshare-all --unshare-net --die-with-parent --new-session --cap-drop ALL --ro-bind / / --proc /proc --dev /dev -- /usr/bin/true
       - uses: actions/setup-node@v7
         with:
           node-version: "26"
@@ -40,6 +45,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - name: Install and verify preview sandbox prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap binutils
+          /usr/bin/bwrap --unshare-all --unshare-net --die-with-parent --new-session --cap-drop ALL --ro-bind / / --proc /proc --dev /dev -- /usr/bin/true
       - uses: actions/setup-node@v7
         with:
           node-version: "26"
@@ -127,6 +137,12 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+      - name: Install and verify preview sandbox prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap binutils
+          /usr/bin/bwrap --unshare-all --unshare-net --die-with-parent --new-session --cap-drop ALL --ro-bind / / --proc /proc --dev /dev -- /usr/bin/true
       - uses: actions/setup-node@v7
         with:
           node-version: "26"
@@ -142,3 +158,13 @@ jobs:
       - run: node scripts/smoke-provider-runtime.mjs
       - run: node scripts/build-server.mjs
       - run: node scripts/smoke-server.mjs --electron
+      - name: Build the current private Linux package for deployment tests
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p "$HOME/.cache"
+          npx electron-builder --linux --dir --x64 --publish never
+      - name: Deployment lifecycle and preview sandbox tests
+        if: runner.os == 'Linux'
+        run: npm run test:deployment
+        env:
+          TMPDIR: /tmp
