@@ -4823,3 +4823,48 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 .lh-your-turn-dot { align-self: center; width: 8px; height: 8px; border-radius: 999px; background: var(--primary); }
 .lh-your-turn-note { color: var(--muted-foreground); font-weight: 500; }
 :root .lh-sessions-content[data-searching] .lh-your-turn-hint { display: none; }
+
+/* F6 (round 15, phones): Thinking while reading is a full-screen pane that
+   slides in from the right; the lesson keeps a labelled button for it. */
+.lh-reading-entry { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 8px; }
+.lh-reading-open {
+	display: flex; flex: 1; min-width: 0; align-items: center; gap: 10px; min-height: 52px; padding: 6px 12px;
+	border: 1px solid var(--border); border-radius: 14px; background: var(--card); color: var(--foreground); text-align: left;
+}
+.lh-reading-open > svg { flex: none; width: 18px; height: 18px; color: var(--muted-foreground); }
+.lh-reading-open-text { display: flex; flex: 1; min-width: 0; flex-direction: column; }
+.lh-reading-open-label { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.lh-reading-open-preview { overflow: hidden; color: var(--muted-foreground); font-size: 14px; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
+.lh-reading-entry > .lh-phone-reveal { display: inline-flex; flex: none; align-self: stretch; }
+.lh-reading-pane {
+	position: fixed; inset: 0; z-index: 70; display: flex; flex-direction: column;
+	padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+	background: var(--background); transform: translateX(100%); visibility: hidden;
+	transition: transform 240ms cubic-bezier(.2, .8, .2, 1), visibility 0s linear 240ms; touch-action: pan-y pinch-zoom;
+}
+.lh-reading-pane[data-open] { transform: translateX(0); visibility: visible; transition: transform 240ms cubic-bezier(.2, .8, .2, 1), visibility 0s; }
+@media (prefers-reduced-motion: reduce) { .lh-reading-pane, .lh-reading-pane[data-open] { transition: none; } }
+.lh-reading-pane-head { display: flex; align-items: center; min-height: 60px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.lh-reading-pane-close {
+	display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 14px 0 8px; border-radius: 12px;
+	border: 1px solid var(--border); background: var(--card); color: var(--foreground); font-size: 15px; font-weight: 600;
+}
+.lh-reading-pane-close svg { width: 18px; height: 18px; }
+.lh-reading-pane-body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 8px; padding: 16px; overflow-y: auto; }
+.lh-reading-pane-title { margin: 0; font-size: 19px; font-weight: 650; }
+.lh-reading-pane-hint { margin: 0; color: var(--muted-foreground); font-size: 15px; line-height: 1.45; }
+.lh-reading-pane-field { display: flex; flex-direction: column; margin-top: 4px; }
+:root .lh-reading-pane-field .lh-compact-field { min-height: 40dvh; align-items: stretch; }
+:root .lh-reading-pane-field .lh-compact-field > [data-file-path-input] {
+	min-height: 40dvh; max-height: calc(var(--lh-phone-height, 100dvh) - 260px); white-space: normal;
+}
+.lh-reading-pane-question {
+	display: inline-flex; align-self: flex-end; align-items: center; gap: 4px; min-height: 44px; margin-top: 4px; padding: 0 16px; border-radius: 999px;
+	border: 1px solid color-mix(in oklab, var(--primary) 55%, var(--border)); color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); font-size: 15px; font-weight: 600;
+}
+.lh-reading-pane-question svg { width: 18px; height: 18px; }
+:root .lh-reading-entry > .lh-phone-reveal {
+	align-self: flex-end; align-items: center; justify-content: center; gap: 2px; min-height: 48px; padding: 0 12px 0 18px;
+	border-radius: 999px; font-size: 15px; font-weight: 600; white-space: nowrap;
+}
+:root .lh-reading-entry > .lh-phone-reveal .lh-phone-reveal-label { display: inline; }
