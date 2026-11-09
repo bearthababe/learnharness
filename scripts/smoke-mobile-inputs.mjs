@@ -1170,7 +1170,9 @@ try {
 		await page.waitForFunction(() => window.speech.frames >= 3, { timeout: 5000 });
 		assert.equal(await page.evaluate(() => window.captureContext.state), "running", `Reading capture ${run} must run the actual audio graph`);
 		await page.evaluate(n => window.speech.final(`Capture ${n}.`), run);
-		await page.locator('[aria-label="Stop dictation"]').click();
+		// The reading note's own Stop (round 15: it lives in the phone's pane,
+		// after the hidden row's dictation button in the page).
+		await page.locator('[data-testid="reading-thinking-field"] [aria-label="Stop dictation"]').click();
 		await page.waitForFunction(() => window.speech.finishing);
 		await page.evaluate(() => window.speech.close());
 		await page.waitForSelector('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
