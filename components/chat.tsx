@@ -1985,13 +1985,14 @@ export function Chat({
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
 					)}
 					{notebookOpenerEl}
+					{/* B16 (round 18, owner): on phones Focus sits directly left of ⋯, and
+					    ⋯ keeps the top-right corner on every screen (P2's look kept). */}
+					<FocusCornerButton />
 					{/* Phones: model, reasoning and Usage live here (owner O1). */}
 					<PageMenuButton
 						topRows={phoneLayout && kind !== "practice" ? [{ id: "plan", label: "Plan", value: planTree ? undefined : "Not made yet", open: () => setPlanOpen(true) }] : []}
 						extraRows={phoneLayout ? [] : [{ id: "focus", label: "Focus on the lesson", value: "Hides this bar", open: () => setFocusMode(true) }]} />
 					<FocusModeButton />
-					{/* P2 (round 17, phones): Focus in the toolbar's top-right corner. */}
-					<FocusCornerButton />
 				</TopBar>
 				<FocusModeExit />
 				{!notebookVisible && notebook.error && (friendlyNetworkError(notebook.error)

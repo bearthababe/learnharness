@@ -100,6 +100,9 @@ export function PageMenuButton({ extraRows = [], topRows = [] }: {
 		[
 			{ id: "helpers", label: "Helpers", hint: HELPERS_DESCRIPTION, open: () => setHelpers(true) },
 			{ id: "settings", label: "Settings", open: () => openSettings() },
+			// B17 (round 18, owner): the try-out options, one tap away for the
+			// owner — a developer tool, so it sits last, after Settings.
+			{ id: "tryouts", label: "Try-out designs", open: () => openSettings("tryouts") },
 		],
 	];
 	const row = (item: PageMenuRow) => (

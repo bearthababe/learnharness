@@ -5030,8 +5030,9 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 .lh-settings-advanced { margin-top: 6px; border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent); padding-top: 10px; }
 .lh-settings-advanced > summary { display: flex; align-items: center; min-height: 44px; color: var(--muted-foreground); font-size: 14px; font-weight: 600; cursor: pointer; }
 
-/* P2 (round 17, phones): Focus sits in the toolbar's top-right corner,
-   framed like the bar's other buttons. In focus mode the bar goes and the
+/* P2 (round 17, phones; placed by B16, round 18): Focus sits directly left of
+   ⋯ (which keeps the corner), framed like the bar's other buttons. In focus
+   mode the bar goes and the
    same spot holds only the bare icon that leaves it — no frame, no label,
    and no lane: the lesson keeps its full width (the icon may sometimes sit
    over a line, which the owner accepts). */
@@ -5062,7 +5063,11 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	   Focus share the rest of the row equally — no item stretches past its
 	   neighbours, and no hole opens between them (E6). */
 	:root .lh-topbar > .lh-header-chip { flex: none; min-width: 0; }
-	:root .lh-topbar > :is(.lh-notebook-opener, .lh-page-menu-button, .lh-focus-corner) { flex: 1 1 0; min-width: 44px; margin-inline: 0; padding-inline: 0; }
+	/* B16 (round 18, owner): ⋯ keeps Home's own corner slot (44px, the same
+	   coordinates on every screen); Focus sits directly left of it; Notebook
+	   and Focus share the space between Home and ⋯. */
+	:root .lh-topbar > .lh-page-menu-button { flex: none; width: 44px; margin-left: 0; }
+	:root .lh-topbar > :is(.lh-notebook-opener, .lh-focus-corner) { flex: 1 1 0; min-width: 44px; margin-inline: 0; padding-inline: 0; }
 	:root .lh-topbar > .lh-header-chip:first-of-type { margin-left: auto; }
 	:root .lh-topbar > .lh-notebook-opener > .lh-notebook-toggle { width: 100%; }
 	:root .lh-topbar > .lh-header-chip[data-empty] { color: var(--muted-foreground); }
