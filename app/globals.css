@@ -5058,11 +5058,13 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 @media (max-width: 767px) {
 	:root .lh-topbar > div.min-w-4.flex-1[aria-hidden="true"] { display: none; }
 	:root .lh-topbar > .lh-page-menu-button { margin-left: auto; }
-	/* B9 (round 18): every bar item is sized by its own icon and label, so
-	   Notebook no longer stretches wider than its neighbours. */
-	:root .lh-topbar > .lh-header-chip, :root .lh-topbar > .lh-notebook-opener { flex: none; min-width: 0; }
+	/* B9 (round 18): Sessions and Home keep Home's own sizes; Notebook, ⋯ and
+	   Focus share the rest of the row equally — no item stretches past its
+	   neighbours, and no hole opens between them (E6). */
+	:root .lh-topbar > .lh-header-chip { flex: none; min-width: 0; }
+	:root .lh-topbar > :is(.lh-notebook-opener, .lh-page-menu-button, .lh-focus-corner) { flex: 1 1 0; min-width: 44px; margin-inline: 0; padding-inline: 0; }
 	:root .lh-topbar > .lh-header-chip:first-of-type { margin-left: auto; }
-	:root .lh-topbar > .lh-notebook-opener > .lh-notebook-toggle { width: auto; }
+	:root .lh-topbar > .lh-notebook-opener > .lh-notebook-toggle { width: 100%; }
 	:root .lh-topbar > .lh-header-chip[data-empty] { color: var(--muted-foreground); }
 	:root .lh-topbar > .lh-header-chip[data-empty] svg { opacity: .7; }
 }
@@ -5757,7 +5759,14 @@ html:not([data-hydrated]) .lh-reading-row > .lh-mic-slot:empty { width: 48px; he
    Expand, Close). Readable 14px labels, 44px targets, nothing removed; on a
    narrow card the row wraps rather than crowding. */
 :root .hw-notebookHeader { display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; row-gap: 4px; }
-:root:root:root .hw-notebookHeader .hw-headerAction { font-size: 14px; }
+:root:root:root .hw-notebookHeader .hw-headerAction { font-size: 14px; padding-inline: 10px; gap: 5px; min-width: 44px; justify-content: center; }
+:root:root:root .hw-notebookHeader .hw-attachSplit { margin-inline: 0; }
+/* Tight enough that the expanded header (with "Show question too") stays one row
+   on a portrait tablet, Close at the far right as in the card. */
+:root:root:root .hw-notebookHeader { column-gap: 4px; padding-inline: 8px; }
+:root:root:root .hw-notebookHeader h2 { margin-right: 0; }
+:root:root:root .hw-zoom .hw-headerAction { padding-inline: 6px; }
+:root:root:root .hw-zoom .hw-zoomValue { min-width: 48px; }
 :root .hw-notebookHeader h2 { margin-right: 4px; }
 :root .hw-zoom { margin-left: auto; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
 :root .hw-zoom .hw-headerAction { border-radius: 0; min-width: 44px; padding-inline: 6px; }
