@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson, optionIndices } from "../../scripts/lib/learning-live.mjs";
+import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson, optionIndices, displayOrder } from "../../scripts/lib/learning-live.mjs";
 import { runLiveExercise } from "../../scripts/lib/learning-live-run.mjs";
 import { runLimits } from "../../scripts/lib/learning-verification.mjs";
 
@@ -153,9 +153,15 @@ test("the learner-turn guard stops the run as incomplete, never a pass, and keep
 });
 
 test("the learner's chosen labels map to option positions, so typeset options can be clicked; unknown labels are deviations", () => {
-	const pending = { options: ["$\\begin{pmatrix} 3 \\\\ 0 \\end{pmatrix}$", "$\\begin{pmatrix} 3 \\\\ 3 \\end{pmatrix}$", "No"] };
+	const pending = { tool: "ask_user_question", toolCallId: "x", options: ["$\\begin{pmatrix} 3 \\\\ 0 \\end{pmatrix}$", "$(A - \\lambda I)\\mathbf{v} = \\mathbf{0}$", "No"] };
 	assert.deepEqual(optionIndices(pending, pending.options[1]), [1]);
+	assert.deepEqual(optionIndices(pending, "(A - \\lambda I)\\mathbf{v} = \\mathbf{0}"), [1], "dropped $ delimiters still match");
 	assert.deepEqual(optionIndices(pending, `${pending.options[0]} | No`), [0, 2]);
 	assert.deepEqual(optionIndices(pending, null), []);
 	assert.throws(() => optionIndices(pending, "Maybe"), /Simulator deviation/);
+	// Quiz-kind questions are shown shuffled; positions follow the on-screen order, not the tool's list.
+	const quiz = { tool: "probe", toolCallId: "toolu_012Atk2djHRcjfA9f1yQB2MA", options: ["A", "B", "C", "D"] };
+	const shown = displayOrder(quiz.tool, quiz.toolCallId, quiz.options);
+	assert.deepEqual([...shown].sort(), ["A", "B", "C", "D"]);
+	for (const label of quiz.options) assert.equal(shown[optionIndices(quiz, label)[0]], label);
 });

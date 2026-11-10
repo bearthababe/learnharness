@@ -13,7 +13,8 @@ after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
 const { createProberAgent, createTeacherAgent } = await import("../src/agent/teacher-agent.ts");
 const { chatStore } = await import("../src/store/chats.ts");
 const { jobStore } = await import("../src/store/jobs.ts");
-const { TUTOR_TOOLS, DENIED_TOOLS } = await import("../scripts/lib/learning-live.mjs");
+const { TUTOR_TOOLS, DENIED_TOOLS, displayOrder } = await import("../scripts/lib/learning-live.mjs");
+const { seededRandom, shuffleOptions } = await import("../src/core/question-core.ts");
 
 // A Claude Code model, as in the live run: the app adds the send_to_user message channel only for Claude routes.
 function engine() {
@@ -38,4 +39,15 @@ it("the live fixture's deny map leaves only D-8 tools in the real prober and tea
 	// Without the deny map the same registries do carry file and research tools: the map is what enforces D-8.
 	const open = createTeacherAgent(ctx, { engine: engine() }).state.tools.map(tool => tool.name);
 	assert.ok(open.includes("read") && open.includes("research"), `unrestricted teacher tools: ${open.join(", ")}`);
+});
+
+it("the live harness reproduces the question dock's option shuffle exactly", () => {
+	for (const id of ["toolu_012Atk2djHRcjfA9f1yQB2MA", "q1", "call-xyz", ""]) {
+		for (const size of [2, 3, 4, 6]) {
+			const options = Array.from({ length: size }, (_, index) => ({ value: `v${index}`, label: `L${index}` }));
+			const app = shuffleOptions(options, seededRandom(id)).map(option => option.label);
+			assert.deepEqual(displayOrder("quiz", id, options.map(option => option.label)), app, `${id}/${size}`);
+		}
+	}
+	assert.deepEqual(displayOrder("ask_user_question", "q1", ["a", "b", "c"]), ["a", "b", "c"], "ask questions are not shuffled");
 });
