@@ -1766,7 +1766,9 @@ export function GraphView({
 				/>
 			</div>
 
-			{!phoneMap && importStatus}
+			{/* B2 (round 17): where Full map has the corner (phones, tablets) the
+			    import results get a row of their own under it, never under it. */}
+			{!mapToggle && importStatus}
 
 			{/* Top-right tail (owner, 2026-09-20): the pipeline cost number —
 			    just a number, hover-highlighted, dropdown breakdown — then
@@ -1782,7 +1784,7 @@ export function GraphView({
 			{/* R1 (round 15): on phones the import result or error, and running
 			    pipelines, get a full-width row of their own under the bar and
 			    Full map, never squeezed into the bar's narrow column. */}
-			{phoneMap && <div className="lh-home-status" data-testid="home-status-row">{importStatus}{pipelinePills}</div>}
+			{mapToggle && <div className="lh-home-status" data-testid="home-status-row">{importStatus}{phoneMap && pipelinePills}</div>}
 			{/* F3 (round 16): Full map and Done are one control in one spot (top
 			    right, under the bar) — expand / collapse — on phones and
 			    tablets; Fit is a map control at the bottom right. Search, the

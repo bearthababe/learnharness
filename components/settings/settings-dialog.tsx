@@ -55,6 +55,7 @@ import { KeyboardSection } from "./keyboard-section.tsx";
 import { TryoutsSection } from "./tryouts-section.tsx";
 import { ChatGPTUIProvider } from "./chatgpt-connection.tsx";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { useDeviceClass } from "@/components/device-features";
 import { ActivityIcon, BrainIcon, ChevronLeftIcon, ChevronRightIcon, FlaskConicalIcon, KeyRoundIcon, KeyboardIcon, PaletteIcon, SlidersHorizontalIcon } from "lucide-react";
 import { NativeSubscriptionUIProvider } from "./subscription-connections.tsx";
 import { useOneMenu } from "@/components/one-menu";
@@ -232,6 +233,11 @@ export function SettingsDialogBody({
 	const phoneLayout = usePhoneLayout();
 	const narrowSettings = useNarrowSettings();
 	const phone = phoneLayout || narrowSettings;
+	// T10 (round 17): keyboard shortcuts are for computers; phones and tablets
+	// (touch devices) do not list them.
+	const deviceClass = useDeviceClass();
+	const noShortcuts = phone || deviceClass === "phone" || deviceClass === "tablet";
+	useEffect(() => { if (noShortcuts && active === "keyboard") setActive("general"); }, [noShortcuts, active]);
 	const [listOpen, setListOpen] = useState(startWithList);
 	const phoneList = phone && listOpen;
 	const activeLabel = SECTIONS.find((x) => x.id === active)?.label ?? "Settings";
@@ -365,7 +371,7 @@ export function SettingsDialogBody({
 					hidden={phone && !phoneList}
 					className="lh-settings-nav flex w-52 shrink-0 flex-col gap-0.5 border-r border-border p-2"
 				>
-					{SECTIONS.filter((s) => !(phone && s.id === "keyboard")).map((s) => {
+					{SECTIONS.filter((s) => !(noShortcuts && s.id === "keyboard")).map((s) => {
 						const Icon = SECTION_ICON[s.id];
 						return (
 							<button
@@ -491,7 +497,7 @@ export function SettingsDialogBody({
 									<TryoutsSection />
 								</SettingsSection>
 							)}
-							{active === "keyboard" && (
+							{active === "keyboard" && !noShortcuts && (
 								<SettingsSection
 									title="Keyboard"
 									hint="Stored on this device"

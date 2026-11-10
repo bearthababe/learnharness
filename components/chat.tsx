@@ -2343,7 +2343,7 @@ export function Chat({
 				<DockOverlay
 					notebook={notebook.session}
 					fullQuestionWidth={handwriting.open}
-					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} hideIds={handwritingSubmission.model?.attempt?.imageVersions.map((image) => image.writingId)} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} /></>}
+					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} foldedAtFirst={!!pending} hideIds={handwritingSubmission.model?.attempt?.imageVersions.map((image) => image.writingId)} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} /></>}
 					hasSharedWriting={hasSharedWriting || handwritingSubmission.hasAttempt()}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.key)?.form : undefined}

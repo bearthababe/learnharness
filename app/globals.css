@@ -3874,10 +3874,11 @@ button[role="switch"][aria-checked="true"] > span {
 }
 .lh-graph-costs-in-settings { padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
 
-/* Phones, question open: the reading notes fold to one line (the step
-   stays); tap to unfold, tap again to fold. Wider screens keep the box. */
+/* Question open: the reading note folds to one line (the step stays); tap
+   to unfold, tap again to fold. T5 (round 17): on every device — phones
+   reach the note through its pane, tablets and laptops fold it here. */
 .lh-reading-fold { display: none; }
-@media (max-width: 767px) {
+@media all {
 	.lh-reading-input[data-reading-claim="false"] > .lh-reading-fold {
 		display: flex;
 		align-items: center;
@@ -5621,3 +5622,84 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 :root:root .hw-notebook .hw-overlay[data-spot="middle-right"] .hw-arcInspector { right: 248px; }
 :root:root .hw-notebook .hw-overlay[data-spot="middle-left"] .hw-arcInspector { left: 248px; }
 :root:root .hw-notebook .hw-overlay[data-spot^="bottom-"] .hw-arcInspector { bottom: 276px; }
+
+/* T5 (round 17, tablets and laptops): inside an open question, the reading
+   note sits like a small header on the question card — a chevron, its
+   name and a short hint (or the first words); it opens to the field. */
+@media (min-width: 768px) {
+	:root .lh-reading-input[data-reading-claim="false"] {
+		margin-bottom: 0; padding: 0 6px; border: 1px solid var(--border); border-bottom: 0; border-radius: 16px 16px 0 0;
+		background: color-mix(in oklab, var(--card) 70%, transparent);
+	}
+	:root .lh-reading-input[data-reading-claim="false"]:not([data-folded]) { padding-bottom: 8px; }
+	:root .lh-reading-input[data-reading-claim="false"] + [data-attachment-composer] { border-top-left-radius: 0; border-top-right-radius: 0; }
+	:root .lh-reading-input[data-reading-claim="false"] > .lh-reading-fold { min-height: 44px; padding: 0 8px; }
+	:root .lh-reading-fold-label { font-size: 12.5px; }
+}
+/* T5: the attached pages fold the same way — a chevron with what they are. */
+.lh-tray-fold { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 4px; text-align: left; font-weight: 600; }
+.lh-tray-fold svg { width: 16px; height: 16px; flex: none; color: var(--muted-foreground); transition: transform .15s ease; }
+.lh-tray-fold[aria-expanded="true"] svg { transform: rotate(90deg); }
+.lh-tray-hint { color: var(--muted-foreground); font-weight: 500; }
+
+/* ---- B1 (round 17, touch): Ideas ---- */
+/* Handles that read as handles: a framed grip at each row's right end. */
+:root .lh-drag-handle:not(.lh-drag-handle-off) {
+	border: 1px solid color-mix(in oklab, var(--foreground) 14%, transparent);
+	background: color-mix(in oklab, var(--foreground) 6%, transparent); color: color-mix(in oklab, var(--foreground) 75%, transparent);
+}
+.lh-handle-hint {
+	display: flex; align-items: center; gap: 8px; margin: 6px 12px 2px; padding: 6px 4px 6px 12px; border: 1px solid var(--border); border-radius: 12px;
+	background: var(--card); color: var(--foreground); font-size: 13.5px; line-height: 1.35;
+}
+.lh-handle-hint > svg { width: 16px; height: 16px; flex: none; color: var(--muted-foreground); }
+.lh-handle-hint > span { flex: 1; min-width: 0; }
+.lh-handle-hint > button { display: grid; flex: none; place-items: center; width: 44px; height: 44px; border-radius: 10px; color: var(--muted-foreground); }
+.lh-handle-hint > button svg { width: 16px; height: 16px; }
+/* The drag label sits left of the finger. */
+:root .lh-drag-ghost { translate: -100% 0; }
+/* The header: Import and New folder labelled like the bar's other actions. */
+.lh-ideas-new-folder { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 10px; color: var(--foreground); font-size: 13.5px; font-weight: 550; }
+.lh-ideas-new-folder:hover { background: var(--accent); }
+.lh-ideas-new-folder svg { width: 16px; height: 16px; color: var(--muted-foreground); }
+@media (pointer: coarse) { .lh-ideas-new-folder { min-height: 44px; } }
+/* Phones: one row like Home's bar — Sessions, Home, Import, New folder,
+   Search (each an icon over its label). Home closes Ideas, so no ✕ here. */
+@media (max-width: 767px) {
+	:root [data-testid="chain-table"] .lh-topbar :is(.lh-ideas-import, .lh-ideas-new-folder, .lh-ideas-search-open) {
+		display: inline-flex; flex: 1 1 64px; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+		min-width: 0; max-width: 96px; width: auto; height: 48px; margin: 0; padding: 0 6px;
+		border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--foreground); font-size: 13px; font-weight: 600; line-height: 1;
+	}
+	:root [data-testid="chain-table"] .lh-topbar .lh-ideas-import > span { position: static; width: auto; height: auto; overflow: visible; clip-path: none; white-space: nowrap; }
+	:root [data-testid="chain-table"] .lh-topbar :is(.lh-ideas-import, .lh-ideas-new-folder) svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+	:root [data-testid="chain-table"] .lh-topbar .lh-ideas-search-open { margin-left: 0; }
+	:root [data-testid="chain-table"] .lh-topbar [data-testid="chain-table-close"] { display: none; }
+}
+/* B2 (round 17): Home. While searching, the map's corner control steps
+   aside (search shows only search) — no-match note included. Tablets give
+   import results a row of their own under Full map, as phones do. */
+@media (max-width: 767px), (pointer: coarse) {
+	:root:has(.lh-graph-search[data-over]) [data-testid="map-open"],
+	body:has([data-testid="graph-no-match"]) [data-testid="map-open"] { display: none; }
+}
+@media (min-width: 768px) and (pointer: coarse) {
+	:root .lh-home-status {
+		position: absolute; top: 128px; right: 16px; z-index: 22; width: min(440px, calc(100% - 32px));
+		display: flex; flex-direction: column; align-items: stretch; gap: 8px; pointer-events: none;
+	}
+	:root .lh-home-status:empty { display: none; }
+	:root .lh-home-status > * { width: auto; max-width: none; pointer-events: auto; }
+}
+
+/* L3 (round 17, laptops): history and session metadata read more easily —
+   a size up and a little more ink than the faintest muted text. */
+@media (min-width: 1024px) and (not (pointer: coarse)) {
+	:root .lh-session-meta { font-size: 13.5px; line-height: 18px; color: color-mix(in oklab, var(--muted-foreground) 72%, var(--foreground)); }
+	:root .lh-session-row[data-state="waiting"] .lh-session-meta { color: var(--lh-brand-ink); }
+	:root .lh-session-row[data-state="working"] .lh-session-meta { color: var(--foreground); }
+	:root .lh-activity-recent-title { font-size: 14px; }
+	:root .lh-activity-recent-meta { font-size: 13px; color: color-mix(in oklab, var(--muted-foreground) 72%, var(--foreground)); }
+	:root .lh-activity-recent[data-status="error"] .lh-activity-recent-meta { color: var(--destructive); }
+	:root .lh-session-subtitle { font-size: 13.5px; color: color-mix(in oklab, var(--muted-foreground) 72%, var(--foreground)); }
+}

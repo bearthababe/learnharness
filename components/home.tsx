@@ -94,6 +94,10 @@ export function Home({
 		},
 	});
 	const [micSlot, setMicSlot] = useMicSlot();
+	// B2 (round 17): only a keyboard-and-mouse computer starts in the field.
+	// On touch screens a focused field shows as active (and empty) on arrival
+	// without raising a keyboard, which reads as a stuck search.
+	useEffect(() => { if (window.matchMedia?.("(pointer: fine)").matches) topicInputRef.current?.focus({ preventScroll: true }); }, []);
 	const [busy, setBusy] = useState(false);
 	const startingRef = useRef(false);
 	const starterRef = useRef(new SessionStarter());
@@ -348,7 +352,6 @@ export function Home({
 							}
 						}}
 						placeholder={mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
-						autoFocus
 						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 					/></CompactLearningInput>
 					<AttachFilesButton editorRef={topicInputRef} />

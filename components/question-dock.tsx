@@ -607,15 +607,32 @@ function QuestionDockForm({
 			// global ←/→ own its keyboard, so it never joins the chain.
 			// Shift+Tab falls through (the global thinking-level cycle owns
 			// it), so the shift check matters.
+			// L1 (round 17): Tab walks the card's stops in order — every option
+			// of a multi-select (one stop, the walked row, for a single pick),
+			// Other's field, Your reasoning, the mic, Submit — then leaves the
+			// card for the page's usual walk. Nothing is unreachable by Tab.
 			if (e.key === "Tab" && !e.shiftKey && !modded) {
+				const root = rootRef.current;
+				const shown = (el: Element | null | undefined): el is HTMLElement => !!el && el instanceof HTMLElement && el.getClientRects().length > 0 && !(el as HTMLButtonElement).disabled;
+				const rows = [...(root?.querySelectorAll<HTMLElement>("[data-kbdrow]") ?? [])];
+				const rowStops = qd.mode === "multi-select" ? rows : rows.filter((row) => Number(row.dataset.kbdrow) === (kbdIdx ?? 0));
+				const rowTarget = (row: HTMLElement) => row.querySelector<HTMLElement>("input, [data-file-path-input]") ?? row;
+				const form = root?.querySelector("form.lh-question-form");
+				const stops = [
+					...rowStops.map(rowTarget),
+					thinkingRef.current,
+					form?.querySelector(".lh-mic-slot button"),
+					form?.querySelector('[data-testid="question-send"]'),
+				].filter(shown);
+				const at = stops.findIndex((stop) => stop === t || stop.contains(t));
+				if (at === stops.length - 1) return; // the end: the page's walk takes over
 				e.preventDefault();
 				e.stopPropagation();
-				if (t?.closest?.("[data-kbdrow]")) thinkingRef.current?.focus();
-				else {
-					const idx = kbdIdx ?? 0;
-					setKbdIdx(idx);
-					focusRow(idx);
-				}
+				const next = stops[at + 1] ?? stops[0];
+				if (!next) return;
+				const row = next.closest<HTMLElement>("[data-kbdrow]");
+				setKbdIdx(row ? Number(row.dataset.kbdrow) : null);
+				next.focus();
 				return;
 			}
 			// Typing never picks an answer (R9, round 12): a letter or digit
@@ -896,7 +913,7 @@ function QuestionDockForm({
 				signal stands alone. */}
 			{/* Keyboard users see the model at a glance (laptops only). */}
 			{qd.mode !== "text" && <p className="lh-kbd-hint" aria-hidden="true" data-testid="question-kbd-hint">
-				<kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Space</kbd> pick{kind === "quiz" ? <> · <kbd>←</kbd><kbd>→</kbd> confidence</> : null} · <kbd>Tab</kbd> your reasoning · <kbd>Enter</kbd> submit
+				<kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Space</kbd> pick{kind === "quiz" ? <> · <kbd>←</kbd><kbd>→</kbd> confidence</> : null} · <kbd>Tab</kbd> next · <kbd>Enter</kbd> submit
 			</p>}
 			{kind === "quiz" && (
 				<div className="lh-question-confidence border-t border-border/60 px-4 py-2.5">
@@ -1032,7 +1049,12 @@ function QuestionDockForm({
 								}
 							}}
 							placeholder="Type your answer…"
-							className="field-sizing-content lh-input max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
+							className={cn(
+								"field-sizing-content lh-input max-h-48 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground",
+								// T8 (round 17): the same answer area as a check's reasoning, so
+								// an explain card is never smaller than the check before it.
+								phase === "teach" ? "min-h-[4.5rem]" : "min-h-10",
+							)}
 						/>
 					) : (
 						<PathInput

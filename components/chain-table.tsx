@@ -55,6 +55,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { joinDictation, useDictationTarget } from "@/components/dictation";
 import {
 	ChevronDownIcon,
 	ChevronRightIcon,
@@ -65,6 +67,7 @@ import {
 	FolderIcon,
 	FolderInputIcon,
 	FolderPlusIcon,
+	GripVerticalIcon,
 	Trash2Icon,
 	ListTreeIcon,
 	SearchIcon,
@@ -186,7 +189,13 @@ export function ChainTableBody({
 		return () => window.clearTimeout(timer);
 	}, [undoNote]);
 	const expandedNow = useRef(expandedClusters); expandedNow.current = expandedClusters;
+	// B1 (round 17): the handles introduce themselves once on this device; the
+	// note goes when dismissed or once something has been moved.
+	const [handleHint, setHandleHint] = useState(false);
+	useEffect(() => { try { setHandleHint(window.localStorage.getItem("lh:ideas-handle-hint") !== "1"); } catch { /* keep it hidden */ } }, []);
+	const seenHandleHint = () => { setHandleHint(false); try { window.localStorage.setItem("lh:ideas-handle-hint", "1"); } catch { /* this view only */ } };
 	const moveItems = (items: MoveItem[], parentId: string | null) => {
+		if (handleHint) seenHandleHint();
 		if (!onOrganizationChange || !fullDirectory) return;
 		const state = fullDirectory.organization;
 		const before = items.map((item) => ({ ...item, parentId: item.kind === "source" ? placementOf(state, item.id)?.folderId ?? null : state.folders.find((f) => f.id === item.id)?.parentId ?? null }));
@@ -362,8 +371,10 @@ export function ChainTableBody({
 				</span>
 				{/* R4 (round 15): importing is findable where the ideas are. */}
 				{!selectMode && <ImportNotesLink testid="ideas-import" label="Import" className="lh-ideas-import lh-no-drag" />}
-				{onOrganizationChange && <button type="button" aria-label="Add folder" data-testid="add-source-folder"
-					onClick={() => setCreatingFolder(true)} className="lh-no-drag rounded-lg p-2 text-muted-foreground hover:bg-accent"><FolderPlusIcon className="size-4" /></button>}
+				{/* B1 (round 17): labelled like the bar's other actions; the name
+				    field is focused within this tap, so its keyboard rises. */}
+				{onOrganizationChange && <button type="button" aria-label="New folder" data-testid="add-source-folder"
+					onClick={() => flushSync(() => setCreatingFolder(true))} className="lh-ideas-new-folder lh-no-drag"><FolderPlusIcon aria-hidden /><span>New folder</span></button>}
 				{phone && <button type="button" className="lh-search-icon lh-ideas-search-open lh-no-drag" aria-label="Search ideas" data-testid="chain-table-search-open"
 					aria-expanded={searchOver} onClick={() => { setSearchOpen(true); requestAnimationFrame(() => searchRef.current?.focus()); }}>
 					<SearchIcon aria-hidden /><span aria-hidden="true">Search</span>
@@ -437,6 +448,10 @@ export function ChainTableBody({
 					</button>
 				</div>
 
+				{handleHint && onOrganizationChange && !selectMode && <p className="lh-handle-hint" data-testid="ideas-handle-hint">
+					<GripVerticalIcon aria-hidden /><span>Drag a row’s handle to move it into a folder — or tap the handle for Move to…</span>
+					<button type="button" aria-label="Got it" onClick={seenHandleHint}><XIcon aria-hidden /></button>
+				</p>}
 				{creatingFolder && onOrganizationChange && <div className="flex items-center px-3 py-2" data-testid="new-folder-row">
 					<EditableSourceName name="" initiallyEditing onCancel={() => setCreatingFolder(false)}
 						onSave={async (name) => {
@@ -727,6 +742,9 @@ function MoveToSheet({ items, directory, onPick, onCreate, onClose }: {
 	const ref = useRef<HTMLDivElement>(null);
 	const [naming, setNaming] = useState(false);
 	const [name, setName] = useState("");
+	// B1 (round 17): naming the new folder takes the app's dictation too.
+	const nameRef = useRef(name); nameRef.current = name;
+	useDictationTarget(useCallback((text: string) => { const next = joinDictation(nameRef.current, text); nameRef.current = next; setName(next); }, []), naming);
 	const [failure, setFailure] = useState("");
 	useEffect(() => {
 		ref.current?.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
@@ -769,7 +787,7 @@ function MoveToSheet({ items, directory, onPick, onCreate, onClose }: {
 					<input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Folder name" aria-label="New folder name" data-testid="move-to-new-name" />
 					<button type="submit" data-testid="move-to-create" disabled={!name.trim()}>Create and move</button>
 					{failure && <p role="alert">{failure}</p>}
-				</form> : <button type="button" role="listitem" className="lh-move-option lh-move-option-new" data-testid="move-to-new" onClick={() => setNaming(true)}>
+				</form> : <button type="button" role="listitem" className="lh-move-option lh-move-option-new" data-testid="move-to-new" onClick={() => flushSync(() => setNaming(true))}>
 					<FolderPlusIcon aria-hidden />New folder…
 				</button>}
 			</div>

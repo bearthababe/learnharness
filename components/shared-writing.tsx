@@ -6,7 +6,7 @@ import { useServerEvent, useServerResync } from "@/components/server-events";
 import { HandwritingPagesContext } from "./handwriting/pages-context";
 import type { OpenChoice, SnapshotWriting } from "./handwriting/pages";
 import { useMenuEscape } from "./menu-escape";
-import { MoreHorizontalIcon, XIcon } from "lucide-react";
+import { ChevronRightIcon, MoreHorizontalIcon, XIcon } from "lucide-react";
 
 export function useSharedWriting(chatId: string, messages: readonly LhMessage[]) {
 	const submittedKey = messages.flatMap((m) => m.sharedWriting?.map((w) => w.id) ?? []).join(",");
@@ -144,13 +144,17 @@ function SharedWritingViewer({ chatId, writing, label, initialDecision = false, 
 	</dialog>;
 }
 
-export function SharedWritingPanel({ chatId, writing: all, busy, hideIds }: {
+export function SharedWritingPanel({ chatId, writing: all, busy, hideIds, foldedAtFirst = false }: {
 	chatId: string;
 	writing: ReturnType<typeof useSharedWriting>;
 	busy: boolean;
 	/** Pages already shown with an unconfirmed answer: not listed twice. */
 	hideIds?: readonly string[];
+	/** T5 (round 17): inside a question the pages start folded to one line. */
+	foldedAtFirst?: boolean;
 }) {
+	const [folded, setFolded] = useState(foldedAtFirst);
+	useEffect(() => { setFolded(foldedAtFirst); }, [foldedAtFirst]);
 	const hidden = new Set(hideIds ?? []);
 	const writing = hidden.size ? { ...all, pending: all.pending.filter((item) => !hidden.has(item.id)) } : all;
 	const [removeError, setRemoveError] = useState<string | null>(null);
@@ -174,11 +178,15 @@ export function SharedWritingPanel({ chatId, writing: all, busy, hideIds }: {
 	return <section className="lh-shared-writing mb-2 rounded-lg border border-border bg-card px-3 py-2 text-xs" data-review={review || undefined} data-has-writing={writing.pending.length > 0 || (!!writing.error && !/failed to fetch|networkerror|load failed/i.test(writing.error))} aria-label="Shared writing">
 		{writing.pending.length > 0 && <>
 			<div className="lh-tray-head">
-				<p className="font-medium">{writing.pending.length} {writing.pending.length === 1 ? "page" : "pages"} attached · not sent</p>
-				<button type="button" className="lh-tray-toggle" data-testid="shared-writing-review" aria-expanded={review} onClick={() => setReview((open) => !open)}>{review ? "Done" : "Review"}</button>
+				<button type="button" className="lh-tray-fold" data-testid="shared-writing-fold" aria-expanded={!folded} onClick={() => setFolded((value) => !value)}>
+					<ChevronRightIcon aria-hidden />
+					<span>{writing.pending.length} {writing.pending.length === 1 ? "page" : "pages"} attached · not sent</span>
+					{folded && <span className="lh-tray-hint">· tap to see</span>}
+				</button>
+				{!folded && <button type="button" className="lh-tray-toggle" data-testid="shared-writing-review" aria-expanded={review} onClick={() => setReview((open) => !open)}>{review ? "Done" : "Review"}</button>}
 			</div>
-			<SharedWritingImages chatId={chatId} writing={writing.pending} onRemove={busy ? undefined : remove} />
-			{(review || busy) && <p className="lh-tray-help text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Goes with your next message. × takes it out; it stays in your notebook."}</p>}
+			{!folded && <SharedWritingImages chatId={chatId} writing={writing.pending} onRemove={busy ? undefined : remove} />}
+			{!folded && (review || busy) && <p className="lh-tray-help text-muted-foreground">{busy ? "Waiting for the tutor to finish. Your writing stays here." : "Goes with your next message. × takes it out; it stays in your notebook."}</p>}
 			{removeError && <p role="alert" className="text-destructive">{removeError}</p>}
 		</>}
 		{writing.error && (/failed to fetch|networkerror|load failed/i.test(writing.error)

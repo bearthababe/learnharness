@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type HTMLAttributes, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type HTMLAttributes, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { isDictationActive, joinDictation, useDictationTarget } from "@/components/dictation";
 import { FolderIcon, FolderOpenIcon, GripVerticalIcon } from "lucide-react";
 import { useCoarsePointer } from "@/components/use-phone-viewport";
 import { canMoveFolder, folderIsEmpty, fuzzyScore, placementOf, folderEntryCheck, type SourceEntrySelection, type OrganizationAction, type SourceDirectory } from "@/src/core";
@@ -90,6 +91,12 @@ export function EditableSourceName({ name, onSave, onCancel, initiallyEditing = 
 	const submitting = useRef(false);
 	const cancelled = useRef(false);
 	const setRowEditing = useContext(RowEditing);
+	// B1 (round 17): a name being typed takes the app's dictation (the words
+	// go into the name, never into another field), and a tap on a mic does not
+	// end the edit. Its keyboard always rises (S3: naming is never a learning
+	// field, and the field is focused within the tap that opened it).
+	const draftRef = useRef(draft); draftRef.current = draft;
+	useDictationTarget(useCallback((text: string) => { const next = joinDictation(draftRef.current, text); draftRef.current = next; setDraft(next); }, []), editing);
 	useLayoutEffect(() => { setRowEditing?.(editing); return () => setRowEditing?.(false); }, [editing, setRowEditing]);
 	useLayoutEffect(() => { if (editing) { input.current?.focus(); input.current?.select(); } }, [editing]);
 	const commit = async () => {
@@ -105,7 +112,11 @@ export function EditableSourceName({ name, onSave, onCancel, initiallyEditing = 
 	return <span className="min-w-0 flex-1">
 		{editing ? <input ref={input} value={draft} placeholder="Folder name" aria-label="Source or folder name" data-testid="source-name-input"
 			className="block h-5 w-full min-w-0 border-0 bg-transparent p-0 text-sm font-medium leading-5 outline-none shadow-none focus:ring-0"
-			onChange={(e) => setDraft(e.target.value)} onBlur={() => { void commit(); }}
+			onChange={(e) => setDraft(e.target.value)} onBlur={(e) => {
+				// A mic tap (or a run still finishing) keeps the edit open for the words.
+				if ((e.relatedTarget as Element | null)?.closest?.('.lh-mic-button, [aria-label="Start dictation"], [aria-label="Stop dictation"]') || isDictationActive()) return;
+				void commit();
+			}}
 			onKeyDown={(e) => {
 				if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cancelled.current = true; setEditing(false); setFailure(""); onCancel?.(); }
 				if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); void commit(); }
@@ -143,7 +154,7 @@ export function RowActions({ depth, children }: { depth: number; children: React
 interface TreeSource {
 	key: string; birth: string | null; label: string | null; nodeIds: string[]; newestCreatedAt: string;
 }
-type PointerDrag = MoveItem & { from: string | null; x: number; y: number; target: string | null | undefined; begun: boolean };
+type PointerDrag = MoveItem & { from: string | null; x: number; y: number; target: string | null | undefined; begun: boolean; touch: boolean };
 export function SourceFolderTree<T extends TreeSource>({ groups, directory, query, sort, renderSource, onAction, expanded,
 	onToggleExpanded, selection, selectedFolders, onToggleNodes, onToggleFolder, allSourceNodes, allowEmptySelection = true, collapsedForSearch, sourceSelection,
 	renaming = null, onRename = () => {}, onMove, onMoveTo }: {
@@ -276,7 +287,7 @@ export function SourceFolderTree<T extends TreeSource>({ groups, directory, quer
 				speed = e.clientY < box.top + 56 ? -Math.ceil((box.top + 56 - e.clientY) / 6) : e.clientY > box.bottom - 56 ? Math.ceil((e.clientY - (box.bottom - 56)) / 6) : 0;
 				if (speed !== 0 && !frame) frame = requestAnimationFrame(scroll);
 			}
-			const next = { ...item, from, x: e.clientX, y: e.clientY, target, begun: true };
+			const next = { ...item, from, x: e.clientX, y: e.clientY, target, begun: true, touch: e.pointerType !== "mouse" };
 			dragRef.current = next; setDrag(next);
 		};
 		const finish = (commit: boolean) => {
@@ -384,9 +395,11 @@ export function SourceFolderTree<T extends TreeSource>({ groups, directory, quer
 		</button>}
 		{onAction && <div data-testid="source-root-drop" aria-label="Move outside folders" data-drop-active={dropTarget === null} data-drop-root=""
 			className={`min-h-16 flex-1 transition-colors ${dropTarget === null ? "bg-accent/30" : ""}`} {...dropProps(null)} />}
-		{drag && <div className="lh-drag-ghost" aria-hidden="true" style={{ left: drag.x + 14, top: drag.y - 46 }}>
+		{/* B1 (round 17): the label sits left of the finger (the handles are on
+		    the right) and says how to cancel by touch. */}
+		{drag && <div className="lh-drag-ghost" aria-hidden="true" style={{ left: drag.x - 18, top: drag.y - 46 }}>
 			<span className="lh-drag-ghost-name">{drag.name}</span>
-			<span className="lh-drag-ghost-target">{drag.target === undefined ? "Drop on a folder · Esc cancels" : drag.target === null ? "→ Top level" : `→ ${state.folders.find((f) => f.id === drag.target)?.name ?? "folder"}`}</span>
+			<span className="lh-drag-ghost-target">{drag.target === undefined ? (drag.touch ? "Drop on a folder · let go anywhere else to cancel" : "Drop on a folder · Esc cancels") : drag.target === null ? "→ Top level" : `→ ${state.folders.find((f) => f.id === drag.target)?.name ?? "folder"}`}</span>
 		</div>}
 		{drag && <span className="sr-only" role="status">{drag.target === undefined ? "" : drag.target === null ? "Move to the top level" : `Move to ${state.folders.find((f) => f.id === drag.target)?.name ?? "folder"}`}</span>}
 	</div>
