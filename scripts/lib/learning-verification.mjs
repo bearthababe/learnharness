@@ -173,7 +173,7 @@ export function catalogReport(catalog, inventory, observed = {}) {
 		lines.push(`| ${story.parent ? "↳ " : ""}${story.id}: ${story.title} | ${story.availability} | ${story.automation} | ${observed[story.id] ?? "not-run"} | ${story.dependencies.join(", ")} | ${decisions} |`);
 	}
 	lines.push("", "## Owner decisions", "");
-	for (const decision of catalog.decisions ?? []) lines.push(`- **${decision.id}** (${decision.source}): ${decision.question}${decision.blocks?.length ? ` Blocks: ${decision.blocks.join(", ")}.` : ""}`);
+	for (const decision of catalog.decisions ?? []) lines.push(`- **${decision.id}** (${decision.source}): ${decision.question}${decision.blocks?.length ? ` Blocks: ${decision.blocks.join(", ")}.` : ""}${decision.resolved ? ` **Resolved:** ${decision.resolved}` : ""}`);
 	lines.push("", "## Excluded or deferred source behaviors", "");
 	for (const row of inventory.rows.filter(item => item.disposition !== "story")) lines.push(`- ${row.disposition}: ${row.source} ${row.locator}: ${row.behavior}. ${row.reason}`);
 	lines.push("", "Availability comes from source inspection; it is not a run result. Missing verification is not a product-gap finding. No subject-accuracy or learning-efficacy claim.");

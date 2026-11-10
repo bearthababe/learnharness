@@ -256,11 +256,13 @@ D-2). The simulator sees only `learner-brief.md`.
     - a right conclusion with a wrong reason counts as wrong (E7);
     - short prose sub-questions inside one Socratic move are allowed (E11);
     - an out-of-key claim settled false counts as a material error (§3).
+  - **D-2:** the grader is GPT Sol through the owner's Codex/ChatGPT login; the simulated
+    learner is a Claude model through the owner's Claude login. No API billing.
+  - **D-8:** this exercise keeps its tool restriction (teaching, question and planning
+    tools only). #49's normal-functionality live harness needs its own approval later.
 - **Open, with recommendations:**
   - **D-1:** approve the key as a whole (expectations and calibration set). Its five
     readings of policy are already approved; see above.
-  - **D-2:** the live adapter's evaluator model and credential-holding processes.
-    Recommended: decide this separately. Live execution stays blocked until then.
-  - **D-8:** whether this exercise's tool restriction (teaching, question and planning
-    tools only) is separate from #49's normal-functionality live harness. Recommended:
-    treat them as separate authorizations.
+- **Still needed before any live run:** a live adapter that enforces §9 (the tutor cannot
+  reach the key), counts turns and requests against §8, and uses each login only through
+  its existing owner process, never copying credentials (V-5, V-6).
