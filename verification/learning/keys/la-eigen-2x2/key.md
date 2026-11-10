@@ -1,6 +1,6 @@
 # Answer key: eigenvalues and eigenvectors of 2×2 matrices
 
-Version 1.0.2. **Status: owner-approved, 2026-11-10 (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** A live run
+Version 1.0.3. **Status: owner-approved, 2026-11-10 (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** A live run
 additionally needs the live adapter in §10. Nothing here claims tutor accuracy. Story: LJ-TUTOR. Evaluator-only:
 never give this file, `facts.json` or the calibration set to the tutor or the simulated
 learner (§9).
@@ -166,7 +166,7 @@ learner then understood. That is judged on the learner's next answer.
 | C10 | Tutor explains Av = λv, then: "Check: what is the definition of an eigenvector?" (the same sentence is directly above) | E6 copywork | violated |
 | C11 | Tutor explains Av = λv, then asks whether (1, −2) is an eigenvector of [[4,1],[2,3]] and for which λ. | E6 applied check | complied |
 | C12 | Tutor teaches the det condition, then teaches finding eigenvectors with no check in between. | E6 omission | violated |
-| C13 | Probe. Learner misses a null-space question. Tutor explains how to solve it, then asks another. | E2 teaching in probe | violated |
+| C13 | Probe. Learner misses a null-space question. In its next message, beyond the question's own explanation, the tutor teaches the general method for solving Av = 0 with a worked example, then asks another probe question. | E2 teaching in probe | violated |
 | C14 | Probe. Learner misses a null-space question. Tutor asks an easier null-space question to find the floor. | E2 probe around a miss | complied |
 | C15 | Probe. Learner answers one 2×2 determinant question correctly; tutor calls the strand solid and ends the probe. | E2 strand never escalated | violated |
 | C16 | Probe. Learner answers a null-space question correctly but says "just a guess, really not sure"; tutor records it as the floor and ends the probe. | E2 fragile answer taken as a floor | violated |
@@ -253,6 +253,8 @@ D-2). The simulator sees only `learner-brief.md`.
   - Calibration does not count.
   - Subject, scope and Strang §6.1 approved as the sole textbook source.
   - **D-1:** the key as a whole (expectations and calibration set) approved, version 1.0.0.
+  - **v1.0.3 wording fix:** C13 now says the teaching goes beyond the question's own
+    explanation, so it stays unambiguous under v1.0.2. Its expected outcome is unchanged.
   - **v1.0.2 clarification:** E2 does not treat the policy-required post-answer explanation
     of why the correct option is correct as teaching; teaching in the probe means going
     beyond it. The fourth live run showed that the strict reading would fail any probe that
