@@ -37,7 +37,7 @@ test("V-1: selection includes dependencies and rejects missing verification, blo
 	for (const id of ["LJ-BACKUP", "LJ-RECORDS", "LJ-FIND-EARLIER"]) assert.throws(() => selectStories(catalog, id), /missing-verification/);
 	for (const id of ["LJ-DRILL-PRESCRIBED", "LJ-DEVICE-CONTINUITY"]) assert.throws(() => selectStories(catalog, id), /blocked/);
 	assert.throws(() => selectStories(catalog, "LJ-REVIEW"), /missing-verification/);
-	assert.throws(() => selectStories(catalog, "LJ-TUTOR"), /blocked/);
+	assert.throws(() => selectStories(catalog, "LJ-TUTOR"), /missing-verification/);
 	assert.throws(() => selectStories(catalog, "typo"), /Unknown story/);
 });
 
@@ -123,7 +123,7 @@ test("catalog validation rejects untraceable, inconsistent and unapproved entrie
 	mutate((next, rows, tags) => tags.delete("@LJ-START"), /no feature scenario is tagged @LJ-START/);
 	mutate((next, rows, tags) => tags.add("@LJ-REVIEW"), /has a tagged scenario but is marked missing-verification/);
 	mutate((next, rows, tags) => tags.add("@LJ-GHOST"), /no catalog story/);
-	mutate(next => { next.decisions = next.decisions.filter(decision => decision.id !== "D-1" && decision.id !== "D-2" && decision.id !== "D-8"); }, /LJ-TUTOR: blocked without a named owner decision/);
+	mutate(next => { next.decisions = next.decisions.filter(decision => decision.id !== "D-4"); }, /LJ-DRILL-PRESCRIBED: blocked without a named owner decision/);
 	mutate(next => { next.stories.find(story => story.id === "LJ-BACKUP").availability = "probably"; }, /invalid availability/);
 	mutate((next, rows) => { rows.rows = rows.rows.filter(row => !row.stories?.includes("LJ-BACKUP")); }, /LJ-BACKUP: not traced/);
 	mutate((next, rows) => { rows.rows.find(row => row.disposition === "deferred").reason = ""; }, /deferred without a reason/);

@@ -1,7 +1,7 @@
 # Answer key: eigenvalues and eigenvectors of 2×2 matrices
 
-Version 0.12.2-draft (round-12 fixes applied; not re-scored). **Status: draft. The owner approved the subject, scope and source on 2026-11-10 (O-3); the key itself still needs owner approval (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** Nothing here
-authorizes a live run (D-2) or claims tutor accuracy. Story: LJ-TUTOR. Evaluator-only:
+Version 1.0.0. **Status: owner-approved, 2026-11-10 (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** A live run
+additionally needs the live adapter in §10. Nothing here claims tutor accuracy. Story: LJ-TUTOR. Evaluator-only:
 never give this file, `facts.json` or the calibration set to the tutor or the simulated
 learner (§9).
 
@@ -250,6 +250,7 @@ D-2). The simulator sees only `learner-brief.md`.
   - Limits as in §8.
   - Calibration does not count.
   - Subject, scope and Strang §6.1 approved as the sole textbook source.
+  - **D-1:** the key as a whole (expectations and calibration set) approved, version 1.0.0.
   - The key's five readings of policy are approved:
     - a prediction "habit" means skipping on more than half of the new-idea steps (E5);
     - a why/how explanation check counts as applied (E6);
@@ -260,9 +261,6 @@ D-2). The simulator sees only `learner-brief.md`.
     learner is a Claude model through the owner's Claude login. No API billing.
   - **D-8:** this exercise keeps its tool restriction (teaching, question and planning
     tools only). #49's normal-functionality live harness needs its own approval later.
-- **Open, with recommendations:**
-  - **D-1:** approve the key as a whole (expectations and calibration set). Its five
-    readings of policy are already approved; see above.
 - **Still needed before any live run:** a live adapter that enforces §9 (the tutor cannot
   reach the key), counts turns and requests against §8, and uses each login only through
   its existing owner process, never copying credentials (V-5, V-6).

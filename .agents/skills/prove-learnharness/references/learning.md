@@ -27,7 +27,7 @@ nothing: successful `probe_done` results are checked, automatic wake is not.
 4. `npm run verify:learning -- select LJ-REVIEW` (or any other
    missing-verification story) must exit nonzero: missing verification cannot
    open a feature implementation gate. Unknown IDs and blocked stories such as
-   `select LJ-TUTOR` must also refuse. `select LJ-PRACTICE-RESUME` resolves and
+   `select LJ-TUTOR` (missing verification until the live adapter exists) and blocked stories such as `select LJ-DEVICE-CONTINUITY` must also refuse. `select LJ-PRACTICE-RESUME` resolves and
    executes its dependency scenarios; undefined, pending or failing checks
    cannot pass.
 5. `npm run verify:learning -- run --live` must exit nonzero with status blocked,
