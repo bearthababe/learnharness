@@ -182,7 +182,16 @@ export async function learningBrowser(root, run) {
 				if (!nodes.length) return;
 				await idle();
 				await page.waitForSelector('[data-testid="plan-chip"]', { visible: true, timeout: 30_000 });
-				await page.click('[data-testid="plan-chip"]');
+				// A freshly reopened page can paint the chip before it is interactive; retry the
+				// click until the popup opens, and keep a screenshot if it never does.
+				for (let attempt = 0; !(await page.$('[data-testid="plan-popup"]')); attempt++) {
+					if (attempt === 10) {
+						await page.screenshot({ path: path.join(run, `${name}-no-popup.png`), fullPage: true });
+						throw new Error("Plan popup never opened from the plan chip");
+					}
+					await page.click('[data-testid="plan-chip"]');
+					await page.waitForSelector('[data-testid="plan-popup"]', { timeout: 3_000 }).catch(() => {});
+				}
 				for (const id of nodes) await page.waitForSelector(`[data-testid="plan-popup"] [data-testid="plan-node-${id}"]`, { visible: true });
 				const shown = await page.$$eval('[data-testid="plan-popup"] [data-testid^="plan-node-"]', elements => elements.map(element => element.getAttribute("data-testid").slice("plan-node-".length)));
 				await page.screenshot({ path: path.join(run, `${name}.png`), fullPage: true });
