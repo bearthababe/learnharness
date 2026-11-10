@@ -37,7 +37,7 @@ if (command === "validate") {
 	const git = params => execFileSync("git", params, { cwd: root, encoding: "utf8" }).trim();
 	const result = {
 		schemaVersion: 1, status: "incomplete", startedAt: new Date().toISOString(),
-		candidate: { revision: git(["rev-parse", "HEAD"]), dirty: git(["status", "--porcelain"]) !== "", sourceSha256: await sourceFingerprint(root), verificationSha256: createHash("sha256").update(fs.readdirSync(learningDir).sort().map(name => `${name}=${sha(path.join(learningDir, name))}`).join(":")).digest("hex") },
+		candidate: { revision: git(["rev-parse", "HEAD"]), dirty: git(["status", "--porcelain"]) !== "", sourceSha256: await sourceFingerprint(root), verificationSha256: createHash("sha256").update(fs.readdirSync(learningDir, { recursive: true }).map(String).filter(name => fs.statSync(path.join(learningDir, name)).isFile()).sort().map(name => `${name}=${sha(path.join(learningDir, name))}`).join(":")).digest("hex") },
 		expectations: { path: catalog.expectations, sha256: sha(path.join(root, catalog.expectations)), approval: catalog.approval },
 		environment: { runtime: process.version, platform: process.platform, target: "local synthetic Chromium", mode: "scripted faux provider; not live subject evaluation", nativeElectron: "not-run", iPhoneHomeScreen: "not-run", iPadHomeScreen: "not-run" },
 		limits: { modelRequests: 30, learnerTurns: 12, minutes: 20, automaticRetries: 0, liveDispatch: "disabled" },
