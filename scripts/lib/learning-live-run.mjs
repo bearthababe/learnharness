@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { RunBudget, runLimits } from "./learning-verification.mjs";
 import { liveApp } from "./learning-live-app.mjs";
-import { optionIndices, calibrationRows, keyWithoutExpected, compareCalibration, codexJson, calibrationPrompt, gradingPrompt, simulateLearner, pendingQuestion, learnerView, graderTranscript, aggregateRun } from "./learning-live.mjs";
+import { choiceIndices, calibrationRows, keyWithoutExpected, compareCalibration, codexJson, calibrationPrompt, gradingPrompt, simulateLearner, pendingQuestion, learnerView, graderTranscript, aggregateRun } from "./learning-live.mjs";
 
 const KEY_DIR = "verification/learning/keys/la-eigen-2x2";
 const OUTCOME = { pass: "verified", fail: "failed", unverified: "uncertain", "incomplete (stopped)": "incomplete", "incomplete (coverage)": "incomplete" };
@@ -61,7 +61,7 @@ export async function runLiveExercise({ root, run, result, tutorModel = "opus", 
 			const { reply } = await simulate({ brief, view: learnerView(current.messages), pending, replies: live.counts.learnerTurns, model: learnerModel, cwd: learnerCwd });
 			await write(`learner-${String(live.counts.learnerTurns + 1).padStart(3, "0")}.json`, { pending, reply });
 			if (reply.stop) { endedBy = "learner brief: the tutor said the goal is reached"; break; }
-			if (pending) await app.answer({ indices: reply.dontKnow === true ? [] : optionIndices(pending, reply.option), dontKnow: reply.dontKnow === true, text: reply.text, thinking: reply.thinking });
+			if (pending) await app.answer({ indices: reply.dontKnow === true ? [] : choiceIndices(pending, reply.choice), dontKnow: reply.dontKnow === true, text: reply.text, thinking: reply.thinking });
 			else await app.sendMessage(reply.message ?? "");
 			live.counts.learnerTurns++;
 			const settled = await app.settle();

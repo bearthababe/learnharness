@@ -106,7 +106,10 @@ export function learnerView(messages) {
 			const prose = text(message.content);
 			if (prose.trim()) lines.push(`TUTOR: ${prose}`);
 			for (const call of message.content.filter(part => part.type === "toolCall")) {
-				if (QUESTION_TOOLS.has(call.name)) lines.push(`TUTOR QUESTION (${call.arguments?.type ?? call.name}): ${call.arguments?.question ?? ""}${(call.arguments?.options ?? []).length ? `\n  Options: ${call.arguments.options.map(option => option.label).join(" | ")}` : ""}`);
+				if (QUESTION_TOOLS.has(call.name)) {
+					const shown = displayOrder(call.name, call.id ?? "", (call.arguments?.options ?? []).map(option => option.label ?? String(option)));
+					lines.push(`TUTOR QUESTION (${call.arguments?.type ?? call.name}): ${call.arguments?.question ?? ""}${shown.length ? `\n  Options: ${shown.map((label, index) => `${index + 1}. ${label}`).join("  ")}` : ""}`);
+				}
 				if (call.name === "plan_init") lines.push("TUTOR shows a plan map.");
 			}
 		} else if (message.role === "toolResult" && QUESTION_TOOLS.has(message.toolName) && message.details) {
@@ -142,17 +145,13 @@ export function displayOrder(tool, toolCallId, options) {
 	return out;
 }
 
-/** Map the learner's chosen label(s) to on-screen option positions; an unknown label is a simulator deviation.
- * Matching ignores $ delimiters and spacing, which a learner may drop when copying typeset options. */
-export function optionIndices(pending, option) {
-	if (!option) return [];
-	const norm = value => String(value).replace(/\$/g, "").replace(/\s+/g, " ").trim();
+/** The learner answers by number, in on-screen order (1-based); anything else is a simulator deviation. */
+export function choiceIndices(pending, choice) {
 	const shown = displayOrder(pending.tool, pending.toolCallId ?? "", pending.options);
-	return String(option).split("|").map(norm).filter(Boolean).map(label => {
-		const index = shown.findIndex(candidate => norm(candidate) === label);
-		if (index < 0) throw new Error(`Simulator deviation: chose "${label}", which is not one of the options`);
-		return index;
-	});
+	const picks = (Array.isArray(choice) ? choice : choice == null ? [] : [choice]).map(Number);
+	for (const pick of picks) if (!Number.isInteger(pick) || pick < 1 || pick > shown.length) throw new Error(`Simulator deviation: chose option ${JSON.stringify(pick)}, not one of 1–${shown.length}`);
+	if (picks.length > 1 && !pending.multiSelect) throw new Error("Simulator deviation: chose several options on a single-choice question");
+	return picks.map(pick => pick - 1);
 }
 
 /** Run a CLI with stdin, bounded by a timeout; resolves stdout. */
@@ -185,7 +184,7 @@ const CLAUDE_LOCKDOWN = ["--tools", "", "--strict-mcp-config", "--setting-source
 export async function simulateLearner({ brief, view, pending, replies, model, cwd, run = runCli }) {
 	const system = `${brief}\n\nYou are this learner. Reply ONLY with one JSON object and nothing else.`;
 	const task = pending
-		? `The tutor has an open question. You must answer it now (you may pick "I don't know" and put a question of your own in your thinking).\nQuestion: ${pending.question}\nOptions (copy one label exactly${pending.multiSelect ? "; several allowed, separated by |" : ""}): ${pending.options.join(" | ") || "(free text)"}\nReply as {"option": "<exact label or several joined by |, or null>", "dontKnow": <true|false>, "text": "<free-text answer if there are no options, else empty>", "thinking": "<your reasoning in your own words>"}`
+		? `The tutor has an open question. You must answer it now (you may pick "I don't know" and put a question of your own in your thinking).\nQuestion: ${pending.question}\n${pending.options.length ? `Options, numbered as they appear on your screen:\n${displayOrder(pending.tool, pending.toolCallId ?? "", pending.options).map((label, index) => `${index + 1}. ${label}`).join("\n")}` : "(This question has no options: answer in free text.)"}\nReply as {"choice": [<option number${pending.multiSelect ? "s; several allowed" : "; exactly one"}>, or [] if none], "dontKnow": <true|false>, "text": "<free-text answer if there are no options, else empty>", "thinking": "<your reasoning in your own words>"}`
 		: `It is your turn to write a message to the tutor. Reply as {"message": "<what you type>"}. If the tutor has said your goal is reached, reply {"stop": true} instead.`;
 	const prompt = `This is message ${replies + 1} of yours (counting your first).\n\nThe session so far:\n\n${view || "(nothing yet: write your first message)"}\n\n${task}`;
 	const output = await run("claude", ["-p", "--output-format", "json", "--model", model, "--system-prompt", system, ...CLAUDE_LOCKDOWN], { input: prompt, cwd, timeoutMs: 10 * 60_000, env: { ...process.env, CLAUDE_CODE_DISABLE_CLAUDE_MDS: "1" } });

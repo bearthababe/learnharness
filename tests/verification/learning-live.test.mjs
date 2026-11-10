@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson, optionIndices, displayOrder } from "../../scripts/lib/learning-live.mjs";
+import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson, choiceIndices, displayOrder } from "../../scripts/lib/learning-live.mjs";
 import { runLiveExercise } from "../../scripts/lib/learning-live-run.mjs";
 import { runLimits } from "../../scripts/lib/learning-verification.mjs";
 
@@ -63,7 +63,7 @@ const messages = [
 test("the learner sees the question and its options, never the answer, explanation, assessment or hidden reasoning", () => {
 	assert.deepEqual(pendingQuestion(messages), { toolCallId: "q1", tool: "quiz", question: quiz.arguments.question, type: "check", options: ["Yes, λ = 2", "No"], multiSelect: false });
 	const view = learnerView(messages);
-	assert.match(view, /Yes, λ = 2 \| No/);
+	assert.match(view, /1\. (Yes, λ = 2|No)  2\. (Yes, λ = 2|No)/, "options are numbered in screen order");
 	for (const hidden of ["correctAnswer", "\"yes\"", "A(1,-2) = 2(1,-2)", "SECRET-ASSESSMENT", "SECRET-THOUGHT"]) assert.ok(!view.includes(hidden), hidden);
 	const answered = [...messages, { role: "toolResult", toolName: "quiz", toolCallId: "q1", content: "answered", details: { answers: [{ label: "Yes, λ = 2" }], thinking: "multiplied it out", explanation: "A(1,-2) = 2(1,-2)." } }];
 	assert.equal(pendingQuestion(answered), null);
@@ -153,16 +153,18 @@ test("the learner-turn guard stops the run as incomplete, never a pass, and keep
 	assert.ok(fs.existsSync(path.join(run, "transcript.md")));
 });
 
-test("the learner's chosen labels map to option positions, so typeset options can be clicked; unknown labels are deviations", () => {
-	const pending = { tool: "ask_user_question", toolCallId: "x", options: ["$\\begin{pmatrix} 3 \\\\ 0 \\end{pmatrix}$", "$(A - \\lambda I)\\mathbf{v} = \\mathbf{0}$", "No"] };
-	assert.deepEqual(optionIndices(pending, pending.options[1]), [1]);
-	assert.deepEqual(optionIndices(pending, "(A - \\lambda I)\\mathbf{v} = \\mathbf{0}"), [1], "dropped $ delimiters still match");
-	assert.deepEqual(optionIndices(pending, `${pending.options[0]} | No`), [0, 2]);
-	assert.deepEqual(optionIndices(pending, null), []);
-	assert.throws(() => optionIndices(pending, "Maybe"), /Simulator deviation/);
-	// Quiz-kind questions are shown shuffled; positions follow the on-screen order, not the tool's list.
+test("the learner answers by on-screen number; positions follow the shuffled screen order; anything else is a deviation", () => {
+	const ask = { tool: "ask_user_question", toolCallId: "x", options: ["a", "b", "c"], multiSelect: false };
+	assert.deepEqual(choiceIndices(ask, [2]), [1]);
+	assert.deepEqual(choiceIndices(ask, 3), [2]);
+	assert.deepEqual(choiceIndices(ask, []), []);
+	assert.throws(() => choiceIndices(ask, [4]), /Simulator deviation/);
+	assert.throws(() => choiceIndices(ask, ["(1,1)"]), /Simulator deviation/);
+	assert.throws(() => choiceIndices(ask, [1, 2]), /several options on a single-choice/);
+	assert.deepEqual(choiceIndices({ ...ask, multiSelect: true }, [1, 3]), [0, 2]);
 	const quiz = { tool: "probe", toolCallId: "toolu_012Atk2djHRcjfA9f1yQB2MA", options: ["A", "B", "C", "D"] };
 	const shown = displayOrder(quiz.tool, quiz.toolCallId, quiz.options);
 	assert.deepEqual([...shown].sort(), ["A", "B", "C", "D"]);
-	for (const label of quiz.options) assert.equal(shown[optionIndices(quiz, label)[0]], label);
+	const view = learnerView([{ role: "assistant", content: [{ type: "toolCall", id: quiz.toolCallId, name: "probe", arguments: { question: "Q?", options: quiz.options.map(label => ({ value: label, label })) } }] }]);
+	assert.match(view, new RegExp(shown.map((label, index) => `${index + 1}\\. ${label}`).join("  ")), "the learner sees the same numbered order as the screen");
 });
