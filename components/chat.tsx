@@ -7,7 +7,7 @@ import { OPEN_HELPERS_EVENT, PageMenuButton } from "@/components/page-menu";
 import { SessionHelperFailures } from "@/components/activity-dock";
 import { NotebookOpener } from "@/components/notebook-opener";
 import { useMarkSessionSeen } from "@/components/session-seen";
-import { FocusModeButton, FocusModeExit, FocusTitleButton, setFocusMode } from "@/components/focus-mode";
+import { FocusCornerButton, FocusModeButton, FocusModeExit, setFocusMode } from "@/components/focus-mode";
 import { useHeaderLook, useTryout } from "@/components/device-prefs";
 import { MovableSlot } from "@/components/movable-slot";
 import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
@@ -729,28 +729,13 @@ export function Chat({
 	const readingThinkingRef = useRef("");
 	const readingNow = useCallback(() => readingThinkingRef.current, []);
 	const phoneLayout = usePhoneLayout();
-	// R6/P3 (round 16, phones): one chat box while the equation notebook is
-	// open — for the tutor or for the notebook, one at a time, labelled.
-	// P3-A docks it at the bottom with a Tutor | Notebook switch; P3-B lets it
-	// follow the area being worked in. Each input keeps its own draft.
-	const notebookInputStyle = useTryout("notebookInput");
-	const oneBox = phoneLayout && notebookVisible;
-	const [nbMode, setNbMode] = useState<"tutor" | "notebook">("notebook");
-	useEffect(() => { if (notebookVisible) setNbMode("notebook"); }, [notebookVisible]);
-	const [nbBarSlot, setNbBarSlot] = useState<HTMLDivElement | null>(null);
-	const nbDocked = oneBox && notebookInputStyle === "docked";
-	useEffect(() => {
-		const root = workspaceRef.current;
-		if (!oneBox || notebookInputStyle !== "follow" || !root) return;
-		const pick = (event: Event) => {
-			const target = event.target as Element | null;
-			if (target?.closest?.('.notebook-slot, [data-testid="movable-notebook"]')) setNbMode("notebook");
-			else if (target?.closest?.('.session-tutor, [data-testid="movable-tutor"]')) setNbMode("tutor");
-		};
-		root.addEventListener("pointerdown", pick, true);
-		root.addEventListener("focusin", pick, true);
-		return () => { root.removeEventListener("pointerdown", pick, true); root.removeEventListener("focusin", pick, true); };
-	}, [oneBox, notebookInputStyle]);
+	// P5 (round 17, phones): the equation notebook takes over the screen like
+	// the thinking pane — the big mic bar, the keyboard button and Peek; the
+	// lesson's chat box is the tutor's again (the one-box switch is gone).
+	// Peek shows the lesson with a pull-up sheet of the working.
+	const notebookPane = phoneLayout && notebookVisible;
+	const [notebookPeek, setNotebookPeek] = useState(false);
+	useEffect(() => { if (!notebookPane) setNotebookPeek(false); }, [notebookPane]);
 
 	// ⌘T (toggle-user-thinking, owner round 2026-10-07): set EVERY user
 	// thinking row to one state — transcript rows default open, so the
@@ -1861,7 +1846,7 @@ export function Chat({
 		<div className={handwriting.open ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
 			<div inert={handwriting.open && handwriting.expanded} className={handwriting.open ? "hw-chat hw-mobileHidden flex min-h-0 min-w-0 flex-1 flex-col" : "contents"}>
 			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}
-				data-one-box={oneBox ? notebookInputStyle : undefined} data-nb-mode={oneBox ? nbMode : undefined}>
+				data-notebook-pane={notebookPane || undefined} data-notebook-peek={(notebookPane && notebookPeek) || undefined}>
 			<div ref={sessionTutorRef} className="session-tutor" inert={notebookLayout.expanded}>
 				{/* Round 15 (A6): the bar and the strips under it are one head; with
 				    the phone's Glass bar it floats over the lesson, which scrolls
@@ -1944,7 +1929,6 @@ export function Chat({
 						<span className="lh-session-subtitle" aria-hidden="true" data-kind={kind === "practice" ? (practiceMode === "drill" ? "drill" : "practice") : "teach"}>
 							{kind === "practice" ? (practiceMode === "drill" ? "Drill session" : "Practice session") : phaseLabel(phases.at(-1) ?? "probe")}
 						</span>
-						<FocusTitleButton />
 						</span>
 							{/* flex-1 spacer: keeps the chips at the right edge AND stays a
 							    drag surface (no carve-out) — the freed bar is grippable. */}
@@ -1955,11 +1939,10 @@ export function Chat({
 					    structure beside the phase chip — access to the full-DAG popup
 					    at every width; the marginalia is the wide-screen glance view. */}
 					<NotebookSpeechDestination session={notebook.session} />
-					{/* E6 (round 16): on phones the Plan slot is always there, so the
-					    toolbar keeps identical positions with or without a plan (no
-					    hole); before a plan exists it opens a note saying why. Wider
-					    screens show it only once there is a plan. */}
-					{(planTree || phoneLayout) && (
+					{/* P3 (round 17): on phones Plan heads the ⋯ menu in lessons (the
+					    toolbar slot goes to Focus); practice and drill have no plan on
+					    any device. Wider screens show the chip once there is a plan. */}
+					{planTree && !phoneLayout && kind !== "practice" && (
 						<Hint label="Open the full plan" side="bottom">
 <button
 							type="button"
@@ -2002,8 +1985,12 @@ export function Chat({
 					)}
 					{notebookOpenerEl}
 					{/* Phones: model, reasoning and Usage live here (owner O1). */}
-					<PageMenuButton extraRows={[{ id: "focus", label: "Focus on the lesson", value: "Hides this bar", open: () => setFocusMode(true) }]} />
+					<PageMenuButton
+						topRows={phoneLayout && kind !== "practice" ? [{ id: "plan", label: "Plan", value: planTree ? undefined : "Not made yet", open: () => setPlanOpen(true) }] : []}
+						extraRows={phoneLayout ? [] : [{ id: "focus", label: "Focus on the lesson", value: "Hides this bar", open: () => setFocusMode(true) }]} />
 					<FocusModeButton />
+					{/* P2 (round 17, phones): Focus in the toolbar's top-right corner. */}
+					<FocusCornerButton />
 				</TopBar>
 				<FocusModeExit />
 				{!notebookVisible && notebook.error && (friendlyNetworkError(notebook.error)
@@ -2409,9 +2396,7 @@ export function Chat({
 							)
 						)
 					}
-					composer={phoneLayout ? <MovableSlot to={nbDocked ? nbBarSlot : null} hidden={oneBox && nbMode !== "tutor"} owner="tutor" label={oneBox && notebookInputStyle === "follow" ? "Talking to the tutor" : undefined}>
-						{tutorComposer}
-					</MovableSlot> : tutorComposer}
+					composer={tutorComposer}
 									onSubmitAnswer={async (output, toolCallId, fields, reviewed) => {
 						const pending = pendingRef.current;
 						if (!pending || pending.toolCallId !== toolCallId) return false;
@@ -2477,7 +2462,7 @@ export function Chat({
 				</div>
 				{notebookLayout.mounted && <>
 					<NotebookSplit hidden={!notebookVisible} />
-					<NotebookFrame hidden={!notebookVisible} expanded={notebookLayout.expanded}
+					<NotebookFrame hidden={!notebookVisible} expanded={notebookLayout.expanded} pane={notebookPane}
 						onExpand={() => { void notebook.session.speech.choose({ kind: "notebook" }).then(notebookLayout.expand).catch(() => {}); }}
 						onBack={notebookLayout.back}
 						onClose={() => {
@@ -2488,15 +2473,8 @@ export function Chat({
 						}}>
 						{controls => <NotebookPanel session={notebook.session} dictation={dictation} viewControls={controls} workspaceId={workspaceId}
 							activity={notebookActivity}
-							oneBox={phoneLayout ? { to: nbDocked ? nbBarSlot : null, hidden: oneBox && nbMode !== "notebook", label: oneBox && notebookInputStyle === "follow" ? "Instructing the notebook" : undefined } : undefined} />}
+							pane={notebookPane ? { peeking: notebookPeek, peek: () => setNotebookPeek(true), unpeek: () => setNotebookPeek(false) } : undefined} />}
 					</NotebookFrame>
-					{nbDocked && <div className="lh-nb-bar" data-testid="nb-bar" data-mode={nbMode}>
-						<div className="lh-nb-switch lh-segmented" role="group" aria-label="The chat box is for">
-							<button type="button" data-active={nbMode === "tutor"} aria-pressed={nbMode === "tutor"} data-testid="nb-mode-tutor" onClick={() => setNbMode("tutor")}><MessageCircleIcon aria-hidden />Tutor</button>
-							<button type="button" data-active={nbMode === "notebook"} aria-pressed={nbMode === "notebook"} data-testid="nb-mode-notebook" onClick={() => setNbMode("notebook")}><NotebookPenIcon aria-hidden />Notebook</button>
-						</div>
-						<div ref={setNbBarSlot} className="lh-nb-bar-slot" />
-					</div>}
 				</>}
 			</div>
 			</div>

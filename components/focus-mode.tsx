@@ -21,16 +21,18 @@ function apply() {
 }
 export function setFocusMode(next: boolean) {
 	if (on === next) return;
-	// F5 (round 16): the Exit control takes the Focus icon's own spot (one
-	// place opens and closes); the reading line stays the top line across
-	// the switch, though the bar goes and the column narrows.
+	// P2 (round 17): the way out is the Focus button's own spot (one place
+	// opens and closes); the reading line stays the top line across the
+	// switch, though the bar goes.
 	if (next && typeof document !== "undefined") {
-		const icon = document.querySelector<HTMLElement>(".lh-focus-title");
+		const icon = document.querySelector<HTMLElement>(".lh-focus-corner");
 		const box = icon?.checkVisibility?.() ? icon.getBoundingClientRect() : null;
 		const style = document.documentElement.style;
 		if (box && box.width) {
 			style.setProperty("--lh-focus-spot-top", `${Math.round(box.top)}px`);
 			style.setProperty("--lh-focus-spot-right", `${Math.round(window.innerWidth - box.right)}px`);
+			style.setProperty("--lh-focus-spot-width", `${Math.round(box.width)}px`);
+			style.setProperty("--lh-focus-spot-height", `${Math.round(box.height)}px`);
 		}
 	}
 	keepReadingPlace(() => { on = next; apply(); });
@@ -73,11 +75,12 @@ export function FocusModeButton() {
 	);
 }
 
-/** Phones (round 16, F5): a visible Focus control — a 44px icon at the
- *  right end of the title row. ⋯ keeps its row as a second route. */
-export function FocusTitleButton() {
+/** Phones (round 17, P2): Focus in the toolbar's top-right corner, framed
+ *  like the bar's other buttons. In focus mode the same spot holds the bare
+ *  icon that leaves it (FocusModeExit). */
+export function FocusCornerButton() {
 	return (
-		<button type="button" className="lh-focus-title lh-no-drag" data-testid="focus-title" aria-label="Focus on the lesson" title="Focus on the lesson" onClick={() => setFocusMode(true)}>
+		<button type="button" className="lh-nav-chip lh-focus-corner lh-no-drag" data-testid="focus-corner" aria-label="Focus on the lesson" title="Focus on the lesson" onClick={() => setFocusMode(true)}>
 			<MaximizeIcon aria-hidden />
 		</button>
 	);

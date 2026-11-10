@@ -42,33 +42,39 @@ function subscribe(listener: () => void) {
  * Try-out designs (round 16, owner rule): alternatives the owner compares
  * on his phone and tablet. Each is a real, complete variant, kept on this
  * device like the other preferences here; the first option is the default.
- * - paneControls (P1): the thinking pane's controls — the mic inside the
- *   field with ⋯ in the bottom bar, or a big centre mic with a keyboard toggle.
- * - panePeek (P2): looking at the lesson while writing — Back plus a
- *   "Continue writing" pill, a "From the lesson" strip, or a Peek button.
- * - tabletPane (F6): the tablet's reading note inline, or the slide-in pane.
- * - notebookInput (P3): the phone notebook's one chat box docked at the
- *   bottom with a Tutor | Notebook switch, or following the active area.
+ * Round 17: the owner's picks became the design (the big mic bar and Peek);
+ * the variants he did not pick are gone. New this round:
+ * - cardLayout (S4, phones): surfaces that take over the screen (the
+ *   thinking pane, the notebook, an open question, a practice problem) as
+ *   today's plain full-screen layout, or as one inset card with a filled
+ *   main action at the bottom.
+ * - sessionsPage (P4, phones): the sessions list as a page under the usual
+ *   toolbar (Sessions shown active), or a page with its own header and Back.
  */
 export const TRYOUTS = {
-	paneControls: { options: ["field-mic", "big-mic"] },
-	panePeek: { options: ["pill", "strip", "peek"] },
-	tabletPane: { options: ["inline", "pane"] },
-	notebookInput: { options: ["docked", "follow"] },
+	cardLayout: { options: ["plain", "card"] },
+	sessionsPage: { options: ["toolbar", "header"] },
 } as const;
 export type Tryout = keyof typeof TRYOUTS;
 export type TryoutValue<T extends Tryout> = (typeof TRYOUTS)[T]["options"][number];
 const TRYOUT_PREFIX = "lh:try:";
 const TRYOUT_KEY: Record<Tryout, string> = {
-	paneControls: `${TRYOUT_PREFIX}pane-controls`,
-	panePeek: `${TRYOUT_PREFIX}pane-peek`,
-	tabletPane: `${TRYOUT_PREFIX}tablet-pane`,
-	notebookInput: `${TRYOUT_PREFIX}notebook-input`,
+	cardLayout: `${TRYOUT_PREFIX}card-layout`,
+	sessionsPage: `${TRYOUT_PREFIX}sessions-page`,
 };
+/** Keys of round 16's retired try-outs: dropped once, so nothing stale lingers. */
+const RETIRED_TRYOUT_KEYS = ["pane-controls", "pane-peek", "tablet-pane", "notebook-input"].map((name) => `${TRYOUT_PREFIX}${name}`);
+let retiredCleared = false;
+function clearRetiredTryouts() {
+	if (retiredCleared) return;
+	retiredCleared = true;
+	try { for (const key of RETIRED_TRYOUT_KEYS) window.localStorage.removeItem(key); } catch { /* storage blocked */ }
+}
 export function tryoutDefault<T extends Tryout>(name: T): TryoutValue<T> {
 	return TRYOUTS[name].options[0] as TryoutValue<T>;
 }
 export function readTryout<T extends Tryout>(name: T): TryoutValue<T> {
+	clearRetiredTryouts();
 	try {
 		const raw = window.localStorage.getItem(TRYOUT_KEY[name]);
 		return ((TRYOUTS[name].options as readonly string[]).includes(raw ?? "") ? raw : tryoutDefault(name)) as TryoutValue<T>;
@@ -120,10 +126,15 @@ export function useKeyboardOff(): boolean {
 	return useSyncExternalStore(subscribe, () => read("keyboardOff"), () => DEFAULTS.keyboardOff);
 }
 
-/** The fields that take dictation (each sits in a compact field with its
- *  mic). Round 14 (M2): search, renaming and Settings always type — the
- *  switch is about dictating, and those fields have no mic. */
-const EDITABLE = '.lh-compact-field :is(textarea, [contenteditable="true"], [data-file-path-input])';
+/** The fields the switch covers (S3, round 17): learning activities only —
+ *  the dictation fields of a lesson, practice or drill (the session's dock,
+ *  and the panes it opens over the page, marked data-learning-surface).
+ *  Utility inputs always raise the keyboard, even with the switch on:
+ *  search, naming and renaming (folders, sessions), Settings, and Home's
+ *  start field. The switch exists so that tapping a field while reading
+ *  does not change the whole screen. */
+export const LEARNING_SURFACE = ":is([data-session-workspace], [data-learning-surface])";
+const EDITABLE = `${LEARNING_SURFACE} .lh-compact-field :is(textarea, [contenteditable="true"], [data-file-path-input])`;
 
 /** Apply the keyboard choice to every field (and to fields that appear
  *  later, on focus). With the keyboard off, fields are marked

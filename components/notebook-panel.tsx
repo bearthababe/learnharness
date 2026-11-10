@@ -1,30 +1,34 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeftIcon, CheckIcon, EllipsisIcon, Loader2Icon, Maximize2Icon, Minimize2Icon, Undo2Icon, XIcon } from "lucide-react";
+import { ArrowLeftIcon, CheckIcon, ChevronLeftIcon, EllipsisIcon, EyeIcon, InfoIcon, Loader2Icon, Maximize2Icon, Minimize2Icon, Undo2Icon, XIcon } from "lucide-react";
 import type { NotebookSession } from "./notebook-session";
 import { NotebookWorking } from "./notebook-working";
 import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, NOTEBOOK_PICKER_MODELS, notebookCandidateFor, notebookPickerModel, type NotebookPickerModel, type TutorDraftOwner } from "@/src/core";
-import { CompactLearningInput } from "./compact-learning-input";
+import { CompactLearningInput, useMicSlot } from "./compact-learning-input";
 import type { Dictation } from "./dictation";
 import type { NotebookViewControls } from "./notebook-layout";
 import { MenuShell } from "./menu-shell";
 import { NotebookDraftReview } from "./learner-explanation";
 import { notebookActivityDrafts } from "./notebook-activity-draft";
 import { useOneMenu } from "./one-menu";
-import { MovableSlot } from "./movable-slot";
+import { BigMic, KeyboardToggle, PaneBar, PeekReturn, settleDocumentScroll } from "./pane-kit";
+import { NotebookPeekSheet } from "./notebook-peek-sheet";
+import { useTryout } from "./device-prefs";
 
-export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId, oneBox }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string;
-	/** R6/P3 (round 16, phones): the instruction is the notebook half of the
-	 *  one chat box — moved to the bottom bar, or hidden while the tutor's
-	 *  box is in use. Absent: it stays here, always shown. */
-	oneBox?: { to: HTMLElement | null; hidden: boolean; label?: string } }) {
+export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId, pane }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string;
+	/** P5 (round 17, phones): the notebook takes over the screen like the
+	 *  thinking pane — "‹ Lesson", the big mic bar, the keyboard button and
+	 *  Peek (the lesson, with the working in a pull-up sheet). */
+	pane?: { peeking: boolean; peek: () => void; unpeek: () => void } }) {
 	const { view, draftText, saving, editing, inputLocked, error, cursorLineId, expressionSelection } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
 	const speech = useSyncExternalStore(session.speech.subscribe, session.speech.getSnapshot, session.speech.getSnapshot);
 	const drafts = useSyncExternalStore(session.tutor.subscribe, session.tutor.getSnapshot, session.tutor.getSnapshot);
 	const attached = notebookActivityDrafts(drafts.drafts, activity);
 	const hasWorking = attached.some(draft => draft.parts.some(part => part.kind === "working"));
-	const [menu, setMenu] = useState<"options" | "model" | "history" | "usage" | "review" | null>(null);
+	const [menu, setMenu] = useState<"options" | "model" | "history" | "usage" | "review" | "help" | null>(null);
+	const [micSlot, setMicSlot] = useMicSlot();
+	const card = useTryout("cardLayout") === "card" && !!pane;
 	useOneMenu("notebook-options", menu !== null, () => setMenu(null));
 	// After an instruction lands, the lines it added or changed glow briefly
 	// (never on first load), so the learner sees what moved.
@@ -43,14 +47,8 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 		return () => window.clearTimeout(timer);
 	}, [view?.lines]);
 	const trigger = useRef<HTMLButtonElement>(null);
+	const helpTrigger = useRef<HTMLButtonElement>(null);
 	const applyWaiting = editing || inputLocked;
-	// R5 (round 16): once a line has been tapped, the learner knows; the hint goes.
-	const [hintSeen, setHintSeen] = useState(() => { try { return typeof window !== "undefined" && window.localStorage.getItem("lh:notebook-aim-hint-seen") === "1"; } catch { return false; } });
-	useEffect(() => {
-		if (!cursorLineId || hintSeen) return;
-		setHintSeen(true);
-		try { window.localStorage.setItem("lh:notebook-aim-hint-seen", "1"); } catch { /* this view only */ }
-	}, [cursorLineId, hintSeen]);
 	const modelLocked = !view || saving || applyWaiting || !!view.pending || speech.active;
 	const candidate = view?.candidate ?? DEFAULT_NOTEBOOK_CANDIDATE;
 	const model = notebookPickerModel(candidate);
@@ -59,7 +57,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 		if (!menu) return;
 		const outside = (event: PointerEvent) => {
 			const target = event.target as Element;
-			if (target.closest?.('[data-testid="notebook-options"]') || trigger.current?.contains(target)) return;
+			if (target.closest?.('[data-testid="notebook-options"], [data-testid="notebook-help-card"]') || trigger.current?.contains(target) || helpTrigger.current?.contains(target)) return;
 			setMenu(null);
 		};
 		document.addEventListener("pointerdown", outside);
@@ -86,7 +84,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 	const instruction = <>
 		<form className="notebook-instruction-form" onSubmit={(event) => { event.preventDefault(); apply(); }}>
 			<div className="notebook-input-row">
-			<CompactLearningInput dictation={!dictation?.active || speech.destination === "notebook" ? dictation : undefined}>
+			<CompactLearningInput dictation={!dictation?.active || speech.destination === "notebook" ? dictation : undefined} speech={!pane} micSlot={pane ? undefined : micSlot}>
 			<textarea id="notebook-instruction" aria-label="Notebook instruction" placeholder={scopeText ? (expressionSelection ? "Instruction for this term" : "Instruction for this line") : "e.g. Write p = F/A, put in F = 600 N"} value={draftText} rows={1}
 				className="lh-input w-full resize-none bg-transparent text-base"
 				onChange={(event) => { void session.dispatch({ type: "draft", text: event.target.value }).catch(() => {}); }}
@@ -95,6 +93,8 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 					if (event.key === "Tab") event.stopPropagation();
 				}} />
 			</CompactLearningInput>
+			{/* S1 (round 17): the mic, right before Apply (the pane's is in its bar). */}
+			{!pane && <span ref={setMicSlot} className="lh-mic-slot" />}
 			<button type="submit" aria-label="Apply changes" disabled={!speech.active && !draftText.trim() || applyWaiting} className="notebook-apply">{editing ? <Loader2Icon className="animate-spin" /> : "Apply"}</button>
 			</div>
 			{(saving || editing) && <span className="sr-only" role="status">{editing ? view?.pending?.status === "awaiting-transcript" ? "Working pending…" : "Applying changes…" : "Saving…"}</span>}
@@ -106,14 +106,18 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 			</details>}
 		</form>
 	</>;
-	return <section aria-label="Notebook" data-input-owner="notebook" className="notebook-panel flex min-h-0 min-w-0 flex-col border-border bg-background">
+	return <section aria-label="Notebook" data-input-owner="notebook" data-learning-surface="" data-pane={pane ? (card ? "card" : "plain") : undefined} data-testid="notebook-panel" className="notebook-panel flex min-h-0 min-w-0 flex-col border-border bg-background">
+		<div className="notebook-surface">
 		<header className="notebook-frame-header" data-notebook-view-control=""><h2 className={scopeText ? "sr-only" : undefined}>Notebook</h2>
 			{scopeText && <p className="notebook-scope" data-testid="notebook-scope">
 				<span><span className="sr-only">Apply changes to </span>{scopeText}</span>
 				<button type="button" aria-label="Clear selection" onClick={() => session.clearSelection()}><XIcon /></button>
 			</p>}
+			{/* P5 (round 17): the help sits behind an info icon instead of over
+			    the working. */}
+			<button type="button" aria-label="How the notebook works" title="How the notebook works" data-testid="notebook-help" aria-expanded={menu === "help"} onClick={() => setMenu(menu === "help" ? null : "help")} ref={helpTrigger}><InfoIcon /></button>
 			<button type="button" aria-label="Undo" title="Undo" disabled={applyWaiting || !!view?.pending || !view?.canUndo} onClick={() => command("undo")}><Undo2Icon /></button>
-			{viewControls && (viewControls.expanded
+			{viewControls && !pane && (viewControls.expanded
 				? <button type="button" className="notebook-back-lesson" data-testid="notebook-back-lesson" aria-label="Back to the lesson" title="Back to the lesson" onClick={viewControls.toggleExpanded}>
 					<Minimize2Icon /><span>Lesson</span>
 				</button>
@@ -126,7 +130,14 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 				if (event.key === "Enter") { event.stopPropagation(); if (!(event.target instanceof HTMLButtonElement) && !(event.target instanceof HTMLTextAreaElement)) event.preventDefault(); }
 			}}>
 				<button ref={trigger} type="button" aria-label="Notebook options" title="Notebook options" aria-expanded={menu !== null} aria-haspopup="menu" onClick={() => setMenu(menu ? null : "options")}><EllipsisIcon /></button>
-				{menu && <MenuShell key={menu} anchorRef={trigger} testid="notebook-options" preferredSide="down" menuClass="notebook-options" fitVisualViewport={menu === "review" || menu === "model"}>
+				{menu === "help" && <MenuShell key="help" anchorRef={helpTrigger} testid="notebook-help-card" preferredSide="down" menuClass="notebook-options notebook-help" onClose={() => setMenu(null)}>
+					<div className="notebook-menu-content" data-testid="notebook-help-text">
+						<p>Say or type what to write, then <strong>Apply</strong>.</p>
+						<p>To aim an instruction, tap a line <span className="notebook-hint-line" aria-hidden>1</span> or a term <span className="notebook-hint-term" aria-hidden>1</span> first.</p>
+						<p>Your working goes with your next message or answer.</p>
+					</div>
+				</MenuShell>}
+				{menu && menu !== "help" && <MenuShell key={menu} anchorRef={trigger} testid="notebook-options" preferredSide="down" menuClass="notebook-options" fitVisualViewport={menu === "review" || menu === "model"}>
 					{menu !== "options" && <div className="notebook-options-heading"><button type="button" aria-label="Back to Notebook options" onClick={() => setMenu("options")}><ArrowLeftIcon /></button><h3>{menu === "model" ? "Notebook model" : menu === "history" ? "History" : menu === "review" ? "Review attached working" : "Usage"}</h3></div>}
 					{menu === "options" && <div role="menu" aria-label="Notebook options">
 						<button type="button" role="menuitem" onClick={() => setMenu("model")}>Model<span>{NOTEBOOK_CANDIDATES[candidate].label}</span></button>
@@ -165,21 +176,37 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 					</div>}
 				</MenuShell>}
 			</div>
-			{viewControls && <button type="button" aria-label="Hide notebook" title="Hide notebook" data-testid="notebook-close" onClick={viewControls.close}><XIcon /></button>}
+			{viewControls && !pane && <button type="button" aria-label="Hide notebook" title="Hide notebook" data-testid="notebook-close" onClick={viewControls.close}><XIcon /></button>}
 		</header>
-		{oneBox ? <MovableSlot to={oneBox.to} hidden={oneBox.hidden} owner="notebook" label={oneBox.label}>{instruction}</MovableSlot> : instruction}
+		{card && <div className="lh-pane-head notebook-card-head">
+			<p className="lh-pane-context">Equation notebook</p>
+			<h2 className="lh-pane-title">Your working</h2>
+		</div>}
+		{instruction}
 		<div data-notebook-scroll="" className="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
-			{/* R11 (round 15): the two kinds of number, explained beside the
-			    working (above it), each in its own look: lines in the margin,
-			    terms as #tags. */}
-			{/* R5 (round 16): the "tap a line" hint shows until the first tap. */}
-			{!!view?.lines.length && !hintSeen && <p className="notebook-numbers-hint" data-testid="notebook-numbers-hint">To aim an instruction, tap a line <span className="notebook-hint-line" aria-hidden>1</span> or a term <span className="notebook-hint-term" aria-hidden>1</span></p>}
 			<NotebookWorking lines={view?.lines ?? []} selectedLineId={cursorLineId} expressionSelection={expressionSelection} onSelect={session.selectLine} onSelectExpression={session.selectExpression} changedIds={changed} />
-			{/* Round 14 (E1): what the instruction and Apply do, with an
-			    example, and when the tutor gets to see the working. */}
-			{view?.lines.length === 0 && <div className="notebook-empty" data-testid="notebook-empty">
-				<p>Say or type what to write, then <strong>Apply</strong>. Your working goes with your next message or answer.</p>
-			</div>}
+			{/* P5 (round 17): one quiet line when empty; the how-to is behind ⓘ. */}
+			{view?.lines.length === 0 && <p className="notebook-empty" data-testid="notebook-empty">No working yet. Say or type what to write.</p>}
 		</div>
+		{pane && card && <div className="lh-pane-actions notebook-card-actions" data-testid="notebook-pane-actions">
+			<button type="button" className="lh-pane-main" data-testid="notebook-card-apply" disabled={!speech.active && !draftText.trim() || applyWaiting} onClick={apply}>Apply</button>
+			<button type="button" className="lh-pane-quiet" data-testid="notebook-pane-back" onClick={() => { viewControls?.close(); settleDocumentScroll(); }}>Back to lesson</button>
+		</div>}
+		</div>
+		{pane && !card && <nav className="lh-pane-nav" aria-label="Leave the notebook">
+			<button type="button" className="lh-pane-back" data-testid="notebook-pane-back" aria-label="Back to lesson" onClick={() => { viewControls?.close(); settleDocumentScroll(); }}>
+				<ChevronLeftIcon aria-hidden />Lesson
+			</button>
+		</nav>}
+		{pane && <PaneBar testid="notebook-pane-bar"
+			start={<button type="button" className="lh-pane-peek" data-testid="notebook-pane-peek" aria-label="Peek at the lesson" onClick={() => { pane.peek(); settleDocumentScroll(); }}>
+				<EyeIcon aria-hidden /><span aria-hidden="true">Peek</span>
+			</button>}
+			mic={<BigMic dictation={speech.destination === "notebook" || !dictation?.active ? dictation : undefined} testid="notebook-pane-mic" />}
+			end={<KeyboardToggle testid="notebook-pane-keyboard" />} />}
+		{pane?.peeking && <>
+			<NotebookPeekSheet lines={view?.lines ?? []} changedIds={changed} />
+			<PeekReturn label="Return to notebook" testid="notebook-pane-return" dictation={speech.destination === "notebook" ? dictation : undefined} onReturn={pane.unpeek} />
+		</>}
 	</section>;
 }

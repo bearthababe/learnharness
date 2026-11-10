@@ -8,7 +8,7 @@ import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import { forgetHandwritingOnDevice } from "@/components/handwriting/device";
 import type { ChatDeleteMode } from "@/src/core";
-import { BookOpenIcon, DumbbellIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PlusIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, ChevronLeftIcon, DumbbellIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PlusIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon, XIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -25,6 +25,7 @@ import type { ChatListItem } from "@/src/core";
 import { kbdEventForAction } from "@/src/core";
 import { notifySettingsSaved } from "@/components/settings-signal";
 import { usePhoneViewport } from "@/components/use-phone-viewport";
+import { useTryout } from "@/components/device-prefs";
 import { bindSidebarSwipe } from "@/components/sidebar-swipe";
 import { publishWaitingCount, useWaitingCount } from "@/components/sessions-summary";
 import { hasNewResult, useSessionSeen } from "@/components/session-seen";
@@ -245,6 +246,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 export function SidebarToggle() {
 	const { open, phone, drawer, toggle } = useSidebar();
 	const waiting = useWaitingCount();
+	// P4 (round 17, phones): as a page under the bar, Sessions stays in the
+	// bar as the current page; a second tap closes it, where it opened.
+	const sessionsPage = useTryout("sessionsPage");
+	const pageBar = phone && sessionsPage === "toolbar";
+	const current = open && pageBar;
 	// Round 15 (F1): where the list is an overlay (phones, tablet drawers) the
 	// bar underneath never rearranges, so closing the list never slides Home.
 	// Only the docked laptop sidebar takes the chip's place.
@@ -261,13 +267,16 @@ export function SidebarToggle() {
 				variant="ghost"
 				size="icon"
 				data-testid="open-sidebar"
-				aria-label="Open sessions"
+				aria-label={current ? "Close sessions" : "Open sessions"}
 				aria-describedby={waiting > 0 ? "lh-waiting-description" : undefined}
+				aria-expanded={pageBar ? open : undefined}
+				aria-current={current ? "page" : undefined}
+				data-current={current || undefined}
 				title={waiting > 0 ? (waiting === 1 ? "Your turn in 1 session" : `Your turn in ${waiting} sessions`) : undefined}
-				aria-hidden={open}
-				tabIndex={open ? -1 : 0}
+				aria-hidden={open && !current}
+				tabIndex={open && !current ? -1 : 0}
 				onClick={toggle}
-				className={cn("lh-nav-chip sidebar-motion relative duration-200", open ? "pointer-events-none opacity-0" : "opacity-100")}
+				className={cn("lh-nav-chip sidebar-motion relative duration-200", open && !current ? "pointer-events-none opacity-0" : "opacity-100")}
 			>
 				{/* Owner, round 6: size-4, SAME as the close glyph — the toggle
 				    must not grow when the sidebar is closed (it did: size-5 here).
@@ -462,10 +471,26 @@ const KIND_FILTER_KEY = "lh:session-kind-filter";
 function SessionsSidebar() {
 	const { open, phone, drawer, toggle, closePhone } = useSidebar();
 	const sidebarRef = useRef<HTMLElement>(null);
+	// P4 (round 17, phones): the list as a page — under the page's own bar
+	// (the bar stays, Sessions shown current) or with its own header and Back.
+	const sessionsPage = useTryout("sessionsPage");
+	useEffect(() => {
+		if (!phone || !open || sessionsPage !== "toolbar") return;
+		// The page starts under the bar's first row (where Sessions is).
+		const shell = sidebarRef.current?.closest<HTMLElement>(".lh-app-shell");
+		const place = () => {
+			const chip = [...document.querySelectorAll<HTMLElement>('[data-testid="open-sidebar"]')].find((el) => el.getClientRects().length);
+			if (chip && shell) shell.style.setProperty("--lh-sessions-page-top", `${Math.round(chip.getBoundingClientRect().bottom + 8)}px`);
+		};
+		place();
+		window.visualViewport?.addEventListener("resize", place);
+		return () => { window.visualViewport?.removeEventListener("resize", place); shell?.style.removeProperty("--lh-sessions-page-top"); };
+	}, [phone, open, sessionsPage]);
 	useEffect(() => {
 		if (!phone || !open) return;
 		const sidebar = sidebarRef.current!;
-		sidebar.querySelector<HTMLButtonElement>('button[aria-label="Close sidebar"]')?.focus({ preventScroll: true });
+		(sidebar.querySelector<HTMLButtonElement>(sessionsPage === "header" ? '[data-testid="sessions-back"]' : '[data-testid="new-session"]')
+			?? sidebar.querySelector<HTMLButtonElement>('button[aria-label="Close sidebar"]'))?.focus({ preventScroll: true });
 		return () => {
 			requestAnimationFrame(() => {
 				const opener = document.querySelector<HTMLButtonElement>('button[data-testid="open-sidebar"]');
@@ -474,7 +499,7 @@ function SessionsSidebar() {
 				}
 			});
 		};
-	}, [phone, open]);
+	}, [phone, open, sessionsPage]);
 	const [chats, setChats] = useState<ChatListItem[] | null>(null);
 	const [ctxChatId, setCtxChatId] = useState<string | null>(null);
 	// Round 15 (A4): no special freezing. The list is ordered by the
@@ -797,8 +822,9 @@ function SessionsSidebar() {
 			className={cn("lh-sessions-panel sidebar-motion shrink-0 overflow-hidden duration-200", open ? "w-72" : "w-0")}
 			aria-hidden={!open}
 			inert={!open}
+			data-sessions-page={phone ? sessionsPage : undefined}
 			role={phone && open ? "dialog" : undefined}
-			aria-modal={phone && open ? true : undefined}
+			aria-modal={phone && open && sessionsPage === "header" ? true : undefined}
 			aria-label="Sessions"
 			onKeyDown={(event) => {
 				if (drawer && open && event.key === "Escape") { event.preventDefault(); event.stopPropagation(); toggle(); return; }
@@ -845,7 +871,11 @@ function SessionsSidebar() {
 							<span className="lh-phone-home-label hidden">Home</span>
 						</Link>
 					</Hint>
-					<span className="lh-wordmark" aria-hidden="true">LearnHarness</span>
+					{/* T9 (round 17): no app name here — it belongs on Home. */}
+					{/* P4 (phones, page with Back): Back where Sessions was. */}
+					<button type="button" className="lh-sessions-back hidden" data-testid="sessions-back" onClick={closePhone}>
+						<ChevronLeftIcon aria-hidden />Back
+					</button>
 					<h2 className="lh-sessions-title hidden">Sessions</h2>
 					<Hint label="Close sidebar" action="toggle-sidebar" disabled={phone}>
 						<Button
@@ -1191,6 +1221,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 			if (!now.open) now.toggle();
 		}
 	}, [focusMode]);
+	// P4 (round 17, phones): the sessions page under the bar keeps the page's
+	// bar live (Sessions closes it, Home goes home); everything else beneath
+	// is inert while it is open. The page with its own header covers it all.
+	const sessionsPage = useTryout("sessionsPage");
+	const underBar = phone && open && sessionsPage === "toolbar";
+	useEffect(() => {
+		const main = document.querySelector<HTMLElement>('main[data-testid="file-path-drop-zone"]');
+		if (!underBar || !main) return;
+		const bar = [...main.querySelectorAll<HTMLElement>(".lh-topbar")].find((el) => el.getClientRects().length);
+		if (!bar) { main.inert = true; return () => { main.inert = false; }; }
+		const marked: HTMLElement[] = [];
+		for (let node: HTMLElement | null = bar; node && node !== main; node = node.parentElement) {
+			for (const sibling of node.parentElement?.children ?? []) {
+				if (sibling !== node && sibling instanceof HTMLElement && !sibling.inert) { sibling.inert = true; marked.push(sibling); }
+			}
+		}
+		// The bar's second row (a session's name) is under the page: inert too.
+		for (const row of bar.querySelectorAll<HTMLElement>(":scope > .lh-title-block")) { if (!row.inert) { row.inert = true; marked.push(row); } }
+		return () => { for (const el of marked) el.inert = false; };
+	}, [underBar, pathname]);
 	// Throwaway whole-shell comparison: its navigation is the subject of the trial.
 	if (process.env.NODE_ENV !== "production" && pathname.startsWith("/prototype/mobile-ui")) return <>{children}</>;
 	return (
@@ -1202,7 +1252,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 					onKeyDown={(event) => { if (event.key !== "Enter") return; event.preventDefault(); event.stopPropagation(); window.dispatchEvent(new CustomEvent("lh:kbd-sessions-search")); }}>Skip to sessions</a>
 			</div>
 			<SessionsSidebar />
-			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open}>{children}</FilePathDropZone>
+			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open && sessionsPage === "header"}>{children}</FilePathDropZone>
 			{drawer && open && <div className="lh-drawer-scrim" aria-hidden="true" data-testid="sessions-drawer-scrim" onClick={toggle} />}
 			{/* The single document-level keydown listener (keyboard wave A) —
 			    after the content in the tree, but it's window-level so order only

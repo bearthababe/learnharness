@@ -8,7 +8,7 @@ import { PathInput } from "@/components/path-input";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { dictationCheckpoint, finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
-import { CompactLearningInput } from "@/components/compact-learning-input";
+import { CompactLearningInput, useMicSlot } from "@/components/compact-learning-input";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
 import { useHandwritingEditor } from "./handwriting/submission";
@@ -312,6 +312,7 @@ function QuestionDockForm({
 	// deterministically shuffled (seeded by toolCallId) so position never leaks
 	// correctness AND server/client render the same order (hydration-safe);
 	// the display order is snapshotted into the answer record at submit time.
+	const [micSlot, setMicSlot] = useMicSlot();
 	const qd = useMemo<QuestionData>(() => {
 		const quizInput = kind === "quiz" ? (input as QuizToolInput) : null;
 		const askInput = kind === "ask" ? (input as AskToolInput) : null;
@@ -1005,7 +1006,7 @@ function QuestionDockForm({
 							<PaperclipIcon aria-hidden /><span className="lh-reading-attached-label">Thinking while reading is attached</span><span className="sr-only"> — it goes with this answer.</span>
 						</span>}
 					</div>
-					<CompactLearningInput dictation={dictationClaim ? dictation : undefined}>{qd.mode === "text" ? (
+					<CompactLearningInput dictation={dictationClaim ? dictation : undefined} micSlot={micSlot}>{qd.mode === "text" ? (
 						<PathInput
 							aria-label="Your answer"
 							value={text}
@@ -1073,6 +1074,8 @@ function QuestionDockForm({
 						<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
 								{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 						</span>
+						{/* S1 (round 17): the mic, right before Submit. */}
+						<span ref={setMicSlot} className="lh-mic-slot" />
 						<Button
 							type="submit"
 							data-testid="question-send"

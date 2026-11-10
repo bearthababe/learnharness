@@ -10,7 +10,7 @@ import type { NotebookSession } from "./notebook-session";
 import { useNotebookActivityDraft } from "./notebook-activity-draft";
 import { useHandwritingEditor } from "./handwriting/submission";
 import type { SharedWriting } from "@/src/core";
-import { CompactLearningInput } from "@/components/compact-learning-input";
+import { CompactLearningInput, useMicSlot } from "@/components/compact-learning-input";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { PathInput } from "@/components/path-input";
 import { cn } from "@/lib/utils";
@@ -76,6 +76,7 @@ function writePracticeDraft(chatId: string, problemCallId: string, text: string)
 export function PracticeDock({ chatId, dictation, problemCallId, input, expanded, onExpand, onSubmit, onEscape, notebook, compactionRunning = false, hasSharedWriting = false }: PracticeDockProps) {
 	const owner = { kind: "practice" as const, problemCallId };
 	const owned = useNotebookActivityDraft(notebook, owner);
+	const [micSlot, setMicSlot] = useMicSlot();
 	const [thinking, setThinking] = useState("");
 	// Ref MIRRORS the field ("nothing gets lost", the question-dock
 	// discipline): a submit resuming after `await finishDictation()` reads
@@ -183,7 +184,7 @@ export function PracticeDock({ chatId, dictation, problemCallId, input, expanded
 				<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					YOUR THINKING
 				</div>
-				<CompactLearningInput dictation={dictation}><PathInput
+				<CompactLearningInput dictation={dictation} micSlot={micSlot}><PathInput
 					aria-label="Your thinking"
 					value={owned.enabled ? owned.text : thinking}
 					onValueChange={(value) => {
@@ -218,6 +219,8 @@ export function PracticeDock({ chatId, dictation, problemCallId, input, expanded
 					<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
 						{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 					</span>
+					{/* S1 (round 17): the mic, right before Submit. */}
+					<span ref={setMicSlot} className="lh-mic-slot" />
 					<Button
 						type="button"
 						data-testid="practice-send"

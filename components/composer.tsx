@@ -7,7 +7,7 @@ import { ArrowRightIcon, ArrowUpIcon, SquareIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PathInput } from "@/components/path-input";
 import { AttachFilesButton } from "@/components/attach-files-button";
-import { CompactLearningInput, useFocusWithin } from "@/components/compact-learning-input";
+import { CompactLearningInput, useMicSlot, useFocusWithin } from "@/components/compact-learning-input";
 import type { Dictation } from "@/components/dictation";
 
 /**
@@ -163,6 +163,7 @@ export function Composer({
 	// guessed from the keyboard).
 	const [focused, focusHandlers] = useFocusWithin();
 	const coarse = useCoarsePointer();
+	const [micSlot, setMicSlot] = useMicSlot();
 	return (
 		<form
 			data-testid="composer"
@@ -173,7 +174,7 @@ export function Composer({
 				act();
 			}}
 		>
-			<CompactLearningInput dictation={dictation} enabled={!!dictation}><PathInput
+			<CompactLearningInput dictation={dictation} enabled={!!dictation} micSlot={micSlot}><PathInput
 				ref={editorRef}
 				value={value}
 				onValueChange={onChange}
@@ -202,6 +203,8 @@ export function Composer({
 				className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 			/></CompactLearningInput>
 			<AttachFilesButton editorRef={editorRef} />
+			{/* S1 (round 17): the mic, right before Send. */}
+			{dictation && <span ref={setMicSlot} className="lh-mic-slot" />}
 			{/* The button follows the text (owner report 2026-10-03): while
 				 a turn runs WITH text typed it stays the SEND affordance
 				 (click = steer — steering must be clickable, not Enter-only);

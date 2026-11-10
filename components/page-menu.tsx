@@ -47,12 +47,11 @@ export const OPEN_GRAPH_DISPLAY_EVENT = "lh:open-graph-display";
 
 export type PageMenuRow = { id: string; label: string; value?: string; hint?: string; open: () => void };
 
-export function PageMenuButton({ extraRows = [], placement = "page" }: {
+export function PageMenuButton({ extraRows = [], topRows = [] }: {
 	/** Rows of this page placed after Usage (Home: import, graph display). */
 	extraRows?: PageMenuRow[];
-	/** Round 16 (F4, P1-A): the same menu, also reachable from the thinking
-	 *  pane's bottom bar, so its keyboard switch is in reach while writing. */
-	placement?: "page" | "pane";
+	/** P3 (round 17): rows at the very top — a lesson's Plan. */
+	topRows?: PageMenuRow[];
 }) {
 	const values = useSyncExternalStore(subscribe, () => state, () => state);
 	const [open, setOpen] = useState(false);
@@ -62,10 +61,9 @@ export function PageMenuButton({ extraRows = [], placement = "page" }: {
 	const touch = useCoarsePointer();
 	const keyboardOff = useKeyboardOff();
 	const { open: openSettings } = useSettingsDialog();
-	const pane = placement === "pane";
-	const triggerTestid = pane ? "pane-menu-button" : "page-menu-button";
-	useOneMenu(pane ? "pane-menu" : "page-menu", open, () => setOpen(false));
-	useOneMenu(pane ? "pane-helpers-sheet" : "helpers-sheet", helpers, () => setHelpers(false));
+	const triggerTestid = "page-menu-button";
+	useOneMenu("page-menu", open, () => setOpen(false));
+	useOneMenu("helpers-sheet", helpers, () => setHelpers(false));
 	useCardDismiss(open, () => setOpen(false), ['[data-testid="page-menu"]', `[data-testid="${triggerTestid}"]`]);
 	useCardDismiss(helpers, () => setHelpers(false), ['[data-testid="helpers-sheet"]', `[data-testid="${triggerTestid}"]`]);
 	const helpersPresence = usePhoneMenuPresence(helpers ? "helpers" : null, phone);
@@ -74,18 +72,16 @@ export function PageMenuButton({ extraRows = [], placement = "page" }: {
 	// the switch is. It passes on its own and never moves anything.
 	const [keyboardHint, setKeyboardHint] = useState(false);
 	useEffect(() => {
-		if (pane) return;
 		let timer = 0;
 		const show = () => { setKeyboardHint(true); window.clearTimeout(timer); timer = window.setTimeout(() => setKeyboardHint(false), 4500); };
 		window.addEventListener(KEYBOARD_HINT_EVENT, show);
 		return () => { window.removeEventListener(KEYBOARD_HINT_EVENT, show); window.clearTimeout(timer); };
-	}, [pane]);
+	}, []);
 	useEffect(() => {
-		if (pane) return;
 		const onOpen = () => setHelpers(true);
 		window.addEventListener(OPEN_HELPERS_EVENT, onOpen);
 		return () => window.removeEventListener(OPEN_HELPERS_EVENT, onOpen);
-	}, [pane]);
+	}, []);
 	const choose = (open: () => void) => {
 		setOpen(false);
 		// The chosen card opens as this menu leaves (one menu at a time).
@@ -112,7 +108,8 @@ export function PageMenuButton({ extraRows = [], placement = "page" }: {
 				<span className="lh-page-menu-label">{item.label}</span>
 				<span className="lh-page-menu-switch-hint">{item.hint}</span>
 			</span> : <span className="lh-page-menu-label">{item.label}</span>}
-			{item.value !== undefined && <span className="lh-page-menu-value">{item.value}</span>}
+			{/* Every row's arrow sits at its right end (P3), value or not. */}
+			<span className="lh-page-menu-value">{item.value ?? ""}</span>
 			<ChevronRightIcon aria-hidden />
 		</button>
 	);
@@ -124,7 +121,7 @@ export function PageMenuButton({ extraRows = [], placement = "page" }: {
 			onClick={() => setKeyboardOff(!keyboardOff)}>
 			<span className="lh-page-menu-switch-text">
 				<span className="lh-page-menu-label">Keep keyboard closed</span>
-				<span className="lh-page-menu-switch-hint">For dictating: fields won’t raise the keyboard</span>
+				<span className="lh-page-menu-switch-hint">In lessons, practice and drill</span>
 			</span>
 			<span className="lh-page-menu-switch-state" aria-hidden>{keyboardOff ? "On" : "Off"}</span>
 			<span className="lh-switch" data-on={keyboardOff || undefined} aria-hidden><span /></span>
@@ -135,7 +132,7 @@ export function PageMenuButton({ extraRows = [], placement = "page" }: {
 			<button
 				ref={trigger}
 				type="button"
-				className={pane ? "lh-pane-menu-button" : "lh-nav-chip lh-page-menu-button lh-no-drag"}
+				className="lh-nav-chip lh-page-menu-button lh-no-drag"
 				data-testid={triggerTestid}
 				aria-label="More options"
 				aria-haspopup="menu"
@@ -145,10 +142,12 @@ export function PageMenuButton({ extraRows = [], placement = "page" }: {
 				<EllipsisIcon aria-hidden />
 			</button>
 			{open && (
-				<MenuShell anchorRef={trigger} testid="page-menu" preferredSide={pane ? "up" : "down"} align="right" fitVisualViewport={phone}
+				<MenuShell anchorRef={trigger} testid="page-menu" preferredSide="down" align="right" fitVisualViewport={phone} cap={1}
 					phoneTriggerTestid={triggerTestid} onClose={() => setOpen(false)}
 					menuClass="lh-page-menu lh-glass rounded-xl border bg-card p-1.5 shadow-xl">
 					<div role="menu" aria-label="More options">
+						{/* P3 (round 17): a lesson's Plan heads the menu. */}
+						{topRows.length > 0 && <>{topRows.map(row)}<div role="separator" className="lh-page-menu-divider" /></>}
 						{keyboardSwitch}
 						{groups.map((group, index) => (
 							<Fragment key={index}>
@@ -165,7 +164,7 @@ export function PageMenuButton({ extraRows = [], placement = "page" }: {
 				</div>
 			)}
 			{helpersPresence.value && (
-				<MenuShell anchorTestid={triggerTestid} testid="helpers-sheet" preferredSide={pane ? "up" : "down"} align="right" fitVisualViewport={phone}
+				<MenuShell anchorTestid={triggerTestid} testid="helpers-sheet" preferredSide="down" align="right" fitVisualViewport={phone}
 					closing={helpersPresence.closing} onClosed={helpersPresence.onClosed}
 					phoneTriggerTestid={triggerTestid} onClose={() => setHelpers(false)}
 					menuClass="lh-helpers-sheet lh-glass w-[24rem] max-w-[calc(100vw-24px)] rounded-xl border bg-card p-1 shadow-xl">

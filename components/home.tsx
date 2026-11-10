@@ -5,7 +5,7 @@ import { useCoarsePointer } from "@/components/use-phone-viewport";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowUpIcon, BookOpenIcon, DumbbellIcon, TargetIcon } from "lucide-react";
-import { CompactLearningInput, useFocusWithin } from "@/components/compact-learning-input";
+import { CompactLearningInput, useMicSlot, useFocusWithin } from "@/components/compact-learning-input";
 import { ResumeStrip } from "@/components/resume-strip";
 import { GraphView } from "@/components/graph-view";
 import { MinimalHome } from "@/components/minimal-home";
@@ -93,6 +93,7 @@ export function Home({
 			setTopic(v);
 		},
 	});
+	const [micSlot, setMicSlot] = useMicSlot();
 	const [busy, setBusy] = useState(false);
 	const startingRef = useRef(false);
 	const starterRef = useRef(new SessionStarter());
@@ -323,7 +324,7 @@ export function Home({
 						void start();
 					}}
 				>
-					<CompactLearningInput dictation={dictation}><PathInput
+					<CompactLearningInput dictation={dictation} micSlot={micSlot}><PathInput
 						ref={topicInputRef}
 						value={topic}
 						onValueChange={(value) => {
@@ -351,6 +352,8 @@ export function Home({
 						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 					/></CompactLearningInput>
 					<AttachFilesButton editorRef={topicInputRef} />
+					{/* S1 (round 17): the mic, right before Start. */}
+					<span ref={setMicSlot} className="lh-mic-slot" />
 					{/* No tooltip on the start square — the ↵ glyph is the
 					    affordance (owner, subtlety round 2026-09-25). */}
 					<button

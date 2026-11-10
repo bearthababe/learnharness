@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { usePaneViewport } from "./pane-kit";
 
 export interface NotebookViewControls {
 	expanded: boolean;
@@ -158,10 +159,15 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 
 /** The accepted four-corner frame and expanded overlay, independent of editor
  * implementation. Retained DOM keeps input state; each view has its own scroll. */
-export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, children }: {
-	hidden: boolean; expanded: boolean; onExpand: () => void; onBack: () => void; onClose: () => void; children: (controls: NotebookViewControls) => ReactNode;
+export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, pane = false, children }: {
+	hidden: boolean; expanded: boolean; onExpand: () => void; onBack: () => void; onClose: () => void;
+	/** P5 (round 17, phones): the notebook takes over the screen, fitted to
+	 *  the visible viewport so its bar sits above the keyboard. */
+	pane?: boolean;
+	children: (controls: NotebookViewControls) => ReactNode;
 }) {
 	const slot = useRef<HTMLDivElement>(null);
+	usePaneViewport(slot, pane && !hidden);
 	const positions = useRef<{ split?: { top: number; left: number }; full?: { top: number; left: number } }>({});
 	const previous = useRef({ hidden, expanded });
 	useLayoutEffect(() => {
@@ -181,7 +187,7 @@ export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, chi
 	}, [hidden, expanded]);
 	useEffect(() => {
 		const element = slot.current!;
-		if (hidden) return;
+		if (hidden || pane) return;
 		const fit = () => {
 			const viewport = window.visualViewport;
 			if ((viewport?.scale ?? 1) !== 1) return;
@@ -194,7 +200,7 @@ export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, chi
 		window.addEventListener("resize", fit); window.visualViewport?.addEventListener("resize", fit); window.visualViewport?.addEventListener("scroll", fit);
 		fit();
 		return () => { observer.disconnect(); window.removeEventListener("resize", fit); window.visualViewport?.removeEventListener("resize", fit); window.visualViewport?.removeEventListener("scroll", fit); element.style.removeProperty("max-height"); };
-	}, [hidden, expanded]);
+	}, [hidden, expanded, pane]);
 	const changeView = (action: () => void) => {
 		const scroll = slot.current?.querySelector<HTMLElement>("[data-notebook-scroll]");
 		if (scroll) positions.current[expanded ? "full" : "split"] = { top: scroll.scrollTop, left: scroll.scrollLeft };

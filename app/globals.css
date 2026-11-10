@@ -4857,10 +4857,6 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 }
 .lh-reading-pane[data-open]:not([data-peeking]) { transform: translateX(0); visibility: visible; transition: transform 240ms cubic-bezier(.2, .8, .2, 1), visibility 0s; }
 @media (prefers-reduced-motion: reduce) { .lh-reading-pane, .lh-reading-pane[data-open] { transition: none; } }
-.lh-reading-pane-head { display: flex; flex: none; flex-direction: column; gap: 2px; padding: 14px 16px 6px; }
-.lh-reading-pane-title { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.3; }
-.lh-reading-pane-hint { margin: 0; color: var(--muted-foreground); font-size: 14px; line-height: 1.4; }
-.lh-reading-pane-body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 8px; padding: 8px 16px 12px; }
 .lh-reading-pane-field { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 /* The field fills the pane; long notes scroll inside it. The mic sits at
    its bottom right (P1-A), in a lane of its own so text never runs under it. */
@@ -4878,70 +4874,6 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 :root .lh-reading-pane-field .lh-compact-field[data-recording] > [data-file-path-input] { visibility: visible; height: auto; min-height: 0; width: 100%; padding-right: 14px; padding-bottom: 56px; }
 :root .lh-reading-pane-field .lh-compact-recording { min-height: 44px; border-radius: 10px; background: var(--card); }
 :root .lh-reading-pane-field .lh-compact-speech button { min-width: 44px; min-height: 44px; }
-/* The bottom bar: Back at the left; P1-A puts ⋯ at the right, P1-B a big
-   mic in the centre and the keyboard switch at the right. */
-.lh-reading-pane-bar {
-	display: flex; flex: none; align-items: center; gap: 8px; min-height: 64px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
-	border-top: 1px solid var(--border); background: var(--background);
-}
-.lh-reading-pane[data-controls="big-mic"] .lh-reading-pane-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
-.lh-reading-pane-bar-end { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; min-width: 0; }
-.lh-reading-pane-close, .lh-reading-pane-peek, .lh-pane-keyboard, .lh-pane-menu-button {
-	display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 44px; min-height: 44px; padding: 0 12px; border-radius: 12px;
-	border: 1px solid var(--border); background: var(--card); color: var(--foreground); font-size: 15px; font-weight: 600; white-space: nowrap;
-}
-.lh-reading-pane-close { justify-self: start; padding: 0 14px 0 8px; }
-.lh-reading-pane-close svg, .lh-reading-pane-peek svg, .lh-pane-keyboard svg, .lh-pane-menu-button svg { width: 20px; height: 20px; flex: none; }
-.lh-pane-menu-button { width: 48px; padding: 0; }
-.lh-pane-keyboard { flex-direction: column; gap: 2px; min-width: 64px; padding: 0 6px; font-size: 12.5px; line-height: 1; }
-.lh-pane-keyboard[aria-pressed="false"] { border-color: color-mix(in oklab, var(--primary) 50%, var(--border)); color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); }
-/* In the big-mic bar the Peek button is an icon, so Back, the mic and the
-   right-hand pair fit side by side at 375px. */
-.lh-reading-pane[data-controls="big-mic"] .lh-reading-pane-peek { padding: 0; width: 48px; }
-.lh-reading-pane[data-controls="big-mic"] .lh-reading-pane-peek-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.lh-pane-mic-wrap { display: inline-flex; justify-self: center; }
-.lh-pane-mic {
-	position: relative; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 999px;
-	background: var(--primary); color: var(--primary-foreground); box-shadow: 0 2px 10px rgb(0 0 0 / .35);
-}
-.lh-pane-mic svg { position: relative; width: 24px; height: 24px; }
-.lh-pane-mic[data-recording] { background: var(--destructive); color: white; }
-.lh-pane-mic-ring { position: absolute; inset: -5px; border: 2px solid color-mix(in oklab, var(--primary) 60%, transparent); border-radius: 999px; transition: transform 90ms linear; }
-.lh-pane-mic[data-recording] .lh-pane-mic-ring { border-color: color-mix(in oklab, var(--destructive) 70%, transparent); }
-.lh-pane-mic:disabled { opacity: .5; }
-/* P2-B: "From the lesson" — two lines of the paragraph in view; a tap
-   opens it to about 40% of the pane, read-only and scrolling. */
-.lh-reading-strip { display: flex; flex: none; flex-direction: column; gap: 4px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--card); }
-.lh-reading-strip-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin: -8px -4px 0; padding: 0 4px; text-align: left; }
-.lh-reading-strip-label { color: var(--muted-foreground); font-size: 13px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
-.lh-reading-strip-action { display: inline-flex; align-items: center; gap: 2px; color: var(--muted-foreground); font-size: 14px; font-weight: 600; }
-.lh-reading-strip-action svg { width: 18px; height: 18px; transition: transform .15s ease; }
-.lh-reading-strip[data-expanded] .lh-reading-strip-action svg { transform: rotate(180deg); }
-.lh-reading-strip-text { font-size: 15px; line-height: 1.5; color: var(--foreground); }
-.lh-reading-strip-text > * { margin: 0 0 8px; }
-.lh-reading-strip:not([data-expanded]) .lh-reading-strip-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-height: 3em; }
-.lh-reading-strip:not([data-expanded]) .lh-reading-strip-text > * { margin: 0; display: inline; }
-.lh-reading-strip[data-expanded] .lh-reading-strip-text { max-height: calc(var(--lh-pane-height, 100dvh) * .4); overflow-y: auto; overscroll-behavior: contain; }
-/* P2-A: "Continue writing", beside Show question in the dock band. */
-.lh-reading-entry[data-compact] { flex-direction: row; align-items: center; justify-content: space-between; }
-.lh-reading-continue {
-	display: inline-flex; align-items: center; gap: 6px; min-height: 48px; padding: 0 16px; border-radius: 999px;
-	border: 1px solid color-mix(in oklab, var(--primary) 45%, var(--border)); background: color-mix(in oklab, var(--primary) 12%, var(--card));
-	color: var(--foreground); font-size: 15px; font-weight: 600; white-space: nowrap;
-}
-.lh-reading-continue svg { width: 18px; height: 18px; color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); }
-:root .lh-reading-entry[data-compact] > .lh-phone-reveal { align-self: center; }
-/* P2-C: the peek shows the lesson; "Return to writing" holds the bottom
-   band (where the dock is), so it never sits over the text. */
-.lh-reading-return-bar {
-	position: fixed; inset-inline: 0; bottom: 0; z-index: 47; display: flex; justify-content: center; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
-	border-top: 1px solid var(--border); background: var(--background);
-}
-.lh-reading-return {
-	display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 22px; border-radius: 999px;
-	background: var(--primary); color: var(--primary-foreground); font-size: 16px; font-weight: 650;
-}
-.lh-reading-return svg { width: 18px; height: 18px; }
 @media (max-width: 767px) {
 	:root[data-reading-peek] .lh-dock-overlay[data-question-open] { visibility: hidden; }
 }
@@ -5094,36 +5026,33 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 .lh-settings-advanced { margin-top: 6px; border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent); padding-top: 10px; }
 .lh-settings-advanced > summary { display: flex; align-items: center; min-height: 44px; color: var(--muted-foreground); font-size: 14px; font-weight: 600; cursor: pointer; }
 
-/* F5 (phones): Focus is a 44px icon at the right end of the title row. In
-   focus mode the whole bar goes; "Exit" takes the icon's own spot, in a
-   lane the lesson keeps free on the right, so it never sits over text at
-   any scroll position. Tablets and laptops keep their routes (⋯, the chip). */
-.lh-focus-title { display: none; }
+/* P2 (round 17, phones): Focus sits in the toolbar's top-right corner,
+   framed like the bar's other buttons. In focus mode the bar goes and the
+   same spot holds only the bare icon that leaves it — no frame, no label,
+   and no lane: the lesson keeps its full width (the icon may sometimes sit
+   over a line, which the owner accepts). */
+.lh-focus-corner { display: none; }
 @media (max-width: 767px) {
 	:root .lh-topbar > .lh-title-block { min-height: 32px; }
-	:root .lh-focus-title {
-		display: inline-flex; flex: none; align-self: center; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -6px -6px -6px auto;
-		border-radius: 12px; color: var(--muted-foreground);
-	}
-	:root .lh-focus-title:hover { background: var(--accent); color: var(--foreground); }
-	:root .lh-focus-title svg { width: 20px; height: 20px; }
+	:root .lh-topbar > .lh-focus-corner { display: inline-flex; flex: none; width: 48px; min-width: 48px; padding: 0; }
+	:root .lh-topbar > .lh-focus-corner svg { width: 20px; height: 20px; color: var(--muted-foreground); }
 	:root[data-focus-mode] .session-tutor { padding-top: 0; }
-	:root[data-focus-mode] .session-tutor [data-session-find-root]:not([data-dock-scroll-area]) { padding-right: calc(var(--lh-focus-spot-right, 16px) + 52px); }
-	:root[data-focus-mode] .lh-dock-overlay[data-question-open] { padding-right: calc(var(--lh-focus-spot-right, 16px) + 52px); }
 	:root .lh-focus-exit {
-		top: var(--lh-focus-spot-top, 56px); right: var(--lh-focus-spot-right, 16px); flex-direction: column; justify-content: center; gap: 3px;
-		width: 44px; height: 52px; padding: 0; border-radius: 14px; font-size: 12.5px; line-height: 1;
+		top: var(--lh-focus-spot-top, 8px); right: var(--lh-focus-spot-right, 16px); width: var(--lh-focus-spot-width, 48px); height: var(--lh-focus-spot-height, 48px);
+		justify-content: center; padding: 0; border: 0; border-radius: 12px; background: transparent !important; box-shadow: none;
+		-webkit-backdrop-filter: none !important; backdrop-filter: none !important; color: var(--foreground);
 	}
-	:root .lh-focus-exit svg { width: 18px; height: 18px; }
-	:root .lh-focus-exit-more { display: none; }
+	:root .lh-focus-exit svg { width: 22px; height: 22px; filter: drop-shadow(0 0 3px var(--background)) drop-shadow(0 0 6px var(--background)); }
+	:root .lh-focus-exit-label { display: none; }
 }
 
-/* E6 (phones): stable toolbar slots. The two middle slots (a session's Plan
-   and Notebook; Home's Search and Ideas) share the space between Home and
-   ⋯ evenly, so nothing leaves a hole and every page puts each slot in the
-   same place. A session always has its Plan slot (see chat.tsx). */
+/* E6 (phones): stable toolbar slots. Home's middle slots (Search, Ideas)
+   share the space between Home and ⋯. A session (P2/P3, round 17) has
+   Sessions, Home and Notebook, then ⋯ and Focus together at the right
+   edge — with or without a plan, in lessons and in practice. */
 @media (max-width: 767px) {
 	:root .lh-topbar > div.min-w-4.flex-1[aria-hidden="true"] { display: none; }
+	:root .lh-topbar > .lh-page-menu-button { margin-left: auto; }
 	:root .lh-topbar > .lh-header-chip, :root .lh-topbar > .lh-notebook-opener { flex: 1 1 64px; min-width: 0; max-width: 96px; }
 	:root .lh-topbar > .lh-header-chip:first-of-type { margin-left: auto; }
 	:root .lh-topbar > .lh-notebook-opener > .lh-notebook-toggle { width: 100%; }
@@ -5322,39 +5251,11 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	:root .lh-session-meta { font-size: 13px; }
 }
 
-/* R6/P3 (phones, equation notebook open): one chat box. P3-A docks it at the
-   bottom of the screen under a Tutor | Notebook switch; P3-B keeps it in the
-   area being worked in, its mode named at the field. The other input stays
-   mounted (its draft kept) but hidden; the tutor's empty dock steps aside. */
-.lh-nb-bar { display: none; }
-@media (max-width: 767px) {
-	.session-panes[data-one-box] .lh-movable[hidden] { display: none !important; }
-	.session-panes[data-one-box="docked"] .lh-dock-overlay[data-dock-kind="composer"] :is(.lh-dock-block, .lh-dock-fade),
-	.session-panes[data-one-box="follow"][data-nb-mode="notebook"] .lh-dock-overlay[data-dock-kind="composer"] :is(.lh-dock-block, .lh-dock-fade) { display: none; }
-	.session-panes[data-one-box="docked"] .lh-nb-bar {
-		display: flex; flex: none; flex-direction: column; gap: 6px; padding: 6px 12px calc(6px + var(--lh-safe-bottom, 0px));
-		border-top: 1px solid var(--border); background: var(--background);
-	}
-	.lh-nb-switch { align-self: flex-start; }
-	.lh-nb-switch > button { min-height: 36px; padding: 0 14px; font-size: 14px; }
-	.lh-nb-switch > button svg { width: 15px; height: 15px; }
-	.lh-nb-bar-slot { display: flex; flex-direction: column; min-width: 0; }
-	.lh-nb-bar-slot > .lh-movable { min-width: 0; }
-	.lh-nb-bar-slot .notebook-instruction-form { max-height: none; padding: 0; border: 0; overflow: visible; }
-	.lh-nb-bar-slot .lh-chat-composer-wrap, .lh-nb-bar-slot form { margin: 0; }
-	/* P3-B: the mode's name at the field. */
-	.session-panes[data-one-box="follow"] .lh-movable[data-label]::before {
-		content: attr(data-label); display: block; padding: 4px 4px 4px; color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); font-size: 13px; font-weight: 650;
-	}
-}
 /* R5: term chips (#n) only on the line being aimed at; the others keep no headroom for them. */
 :root .notebook-working-line:not([data-selected]) .notebook-expression-number { display: none; }
 :root .notebook-working-line:not([data-selected]) .notebook-expression { padding-top: 0; }
 /* R6: the expanded notebook's way back, labelled. */
 .notebook-back-lesson { display: inline-flex; align-items: center; gap: 6px; width: auto !important; padding: 0 12px !important; font-size: 14px; font-weight: 600; }
-@media (max-width: 767px) {
-	.lh-nb-bar-slot > .lh-movable[data-input-owner="tutor"] { border: 1px solid var(--border); border-radius: 14px; background: var(--card); }
-}
 
 /* R8 (tablet): the wheel is a 56px puck by default — the current tool, with
    Undo beside it; drag the puck to move it, tap it to open the wheel. The
@@ -5402,3 +5303,203 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	:root:has(.lh-chains-search[data-over]) [data-testid="chain-table"] .lh-topbar > :not(.lh-chains-search) { visibility: hidden; }
 }
 .lh-confidence-track > [data-testid="confidence-track"] { flex: none; height: 16px; }
+
+/* ============================================================
+   Round 17 (arm B)
+   ============================================================ */
+
+/* S1: the mic is a big, muted round button — prominent by its size, never
+   a loud colour — right before each field's main action (Send, Submit,
+   Start, Apply). While dictating it is Stop, tinted, and the field shows
+   the recording strip, so the recording state is always in view. */
+.lh-mic-slot { display: inline-flex; flex: none; align-items: center; }
+.lh-mic-slot:empty { display: none; }
+.lh-mic-button {
+	display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 999px;
+	border: 1px solid color-mix(in oklab, var(--foreground) 16%, transparent);
+	background: color-mix(in oklab, var(--foreground) 8%, var(--card)); color: color-mix(in oklab, var(--foreground) 88%, transparent);
+	transition: background-color 120ms, border-color 120ms;
+}
+.lh-mic-button svg { width: 22px; height: 22px; }
+.lh-mic-button:hover { background: color-mix(in oklab, var(--foreground) 13%, var(--card)); }
+.lh-mic-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.lh-mic-button[data-recording] {
+	border-color: color-mix(in oklab, var(--destructive) 60%, transparent);
+	background: color-mix(in oklab, var(--destructive) 16%, var(--card)); color: var(--destructive);
+}
+.lh-mic-button[data-recording] svg { width: 16px; height: 16px; fill: currentColor; }
+.lh-mic-button:disabled { opacity: .5; }
+/* The field's own mic (when a caller gives no slot) is the same button. */
+:root .lh-compact-speech > .lh-mic-button { min-width: 44px; min-height: 44px; border-radius: 999px; }
+/* With the mic outside, the field needs no lane for it, and its recording
+   strip spans the field. */
+:root .lh-compact-field[data-mic-outside] > :is(textarea, [data-file-path-input]) { width: 100%; padding-right: 10px; }
+:root .lh-compact-field[data-mic-outside][data-recording] .lh-compact-speech { left: 3px; right: 3px; }
+/* Rows: [field][attach][mic][send], bottom-aligned. */
+@media (max-width: 767px) {
+	form.lh-compact-row:has(> .lh-mic-slot:not(:empty)) { grid-template-columns: minmax(0, 1fr) auto auto; }
+	form.lh-compact-row:has(> .lh-mic-slot:not(:empty)):has([data-testid="attach-files"]) { grid-template-columns: minmax(0, 1fr) auto auto auto; }
+	.lh-compact-row > .lh-mic-slot { margin-bottom: 5px; }
+}
+@media (min-width: 768px) {
+	form.lh-compact-row > .lh-mic-slot { align-self: flex-end; }
+}
+/* The answer and practice cards: the mic sits right before Submit. */
+.lh-question-submit > .lh-mic-slot { margin-left: auto; }
+.lh-question-submit > .lh-mic-slot + button { margin-left: 0 !important; }
+@media (max-width: 767px) {
+	:root .lh-question-submit { align-items: center; gap: 8px; }
+	:root .lh-question-submit > .lh-mic-slot { margin-bottom: 5px; }
+}
+
+/* ---- The phone's full-screen panes (P1 thinking, P5 notebook) ---- */
+.lh-pane-surface { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+.lh-pane-head { display: flex; flex: none; flex-direction: column; gap: 2px; padding: 14px 16px 6px; }
+.lh-pane-context { display: none; margin: 0; color: var(--muted-foreground); font-size: 12.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.lh-pane-title { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.3; }
+.lh-pane-hint { margin: 0; color: var(--muted-foreground); font-size: 14px; line-height: 1.4; }
+.lh-pane-body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 8px; padding: 8px 16px 10px; }
+.lh-pane-nav { display: flex; flex: none; align-items: center; gap: 4px; padding: 0 12px 2px; }
+.lh-pane-back {
+	display: inline-flex; align-items: center; gap: 2px; min-height: 44px; padding: 0 14px 0 8px; border-radius: 12px;
+	border: 1px solid var(--border); background: var(--card); color: var(--foreground); font-size: 15px; font-weight: 600; white-space: nowrap;
+}
+/* P1: Show question as a quiet shortcut beside Back — text, no frame. */
+.lh-pane-shortcut {
+	display: inline-flex; align-items: center; gap: 1px; min-height: 44px; padding: 0 10px; border-radius: 12px;
+	color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); font-size: 15px; font-weight: 600; white-space: nowrap;
+}
+.lh-pane-back svg, .lh-pane-shortcut svg { width: 18px; height: 18px; flex: none; }
+.lh-pane-bar {
+	display: grid; flex: none; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px;
+	min-height: 76px; padding: 6px 12px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--background);
+}
+.lh-pane-bar-start { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lh-pane-bar-end { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+.lh-pane-peek, .lh-pane-keyboard {
+	display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 56px; min-height: 52px; padding: 0 6px;
+	border: 1px solid var(--border); border-radius: 14px; background: var(--card); color: var(--foreground); font-size: 12.5px; font-weight: 600; line-height: 1;
+}
+.lh-pane-peek svg, .lh-pane-keyboard svg { width: 20px; height: 20px; flex: none; }
+.lh-pane-keyboard[aria-pressed="false"] { border-color: color-mix(in oklab, var(--primary) 45%, var(--border)); color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); }
+/* The big mic: muted like the field mics, bigger; the ring follows the voice. */
+.lh-big-mic-wrap { position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-self: center; }
+.lh-big-mic {
+	position: relative; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 999px;
+	border: 1px solid color-mix(in oklab, var(--foreground) 18%, transparent);
+	background: color-mix(in oklab, var(--foreground) 9%, var(--card)); color: var(--foreground);
+}
+.lh-big-mic svg { position: relative; width: 28px; height: 28px; }
+.lh-big-mic[data-recording] { border-color: color-mix(in oklab, var(--destructive) 60%, transparent); background: color-mix(in oklab, var(--destructive) 18%, var(--card)); color: var(--destructive); }
+.lh-big-mic[data-recording] svg { width: 20px; height: 20px; fill: currentColor; }
+.lh-big-mic-ring { position: absolute; inset: -5px; border: 2px solid transparent; border-radius: 999px; transition: transform 90ms linear; pointer-events: none; }
+.lh-big-mic[data-recording] .lh-big-mic-ring { border-color: color-mix(in oklab, var(--destructive) 55%, transparent); }
+.lh-big-mic:disabled { opacity: .5; }
+.lh-big-mic-status { position: absolute; top: calc(100% + 1px); left: 50%; translate: -50% 0; color: var(--destructive); font-size: 11.5px; font-weight: 650; white-space: nowrap; pointer-events: none; }
+.lh-big-mic-status:empty { display: none; }
+/* The thinking pane's field fills its pane (no mic of its own). */
+:root .lh-reading-pane .lh-pane-body .lh-compact-field > [data-file-path-input] { width: 100%; padding-right: 14px; }
+/* S2 Peek: the lesson with only a quiet Return (and the dictation
+   indicator) in the bottom band, never over the text. */
+.lh-peek-return-bar {
+	position: fixed; inset-inline: 0; bottom: 0; z-index: 47; display: flex; align-items: center; justify-content: center; gap: 10px;
+	min-height: 68px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); background: var(--background);
+}
+.lh-peek-return {
+	display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 999px;
+	border: 1px solid color-mix(in oklab, var(--primary) 50%, var(--border)); background: transparent;
+	color: color-mix(in oklab, var(--primary) 72%, var(--foreground)); font-size: 16px; font-weight: 650;
+}
+.lh-peek-dictation { display: inline-flex; align-items: center; gap: 6px; color: var(--destructive); font-size: 14px; font-weight: 650; }
+.lh-peek-dictation-dot { width: 10px; height: 10px; border-radius: 999px; background: var(--destructive); transition: transform 90ms linear; }
+.lh-peek-dictation button { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; border: 1px solid color-mix(in oklab, var(--destructive) 50%, transparent); }
+.lh-peek-dictation button svg { width: 14px; height: 14px; fill: currentColor; }
+@media (max-width: 767px) {
+	:root[data-reading-peek] .lh-reading-entry { visibility: hidden; }
+}
+
+/* S4 (try-out): the card layout for what takes over the screen. One inset
+   card with its own surface and rounded corners; a small uppercase context
+   label, a large title; the content scrolls inside the card; one filled,
+   full-width main action at the bottom with a quiet text action under it. */
+.lh-pane-actions { display: flex; flex: none; flex-direction: column; align-items: stretch; gap: 2px; padding: 10px 16px 6px; }
+.lh-pane-main {
+	min-height: 52px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground); font-size: 16.5px; font-weight: 650;
+}
+.lh-pane-main:disabled { opacity: .45; }
+.lh-pane-quiet { min-height: 44px; border-radius: 12px; color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); font-size: 15px; font-weight: 600; }
+.lh-pane[data-layout="card"] .lh-pane-surface,
+.notebook-panel[data-pane="card"] > .notebook-surface {
+	margin: 10px 12px 0; overflow: hidden; border: 1px solid var(--border); border-radius: 24px;
+	background: var(--card); box-shadow: 0 10px 30px rgb(0 0 0 / .28);
+}
+.lh-pane[data-layout="card"] .lh-pane-context,
+.notebook-panel[data-pane="card"] .lh-pane-context { display: block; }
+.lh-pane[data-layout="card"] .lh-pane-head { padding: 18px 20px 8px; gap: 4px; }
+.lh-pane[data-layout="card"] .lh-pane-title, .notebook-panel[data-pane="card"] .lh-pane-title { font-size: 22px; line-height: 1.25; }
+.lh-pane[data-layout="card"] .lh-pane-body { padding: 6px 16px 4px; }
+.lh-pane[data-layout="card"] .lh-reading-pane-field .lh-compact-field { background: var(--background); }
+.lh-pane[data-layout="card"] .lh-pane-bar { min-height: 80px; }
+
+/* ---- P5: the phone's notebook pane ---- */
+.notebook-surface { display: contents; }
+@media (max-width: 767px) {
+	/* The notebook takes over the screen; the lesson keeps its full height
+	   beneath (only the notebook moves). */
+	.session-panes[data-notebook-pane] > .session-tutor { flex: 1 1 auto !important; }
+	.session-panes[data-notebook-pane] > .notebook-split-divider { display: none !important; }
+	.session-panes[data-notebook-pane] > .notebook-slot {
+		position: fixed !important; inset-inline: 0; top: var(--lh-pane-top, 0px); height: var(--lh-pane-height, 100dvh); max-height: none !important;
+		z-index: 48; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px) !important; background: var(--background);
+	}
+	.session-panes[data-notebook-pane] > .notebook-slot > .notebook-frame { inset: 0 !important; border: 0; border-radius: 0; box-shadow: none; background: var(--background); }
+	.session-panes[data-notebook-peek] > .notebook-slot { visibility: hidden; pointer-events: none; }
+	.notebook-panel[data-pane] { height: 100%; background: var(--background); }
+	.notebook-panel[data-pane] > .notebook-surface { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+	.notebook-panel[data-pane] .notebook-frame-header { border-bottom: 1px solid var(--border); }
+	.notebook-panel[data-pane] .notebook-surface > [data-notebook-scroll] { order: 1; }
+	.notebook-panel[data-pane] .notebook-surface > .notebook-instruction-form { order: 2; border-top: 1px solid var(--border); }
+	.notebook-panel[data-pane] .notebook-surface > .notebook-card-actions { order: 3; }
+	.notebook-panel[data-pane="card"] .notebook-frame-header { border-bottom: 0; }
+	.notebook-panel[data-pane="card"] .notebook-card-head { padding: 0 20px 6px; }
+	.notebook-panel[data-pane] .notebook-instruction-form .lh-compact-field > textarea { width: 100%; }
+}
+.notebook-help { width: 300px; }
+.notebook-help p { margin: 0 0 8px; font-size: 14px; line-height: 1.45; }
+.notebook-help p:last-child { margin-bottom: 0; }
+/* The pull-up sheet of working while peeking (P5): the working only. */
+.lh-peek-sheet {
+	position: fixed; inset-inline: 0; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); z-index: 47; display: flex; flex-direction: column;
+	border: 1px solid var(--border); border-bottom: 0; border-radius: 18px 18px 0 0; background: var(--card); box-shadow: 0 -8px 24px rgb(0 0 0 / .35);
+}
+.lh-peek-sheet-handle { display: grid; flex: none; place-items: center; height: 44px; touch-action: none; cursor: ns-resize; }
+.lh-peek-sheet-handle > span { width: 40px; height: 5px; border-radius: 999px; background: var(--muted-foreground); opacity: .6; }
+.lh-peek-sheet-handle:focus-visible { outline: 2px solid var(--primary); outline-offset: -4px; }
+.lh-peek-sheet-working { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 12px 8px; }
+.lh-peek-sheet-working .notebook-empty { margin: 4px 8px; }
+
+/* ---- P4 (try-out, phones): Sessions as a page ---- */
+.lh-sessions-back { display: none; }
+@media (max-width: 767px) {
+	/* Under the bar: the page's own bar stays (Sessions shown current; a
+	   second tap closes it where it opened), the list fills the rest. */
+	.lh-sessions-panel[data-sessions-page="toolbar"][aria-hidden="false"] {
+		top: var(--lh-sessions-page-top, 72px);
+		height: calc(var(--lh-phone-top, 0px) + var(--lh-phone-height, 100dvh) - var(--lh-sessions-page-top, 72px));
+		padding-top: 0; border-top: 1px solid var(--border);
+	}
+	.lh-sessions-panel[data-sessions-page="toolbar"] .lh-sessions-header { display: none; }
+	/* One current place in the bar while the list is open. */
+	:root:has(.lh-sessions-panel[data-sessions-page="toolbar"][aria-hidden="false"]) .lh-nav-chip[data-current]:not([data-testid="open-sidebar"]) {
+		border-color: var(--border); background: var(--card);
+	}
+	:root:has(.lh-sessions-panel[data-sessions-page="toolbar"][aria-hidden="false"]) .lh-nav-chip[data-current]:not([data-testid="open-sidebar"]) svg { color: var(--muted-foreground); }
+	/* With its own header: Back exactly where Sessions was, then the title. */
+	.lh-sessions-panel[data-sessions-page="header"] .lh-sessions-header { justify-content: flex-start; gap: 12px; height: 64px; padding: 8px 16px; }
+	.lh-sessions-panel[data-sessions-page="header"] .lh-sessions-back {
+		display: inline-flex; align-items: center; gap: 2px; height: 48px; padding: 0 12px 0 6px; border: 1px solid var(--border); border-radius: 12px;
+		background: var(--card); color: var(--foreground); font-size: 15px; font-weight: 600;
+	}
+	.lh-sessions-panel[data-sessions-page="header"] .lh-sessions-back svg { width: 20px; height: 20px; }
+	.lh-sessions-panel[data-sessions-page="header"] .lh-sessions-close { display: none; }
+}
