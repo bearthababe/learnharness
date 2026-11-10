@@ -25,10 +25,10 @@ case, such as [[1,1],[1,1]] v = 0, you can find (1, −1). Once the tutor has sh
 at a method, use it correctly.
 
 **Things that happen, each once, the first time the situation arises:**
-1. The first time you're asked for an eigenvector, offer (0, 0) with a confident reason,
-   e.g. "A times 0 is λ times 0." Switch to a nonzero vector only after the tutor
-   explains why (0, 0) doesn't count. If the tutor just says "try again", repeat your
-   answer once.
+1. The first time you're asked for an eigenvector, in any part of the session, offer
+   (0, 0) with a confident reason, e.g. "A times 0 is λ times 0." Switch to a nonzero
+   vector only after the tutor explains, or leads you with questions to see, why (0, 0)
+   doesn't count. If the tutor just says "try again", repeat your answer once.
 2. When the condition det(A − λI) = 0 is introduced, ask "why does the determinant have to
    be 0?" before answering anything else.
 3. If a repeated eigenvalue comes up, or you're asked whether a matrix like [[2,0],[0,2]]

@@ -66,3 +66,18 @@ test("the key's prose covers only fixtures that exist", () => {
 	const ids = new Set(facts.problems.map(problem => problem.id));
 	for (const reference of key.match(/\bR\d+\b/g) ?? []) assert.ok(ids.has(reference), `key.md cites ${reference}, which facts.json lacks`);
 });
+
+test("numeric claims in the calibration examples and learner brief", () => {
+	for (const claim of facts.proseClaims) {
+		const a = claim.matrix;
+		const actual = {
+			eigenvector: () => mul(a, claim.vector).every((entry, index) => entry === claim.value * claim.vector[index]) && claim.vector.some(Boolean),
+			diagonalizable: () => realRoots(a).reduce((sum, value) => sum + eigenspaceDimension(a, value), 0) === 2,
+			entry: () => a.flat().includes(claim.value),
+			eigenvalues: () => JSON.stringify(realRoots(a)) === JSON.stringify([...claim.values].sort((x, y) => x - y)),
+			traceSum: () => claim.matrices.every(m => realRoots(m).length === 2 && realRoots(m).reduce((x, y) => x + y) === trace(m)),
+			nullVector: () => mul(a, claim.vector).every(entry => entry === 0) && claim.vector.some(Boolean),
+		}[claim.kind]();
+		assert.equal(actual, claim.holds, `${claim.where}: ${claim.kind}`);
+	}
+});

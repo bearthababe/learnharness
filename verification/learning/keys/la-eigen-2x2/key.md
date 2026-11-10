@@ -1,6 +1,6 @@
 # Answer key: eigenvalues and eigenvectors of 2×2 matrices
 
-Version 0.4.0-draft. **Status: draft for owner approval (decision D-1).** Nothing here
+Version 0.5.0-draft. **Status: draft for owner approval (decision D-1).** Nothing here
 authorizes a live run (D-2) or claims tutor accuracy. Story: LJ-TUTOR. Evaluator-only:
 never give this file, `facts.json` or the calibration set to the tutor or the simulated
 learner (§9).
@@ -31,7 +31,8 @@ verifies it for every fixture. Other textbooks are not cited because their text 
 inspected.
 
 **Machine check.** `tests/verification/la-eigen-key.test.mjs` checks every number in
-`facts.json` exactly (see its `machineChecked` field). It does not check prose.
+`facts.json` exactly, including each numeric claim made in §7 and in the learner brief
+(`proseClaims`). Other prose is not machine-checked.
 
 **Teaching expectations.** Only LearnHarness's own policy, by file:
 `docs/fork-vision.md` §4; `src/agent/prompts/prober/10-probe-doctrine.md`;
@@ -52,7 +53,7 @@ The tutor contradicting one of these, or endorsing a learner's contradiction of 
 | T4 | A is diagonalizable ⇔ it has two independent eigenvectors. *Only if:* p. 293. *If:* put them as the columns of P; then AP = PD and P is invertible, so A = PDP⁻¹. | p. 293; derivation; checker |
 | T5 | Two distinct **real** eigenvalues ⇒ diagonalizable. *Why:* if v₂ = cv₁ (c ≠ 0), then λ₂v₂ = Av₂ = cλ₁v₁ = λ₁v₂, so λ₁ = λ₂, a contradiction; so the eigenvectors are independent, and T4 applies. A repeated eigenvalue neither prevents it (R4) nor guarantees it (R3). | derivation; p. 297 (stated for one matrix); p. 293 "A = I has equal eigenvalues and plenty of eigenvectors"; R3, R4 |
 | T6 | A real 2×2 matrix may have no real eigenvalues (R5). | p. 294 Ex. 5 |
-| T7 | A triangular matrix has its diagonal entries as eigenvalues; in general eigenvalues are not the entries (R2). | p. 294 |
+| T7 | A triangular matrix has its diagonal entries as eigenvalues; in general eigenvalues cannot be read off the entries (R2: 5 is not an entry). | p. 294 |
 | T8 | Row reduction generally changes eigenvalues (R2 reduces to I). | p. 294; checker |
 
 A claim outside T1–T8 that the evaluator cannot settle from `facts.json` or the cited pages
@@ -91,7 +92,7 @@ turn can be judged under several.
 | E7 | The learner answers a **teaching** check or prediction | Accept every valid answer, e.g. any nonzero vector in the eigenspace. If the check answer is wrong or uncertain: say what is wrong or missing, repair (Socratic or expository), and re-check. Due: before the next step builds on this one. (Probe answers fall under E2.) | Accept a wrong answer; reject a valid one; move on without the re-check. | vision §4 r2; teaching §4 |
 | E8 | The learner asks "why?" or voices doubt | Answer the actual question with a motivated reason, then continue. | Reply only with a rule to follow ("that's the formula, just use it"). | method ii; teaching §1–3 |
 | E9 | Any tutor statement about the learner's progress, or the saved probe assessment | Describe guided or hinted success as guided. | Call guided success independent or "mastered"; treat a visited plan node as understood; record a hinted strand as solid. | vision §1, §6; glossary "Learner evidence" |
-| E10 | The tutor's doubt is visible (it hedges, or the learner challenges a claim) | Verify the claim, or say plainly that it is uncertain, before building on it; revisit a flagged claim by the end of the session. Due: by session end, which a cap leaves *pending*. | Build on a doubted claim without verifying or flagging it. (A confident claim the evaluator cannot verify is *unverified*, not violated.) | accuracy |
+| E10 | The tutor shows its own doubt about a claim (a hedge such as "I think", "I'd want to check") | Verify the claim, or keep saying plainly that it is uncertain, before building on it; revisit a flagged claim by the end of the session. Due: by session end, which a cap leaves *pending*. (A learner's challenge falls under E8.) | Later treat the doubted claim as settled without verifying it. (A confident claim the evaluator cannot verify is *unverified*, not violated.) | accuracy |
 
 **Run verdict**, first match wins (V-2, V-4):
 1. **Fail:** any expectation *violated* or any material error. Violations stand even if a cap or a simulator deviation came later.
@@ -100,13 +101,16 @@ turn can be judged under several.
 4. **Incomplete (coverage):** the minimum coverage set (below) was not reached.
 5. **Pass:** otherwise. Every applicable expectation is *complied*.
 
+**Planned end.** The run ends normally after the tutor's reaction to the minimum-set
+re-check. Hitting a turn, request or time cap before that is *incomplete (stopped)*.
+
 **Minimum coverage set (under the current caps):** E1; E2 for a complete probe; E3; and
 for one teaching step, E4, E6 and E7, including one wrong answer, its repair and its
 re-check. Everything else counts if reached and is otherwise *unexercised*. See §8 for why
-this is all that fits. The wrong answer comes from brief event 1, which fires only when a
-check asks for an eigenvector. If the tutor's first check is a different valid kind (for
-example C11), the event may not fire. The run is then *incomplete (coverage)*, never
-failed.
+this is all that fits. The wrong answer comes from brief event 1, which fires the first time the
+learner is asked for an eigenvector, whether in the probe, a prediction or a check. If it
+fires outside a teaching check, or never fires (for example after a C11-style check), the
+minimum set may not be reached. The run is then *incomplete (coverage)*, never failed.
 
 ## 6. Simulated learner
 
@@ -142,18 +146,21 @@ learner then understood. That is judged on the learner's next answer.
 | C16 | First tutor turn: "Let's start with what an eigenvector is…" (the learner said only "eigenvalues"). | E1 | violated |
 | C17 | The probe showed matrix-vector multiplication solid; the plan's first node re-teaches it. | E3 | violated |
 | C18 | Tutor: "Eigenvalues satisfy det(A − λI) = 0. Find them for [[4,1],[2,3]]," with no link to Av = λv, then builds on it. | E4 unmotivated | violated |
-| C19 | Learner predicts "λ is an entry of A". The tutor's next teaching opens: "You guessed an entry. That's true for triangular matrices, but not in general: eigenvalues solve det(A − λI) = 0, and [[4,1],[2,3]] has eigenvalues 5 and 2, neither of them an entry." | E5 resolved | complied |
+| C19 | Learner predicts "λ is an entry of A". The tutor's next teaching opens: "You guessed an entry. That's true for triangular matrices, but not in general: eigenvalues solve det(A − λI) = 0, and [[4,1],[2,3]] has eigenvalues 5 and 2; 5 is not an entry." | E5 resolved | complied |
 | C20 | Same prediction. The tutor's next teaching never mentions it and starts on det(A − λI). | E5 ignored | violated |
 | C21 | The tutor presents the plan and, in the same message, begins teaching the first node. | E3 teaching in the presenting turn | violated |
-| C22 | Learner: "Are you sure that works for every 2×2 matrix?" The tutor neither checks nor flags it, and builds on it in the next step. | E10 | violated |
-| C23 | Same challenge. Tutor: "I'm not certain. Let's test it on [[2,0],[0,2]] and [[1,1],[0,1]] before relying on it," then does. | E10 | complied |
-| C24 | Learner solved the null-space question after a hint. Tutor: "Great, you've mastered null spaces." | E9 | violated |
-| C25 | Tutor: "The eigenvalues of [[4,1],[2,3]] are 4 and 3." | T7 material error | violated |
-| C26 | Tutor states, with no hedging, a claim about 3×3 defective matrices that is not in T1–T8. | out-of-key claim | unverified |
-| C27 | Run: C4 happens at learner turn 9, and the cap stops the run at turn 12. | run verdict | fail |
-| C28 | Run: everything complies through the probe; at turn 6 the simulator answers a question it was told it cannot. | run verdict | incomplete |
-| C29 | Run: minimum set complied, but one applicable E10 judgment is unverified. | run verdict | unverified |
-| C30 | Run: no violation; the cap stops it while a re-check is *pending*. | run verdict | incomplete (stopped) |
+| C22 | Tutor: "I think the two eigenvalues always add up to the trace, though I'd want to check that." In the next step it uses this as a settled fact, with no check and no flag. | E10 | violated |
+| C23 | Same hedge. Tutor: "Let's check: the roots of λ² − (trace)λ + det = 0 add up to the trace, so yes, for every 2×2 matrix," then uses it. (Testing a few matrices would not establish it for every matrix.) | E10 | complied |
+| C24 | Tutor states plainly, as a foundation: "An eigenvector is never the zero vector; that's part of the definition." No derivation is given. | E4 unconditional truth | complied |
+| C25 | After teaching why an eigenvector must be nonzero, the tutor asks: "In your own words, why can't (0, 0) count as an eigenvector?" (not a copy of the text above) | E6 recall check | complied |
+| C26 | The tutor teaches three new ideas, each with no prediction, none of them a wrap-up or a repair. | E5 habit | violated |
+| C27 | Learner solved the null-space question after a hint. Tutor: "Great, you've mastered null spaces." | E9 | violated |
+| C28 | Tutor: "The eigenvalues of [[4,1],[2,3]] are 4 and 3." | T7 material error | violated |
+| C29 | Tutor states, with no hedging, a claim about 3×3 defective matrices that is not in T1–T8. | out-of-key claim | unverified |
+| C30 | Run: C4 happens at learner turn 9, and the cap stops the run at turn 12. | run verdict | fail |
+| C31 | Run: everything complies through the probe; at turn 6 the simulator answers a question it was told it cannot. | run verdict | incomplete (stopped) |
+| C32 | Run: minimum set complied, but one applicable E10 judgment is unverified. | run verdict | unverified |
+| C33 | Run: no violation; the cap stops it while a re-check is *pending*. | run verdict | incomplete (stopped) |
 
 ## 8. Fit to the authorized exercise (spec §3)
 
@@ -176,11 +183,11 @@ retries; ≤ 20 minutes; no automatic retries; teaching, question and planning t
 - Tutor: about 1 per learner turn, plus about 3 tool continuations (the `probe_done` result, the teacher handoff and `plan_init`), plus the closing reaction. About 16.
 - Simulator: 12.
 - Grading: about 2.
-- Total: about 30, at the cap. These are estimates; the live adapter must count real requests.
+- Total: about 30, at the cap, with **no headroom**. A request cap is likely to stop a real run. These are estimates; the live adapter must count real requests.
 
 **Conclusion.** Under the current caps, a policy-compliant session reaches the probe, the
-plan and one teaching step. That is why the minimum coverage set is so
-small. The diagonalization criterion, M5 and most of §5 will normally be *unexercised*.
+plan and one teaching step, and even that is likely to hit the request cap. That is why
+the minimum coverage set is so small. The diagonalization criterion, M5 and most of §5 will normally be *unexercised*.
 Covering more takes an owner decision (O-1).
 
 ## 9. Independence and leakage
@@ -197,7 +204,7 @@ D-2). The simulator sees only `learner-brief.md`.
   - (b) Two bounded exercises: probe plus plan from the goal, then teaching from an approved fixture of a probed session, each within today's caps.
   - (c) Raise the caps for this exercise to about 20 learner turns and 50 requests.
 
-  Recommended: (b). Each run stays small, and teaching gets enough turns to reach the diagonalization criterion.
+  Recommended: (b). Each run stays small, the request budget gets headroom, and teaching gets enough turns to reach the diagonalization criterion.
 - **O-2, calibration.** Calibration must precede any live verdict. Does it count against
   the 30 requests? Recommended: no. Run it as a separate preflight, capped at 1 request
   (every example in one batch, with no retry).
