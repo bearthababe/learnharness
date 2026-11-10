@@ -81,12 +81,13 @@ try {
 	const paned = !!paneOpener && await paneOpener.isVisible();
 	if (paned) { await paneOpener.tap(); await page.waitForSelector('[data-testid="reading-pane"][data-open]'); }
 	await page.locator(reading).fill("Existing reading thoughts.");
-	await page.click('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
+	// P1 (round 17): the pane's big mic bar carries the note's microphone.
+	await page.click(paned ? '[data-testid="reading-pane-mic"]' : '[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
 	await page.waitForFunction(() => window.__revealFrames > 0);
 	await page.evaluate(() => window.__revealSpeech.final("First spoken thought."));
 	assert.equal(await page.$eval(reading, e => e.textContent), "Existing reading thoughts.", "Speech stays buffered until recording finishes");
-	// Round 16 (F4): the pane has no Show question; back to the lesson (the
-	// recording carries on into the note), then the lesson's Show question.
+	// Back to the lesson (the recording carries on into the note), then the
+	// lesson's Show question.
 	if (paned) { await page.tap('[data-testid="reading-pane-close"]'); await page.waitForSelector('[data-testid="reading-pane"]:not([data-open])'); }
 	await page.tap(paned ? '.lh-reading-entry [data-testid="teach-check-reveal"]' : reveal);
 	// Allow the tap's React update to paint, but hold the recognizer's final response.

@@ -97,7 +97,7 @@ export function Home({
 	// B2 (round 17): only a keyboard-and-mouse computer starts in the field.
 	// On touch screens a focused field shows as active (and empty) on arrival
 	// without raising a keyboard, which reads as a stuck search.
-	useEffect(() => { if (window.matchMedia?.("(pointer: fine)").matches) topicInputRef.current?.focus({ preventScroll: true }); }, []);
+	useEffect(() => { if (!window.matchMedia?.("(pointer: coarse)").matches) topicInputRef.current?.focus({ preventScroll: true }); }, []);
 	const [busy, setBusy] = useState(false);
 	const startingRef = useRef(false);
 	const starterRef = useRef(new SessionStarter());

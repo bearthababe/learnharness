@@ -300,3 +300,23 @@ it("the actual choice dock permits ordinary recovery with empty newer choices bu
 	assert.doesNotMatch(submitButton(render(bridge)), /\sdisabled=/);
 	assert.match(submitButton(render(null)), /\sdisabled=/);
 });
+
+it("T6 (round 17): an area snapshot of an unchanged page still attaches, as the page's next revision", async () => {
+	const source = notebookSource(emptyHandwriting());
+	const { contentFingerprint } = await handwritingFingerprints(source);
+	const draft: DurableDraft = { version: 1, chatId: "chat", targetKey: "composer", draftId: "draft", revision: 1, editor: { text: "" } };
+	const run = async (replace: boolean) => {
+		const requests: FormData[] = [];
+		const model = new HandwritingAttachment("chat", { device: device(), fetch: async (_url, init) => { requests.push(init!.body as FormData); throw new Error("Offline"); }, encode: async () => new Blob(["area"]), refresh: async () => ({ pending: [], pageAttachments: {} }), reveal() {}, changed() {} });
+		await model.open();
+		await model.attach({ pageId: "page_initial", head: { revision: 1, writingId: "writing_earlier", contentFingerprint }, valid: () => true, finish: async () => true,
+			freeze: () => ({ source, draft, raster: { width: 1400, height: 1800, rgba: new ArrayBuffer(1400 * 1800 * 4) } }), replace });
+		return { requests, notice: model.notice("page_initial")?.kind };
+	};
+	const page = await run(false);
+	assert.equal(page.requests.length, 0, "the same page, unchanged, is not attached twice");
+	assert.equal(page.notice, "unchanged");
+	const area = await run(true);
+	assert.equal(area.requests.length, 1, "an area is a new snapshot");
+	assert.equal(area.requests[0]!.get("expectedPageRevision"), "1", "it replaces the page's pending snapshot (the next revision)");
+});

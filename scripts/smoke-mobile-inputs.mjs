@@ -256,7 +256,8 @@ try {
 	const assertMicSpace = async selector => {
 		const separate = await page.$eval(selector, e => {
 			const editor = e.getBoundingClientRect();
-			const mic = e.parentElement.querySelector('[aria-label="Start dictation"]').getBoundingClientRect();
+			// S1 (round 17): the mic sits right before the row's main action.
+			const mic = e.closest('form, .lh-question-input, .lh-compact-row').querySelector('[aria-label="Start dictation"]').getBoundingClientRect();
 			return editor.right <= mic.left;
 		});
 		assert.ok(separate, "Empty placeholder and typed text have their own space before the microphone target");
@@ -277,13 +278,23 @@ try {
 		for (const width of [320, 375, 430]) {
 			await page.setViewport({ width, height: 550, isMobile: true, hasTouch: true });
 			await fill(selector, "A substantial explanation.\n".repeat(16));
-			await hitTargets([`${fieldSelector} .lh-compact-field button`], `In-field controls fit and receive taps at ${width}px`, true);
+			// S1 (round 17): the mic sits in the Submit row under the field; with a
+			// long draft that row is reached by scrolling, like Submit itself.
+			await page.$eval(`${fieldSelector} .lh-mic-button`, e => e.scrollIntoView({ block: "center" }));
+			await hitTargets([`${fieldSelector} .lh-mic-button`], `The field's mic fits and receives taps at ${width}px`, true);
 		}
 		await page.setViewport({ width: 375, height: 350, isMobile: true, hasTouch: true });
 		await page.$eval(selector, e => e.focus());
 		await page.waitForFunction(sel => { const r = document.querySelector(sel).getBoundingClientRect(); return r.top >= 0 && r.bottom <= 350; }, {}, selector);
 		assert.ok(await page.$eval(selector, e => e.scrollHeight > e.clientHeight), "Long draft scrolls internally in a keyboard-sized viewport");
 		await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
+	};
+	// P3 (round 17): phones open Plan from the top of ⋯ (wider screens: the chip).
+	const openPlan = async () => {
+		if (await page.$eval('[data-testid="plan-chip"]', e => e.checkVisibility()).catch(() => false)) { await page.click('[data-testid="plan-chip"]'); return; }
+		await page.click('[data-testid="page-menu-button"]');
+		await page.waitForSelector('[data-testid="page-menu-plan"]', { visible: true });
+		await page.click('[data-testid="page-menu-plan"]');
 	};
 	const scrollBack = async () => {
 		const point = await page.evaluate(() => {
@@ -317,7 +328,7 @@ try {
 			return buttons.map(button => {
 				const r = button.getBoundingClientRect();
 				const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-				return { selector, width: r.width, height: r.height, fits: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, hit: button === hit || button.contains(hit) };
+				return { selector, width: r.width, height: r.height, fits: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, hit: button === hit || button.contains(hit), edges: [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom), innerWidth, innerHeight] };
 			});
 		}), { selectors, allMatches });
 		assert.ok(targets.length && targets.every(r => r.width >= 44 && r.height >= 44 && r.fits && r.hit), `${label}: ${JSON.stringify(targets)}`);
@@ -757,7 +768,7 @@ try {
 		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Card dismissal restores lesson interaction");
 		await assertReading("Usage dismissal");
 		await page.focus(input);
-		await page.click('[data-testid="plan-chip"]'); // phones open Plan from the header (the composer row no longer repeats it)
+		await openPlan(); // phones open Plan from the top of ⋯ (round 17, P3)
 		await page.waitForSelector('[data-testid="plan-popup"]');
 		await fitPanel('[data-testid="plan-popup"]');
 		assert.match(await page.$eval('[data-testid="plan-popup"]', e => e.textContent), /Pressure and area/);
@@ -1075,7 +1086,7 @@ try {
 		delete visualViewport.height; delete visualViewport.offsetTop;
 		visualViewport.dispatchEvent(new Event("resize"));
 	});
-	await page.click('[data-testid="plan-chip"]'); // phones open Plan from the header (the composer row no longer repeats it)
+	await openPlan(); // phones open Plan from the top of ⋯ (round 17, P3)
 	await page.waitForSelector('[data-testid="plan-popup-dialog"]');
 	const fullPlan = await visibleBounds('[data-testid="plan-popup"]');
 	assert.equal(fullPlan.top, 0);
@@ -1162,29 +1173,29 @@ try {
 	// slides in from the right; the lesson keeps a labelled button for it.
 	await page.click('[data-testid="reading-pane-open"]');
 	await page.waitForSelector('[data-testid="reading-pane"][data-open]');
-	assert.ok(await page.$('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]'), "Before reveal, the reading input owns the in-field microphone");
-	await assertMicSpace(reading);
+	// P1 (round 17): the pane's big mic bar carries the note's microphone.
+	const paneMic = '[data-testid="reading-pane-mic"]';
+	assert.ok(await page.$(`${paneMic}[aria-label="Start dictation"]`), "Before reveal, the reading pane owns the big microphone");
 	for (let run = 1; run <= 2; run++) {
-		await page.locator('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]').click();
+		await page.locator(`${paneMic}[aria-label="Start dictation"]`).click();
 		await page.waitForFunction(() => window.speech?.readyState === 1);
 		await page.waitForFunction(() => window.speech.frames >= 3, { timeout: 5000 });
 		assert.equal(await page.evaluate(() => window.captureContext.state), "running", `Reading capture ${run} must run the actual audio graph`);
 		await page.evaluate(n => window.speech.final(`Capture ${n}.`), run);
-		// The reading note's own Stop (round 15: it lives in the phone's pane,
-		// after the hidden row's dictation button in the page).
-		await page.locator('[data-testid="reading-thinking-field"] [aria-label="Stop dictation"]').click();
+		// The big mic is the note's Stop too.
+		await page.locator(`${paneMic}[aria-label="Stop dictation"]`).click();
 		await page.waitForFunction(() => window.speech.finishing);
 		await page.evaluate(() => window.speech.close());
-		await page.waitForSelector('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
+		await page.waitForSelector(`${paneMic}[aria-label="Start dictation"]`);
 		if (run === 1) await page.evaluate(async () => { await window.captureContext.suspend(); window.captureContext.interrupted = true; });
 	}
 	assert.equal(await page.$eval(reading, e => e.textContent), "Capture 1. Capture 2.", "Restart after interrupted audio captures and appends a second recording once");
 	await fill(reading, "Reading thought.");
-	await page.click('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
+	await page.click(`${paneMic}[aria-label="Start dictation"]`);
 	await page.waitForFunction(() => window.speech?.readyState === 1);
 	await page.evaluate(() => window.speech.final("Before reveal."));
-	// Round 16 (F4): the pane has no Show question of its own — back to the
-	// lesson (dictation keeps going into the note), then the lesson's Show question.
+	// Back to the lesson (dictation keeps going into the note), then the
+	// lesson's Show question.
 	await page.click('[data-testid="reading-pane-close"]');
 	await page.waitForSelector('[data-testid="reading-pane"]:not([data-open])');
 	await page.click('.lh-reading-entry [data-testid="teach-check-reveal"]');
@@ -1241,7 +1252,7 @@ try {
 	await page.waitForSelector('[data-testid="thinking-field"] [data-file-path-input]', { visible: true });
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "The force stays the same.");
 	assert.ok(await page.$('[data-testid="confidence-slider"]'), "Selection questions retain confidence");
-	await page.click('[data-testid="plan-chip"]'); // phones open Plan from the header (the composer row no longer repeats it)
+	await openPlan(); // phones open Plan from the top of ⋯ (round 17, P3)
 	await page.waitForSelector('[data-testid="plan-popup"]');
 	await page.keyboard.press("Escape");
 	assert.equal(await page.$eval('[data-testid="thinking-field"] [data-file-path-input]', e => e.textContent), "The force stays the same.", "Real Plan dismissal preserves the question draft");

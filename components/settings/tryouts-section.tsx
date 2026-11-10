@@ -63,6 +63,11 @@ function TryoutCard({ row }: { row: TryoutRow }) {
 }
 
 const ON: Record<DeviceClass, string> = { phone: "phone", tablet: "tablet", laptop: "computer" };
+/** Which device each try-out belongs to (L2: only this device's are listed). */
+export const TRYOUT_DEVICE = { "header-look": "phone", "reveal-style": "phone", "card-layout": "phone", "sessions-page": "phone", "writing-palette": "tablet", "wheel-look": "tablet" } as const satisfies Record<string, DeviceClass>;
+export function tryoutIdsFor(device: DeviceClass): (keyof typeof TRYOUT_DEVICE)[] {
+	return (Object.keys(TRYOUT_DEVICE) as (keyof typeof TRYOUT_DEVICE)[]).filter((id) => TRYOUT_DEVICE[id] === device);
+}
 
 /**
  * Round 17 (L2): only this device's options are listed — a phone shows
@@ -144,7 +149,8 @@ export function TryoutsSection() {
 		},
 	];
 	if (!device) return <div className="lh-tryouts" data-testid="tryouts" />;
-	const here = rows.filter((row) => row.on === device);
+	const ids: string[] = tryoutIdsFor(device);
+	const here = rows.filter((row) => ids.includes(row.id));
 	// Usable ones first; one this device cannot use yet stays, greyed.
 	const ordered = [...here.filter((row) => row.applies), ...here.filter((row) => !row.applies)];
 	return (

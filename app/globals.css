@@ -2707,10 +2707,12 @@ body:has(.lh-graph-results) [data-testid="map-open"] {
 	.lh-dock-block {
 		padding-bottom: 8px;
 	}
-	.session-panes[data-notebook-open="true"] .lh-dock-fade {
+	/* P5 (round 17): with the notebook as a pane the lesson keeps its full
+	   layout, so these split-era compactions no longer apply. */
+	.session-panes[data-notebook-open="true"]:not([data-notebook-pane]) .lh-dock-fade {
 		height: 12px;
 	}
-	.session-panes[data-notebook-open="true"] .lh-compact-stats {
+	.session-panes[data-notebook-open="true"]:not([data-notebook-pane]) .lh-compact-stats {
 		padding-top: 2px;
 	}
 }
@@ -2726,7 +2728,7 @@ body:has(.lh-graph-results) [data-testid="map-open"] {
    (model, usage and plan return when the notebook closes), so the lesson
    above keeps more of its half; the notebook's own toolbar closes it. */
 @media (max-width: 767px) {
-	.session-panes[data-notebook-open="true"] .lh-compact-stats {
+	.session-panes[data-notebook-open="true"]:not([data-notebook-pane]) .lh-compact-stats {
 		display: none;
 	}
 }
@@ -3126,19 +3128,19 @@ button[role="switch"][aria-checked="true"] > span {
 /* Phones with the notebook open: a one-line composer above it, so the
    lesson and the working both keep more of their halves. */
 @media (max-width: 767px) {
-	.session-panes[data-notebook-open="true"] .lh-compact-field {
+	.session-panes[data-notebook-open="true"]:not([data-notebook-pane]) .lh-compact-field {
 		min-height: 44px;
 	}
-	.session-panes[data-notebook-open="true"] .lh-compact-field > :is(textarea, [data-file-path-input]) {
+	.session-panes[data-notebook-open="true"]:not([data-notebook-pane]) .lh-compact-field > :is(textarea, [data-file-path-input]) {
 		min-height: 42px;
 		padding-block: 9px;
 	}
-	.session-panes[data-notebook-open="true"] .lh-compact-row > button.lh-send-button {
+	.session-panes[data-notebook-open="true"]:not([data-notebook-pane]) .lh-compact-row > button.lh-send-button {
 		width: 38px;
 		height: 38px;
 		margin-bottom: 3px;
 	}
-	.session-panes[data-notebook-open="true"] .lh-dock-block {
+	.session-panes[data-notebook-open="true"]:not([data-notebook-pane]) .lh-dock-block {
 		padding-bottom: 4px;
 	}
 }
@@ -5561,14 +5563,14 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 /* The card's own handle: a band across its top (a 44px target, reaching
    into the gap above the card), or a strip down its left side when the
    card sits beside the lesson. No separate divider. */
-.hw-cardHandle { position: relative; display: grid; flex: none; place-items: center; height: 32px; touch-action: none; cursor: ns-resize; user-select: none; -webkit-user-select: none; }
-.hw-cardHandle::before { content: ""; position: absolute; inset: -12px 0 0; }
+/* The card clips its content, so the handle is a full 44px band itself. */
+.hw-cardHandle { position: relative; display: grid; flex: none; place-items: center; height: 44px; touch-action: none; cursor: ns-resize; user-select: none; -webkit-user-select: none; }
 .hw-cardHandle > span { width: 44px; height: 5px; border-radius: 999px; background: var(--muted-foreground); opacity: .6; }
 .hw-cardHandle:focus-visible { outline: 2px solid var(--primary); outline-offset: -4px; border-radius: 12px; }
-.hw-cardHandle[data-wide] { position: absolute; top: 0; bottom: 0; left: 0; z-index: 7; width: 24px; height: auto; cursor: ew-resize; }
-.hw-cardHandle[data-wide]::before { inset: 0 0 0 -20px; }
+.hw-cardHandle[data-wide] { position: absolute; top: 0; bottom: 0; left: 0; z-index: 7; width: 44px; height: auto; margin: 0; cursor: ew-resize; }
+
 .hw-cardHandle[data-wide] > span { width: 5px; height: 44px; }
-:root .hw-notebook:has(> .hw-cardHandle[data-wide]) { padding-left: 24px; }
+:root .hw-notebook:has(> .hw-cardHandle[data-wide]) { padding-left: 44px; }
 /* T3: margins round the page; the page controls under the paper, always in
    view; notices and the pen hint over the paper, never over the controls. */
 :root .hw-paperStack { margin: 16px auto; }
@@ -5702,4 +5704,9 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	:root .lh-activity-recent-meta { font-size: 13px; color: color-mix(in oklab, var(--muted-foreground) 72%, var(--foreground)); }
 	:root .lh-activity-recent[data-status="error"] .lh-activity-recent-meta { color: var(--destructive); }
 	:root .lh-session-subtitle { font-size: 13.5px; color: color-mix(in oklab, var(--muted-foreground) 72%, var(--foreground)); }
+}
+/* P3 (round 17, phones): a session's one middle slot (Notebook) takes the
+   room Plan left, so the bar has no hole before ⋯ and Focus. */
+@media (max-width: 767px) {
+	:root .lh-topbar > .lh-notebook-opener { max-width: none; }
 }

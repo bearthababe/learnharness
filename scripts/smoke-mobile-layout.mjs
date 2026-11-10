@@ -6,6 +6,13 @@ import assert from "node:assert/strict";
 import puppeteer from "puppeteer-core";
 import { checkSidebarSwipes } from "./sidebar-swipe-checks.mjs";
 
+/** P4 (round 17): Sessions closes where it opened — the Sessions chip for the
+ *  page under the bar, the sheet's own control otherwise. */
+async function closeSessions(page) {
+	if (await page.$eval('button[aria-label="Close sidebar"]', e => e.checkVisibility()).catch(() => false)) await page.click('button[aria-label="Close sidebar"]');
+	else await page.click('button[data-testid="open-sidebar"][aria-current="page"]');
+}
+
 const chatId = process.env.LH_SMOKE_CHAT_ID;
 assert.ok(chatId && /^[A-Za-z0-9_-]+$/.test(chatId), "Set LH_SMOKE_CHAT_ID to an existing teaching session.");
 const origin = process.env.LH_SMOKE_URL ?? "http://127.0.0.1:3000";
@@ -73,7 +80,7 @@ try {
 	await checkSidebarSwipes(page, check, origin, chatId);
 	await page.click('.lh-home-navigation button[data-testid="open-sidebar"]');
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
-	await page.click('button[aria-label="Close sidebar"]');
+	await closeSessions(page);
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "true");
 	check(true, "Home toolbar leaves session navigation reachable");
 	const fromMore = async (row, menu) => {
@@ -101,7 +108,7 @@ try {
 	const sidebar = "aside[aria-hidden]";
 	const initiallyClosed = await page.$eval(sidebar, e => e.getAttribute("aria-hidden") === "true");
 	check(initiallyClosed, "Phone sessions panel starts closed despite desktop preference");
-	if (!initiallyClosed) await page.click('button[aria-label="Close sidebar"]');
+	if (!initiallyClosed) await closeSessions(page);
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getBoundingClientRect().width === 0);
 	const micSelector = await page.$('[data-testid="compact-dictation-toggle"]') ? '[data-testid="compact-dictation-toggle"]' : '[data-testid="dictation-toggle"]';
 	const mic = await rect(micSelector);
@@ -117,7 +124,9 @@ try {
 	const behind = await rect("[data-file-path-input]");
 	check(Math.abs(panel.width - 375) < 1 && panel.x === 0, "Open phone sessions panel covers full width");
 	check(Math.abs(before.width - behind.width) < 1, "Opening sessions does not squeeze chat");
-	check(await page.$eval("main", e => e.inert), "Chat is inert beneath mobile navigation");
+	// P4 (round 17): the sessions page under the bar keeps the bar live; the
+	// lesson beneath it is inert.
+	check(await page.evaluate(() => !!document.querySelector("[data-file-path-input]")?.closest("[inert]")), "Chat is inert beneath mobile navigation");
 	check(await page.$eval(sidebar, e => e.contains(document.activeElement)), "Focus enters mobile navigation");
 	check(await page.evaluate(() => {
 		const list = document.querySelector('[data-testid="session-list"]');
@@ -155,7 +164,7 @@ try {
 	});
 	await page.locator('button[data-testid="open-sidebar"]').click();
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
-	await page.click('button[aria-label="Close sidebar"]');
+	await closeSessions(page);
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getBoundingClientRect().width === 0);
 	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "open-sidebar");
 	check(true, "Dismissing navigation restores focus to its opener");

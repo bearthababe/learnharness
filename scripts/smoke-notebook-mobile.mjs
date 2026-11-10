@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 
+/** P5 (round 17): phones open the notebook as a pane over the lesson. */
+export async function openNotebook(page) {
+	if (await page.$eval("#notebook-instruction", e => e.checkVisibility()).catch(() => false)) return;
+	await page.click('[aria-label="Open notebook"]');
+	await page.waitForSelector("#notebook-instruction", { visible: true });
+}
+
 export async function openNotebookMenu(page, section) {
+	await openNotebook(page);
 	const trigger = '[aria-label="Notebook options"]';
 	if (await page.$eval(trigger, e => e.getAttribute("aria-expanded") === "true")) await page.click(trigger);
 	await page.click(trigger);
@@ -12,10 +20,13 @@ export async function openNotebookMenu(page, section) {
 	}
 }
 
-/** Round 16 (R6/P3): with the notebook open, a phone shows one chat box at a
- *  time; the docked variant switches it with "Tutor | Notebook". */
+/** P5 (round 17): the phone notebook takes over the screen; the lesson's chat
+ *  box is the tutor's, reached by going back to the lesson (the notebook
+ *  closes; its drafts stay). */
 export async function useTutor(page) {
-	if (await page.$eval('[data-testid="nb-mode-tutor"]', e => e.checkVisibility()).catch(() => false)) await page.click('[data-testid="nb-mode-tutor"]');
+	if (!await page.$eval('[data-testid="notebook-pane-back"]', e => e.checkVisibility()).catch(() => false)) return;
+	await page.click('[data-testid="notebook-pane-back"]');
+	await page.waitForFunction(() => document.querySelector(".notebook-slot")?.hidden);
 }
 
 /** Combined real mobile UI + Notebook service in the disposable smoke app.
@@ -101,7 +112,8 @@ export async function verifyNotebookMobile(browser, origin) {
 	assert.equal(await page.$eval('.notebook-expression-number', e => getComputedStyle(e).fontSize), '13px');
 	await page.tap('[data-notebook-scroll] [aria-label="Select line 1"]');
 	assert.equal(await page.$eval('[data-notebook-scroll] [aria-label="Select expression 2 on line 1"]', e => e.getAttribute('aria-pressed')), 'false');
-	const mic = '.notebook-instruction-form [aria-label="Start dictation"]';
+	// P5 (round 17): the phone pane's big mic dictates into the instruction.
+	const mic = '[data-testid="notebook-pane-mic"][aria-label="Start dictation"]';
 	await page.click(mic);
 	await page.waitForFunction(() => notebookSmoke.sockets.length === 1 && notebookSmoke.worklet);
 	assert.equal(await page.$('[data-testid="composer"] [aria-label="Stop dictation"]'), null, "Tutor does not display another destination's recording controls");
@@ -112,13 +124,13 @@ export async function verifyNotebookMobile(browser, origin) {
 	assert.equal(await page.evaluate(() => notebookSmoke.closes), 0, "Browsing menus does not finalize the recording");
 	assert.equal(await page.$eval('.session-workspace', e => e.dataset.sessionDestination), "notebook");
 	await page.evaluate(() => { notebookSmoke.audio(); notebookSmoke.time = 14; notebookSmoke.final("Keep this unfinished instruction."); });
-	await page.click('.notebook-instruction-form [aria-label="Stop dictation"]');
+	await page.click('[data-testid="notebook-pane-mic"][aria-label="Stop dictation"]');
 	await page.waitForFunction(() => notebookSmoke.closes === 1);
 	await page.evaluate(() => notebookSmoke.end());
 	await page.waitForSelector(mic, { visible: true });
 	assert.equal(await page.$eval("#notebook-instruction", e => e.value), "Keep this unfinished instruction.");
 	assert.equal((await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json()).usage.calls, 1, "Stop does not Apply");
-	// Round 16 (R6/P3): the phone's one chat box — switch it to the Tutor first.
+	// P5 (round 17): back to the lesson, whose chat box is the tutor's.
 	await useTutor(page);
 	await page.click(tutor);
 	await page.waitForFunction(() => !document.querySelector(".session-workspace").inert && document.querySelector(".session-workspace").dataset.sessionDestination === "tutor");
@@ -143,12 +155,15 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.keyboard.press('Escape');
 	assert.deepEqual(await page.evaluate(() => notebookSmoke.sends), [], 'Editing review and Enter never send');
 	await openNotebookMenu(page);
+	// Opening the phone's notebook pane makes it the dictation destination; the
+	// menu's keyboard walk must not change that ownership.
+	const owner = await page.$eval('.session-workspace', e => e.dataset.sessionDestination);
 	await page.keyboard.press("Enter");
 	await page.keyboard.press("ArrowDown");
 	await page.keyboard.press("Enter");
 	await page.waitForSelector('[data-notebook-candidate]');
 	await page.keyboard.press("Escape");
-	assert.equal(await page.$eval('.session-workspace', e => e.dataset.sessionDestination), "tutor", "Menu keyboard navigation preserves Tutor ownership");
+	assert.equal(await page.$eval('.session-workspace', e => e.dataset.sessionDestination), owner, "Menu keyboard navigation preserves the input ownership");
 	assert.deepEqual(await page.evaluate(() => notebookSmoke.sends), [], "Menu Enter never submits Tutor");
 	assert.equal((await (await fetch(`${origin}/api/chats/mobile_other/notebook`)).json()).usage.calls, 1, "Menu Enter never Applies");
 	await page.reload({ waitUntil: "networkidle2" });
@@ -202,9 +217,8 @@ export async function verifyNotebookMobile(browser, origin) {
 	await page.waitForSelector('.notebook-notice summary');
 	await page.reload({ waitUntil: 'networkidle2' });
 	await page.waitForSelector('.notebook-notice summary');
-	// The phone split keeps its own close in the notebook toolbar (the
-	// composer's tool row steps aside while the notebook is open).
-	await page.click('[data-testid="notebook-close"]');
+	// P5 (round 17): the phone pane closes with "‹ Lesson" in its own bar.
+	await page.click('[data-testid="notebook-pane-back"]');
 	await page.waitForFunction(() => document.querySelector('.notebook-slot').hidden);
 	assert.ok(await page.$('[aria-label="Working attached"]'));
 	const readClose = () => fetch(`${origin}/api/chats/mobile_notebook_close/notebook`).then(response => response.json());
