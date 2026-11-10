@@ -3,7 +3,10 @@ import { CaptureRetiredError, type CaptureRecord, type DurableDraft, type Transf
 
 export type AttachmentReview = { pending: SharedWriting[]; pageAttachments: PageAttachments };
 type Dependencies = { device: TransferDevice; fetch: typeof fetch; encode: (raster: NonNullable<CaptureRecord["raster"]>) => Promise<Blob>; refresh: () => Promise<AttachmentReview>; reveal: (pageId: string) => void; changed: () => void };
-export type AttachPreparation = { pageId: string; head: PageAttachments[string] | undefined; valid: () => boolean; finish: () => Promise<boolean>; freeze: () => { source: NotebookSource; draft: DurableDraft; raster: NonNullable<CaptureRecord["raster"]> } };
+export type AttachPreparation = { pageId: string; head: PageAttachments[string] | undefined; valid: () => boolean; finish: () => Promise<boolean>; freeze: () => { source: NotebookSource; draft: DurableDraft; raster: NonNullable<CaptureRecord["raster"]> };
+	/** T6 (round 17): an area of the page — a new snapshot even when the page's
+	 *  working has not changed (it replaces the page's pending one). */
+	replace?: boolean };
 const LIMIT = 25 * 1024 * 1024;
 const noticeText = {
 	preparing: "Preparing snapshot…",
@@ -162,7 +165,7 @@ export class HandwritingAttachment {
 			if (source.journal.pageId !== pageId || frozen.draft.chatId !== this.chatId) throw new Error("Capture target changed");
 			const fingerprints = await handwritingFingerprints(source);
 			if (this.deleted) return;
-			if (preparation.head?.contentFingerprint === fingerprints.contentFingerprint) {
+			if (!preparation.replace && preparation.head?.contentFingerprint === fingerprints.contentFingerprint) {
 				await this.deps.device.saveDraft(this.chatId, this.generation, frozen.draft);
 				this.update(pageId, "unchanged");
 				if (!this.disposed && preparation.valid()) this.deps.reveal(pageId);

@@ -9,10 +9,9 @@ import { NotebookOpener } from "@/components/notebook-opener";
 import { useMarkSessionSeen } from "@/components/session-seen";
 import { FocusCornerButton, FocusModeButton, FocusModeExit, setFocusMode } from "@/components/focus-mode";
 import { useHeaderLook, useTryout } from "@/components/device-prefs";
-import { MovableSlot } from "@/components/movable-slot";
-import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
+import { usePhoneLayout, useStackedNotebook, useTouchLayout } from "@/components/use-phone-viewport";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
-import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
+import { useHandwritingSession } from "@/components/handwriting/session";
 import type { SharedWriting } from "@/src/core";
 
 import { createContext, Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -729,6 +728,7 @@ export function Chat({
 	const readingThinkingRef = useRef("");
 	const readingNow = useCallback(() => readingThinkingRef.current, []);
 	const phoneLayout = usePhoneLayout();
+	const stackedNotebook = useStackedNotebook();
 	// P5 (round 17, phones): the equation notebook takes over the screen like
 	// the thinking pane — the big mic bar, the keyboard button and Peek; the
 	// lesson's chat box is the tutor's again (the one-box switch is gone).
@@ -2371,6 +2371,7 @@ export function Chat({
 					pricing={pricing}
 					notebookToggle={null}
 					onReserve={setDockReserve}
+					flow={handwriting.open && !handwriting.expanded && stackedNotebook}
 					dictationSlot={<DictationBar dictation={dictation} />}
 					dictation={tutorDictation}
 					dictationCancel={dictation.cancel}
@@ -2478,7 +2479,6 @@ export function Chat({
 				</>}
 			</div>
 			</div>
-			{handwriting.mounted && <HandwritingSplit hidden={!handwriting.open} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
 			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded}
 				origin={pending ? "question" : activeProblem ? (practiceMode === "drill" ? "drill" : "practice") : "lesson"} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
 		</div>
@@ -2616,6 +2616,7 @@ export function shouldStampGeometryMute(nextH: number, prevH: number, pending: b
 }
 
 function DockOverlay({
+	flow = false,
 	notebook,
 	notebookToggle,
 	fullQuestionWidth = false,
@@ -2705,6 +2706,9 @@ function DockOverlay({
 	/** Reports the dock's settled height (block + gradient) — ChatView's
 	 *  dockReserve state feeds the transcript's spacer from it. */
 	onReserve: (h: number) => void;
+	/** T4 (round 17): the writing card sits under the lesson — what is not
+	 *  being answered belongs to the lesson and scrolls with it. */
+	flow?: boolean;
 	/** The plan marginalia's content (the bare diagram) — rendered only
 	 *  while a question owns the band. Null until a plan exists. */
 	plan?: React.ReactNode;
@@ -2724,6 +2728,7 @@ function DockOverlay({
 	 *  home and /chat/new carry, above the composer while slots are unset. */
 	setupCta?: React.ReactNode;
 }) {
+	const dockPhone = usePhoneLayout();
 	const { isAtBottom, scrollToBottom, scrollRef, stopScroll } = useStickToBottomContext();
 	const wideQuestion = fullQuestionWidth && (!!pending || !!practice);
 	// Render-fresh bottom state (flicker round): the arrival block below reads
@@ -3175,8 +3180,34 @@ function DockOverlay({
 	});
 
 	const questionOpen = !!pending && expanded && !revealPending;
+	// S4 (round 17, try-out on phones): the open question, or the practice
+	// problem, as one inset card with a filled main action.
+	const cardLayout = useTryout("cardLayout") === "card" && dockPhone;
+	// T4: an open question (or an opened problem) is the task and rides with
+	// the writing card; otherwise the dock belongs to the lesson: it sits on
+	// the lesson's end (the spacer reserved for it) and scrolls with it.
+	const inFlow = flow && !questionOpen && !(practice && expanded);
+	useLayoutEffect(() => {
+		const overlay = overlayRef.current, scroller = scrollRef.current;
+		if (!overlay) return;
+		if (!inFlow || !scroller) { delete overlay.dataset.flow; overlay.style.removeProperty("top"); overlay.style.removeProperty("bottom"); return; }
+		overlay.dataset.flow = "";
+		const spacer = scroller.querySelector<HTMLElement>('[data-testid="dock-spacer"]');
+		const place = () => {
+			const host = overlay.offsetParent as HTMLElement | null;
+			if (!spacer || !host) return;
+			overlay.style.top = `${Math.round(spacer.getBoundingClientRect().top - host.getBoundingClientRect().top)}px`;
+			overlay.style.bottom = "auto";
+		};
+		place();
+		scroller.addEventListener("scroll", place, { passive: true });
+		const observer = new ResizeObserver(place);
+		observer.observe(scroller); if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
+		return () => { scroller.removeEventListener("scroll", place); observer.disconnect(); delete overlay.dataset.flow; overlay.style.removeProperty("top"); overlay.style.removeProperty("bottom"); };
+	}, [inFlow, scrollRef]);
 	return (
 		<div ref={overlayRef} className="lh-dock-overlay pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }} data-question-open={questionOpen || undefined}
+			data-layout={cardLayout ? "card" : undefined}
 			data-dock-kind={pending ? "question" : practice ? "practice" : "composer"}>
 			{/* Phones (owner P7): an open question owns the lesson area below the
 			    page bar — the CSS keys on data-question-open; "Back to lesson", first there,

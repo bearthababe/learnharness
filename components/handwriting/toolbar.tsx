@@ -206,6 +206,9 @@ export function HandwritingToolbar(p: Props) {
 				<GripHorizontalIcon aria-hidden size={18} />
 			</button>}
 			{variant === "wheel" && gripHint && !isFolded && <p className="hw-gripHint" role="status" data-testid="wheel-grip-hint">Drag the handle to move the wheel to any corner or side</p>}
+			{/* T7 (round 17): folding the wheel back is on the wheel itself, labelled. */}
+			{variant === "wheel" && !isFolded && <button type="button" className="hw-iconButton hw-wheelFold" data-testid="fold-wheel" aria-label="Fold the wheel to the small puck" title="Fold the wheel" disabled={p.disabled}
+				{...p.handlers("Fold the wheel", () => fold(true))}><Minimize2Icon aria-hidden size={18} /><span className="hw-ringLabel" aria-hidden="true">Fold</span></button>}
 			<div className="hw-arcUndo"><button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled || !p.canUndo} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} />{variant === "wheel" && <span className="hw-ringLabel" aria-hidden="true">Undo</span>}</button><button type="button" className="hw-iconButton" aria-label="Redo" title="Redo" disabled={p.disabled || !p.canRedo} {...p.handlers("Redo", p.redo)}><Redo2Icon size={19} />{variant === "wheel" && <span className="hw-ringLabel" aria-hidden="true">Redo</span>}</button></div>
 			{expanded && <div className="hw-arcInspector">
 				<div className="hw-inspectorTitle"><span>{label}</span><button type="button" aria-label="Close tool settings" {...p.handlers("Close tool settings", () => setExpanded(false))}><XIcon size={16} /></button></div>
@@ -218,7 +221,6 @@ export function HandwritingToolbar(p: Props) {
 				{p.tool === "pen" && <><div className="hw-sectionLabel">Ink</div><div role="group" aria-label="Pen colour" className="hw-colours">{p.colours.map(item => <button key={item.name} type="button" className="hw-colourChoice" aria-label={`${item.name} pen`} aria-pressed={p.colour === item.value} disabled={p.disabled}
 					{...p.handlers(`${item.name} pen`, () => { p.selectColour(item.value); setExpanded(false); })}><span style={{ backgroundColor: item.value, filter: p.dimPaper ? "var(--lh-dim-paper-filter)" : undefined }} /></button>)}</div></>}
 				{variant !== "wheel" && <p>Tap the active tool to adjust.</p>}
-				{variant === "wheel" && <button type="button" className="hw-foldWheel" data-testid="fold-wheel" {...p.handlers("Fold the wheel", () => fold(true))}><Minimize2Icon aria-hidden size={16} /><span>Back to the small puck</span></button>}
 			</div>}
 		</div>
 	</div>;

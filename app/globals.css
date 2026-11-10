@@ -5031,7 +5031,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
    same spot holds only the bare icon that leaves it — no frame, no label,
    and no lane: the lesson keeps its full width (the icon may sometimes sit
    over a line, which the owner accepts). */
-.lh-focus-corner { display: none; }
+:root .lh-topbar > .lh-focus-corner { display: none; }
 @media (max-width: 767px) {
 	:root .lh-topbar > .lh-title-block { min-height: 32px; }
 	:root .lh-topbar > .lh-focus-corner { display: inline-flex; flex: none; width: 48px; min-width: 48px; padding: 0; }
@@ -5503,3 +5503,121 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	.lh-sessions-panel[data-sessions-page="header"] .lh-sessions-back svg { width: 20px; height: 20px; }
 	.lh-sessions-panel[data-sessions-page="header"] .lh-sessions-close { display: none; }
 }
+
+/* S4 (try-out, phones): the open question as one card. It fills the area
+   under the bar; its content scrolls inside it and Submit — filled, full
+   width, the mic before it — stays reachable at its foot; "Back to lesson"
+   is the quiet text action under it. Answers are big full-width cards;
+   the chosen one has the accent outline and a light tint. */
+@media (max-width: 767px) {
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] { overflow: hidden; padding: 0 12px; }
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] > .lh-question-back {
+		order: 99; position: static; justify-content: center; margin: 0; padding: 2px 8px calc(6px + env(safe-area-inset-bottom, 0px)); border: 0; background: transparent;
+	}
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] > .lh-question-back button { color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); }
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] > .lh-question-back svg { display: none; }
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] .lh-dock-block { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding-bottom: 4px; background: transparent; }
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] .lh-dock-block > div,
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] [data-dock-viewport],
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] [data-tutor-draft-inputs] { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; padding-inline: 0; }
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] [data-attachment-composer] {
+		flex: 1 1 auto; min-height: 0; margin-top: 10px; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior: contain;
+		border-radius: 24px; background: var(--card); box-shadow: 0 10px 30px rgb(0 0 0 / .28);
+	}
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] .lh-eyebrow { padding-top: 8px; font-size: 12.5px; letter-spacing: .08em; }
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] .lh-question-text { font-size: 21px; line-height: 1.3; font-weight: 650; }
+	:root .lh-dock-overlay[data-layout="card"] .lh-option { min-height: 56px; align-items: center; padding: 14px 16px; border-radius: 16px; font-size: 16.5px; }
+	:root .lh-dock-overlay[data-layout="card"] .lh-option[aria-checked="true"] { border-color: var(--primary); background: color-mix(in oklab, var(--primary) 14%, var(--card)); }
+	:root .lh-dock-overlay[data-layout="card"] .lh-question-submit {
+		position: sticky; bottom: 0; z-index: 1; gap: 10px; padding: 10px 0 6px; background: var(--card);
+	}
+	:root .lh-dock-overlay[data-layout="card"] .lh-question-submit > .lh-mic-slot { margin: 0; }
+	:root .lh-dock-overlay[data-layout="card"] .lh-question-submit > button:is([data-testid="question-send"], [data-testid="practice-send"]) {
+		flex: 1 1 auto; height: 52px; min-height: 52px; margin: 0 !important; border-radius: 999px; font-size: 16.5px; font-weight: 650;
+	}
+	/* The practice problem (a dock, not the whole screen) as the same card. */
+	:root .lh-dock-overlay[data-dock-kind="practice"][data-layout="card"] [data-attachment-composer] { border-radius: 24px; box-shadow: 0 10px 30px rgb(0 0 0 / .28); }
+	:root .lh-dock-overlay[data-dock-kind="practice"][data-layout="card"] [data-testid="practice-dock"] .lh-prose { font-size: 18.5px; line-height: 1.35; font-weight: 600; }
+}
+@media (max-width: 767px) {
+	/* The main action pins to the card's foot over all of its content. */
+	:root .lh-dock-overlay[data-layout="card"] :is(.lh-question-form, .lh-question-input) { display: contents; }
+	:root .lh-dock-overlay[data-layout="card"] .lh-question-input > .lh-input-label { padding: 6px 16px 4px; }
+	:root .lh-dock-overlay[data-layout="card"] .lh-question-input > .lh-compact-field { margin: 0 12px; }
+	:root .lh-dock-overlay[data-layout="card"] .lh-question-submit { margin: 0; padding-inline: 12px; }
+}
+
+/* T1 (round 17, tablets and laptops): the thinking row like the phone
+   pane's controls — the field, then (touch) the keyboard button and the
+   big mic; no Back and no second Show question. */
+.lh-reading-row { display: flex; align-items: flex-end; gap: 8px; }
+.lh-reading-row > .lh-compact-field { flex: 1 1 auto; min-width: 0; }
+.lh-reading-row > .lh-pane-keyboard { min-height: 48px; min-width: 56px; }
+.lh-reading-row > .lh-mic-slot .lh-mic-button { width: 48px; height: 48px; }
+.lh-reading-row > .lh-mic-slot .lh-mic-button svg { width: 24px; height: 24px; }
+
+/* ---- T2/T3 (round 17, tablets): the notebook card ---- */
+/* The card's own handle: a band across its top (a 44px target, reaching
+   into the gap above the card), or a strip down its left side when the
+   card sits beside the lesson. No separate divider. */
+.hw-cardHandle { position: relative; display: grid; flex: none; place-items: center; height: 32px; touch-action: none; cursor: ns-resize; user-select: none; -webkit-user-select: none; }
+.hw-cardHandle::before { content: ""; position: absolute; inset: -12px 0 0; }
+.hw-cardHandle > span { width: 44px; height: 5px; border-radius: 999px; background: var(--muted-foreground); opacity: .6; }
+.hw-cardHandle:focus-visible { outline: 2px solid var(--primary); outline-offset: -4px; border-radius: 12px; }
+.hw-cardHandle[data-wide] { position: absolute; top: 0; bottom: 0; left: 0; z-index: 7; width: 24px; height: auto; cursor: ew-resize; }
+.hw-cardHandle[data-wide]::before { inset: 0 0 0 -20px; }
+.hw-cardHandle[data-wide] > span { width: 5px; height: 44px; }
+:root .hw-notebook:has(> .hw-cardHandle[data-wide]) { padding-left: 24px; }
+/* T3: margins round the page; the page controls under the paper, always in
+   view; notices and the pen hint over the paper, never over the controls. */
+:root .hw-paperStack { margin: 16px auto; }
+:root .hw-paperScroll, :root .hw-paper { touch-action: pan-x pan-y; }
+:root .hw-pageFooter { flex: none; padding: 4px 8px; border-top: 1px solid var(--border); background: var(--card); }
+.hw-noticeStack { position: absolute; top: 8px; inset-inline: 8px; z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+.hw-noticeStack > .hw-notice { position: static; pointer-events: auto; max-width: 100%; }
+.hw-zoom { display: inline-flex; align-items: center; }
+:root .hw-zoom .hw-headerAction { min-width: 44px; height: 44px; padding-inline: 8px; justify-content: center; }
+:root .hw-zoom .hw-zoomValue { min-width: 56px; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+/* T4: the dock as part of the lesson (the writing card under it, nothing
+   being answered): on the lesson's end, scrolling with it. */
+.lh-dock-overlay[data-flow] .lh-dock-fade { display: none; }
+.lh-dock-overlay[data-flow] .lh-dock-block { background: transparent; }
+/* T6 (round 17): Attach names what it attaches to; a menu offers the
+   whole page or an area of it. */
+.hw-attachChevron { width: 14px !important; height: 14px !important; opacity: .7; }
+:root .hw-attachPanel { width: min(340px, calc(100% - 16px)); padding: 10px; }
+.hw-attachFor { margin: 2px 6px 8px !important; color: var(--muted-foreground); font-size: 13.5px; line-height: 1.4; }
+:root .hw-attachPanel .hw-optionRow { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 8px; border-radius: 10px; text-align: left; }
+:root .hw-attachPanel .hw-optionRow:hover { background: var(--accent); }
+.hw-attachPanel .hw-optionRow svg { width: 18px; height: 18px; flex: none; color: var(--muted-foreground); }
+.hw-attachPanel .hw-optionHint { margin-left: auto; color: var(--muted-foreground); font-size: 12.5px; }
+.hw-areaSelect { position: absolute; inset: 0; z-index: 3; overflow: hidden; cursor: crosshair; touch-action: none; background: rgb(0 0 0 / .08); }
+.hw-areaBox { position: absolute; border: 2px dashed var(--primary); background: color-mix(in oklab, var(--primary) 10%, transparent); box-shadow: 0 0 0 9999px rgb(0 0 0 / .28); pointer-events: none; }
+:root .hw-areaBar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
+:root .hw-areaBar > span { flex: 1 1 12rem; }
+:root .hw-areaBar button { border-radius: 999px; border: 1px solid var(--border); font-weight: 600; }
+:root .hw-areaBar .hw-areaAttach { border-color: color-mix(in oklab, var(--primary) 55%, var(--border)); color: color-mix(in oklab, var(--primary) 75%, var(--foreground)); }
+:root .hw-areaBar .hw-areaAttach:disabled { opacity: .45; }
+/* T7 (round 17): the opened wheel — six evenly spaced 64px places round the
+   hub (Pen, Redo, Undo, Fold, Eraser, Highlight), labels that fit inside
+   their buttons, and Fold on the wheel itself. */
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) { width: 236px; height: 236px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-toolButton,
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-arcUndo > .hw-iconButton,
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-wheelFold { position: absolute; width: 64px; height: 64px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-arc_pen { left: 86px; top: 0; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-arcUndo > .hw-iconButton:last-child { left: 160px; top: 43px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-arcUndo > .hw-iconButton:first-child { left: 160px; top: 129px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-wheelFold { left: 86px; top: 172px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-arc_eraser { left: 12px; top: 129px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-arc_highlighter { left: 12px; top: 43px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) .hw-wheelHub { left: 86px; top: 86px; width: 64px; height: 64px; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) .hw-ringLabel { font-size: 12.5px; line-height: 1.1; letter-spacing: 0; }
+.hw-overlay .hw-wheelFold { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; pointer-events: auto; border-radius: 999px; color: var(--foreground); border: 1px dashed var(--tool-edge); }
+.hw-overlay .hw-wheelFold:hover { background: var(--accent); }
+/* The opened wheel's settings card clears the larger wheel. */
+:root .hw-overlay[data-variant="wheel"] .hw-arcInspector { right: 248px; }
+:root .hw-notebook[data-tools-side="left"] .hw-overlay[data-variant="wheel"] .hw-arcInspector { left: 248px; right: auto; }
+:root:root .hw-notebook .hw-overlay[data-spot="middle-right"] .hw-arcInspector { right: 248px; }
+:root:root .hw-notebook .hw-overlay[data-spot="middle-left"] .hw-arcInspector { left: 248px; }
+:root:root .hw-notebook .hw-overlay[data-spot^="bottom-"] .hw-arcInspector { bottom: 276px; }

@@ -43,6 +43,15 @@ function subscribeTouchLayout(update: () => void) {
 export function useTouchLayout() {
 	return useSyncExternalStore(subscribeTouchLayout, () => window.matchMedia?.(TOUCH_MEDIA).matches ?? false, () => false);
 }
+/** T4 (round 17): the writing card sits under the lesson (not beside it)
+ *  below 980px — the handwriting workspace's own breakpoint. */
+export function useStackedNotebook() {
+	return useSyncExternalStore((update) => {
+		const media = window.matchMedia?.("(min-width: 768px) and (max-width: 979px)");
+		media?.addEventListener("change", update);
+		return () => media?.removeEventListener("change", update);
+	}, () => window.matchMedia?.("(min-width: 768px) and (max-width: 979px)").matches ?? false, () => false);
+}
 /** A touch screen (an on-screen keyboard is possible). */
 export function useCoarsePointer() {
 	return useSyncExternalStore((update) => {

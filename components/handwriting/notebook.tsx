@@ -2,9 +2,9 @@
 
 /** Accepted canvas/layout from c663dcecd22a, isolated from session/model state.
  * Only completed strokes touch recovery. No React/storage work on movement. */
-import { useCallback, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref, type RefObject, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeftIcon, ChevronRightIcon, FilesIcon, Maximize2Icon, Minimize2Icon, MoreHorizontalIcon, PaperclipIcon, PlusIcon, XIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, FilesIcon, Maximize2Icon, Minimize2Icon, MinusIcon, MoreHorizontalIcon, PaperclipIcon, PlusIcon, SquareDashedIcon, XIcon } from "lucide-react";
 import { useSidebar } from "@/components/sidebar";
 import { HandwritingPages, type PagesState } from "./pages";
 import { handwritingPagesDevice } from "./pages-device";
@@ -19,7 +19,7 @@ import { HandwritingSubmissionContext } from "./submission";
 import { dictationCheckpoint, finishDictation } from "../dictation";
 import { useMenuEscape } from "../menu-escape";
 import { useOneMenu } from "../one-menu";
-import { paint, HIGHLIGHT_OPACITY, freezeHandwritingRaster } from "./render";
+import { paint, HIGHLIGHT_OPACITY, freezeHandwritingArea, freezeHandwritingRaster } from "./render";
 import { ConceptsSetup } from "../shared-writing";
 
 const { width: WIDTH, height: HEIGHT } = HANDWRITING_PAGE;
@@ -106,15 +106,27 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const [colour, setColour] = useState<Stroke["colour"]>(HANDWRITING_PEN_COLOURS[0]);
 	const [penScale, setPenScale] = useState<Stroke["penScale"]>(HANDWRITING_PEN_SCALES[1]), [eraserWidth, setEraserWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]), [highlighterWidth, setHighlighterWidth] = useState<Stroke["width"]>(HANDWRITING_BROAD_WIDTHS[1]);
 	const [dimPaper, setDimPaper] = useState(true), [toolsOpen, setToolsOpen] = useState(false), [conceptsOpen, setConceptsOpen] = useState(false);
-	useMenuEscape(hidden ? null : pagesOpen ? "pages" : optionsOpen ? "options" : toolsOpen ? "tools" : conceptsOpen ? "concepts" : null, () => {
-		const trigger = pagesOpen ? "Pages" : "Notebook options";
-		setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false);
+	// T6: the Attach menu (whole page, or an area) and the area being drawn.
+	const [attachOpen, setAttachOpen] = useState(false);
+	const [selecting, setSelecting] = useState(false), [area, setArea] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+	const areaDrag = useRef<{ id: number; x: number; y: number } | null>(null);
+	useMenuEscape(hidden ? null : pagesOpen ? "pages" : optionsOpen ? "options" : toolsOpen ? "tools" : conceptsOpen ? "concepts" : attachOpen ? "attach" : selecting ? "select-area" : null, () => {
+		const trigger = pagesOpen ? "Pages" : attachOpen || selecting ? "Attach" : "Notebook options";
+		setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); setAttachOpen(false); setSelecting(false); setArea(null);
 		controlsRef.current?.querySelector<HTMLButtonElement>(`[aria-label="${trigger}"]`)?.focus();
 	});
 	// One menu open at a time, app-wide (round 11): a notebook panel closes
 	// when Settings, a model menu or Extract files opens, and vice versa.
-	useOneMenu("handwriting-panel", !hidden && (pagesOpen || optionsOpen || toolsOpen || conceptsOpen), () => { setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); });
-	const [paperSize, setPaperSize] = useState({ width: 1, height: 1 });
+	useOneMenu("handwriting-panel", !hidden && (pagesOpen || optionsOpen || toolsOpen || conceptsOpen || attachOpen), () => { setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); setAttachOpen(false); });
+	// T3 (round 17): one fixed paper size. Its base is the size at which the
+	// whole page fits the expanded notebook; the card beside the lesson shows
+	// part of the same page at the same size, so moving the card never
+	// resizes the paper. Only zoom changes it — pinch, or − / reset / + —
+	// and strokes are in page units, so the pen's width follows the zoom.
+	const [baseWidth, setBaseWidth] = useState(1);
+	const [zoom, setZoomState] = useState(() => readZoom());
+	const setZoom = useCallback((next: number) => { const value = clampZoom(next); setZoomState(value); try { localStorage.setItem(ZOOM_KEY, String(value)); } catch { /* this view only */ } }, []);
+	const paperSize = { width: baseWidth * zoom, height: baseWidth * zoom * HEIGHT / WIDTH };
 	const viewRef = useRef({ expanded, paperSize }); viewRef.current = { expanded, paperSize };
 	const paperPositions = useRef<{ split: number; full?: number }>({ split: 0 }), restorePaperPosition = useRef<number | null>(null);
 	const mergeHighlight = useCallback((context: CanvasRenderingContext2D) => {
@@ -192,22 +204,32 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		const unregister = submissionRef.current?.registerNotebook({ canUpdate: () => !active.current, reveal: pageId => { if (recovery.current?.getSnapshot().working.pageId !== pageId) return; if (active.current) reviewDeferred.current = true; else callbacks.current.onReview(); } });
 		return () => { unregister?.(); for (const resolve of strokeWaiters.current.splice(0)) resolve(); };
 	}, [chatId]);
-	async function attachSnapshot() {
+	// T6 (round 17): Attach says what it attaches to, and says why when it
+	// cannot attach — never a tap that does nothing.
+	const [attachNote, setAttachNote] = useState("");
+	useEffect(() => { if (!attachNote) return; const timer = window.setTimeout(() => setAttachNote(""), 6000); return () => window.clearTimeout(timer); }, [attachNote]);
+	async function attachSnapshot(area?: { x: number; y: number; width: number; height: number }) {
 		const working = recovery.current, transfer = submissionRef.current, uploader = transfer?.attachment();
-		if (!working?.getSnapshot().ready || decoding.current || active.current || !transfer?.ready || !uploader || !transfer.claim()) return;
+		if (!working?.getSnapshot().ready || decoding.current || !transfer?.ready || !uploader) { setAttachNote("The notebook is still opening. Try again in a moment."); return; }
+		if (active.current || transfer.isPreparing() || transfer.blocked()) { setAttachNote("Wait a moment: the last change is still being saved."); return; }
+		if (!transfer.activeField()) { setAttachNote("There is nothing to attach to right now. Open the question, or write a message to the tutor."); return; }
+		const content = replayHandwriting(working.getSnapshot().working);
+		if (!content.strokes.length && !content.background) { setAttachNote("This page is empty. Write something first."); return; }
+		if (!transfer.claim()) { setAttachNote("Wait a moment: the last change is still being saved."); return; }
+		setAttachNote("");
 		const field = transfer.activeField(), pageId = normalizeHandwriting(working.getSnapshot().working).pageId, validSpeech = dictationCheckpoint();
 		const valid = () => recovery.current === working && normalizeHandwriting(working.getSnapshot().working).pageId === pageId && transfer.activeField() === field && !!field && validSpeech();
 		try {
-			if (uploader.hasCapture(pageId)) { await uploader.retry(pageId); return; }
+			if (uploader.hasCapture(pageId) && !area) { await uploader.retry(pageId); return; }
 			const observed = await callbacks.current.review();
 			if (!valid()) return;
-			await uploader.attach({ pageId, head: observed.pageAttachments[pageId], valid, finish: async () => {
+			await uploader.attach({ pageId, head: observed.pageAttachments[pageId], valid, replace: !!area, finish: async () => {
 				await finishDictation();
 				if (active.current) await new Promise<void>(resolve => strokeWaiters.current.push(resolve));
 				return valid() && working.getSnapshot().ready && !decoding.current;
 			}, freeze: () => {
 				if (!valid() || active.current) throw new Error("Capture target changed");
-				const source = structuredClone(notebookSource(working.getSnapshot().working)), draft = transfer.checkpoint(field!.targetKey), raster = freezeHandwritingRaster(backgroundRef.current!, canvasRef.current!);
+				const source = structuredClone(notebookSource(working.getSnapshot().working)), draft = transfer.checkpoint(field!.targetKey), raster = area ? freezeHandwritingArea(backgroundRef.current!, canvasRef.current!, area) : freezeHandwritingRaster(backgroundRef.current!, canvasRef.current!);
 				transfer.release();
 				return { source, draft, raster };
 			} });
@@ -227,17 +249,51 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		return () => { observer.disconnect(); window.removeEventListener("resize", fit); window.removeEventListener("scroll", fit); viewport?.removeEventListener("resize", fit); viewport?.removeEventListener("scroll", fit); };
 	}, [expanded, hidden]);
 	useEffect(() => {
-		redraw(); const area = areaRef.current!;
-		const observer = new ResizeObserver(() => { if (area.clientWidth && area.clientHeight) { const width = paperWidthFor(area, viewRef.current.expanded); setPaperSize({ width, height: width * HEIGHT / WIDTH }); } });
-		observer.observe(area); return () => observer.disconnect();
+		redraw();
+		const layout = slotRef.current?.parentElement;
+		if (!layout) return;
+		const measure = () => { const width = fittedPaperWidth(layout); if (width > 1) setBaseWidth(prior => Math.abs(prior - width) < 1 ? prior : width); };
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(layout); return () => observer.disconnect();
 	}, [redraw]);
-	// The view changes size without the area resizing (expanded ↔ split).
+	// Pinch to zoom (two fingers on the paper); the point between the fingers
+	// stays where it is. One finger still scrolls, and the pen still writes.
 	useEffect(() => {
-		const area = areaRef.current;
-		if (!area || !area.clientWidth || !area.clientHeight) return;
-		const width = paperWidthFor(area, expanded);
-		setPaperSize(prior => Math.abs(prior.width - width) < 1 ? prior : { width, height: width * HEIGHT / WIDTH });
-	}, [expanded]);
+		const area = areaRef.current; if (!area) return;
+		const touches = new Map<number, { x: number; y: number }>();
+		let pinch: { distance: number; zoom: number } | null = null;
+		const spread = () => { const [a, b] = [...touches.values()]; return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0; };
+		const down = (event: PointerEvent) => {
+			if (event.pointerType !== "touch") return;
+			touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+			if (touches.size === 2) pinch = { distance: spread(), zoom: zoomRef.current };
+		};
+		const move = (event: PointerEvent) => {
+			if (!touches.has(event.pointerId)) return;
+			touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+			if (!pinch || touches.size !== 2 || pinch.distance < 10) return;
+			event.preventDefault();
+			const [a, b] = [...touches.values()];
+			zoomAround(pinch.zoom * spread() / pinch.distance, (a!.x + b!.x) / 2, (a!.y + b!.y) / 2);
+		};
+		const up = (event: PointerEvent) => { touches.delete(event.pointerId); if (touches.size < 2) pinch = null; };
+		area.addEventListener("pointerdown", down); area.addEventListener("pointermove", move, { passive: false });
+		area.addEventListener("pointerup", up); area.addEventListener("pointercancel", up);
+		return () => { area.removeEventListener("pointerdown", down); area.removeEventListener("pointermove", move); area.removeEventListener("pointerup", up); area.removeEventListener("pointercancel", up); };
+	}, []);
+	const zoomRef = useRef(zoom); zoomRef.current = zoom;
+	/** Zoom, keeping the paper under (x, y) — or the view's centre — in place. */
+	function zoomAround(next: number, x?: number, y?: number) {
+		const area = areaRef.current, value = clampZoom(next);
+		if (!area || value === zoomRef.current) return;
+		const box = area.getBoundingClientRect();
+		const fx = (x ?? box.left + box.width / 2) - box.left, fy = (y ?? box.top + box.height / 2) - box.top;
+		const ratio = value / zoomRef.current;
+		const left = (area.scrollLeft + fx) * ratio - fx, top = (area.scrollTop + fy) * ratio - fy;
+		zoomRef.current = value; setZoom(value);
+		requestAnimationFrame(() => { area.scrollLeft = Math.max(0, left); area.scrollTop = Math.max(0, top); });
+	}
 	function prepareViewChange(nextExpanded: boolean) {
 		const position = (areaRef.current?.scrollTop ?? 0) / paperSize.height;
 		paperPositions.current[expanded ? "full" : "split"] = position;
@@ -246,9 +302,9 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	}
 	useLayoutEffect(() => {
 		const area = areaRef.current;
-		if (!area || restorePaperPosition.current === null || Math.abs(paperSize.width - paperWidthFor(area, expanded)) > 1) return;
+		if (!area || restorePaperPosition.current === null) return;
 		area.scrollTop = restorePaperPosition.current * paperSize.height; restorePaperPosition.current = null;
-	}, [expanded, paperSize]);
+	}, [expanded, paperSize.height]);
 	useEffect(() => {
 		const canvas = canvasRef.current!, controls = controlsRef.current!;
 		const claimCanvas = (event: TouchEvent) => {
@@ -323,6 +379,10 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		};
 	}
 	const sizes = tool === "pen" ? PEN_SIZES : BROAD_SIZES, currentSize = tool === "pen" ? penScale : tool === "eraser" ? eraserWidth : highlighterWidth;
+	// What Attach attaches to (T6), named after the field that would take it.
+	const targetKey = submission?.activeField()?.targetKey ?? "";
+	const attachTarget = targetKey.startsWith("question:") ? "your answer" : targetKey.startsWith("problem:") ? "your working" : targetKey === "composer" ? "your next message" : "your answer or message";
+	const attachShort = targetKey.startsWith("question:") ? "answer" : targetKey.startsWith("problem:") ? "working" : "message";
 	return <div ref={slotRef} className="hw-notebookSlot" hidden={hidden} data-testid="notebook-slot" data-layout-revision="component-sized-card"
 		style={{ position: expanded ? "absolute" : "relative", inset: expanded ? 0 : undefined, flex: "1 1 0px", minWidth: 0, minHeight: 0, boxSizing: "border-box", padding: 16, overflow: "hidden" }}>
 		<aside ref={controlsRef} className="rounded-2xl border bg-card shadow-lg hw-notebook" aria-label="Handwriting notebook" data-testid="handwriting-notebook" data-ready={saved.ready} data-page-id={pageId} data-expanded={expanded} data-tools-side={toolsLeft ? "left" : "right"}
@@ -330,14 +390,28 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 			{/* One order in the side-by-side and the expanded view (round 14,
 			    T5): the notebook's own controls, its primary action, then the
 			    view controls with Close at the far right. */}
+			{/* T2 (round 17): the card's own handle — slide it up or down; there is
+			    no separate divider. The size is remembered. */}
+			{!expanded && <CardHandle slotRef={slotRef} canResize={() => !active.current && !recovery.current?.getSnapshot().busy && !submissionRef.current?.isPreparing()} />}
 			<header className="hw-notebookHeader"><h2>Notebook</h2>
 				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Pages" aria-expanded={pagesOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Pages", () => { setPagesOpen(value => !value); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); void recovery.current?.refreshPages().catch(() => {}); })}><FilesIcon aria-hidden />Pages</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Notebook options" aria-expanded={optionsOpen} {...handlers("Notebook options", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); setConceptsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction" disabled={!saved.ready || submission?.preparing} {...handlers("Attach snapshot", () => { void attachSnapshot(); })} data-testid="notebook-attach"><PaperclipIcon aria-hidden />Attach page</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label={`Attach to ${attachTarget}`} aria-expanded={attachOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Attach", () => { setAttachOpen(open => !open); setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); })} data-testid="notebook-attach"><PaperclipIcon aria-hidden />Attach to {attachShort}<ChevronDownIcon aria-hidden className="hw-attachChevron" /></Button>
+				{/* T3: zoom is the only thing that changes the paper's size. */}
+				<span className="hw-zoom" role="group" aria-label="Zoom">
+					<Button variant="ghost" size="sm" className="hw-headerAction hw-zoomButton" aria-label="Zoom out" disabled={zoom <= ZOOMS.min} {...handlers("Zoom out", () => zoomAround(zoom / 1.25))} data-testid="notebook-zoom-out"><MinusIcon aria-hidden /></Button>
+					<Button variant="ghost" size="sm" className="hw-headerAction hw-zoomValue" aria-label={`Zoom ${Math.round(zoom * 100)}%: reset to 100%`} {...handlers("Reset zoom", () => zoomAround(1))} data-testid="notebook-zoom-reset">{Math.round(zoom * 100)}%</Button>
+					<Button variant="ghost" size="sm" className="hw-headerAction hw-zoomButton" aria-label="Zoom in" disabled={zoom >= ZOOMS.max} {...handlers("Zoom in", () => zoomAround(zoom * 1.25))} data-testid="notebook-zoom-in"><PlusIcon aria-hidden /></Button>
+				</span>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? `Show ${origin} too` : "Expand notebook"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? `Show ${origin} too` : "Expand"}</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close notebook" {...handlers("Close writing", () => { if (expanded) prepareViewChange(false); onClose(); })}><XIcon aria-hidden />Close</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" {...handlers("Chat", onClose)} data-testid="open-notebook-chat">Chat</Button>
 			</header>
+			{attachOpen && <div className="hw-toolsPanel hw-attachPanel" role="menu" aria-label={`Attach to ${attachTarget}`} data-testid="notebook-attach-menu">
+				<p className="hw-attachFor">Goes with {attachTarget}. You can review it and take it out before sending.</p>
+				<button type="button" role="menuitem" className="hw-optionRow" {...handlers("Attach whole page", () => { setAttachOpen(false); void attachSnapshot(); })} data-testid="notebook-attach-page"><PaperclipIcon aria-hidden /><span className="hw-optionLabel">Whole page</span></button>
+				<button type="button" role="menuitem" className="hw-optionRow" {...handlers("Select an area", () => { setAttachOpen(false); setArea(null); setSelecting(true); })} data-testid="notebook-attach-area"><SquareDashedIcon aria-hidden /><span className="hw-optionLabel">Select an area</span><span className="hw-optionHint">Draw a box round what to send</span></button>
+			</div>}
 			{optionsOpen && <div className="hw-toolsPanel hw-optionsPanel" data-testid="notebook-options">
 				{/* The page's own actions live here (round 14, T3): there is no
 				    separate Page button on the paper any more. */}
@@ -378,27 +452,56 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				<button type="button" className="min-h-11 underline" {...handlers("Reload preview", () => location.reload())}>Reload preview</button>
 				<p>Reload keeps your notebook, Undo and Redo, attached snapshots and explanation saved at Attach.</p>
 			</div>}
-			{flattened && <p className="hw-notice">Flattened image · original marks cannot be erased</p>}
 			<div className="hw-drawingWorkspace"><div className="hw-paperArea"><div ref={areaRef} className="hw-paperScroll" data-testid="notebook-paper-scroll">
 				<div className={`hw-paperStack ${dimPaper ? "hw-dimPaper" : ""}`} style={{ width: paperSize.width, height: paperSize.height }}>
 					<canvas ref={backgroundRef} width={WIDTH} height={HEIGHT} className="hw-figureBackground" aria-hidden="true" data-testid="notebook-background" />
 					<canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="hw-paper" style={{ cursor: tool === "eraser" ? "cell" : "crosshair" }} aria-label="Handwriting page — use Pencil or mouse; fingers do not draw" data-testid="notebook-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onContextMenu={e => e.preventDefault()} />
 					<canvas ref={highlightRef} width={WIDTH} height={HEIGHT} className="hw-highlightOverlay" style={{ opacity: HIGHLIGHT_OPACITY }} aria-hidden="true" data-testid="notebook-highlight-overlay" />
+					{/* T6: draw a box round the part to attach (finger, Pencil or mouse). */}
+					{selecting && <div className="hw-areaSelect" data-testid="notebook-area-select" aria-label="Drag over the part of the page to attach"
+						onPointerDown={event => {
+							if (event.button !== 0) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
+							const box = event.currentTarget.getBoundingClientRect(), x = (event.clientX - box.left) * WIDTH / box.width, y = (event.clientY - box.top) * HEIGHT / box.height;
+							areaDrag.current = { id: event.pointerId, x, y }; setArea({ x, y, width: 0, height: 0 });
+						}}
+						onPointerMove={event => {
+							const start = areaDrag.current; if (!start || start.id !== event.pointerId) return; event.preventDefault();
+							const box = event.currentTarget.getBoundingClientRect();
+							const x = Math.max(0, Math.min(WIDTH, (event.clientX - box.left) * WIDTH / box.width)), y = Math.max(0, Math.min(HEIGHT, (event.clientY - box.top) * HEIGHT / box.height));
+							setArea({ x: Math.min(start.x, x), y: Math.min(start.y, y), width: Math.abs(x - start.x), height: Math.abs(y - start.y) });
+						}}
+						onPointerUp={() => { areaDrag.current = null; }} onPointerCancel={() => { areaDrag.current = null; }}>
+						{area && area.width > 0 && <span className="hw-areaBox" data-testid="notebook-area-box" style={{ left: `${area.x / WIDTH * 100}%`, top: `${area.y / HEIGHT * 100}%`, width: `${area.width / WIDTH * 100}%`, height: `${area.height / HEIGHT * 100}%` }} />}
+					</div>}
 				</div>
-				{(() => {
-					const at = Math.max(0, pages.findIndex(page => page.id === pageId)), count = Math.max(1, pages.length), busy = !saved.ready || !!submission?.preparing;
-					const go = (index: number) => { const target = pages[index]; if (target) void recovery.current?.switchPage(target.id); };
-					return <nav className="hw-pageFooter" aria-label="Page navigation" data-testid="notebook-page-footer">
-						<button type="button" aria-label="Previous page" disabled={busy || at === 0} {...handlers("Previous page", () => go(at - 1))}><ChevronLeftIcon aria-hidden /></button>
-						<span>Page {at + 1} of {count}</span>
-						<button type="button" aria-label="Next page" disabled={busy || at >= count - 1} {...handlers("Next page", () => go(at + 1))}><ChevronRightIcon aria-hidden /></button>
-						<button type="button" className="hw-footerAdd" disabled={busy} {...handlers("Add page", () => { void recovery.current?.addBlankPage(); })} data-testid="notebook-footer-add-page"><PlusIcon aria-hidden />Add page</button>
-					</nav>;
-				})()}
-			</div>{fingerHint && <p className="hw-fingerHint" role="status" data-testid="finger-hint">Write with your pen · fingers scroll the page</p>}<HandwritingToolbar variant={palette} tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} /></div></div>
+
+			</div>{fingerHint && <p className="hw-fingerHint" role="status" data-testid="finger-hint">Write with your pen · fingers scroll the page</p>}
+			{/* Notices sit at the top of the paper, never over the page controls. */}
+			<div className="hw-noticeStack">
+			{selecting && <div className="hw-notice hw-areaBar" role="group" aria-label="Select an area" data-testid="notebook-area-bar">
+				<span>{area && area.width > 20 && area.height > 20 ? `Attach this area to ${attachTarget}?` : "Drag over the part to attach."}</span>
+				<button type="button" className="min-h-11 px-3" {...handlers("Cancel area", () => { setSelecting(false); setArea(null); })} data-testid="notebook-area-cancel">Cancel</button>
+				<button type="button" className="hw-areaAttach min-h-11 px-3" disabled={!area || area.width <= 20 || area.height <= 20} {...handlers("Attach area", () => { const chosen = area; setSelecting(false); setArea(null); if (chosen) void attachSnapshot(chosen); })} data-testid="notebook-area-attach">Attach area</button>
+			</div>}
+			{attachNote && <p className="hw-notice" role="status" data-testid="notebook-attach-note">{attachNote}</p>}
+			{flattened && <p className="hw-notice">Flattened image · original marks cannot be erased</p>}
 			{clearedAt !== null && !saved.notice && <div className="hw-notice hw-clearedNotice" role="status" data-testid="notebook-cleared">Page cleared<button type="button" className="min-h-11 px-3 underline" {...handlers("Undo clear", () => { setClearedAt(null); undoLast(); })}>Undo</button></div>}
 			{saved.notice && <div className="hw-notice" role="status">{saved.notice}{saved.notice !== "Opening notebook…" && <button type="button" className="min-h-11 px-3 underline" {...handlers("Retry", () => { void recovery.current?.retry().then(() => refreshStatus.current()); })}>Retry</button>}</div>}
 			{shownNotice && <div className="hw-notice" role="status">{shownNotice.text}{shownNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
+			</div>
+			<HandwritingToolbar variant={palette} tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} /></div>
+			{/* T3: the page controls are always in view, under the paper. */}
+				{(() => {
+				const at = Math.max(0, pages.findIndex(page => page.id === pageId)), count = Math.max(1, pages.length), busy = !saved.ready || !!submission?.preparing;
+				const go = (index: number) => { const target = pages[index]; if (target) void recovery.current?.switchPage(target.id); };
+				return <nav className="hw-pageFooter" aria-label="Page navigation" data-testid="notebook-page-footer">
+					<button type="button" aria-label="Previous page" disabled={busy || at === 0} {...handlers("Previous page", () => go(at - 1))}><ChevronLeftIcon aria-hidden /></button>
+					<span>Page {at + 1} of {count}</span>
+					<button type="button" aria-label="Next page" disabled={busy || at >= count - 1} {...handlers("Next page", () => go(at + 1))}><ChevronRightIcon aria-hidden /></button>
+					<button type="button" className="hw-footerAdd" disabled={busy} {...handlers("Add page", () => { void recovery.current?.addBlankPage(); })} data-testid="notebook-footer-add-page"><PlusIcon aria-hidden />Add page</button>
+				</nav>;
+			})()}
+			</div>
 		</aside>
 	</div>;
 }
@@ -415,14 +518,74 @@ function PageRow({ page, index, pages, current, revision, model, disabled, choos
 	</button>{failed && <button type="button" onClick={() => { setFailed(false); setRetry(value => value + 1); }}>Couldn’t load page. Retry</button>}</div>;
 }
 
-/** R7 (round 16): beside the lesson the whole page fits its panel, with the
- *  page controls (Previous, Next, Add page) just below it — no Expand
- *  needed to reach them. Expanded, the page takes the full width and the
- *  paper scrolls as before. */
-function paperWidthFor(area: HTMLElement, expanded: boolean): number {
-	const width = Math.max(1, area.clientWidth - 16);
-	if (expanded) return width;
-	const footer = area.querySelector<HTMLElement>(".hw-pageFooter")?.getBoundingClientRect().height ?? 56;
-	const room = area.clientHeight - footer - 24;
-	return room > 120 ? Math.max(1, Math.min(width, room * WIDTH / HEIGHT)) : width;
+const ZOOM_KEY = "lh:hw-zoom";
+const ZOOMS = { min: 0.5, max: 3 } as const;
+function clampZoom(value: number): number { return Math.round(Math.max(ZOOMS.min, Math.min(ZOOMS.max, value)) * 100) / 100; }
+function readZoom(): number {
+	try { const value = Number(localStorage.getItem(ZOOM_KEY)); return Number.isFinite(value) && value > 0 ? clampZoom(value) : 1; } catch { return 1; }
+}
+/** T3 (round 17): the paper's width at 100% — the whole page fitting the
+ *  expanded notebook (the card's full extent in its layout), with margins
+ *  around the page and room for its header and page controls. The same
+ *  for the card beside the lesson, so the paper never resizes with it. */
+function fittedPaperWidth(layout: HTMLElement): number {
+	const inset = 16 * 2, header = 56, footer = 56, margin = 16 * 2, gutter = 16;
+	const width = layout.clientWidth - inset - margin - gutter;
+	const height = layout.clientHeight - inset - header - footer - margin;
+	if (width <= 0 || height <= 0) return 1;
+	return Math.max(1, Math.min(width, height * WIDTH / HEIGHT));
+}
+
+const SHARE_KEY = "lh:hw-split";
+/** Portrait tablets give the page most of the height (writing is the task
+ *  there); elsewhere the split starts even. */
+function defaultShare(): number {
+	return typeof window !== "undefined" && window.matchMedia?.("(min-width: 768px) and (max-width: 1023px) and (pointer: coarse)").matches ? 46 : 50;
+}
+function readShare(): number {
+	try { const value = Number(localStorage.getItem(SHARE_KEY)); return Number.isFinite(value) && value > 0 ? value : defaultShare(); } catch { return defaultShare(); }
+}
+
+/** T2 (round 17): the notebook card's handle. Drag it (finger or Pencil)
+ *  to slide the card up or down — side by side, left or right. The lesson
+ *  keeps the rest; the size is remembered on this device. A 44px target. */
+function CardHandle({ slotRef, canResize }: { slotRef: RefObject<HTMLDivElement | null>; canResize: () => boolean }) {
+	const [state, setState] = useState({ share: 50, wide: false, max: 70 });
+	const share = useRef(50), drag = useRef<number | null>(null);
+	const apply = useCallback((next: number, save: boolean) => {
+		const layout = slotRef.current?.parentElement; if (!layout) return;
+		const wide = getComputedStyle(layout).flexDirection === "row";
+		const extent = wide ? layout.clientWidth : layout.clientHeight;
+		if (!extent) return;
+		// The card keeps room for its header, a strip of page and its page controls.
+		const max = Math.max(25, Math.min(80, (extent - (wide ? 384 : 300)) / extent * 100));
+		const bounded = Math.max(20, Math.min(max, next));
+		layout.style.setProperty("--notebook-context-share", `${bounded}%`);
+		share.current = bounded;
+		setState(prior => prior.share === Math.round(bounded) && prior.wide === wide && prior.max === Math.round(max) ? prior : { share: Math.round(bounded), wide, max: Math.round(max) });
+		if (save) { try { localStorage.setItem(SHARE_KEY, String(Math.round(bounded))); } catch { /* this view only */ } }
+	}, [slotRef]);
+	useEffect(() => {
+		const layout = slotRef.current?.parentElement; if (!layout) return;
+		share.current = readShare(); apply(share.current, false);
+		const observer = new ResizeObserver(() => apply(share.current, false));
+		observer.observe(layout); return () => observer.disconnect();
+	}, [apply, slotRef]);
+	const at = (event: ReactPointerEvent<HTMLDivElement>) => {
+		const layout = slotRef.current?.parentElement; if (!layout) return share.current;
+		const rect = layout.getBoundingClientRect();
+		return 100 * (state.wide ? (event.clientX - rect.left) / rect.width : (event.clientY - rect.top) / rect.height);
+	};
+	return <div className="hw-cardHandle" role="separator" tabIndex={0} data-testid="notebook-card-handle" data-wide={state.wide || undefined}
+		aria-label={state.wide ? "Move the notebook left or right" : "Move the notebook up or down"} aria-orientation={state.wide ? "vertical" : "horizontal"}
+		aria-valuemin={20} aria-valuemax={state.max} aria-valuenow={state.share} aria-valuetext={`${state.share}% lesson`}
+		onPointerDown={event => { if (event.button !== 0 || !canResize()) return; event.preventDefault(); if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); drag.current = event.pointerId; event.currentTarget.setPointerCapture(event.pointerId); }}
+		onPointerMove={event => { if (drag.current !== event.pointerId) return; event.preventDefault(); apply(at(event), false); }}
+		onPointerUp={event => { if (drag.current !== event.pointerId) return; drag.current = null; apply(at(event), true); }}
+		onPointerCancel={() => { drag.current = null; }} onLostPointerCapture={() => { if (drag.current !== null) { drag.current = null; apply(share.current, true); } }}
+		onKeyDown={event => {
+			if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home"].includes(event.key) || !canResize()) return;
+			event.preventDefault(); event.stopPropagation();
+			apply(event.key === "Home" ? defaultShare() : share.current + (["ArrowUp", "ArrowLeft"].includes(event.key) ? -5 : 5), true);
+		}}><span aria-hidden="true" /></div>;
 }

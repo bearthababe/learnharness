@@ -14,7 +14,7 @@
 	.lh-question-input { display: flex; flex-direction: column; align-items: stretch; gap: 6px; border: 0; background: none; }
 	.lh-input-label { grid-column: 1 / -1; padding: 0 4px; }
 	.lh-question-submit { display: flex; justify-content: flex-end; padding: 0; }
-	.lh-question-submit > span, .lh-wide-submit-label { display: none; }
+	.lh-question-submit > span:not(.lh-mic-slot), .lh-wide-submit-label { display: none; }
 	.lh-phone-submit-icon { display: block; }
 	.lh-question-submit > button { min-width: 44px; min-height: 44px; padding: 0; margin-bottom: 5px; }
 	.lh-compact-row {

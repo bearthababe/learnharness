@@ -29,3 +29,20 @@ export async function encodeHandwritingRaster(raster: NonNullable<CaptureRecord[
 	canvas.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(raster.rgba.slice(0)), raster.width, raster.height), 0, 0);
 	return new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Couldn’t encode snapshot")), "image/png"));
 }
+
+/** T6 (round 17): a snapshot of one area of the page — the area scaled to
+ *  fit a page-sized image on white (the snapshot format stays one page). */
+export function freezeHandwritingArea(background: HTMLCanvasElement, ink: HTMLCanvasElement, area: { x: number; y: number; width: number; height: number }): NonNullable<CaptureRecord["raster"]> {
+	const { width: W, height: H } = HANDWRITING_PAGE;
+	const page = document.createElement("canvas"); page.width = W; page.height = H;
+	const source = page.getContext("2d")!;
+	source.fillStyle = "white"; source.fillRect(0, 0, W, H); source.drawImage(background, 0, 0); source.drawImage(ink, 0, 0);
+	const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
+	const context = canvas.getContext("2d")!;
+	context.fillStyle = "white"; context.fillRect(0, 0, W, H);
+	const margin = 40, scale = Math.min((W - 2 * margin) / area.width, (H - 2 * margin) / area.height);
+	const width = area.width * scale, height = area.height * scale;
+	context.imageSmoothingQuality = "high";
+	context.drawImage(page, area.x, area.y, area.width, area.height, (W - width) / 2, (H - height) / 2, width, height);
+	return { ...HANDWRITING_PAGE, rgba: context.getImageData(0, 0, W, H).data.buffer as ArrayBuffer };
+}
