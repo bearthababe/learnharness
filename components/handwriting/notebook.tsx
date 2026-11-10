@@ -335,28 +335,6 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		const target = (current.stroke.tool === "highlighter" ? highlightRef.current : canvasRef.current)?.getContext("2d"); if (!target) return;
 		current.stroke.points.forEach((point, index) => paint(target, current.stroke, current.stroke.points[Math.max(0, index - 1)]!, point));
 	}, [inkScale, redraw]);
-	const paperAreaRef = useRef<HTMLDivElement>(null), areaBarRef = useRef<HTMLDivElement>(null);
-	const [areaBarPlace, setAreaBarPlace] = useState<{ top: number; side: "top" | "below" | "above" | "edge" }>({ top: 8, side: "top" });
-	useLayoutEffect(() => {
-		if (!selecting) return;
-		const paper = paperAreaRef.current, scroll = areaRef.current; if (!paper || !scroll) return;
-		const place = () => {
-			const bar = areaBarRef.current, canvas = canvasRef.current; if (!bar || !canvas) return;
-			const margin = 8, view = paper.getBoundingClientRect(), page = canvas.getBoundingClientRect(), height = bar.offsetHeight;
-			let next: { top: number; side: "top" | "below" | "above" | "edge" } = { top: margin, side: "top" };
-			if (area && area.width > 0 && area.height > 0) {
-				const top = page.top + area.y / HEIGHT * page.height - view.top, bottom = page.top + (area.y + area.height) / HEIGHT * page.height - view.top;
-				if (bottom + margin + height <= view.height - margin) next = { top: Math.max(margin, bottom + margin), side: "below" };
-				else if (top - margin - height >= margin) next = { top: Math.min(view.height - margin - height, top - margin - height), side: "above" };
-				else next = top > view.height - bottom ? { top: margin, side: "edge" } : { top: Math.max(margin, view.height - margin - height), side: "edge" };
-			}
-			setAreaBarPlace(prior => prior.top === next.top && prior.side === next.side ? prior : next);
-		};
-		place();
-		scroll.addEventListener("scroll", place, { passive: true });
-		const observer = new ResizeObserver(place); observer.observe(paper);
-		return () => { scroll.removeEventListener("scroll", place); observer.disconnect(); };
-	}, [selecting, area, zoom]);
 	const zoomRef = useRef(zoom); zoomRef.current = zoom;
 	/** Zoom, keeping the paper under (x, y) — or the view's centre — in place. */
 	function zoomAround(next: number, x?: number, y?: number) {
@@ -532,7 +510,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				<button type="button" className="min-h-11 underline" {...handlers("Reload preview", () => location.reload())}>Reload preview</button>
 				<p>Reload keeps your notebook, Undo and Redo, attached snapshots and explanation saved at Attach.</p>
 			</div>}
-			<div className="hw-drawingWorkspace"><div ref={paperAreaRef} className="hw-paperArea"><div ref={areaRef} className="hw-paperScroll" data-testid="notebook-paper-scroll">
+			<div className="hw-drawingWorkspace"><div className="hw-paperArea"><div ref={areaRef} className="hw-paperScroll" data-testid="notebook-paper-scroll">
 				<div className={`hw-paperStack ${dimPaper ? "hw-dimPaper" : ""}`} style={{ width: paperSize.width, height: paperSize.height }}>
 					<canvas ref={backgroundRef} width={WIDTH} height={HEIGHT} className="hw-figureBackground" aria-hidden="true" data-testid="notebook-background" />
 					<canvas ref={canvasRef} width={Math.round(WIDTH * inkScale)} height={Math.round(HEIGHT * inkScale)} data-ink-scale={inkScale} className="hw-paper" style={{ cursor: tool === "eraser" ? "cell" : "crosshair" }} aria-label="Handwriting page — use Pencil or mouse; fingers do not draw" data-testid="notebook-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onContextMenu={e => e.preventDefault()} />
@@ -556,14 +534,6 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				</div>
 
 			</div>{fingerHint && <p className="hw-fingerHint" role="status" data-testid="finger-hint">Write with your pen · fingers scroll the page</p>}
-			{/* B3 (round 18): the area bar sits outside the selection — below it, or
-			    above it, wherever the paper has room — so the learner sees exactly
-			    what will be sent. */}
-			{selecting && <div ref={areaBarRef} className="hw-notice hw-areaBar" role="group" aria-label="Select an area" data-testid="notebook-area-bar" data-place={areaBarPlace.side} style={{ top: areaBarPlace.top }}>
-				<span>{area && area.width > 20 && area.height > 20 ? `Attach this area to ${attachTarget}?` : "Drag over the part to attach."}</span>
-				<button type="button" className="min-h-11 px-3" {...handlers("Cancel area", () => { setSelecting(false); setArea(null); })} data-testid="notebook-area-cancel">Cancel</button>
-				<button type="button" className="hw-areaAttach min-h-11 px-3" disabled={!area || area.width <= 20 || area.height <= 20} {...handlers("Attach area", () => { const chosen = area; setSelecting(false); setArea(null); if (chosen) void attachSnapshot(chosen); })} data-testid="notebook-area-attach">Attach area</button>
-			</div>}
 			{/* Notices sit at the top of the paper, never over the page controls. */}
 			<div className="hw-noticeStack">
 			{attachNote && <p className="hw-notice" role="status" data-testid="notebook-attach-note">{attachNote}</p>}
@@ -577,6 +547,16 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				{(() => {
 				const at = Math.max(0, pages.findIndex(page => page.id === pageId)), count = Math.max(1, pages.length), busy = !saved.ready || !!submission?.preparing;
 				const go = (index: number) => { const target = pages[index]; if (target) void recovery.current?.switchPage(target.id); };
+				// B3 (round 18): while an area is being chosen, its bar takes the page
+				// controls' place under the paper, so it never covers any of the page
+				// and the learner sees exactly what will be sent.
+				if (selecting) return <div className="hw-pageFooter hw-areaFooter">
+					<div className="hw-areaBar" role="group" aria-label="Select an area" data-testid="notebook-area-bar" data-place="footer">
+						<span>{area && area.width > 20 && area.height > 20 ? `Attach this area to ${attachTarget}?` : "Drag over the part to attach."}</span>
+						<button type="button" className="min-h-11 px-3" {...handlers("Cancel area", () => { setSelecting(false); setArea(null); })} data-testid="notebook-area-cancel">Cancel</button>
+						<button type="button" className="hw-areaAttach min-h-11 px-3" disabled={!area || area.width <= 20 || area.height <= 20} {...handlers("Attach area", () => { const chosen = area; setSelecting(false); setArea(null); if (chosen) void attachSnapshot(chosen); })} data-testid="notebook-area-attach">Attach area</button>
+					</div>
+				</div>;
 				return <nav className="hw-pageFooter" aria-label="Page navigation" data-testid="notebook-page-footer">
 					<button type="button" aria-label="Previous page" disabled={busy || at === 0} {...handlers("Previous page", () => go(at - 1))}><ChevronLeftIcon aria-hidden /></button>
 					<span>Page {at + 1} of {count}</span>

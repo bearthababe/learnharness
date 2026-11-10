@@ -5749,8 +5749,9 @@ html:not([data-hydrated]) .lh-reading-row > .lh-mic-slot:empty { width: 48px; he
 /* ---- Round 18 (bug fixes) ---- */
 /* B2: each pending attachment says whether it is a whole page or an area. */
 .lh-writing-kind { position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border-radius: 6px; background: color-mix(in oklab, var(--card) 88%, transparent); color: var(--foreground); font-size: 13px; font-weight: 600; line-height: 18px; pointer-events: none; }
-/* B3: the area bar is placed by the notebook outside the selection (top set inline). */
-:root .hw-paperArea > .hw-areaBar { position: absolute; inset-inline: 8px; bottom: auto; z-index: 7; }
+/* B3: while choosing an area, its bar sits in the page controls' place under the paper. */
+:root .hw-areaFooter { display: flex; align-items: center; min-height: 53px; }
+:root .hw-areaFooter > .hw-areaBar { flex: 1; min-width: 0; padding-inline: 4px; }
 /* B5: the notebook header in three calm groups — the notebook's own (title,
    Pages, ⋯), Attach, and the view at the end (zoom as one bordered control,
    Expand, Close). Readable 14px labels, 44px targets, nothing removed; on a

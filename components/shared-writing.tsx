@@ -180,7 +180,7 @@ export function SharedWritingPanel({ chatId, writing: all, busy, hideIds, folded
 			<div className="lh-tray-head">
 				<button type="button" className="lh-tray-fold" data-testid="shared-writing-fold" aria-expanded={!folded} onClick={() => setFolded((value) => !value)}>
 					<ChevronRightIcon aria-hidden />
-					<span>{writing.pending.length} {writing.pending.length === 1 ? "page" : "pages"} attached · not sent</span>
+					<span>{attachedCount(writing.pending)} attached · not sent</span>
 					{folded && <span className="lh-tray-hint">· tap to see</span>}
 				</button>
 				{!folded && <button type="button" className="lh-tray-toggle" data-testid="shared-writing-review" aria-expanded={review} onClick={() => setReview((open) => !open)}>{review ? "Done" : "Review"}</button>}
@@ -217,4 +217,12 @@ export function ConceptsSetup({ chatId, onCheck }: { chatId: string; onCheck: ()
 		</div>
 		<p className="mt-2 text-muted-foreground">Reload keeps uploaded images and saved conversation. Unsent typed text resets.</p>
 	</div>;
+}
+
+/** B2 (round 18): what waits to be sent, counted as it is — whole pages
+ *  (and imported images) and areas of a page. */
+export function attachedCount(pending: readonly Pick<SharedWriting, "notebook">[]): string {
+	const areas = pending.filter(item => item.notebook && isAreaSlot(item.notebook.pageId)).length, pages = pending.length - areas;
+	const part = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+	return pages && areas ? `${part(pages, "page", "pages")} and ${part(areas, "area", "areas")}` : areas ? part(areas, "area", "areas") : part(pages, "page", "pages");
 }
