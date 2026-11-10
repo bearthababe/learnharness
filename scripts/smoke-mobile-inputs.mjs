@@ -248,6 +248,7 @@ try {
 			close() { this.readyState = 3; this.dispatchEvent(new CloseEvent("close", { code: 1000 })); }
 		};
 	});
+	const waitForSpeechAudio = (finalCount = 2) => page.waitForFunction(expected => window.speech?.readyState === 1 && window.speech.audioSeconds >= window.speech.cursor + expected / 1000, {}, finalCount);
 	if (process.env.LH_NOTEBOOK_MENUS_ONLY) await checkHandwritingMenus({ page, origin });
 	else {
 	await page.goto(`${origin}/chat/mobile_conversation`, { waitUntil: "networkidle2", timeout: 240_000 });
@@ -369,7 +370,7 @@ try {
 	assert.deepEqual(await page.$eval(input, e => ({ value: e.textContent, start: getSelection().anchorOffset, end: getSelection().focusOffset, scroll: e.scrollTop })), { value: longDraft, start: 8, end: 20, scroll: beforeCapture.scroll }, "Cancel during finalization restores earlier draft, selection and internal scroll");
 	await fill(input, "Review before sending.");
 	await page.click(mic);
-	await page.waitForFunction(() => window.speech.readyState === 1);
+	await waitForSpeechAudio();
 	await page.evaluate(() => window.speech.final("Spoken working."));
 	await page.click('[aria-label="Stop dictation"]');
 	await page.waitForFunction(() => window.speech.finishing);
@@ -381,7 +382,7 @@ try {
 	assert.equal((await (await fetch(`${origin}/api/chats/mobile_conversation`)).json()).messages.filter(m => m.role === "user").length, 0, "Dictation Stop does not submit or start a tutor turn");
 	await fill(input, "Typed first.");
 	await page.locator(mic).click();
-	await page.waitForFunction(() => window.speech.readyState === 1);
+	await waitForSpeechAudio();
 	await page.evaluate(() => window.speech.final("Spoken middle."));
 	await page.click('[data-testid="composer"] [aria-label="Send"]');
 	await page.waitForFunction(() => window.speech.finishing);
@@ -412,6 +413,7 @@ try {
 	await page.click(mic);
 	await page.waitForFunction(() => window.speech !== window.cancelledSpeech && window.speech.readyState === 1);
 	assert.equal(await page.$eval(send, e => e.disabled), false, "Active speech enables Send before any text is flushed");
+	await waitForSpeechAudio();
 	await page.evaluate(() => window.speech.final("Speech only."));
 	await page.click(send);
 	await page.waitForFunction(() => window.speech.finishing);
@@ -549,7 +551,7 @@ try {
 	await page.click('[aria-label="Open handwritten working 1"]');
 	await page.waitForSelector('[data-testid="shared-writing-viewer"]');
 	await page.click('[aria-label="Close handwritten working"]');
-	await page.click(mic); await page.waitForFunction(() => window.speech?.readyState === 1);
+	await page.click(mic); await waitForSpeechAudio();
 	await page.evaluate(() => window.speech.final("With the reviewed image."));
 	await page.click('[data-testid="composer"] [aria-label="Send"]');
 	await page.waitForFunction(() => window.speech.finishing);
@@ -619,11 +621,13 @@ try {
 		const animate = Element.prototype.animate, effects = [];
 		const clock = Object.getOwnPropertyDescriptor(Animation.prototype, "startTime");
 		window.__lhExitStarts = null;
+		window.__lhExitAnimations = [];
 		Element.prototype.animate = function (...args) {
 			const animation = animate.apply(this, args);
 			if (this.matches('[data-lh-menu][data-closing="true"], [data-testid="phone-menu-backdrop"]')) {
 				const effect = { animation, start: null };
 				effects.push(effect);
+				window.__lhExitAnimations.push(animation);
 				// Pause at the real shared start, before a remote round trip or a
 				// settings read can outlast the 400ms interval under inspection.
 				Object.defineProperty(animation, "startTime", {
@@ -647,7 +651,8 @@ try {
 		await page.waitForSelector(`[data-testid="${card}"][data-closing="true"]`);
 		const exit = await page.evaluate(({ trigger, card }) => {
 			const menu = document.querySelector(`[data-testid="${card}"]`), backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-			const animation = menu.getAnimations()[0], blur = backdrop.getAnimations()[0];
+			const animation = window.__lhExitAnimations.find(animation => animation.effect.target === menu);
+			const blur = window.__lhExitAnimations.find(animation => animation.effect.target === backdrop);
 			const starts = window.__lhExitStarts, timings = [animation.effect.getTiming(), blur.effect.getTiming()];
 			animation.pause(); blur.pause();
 			const samples = [0, 1, 4, 8, 16, 32, 100, 200, 300, 368, 384, 392, 396, 399, 400].map(time => {
@@ -679,11 +684,8 @@ try {
 		await page.keyboard.press("Escape");
 		await page.locator('[data-testid="phone-menu-trigger"]').click();
 		assert.ok(await page.$(`[data-testid="${card}"]`), "Repeated Escape neither removes nor restarts the paused exit");
-		assert.equal(await page.$eval(`[data-testid="${card}"]`, e => e.getAnimations()[0].currentTime), 200, "Repeated opener tap does not restart exit");
-		await page.$eval(`[data-testid="${card}"]`, menu => {
-			menu.getAnimations().forEach(animation => animation.finish());
-			document.querySelector('[data-testid="phone-menu-backdrop"]').getAnimations().forEach(animation => animation.finish());
-		});
+		assert.equal(await page.$eval(`[data-testid="${card}"]`, menu => window.__lhExitAnimations.find(animation => animation.effect.target === menu).currentTime), 200, "Repeated opener tap does not restart exit");
+		await page.evaluate(() => window.__lhExitAnimations.forEach(animation => animation.finish()));
 		await page.waitForSelector(`[data-testid="${card}"]`, { hidden: true });
 		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Lesson unlocks only after exit completes");
 	};
@@ -746,7 +748,7 @@ try {
 					blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]) };
 			});
 			const timings = [animation.effect.getTiming(), blur.effect.getTiming()];
-			animation.finish(); blur.finish(); window.__lhRestoreAnimate(); delete window.__lhCardEntrance; delete window.__lhBlurEntrance; delete window.__lhEntranceStarts;
+			animation.finish(); blur.finish(); animation.cancel(); blur.cancel(); window.__lhRestoreAnimate(); delete window.__lhCardEntrance; delete window.__lhBlurEntrance; delete window.__lhEntranceStarts;
 			return { samples, timings, startTimes, createdAt: window.__lhCreatedAt, callbackAt: window.__lhBeforeStartCallback, buttonTop: button.getBoundingClientRect().top };
 		}, { trigger, card });
 		assert.ok(entrance.startTimes[0] !== null);
@@ -817,7 +819,7 @@ try {
 		assert.ok(await page.$('[data-testid="model-menu"][data-closing="true"]'), "Quick close remains mounted while captured");
 		const exitStart = await page.$eval('[data-testid="model-menu"]', menu => {
 			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-			for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = 0; }
+			for (const animation of window.__lhExitAnimations) { animation.pause(); animation.currentTime = 0; }
 			return { ...window.__lhPhoneFrameSample(menu), blur: getComputedStyle(backdrop).backdropFilter };
 		});
 		assert.ok(Math.abs(partial.top - exitStart.top) <= 1, "Quick close starts from the current expansion height");
@@ -1296,7 +1298,7 @@ try {
 	assert.equal(await page.$eval(reading, e => e.textContent), "Capture 1. Capture 2.", "Restart after interrupted audio captures and appends a second recording once");
 	await fill(reading, "Reading thought.");
 	await page.click('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
-	await page.waitForFunction(() => window.speech?.readyState === 1);
+	await waitForSpeechAudio();
 	await page.evaluate(() => window.speech.final("Before reveal."));
 	await page.click('[data-testid="teach-check-reveal"]');
 	await page.waitForFunction(() => window.speech.finishing);
@@ -1319,7 +1321,7 @@ try {
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { hidden: true });
 	await upload("mobile_teaching"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="answer-field"] [aria-label="Start dictation"]');
-	await page.waitForFunction(() => window.speech.readyState === 1);
+	await waitForSpeechAudio(1);
 	await page.evaluate(() => window.speech.final("Spoken answer."));
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => window.speech.finishing);
@@ -1394,6 +1396,7 @@ try {
 		await page.waitForFunction(() => window.speech?.readyState === 0);
 		assert.match(await page.$eval('.lh-compact-recording [role="status"]', e => e.textContent), /Connecting/);
 		await page.evaluate(() => { window.holdConnection = false; window.speech.open(); });
+		await waitForSpeechAudio();
 		await page.evaluate(() => window.speech.final("So pressure is 50 Pa."));
 		if (id === "mobile_drill") {
 			await page.click('[data-testid="practice-send"]');

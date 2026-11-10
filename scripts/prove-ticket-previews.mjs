@@ -10,25 +10,31 @@ import { alive, delay, freePort, git, ownedGroup, readState } from "./lib/ticket
 
 const run = path.join(source, ".prove-it", "runs", `${new Date().toISOString().replaceAll(":", "-")}-zz-prove-it-ticket-previews`);
 fs.mkdirSync(run, { recursive: true });
-const result = { source: { revision: git(source, "rev-parse", "HEAD"), dirty: Boolean(git(source, "status", "--porcelain")) }, startedAt: new Date().toISOString(), status: "running", steps: [], fixture: null };
+const result = { source: { revision: git(source, "rev-parse", "HEAD"), dirty: Boolean(git(source, "status", "--porcelain")) }, startedAt: new Date().toISOString(), status: "running", steps: [], fixture: null, limitations: ["Loopback CI uses one disposable browser context per source: ports alone do not isolate cookies. This drive does not certify same-context private HTTPS hostname isolation, native/helper parity or the actual ten-minute expiry."] };
 function save() { fs.writeFileSync(path.join(run, "result.json"), JSON.stringify(result, null, 2)); }
 async function step(name, operation) {
 	const record = { name, status: "running", startedAt: new Date().toISOString() };
 	result.steps.push(record);
 	save();
+	console.log(`Starting: ${name}`);
 	try { record.evidence = await operation(); record.status = "passed"; }
 	catch (error) { record.status = "failed"; record.error = error.stack; throw error; }
-	finally { record.finishedAt = new Date().toISOString(); save(); }
+	finally { record.finishedAt = new Date().toISOString(); save(); console.log(`${record.status}: ${name}`); }
 }
 const json = async (url, options) => {
-	const response = await fetch(url, { ...options, signal: AbortSignal.timeout(180_000) });
+	assert.equal(new URL(page.url()).origin, new URL(url).origin, "Open the source in its verified browser before application requests");
+	const response = await page.evaluate(async ({ target, options }) => {
+		const response = await fetch(target, { ...options, signal: AbortSignal.timeout(180_000) });
+		return { status: response.status, body: await response.text() };
+	}, { target: url.href, options });
 	assert.equal(response.status, 200, `${url}: HTTP ${response.status}`);
-	return response.json();
+	return JSON.parse(response.body);
 };
 const post = body => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 let environment;
 let browser;
 let page;
+const sourcePages = new Map();
 const processes = [];
 const ports = new Set();
 const consoleErrors = [];
@@ -52,39 +58,60 @@ for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) process.once(signal, () =>
 	void cleanup().finally(() => process.exit(1));
 });
 
+async function ready(id) {
+	return environment.waitFor(current => {
+		const preview = current.tickets[id];
+		assert.notEqual(preview.preview, "error", preview.error);
+		return preview.preview === "running";
+	}, `${id}: real snapshot build and runtime readiness`, 180_000);
+}
+
 try {
 	environment = await fixture({ real: true, tailnetHost: process.env.LH_PROVE_TAILNET_HOST ?? null,
 		httpsPorts: process.env.LH_PROVE_HTTPS_PORTS?.split(",").map(Number) });
 	result.fixture = environment.directory;
 	save();
 	const originalRoot = git(environment.root, "rev-parse", "HEAD");
-	await step("1,3,4: parallel setup, three unique slots and nonblocking fourth preview", async () => {
+	await step("1,3,4: three concurrent runtimes in unique slots and nonblocking fourth preview", async () => {
 		for (const id of ["alpha", "beta", "gamma", "delta"]) await environment.attach(id, id === "delta" ? "full-send" : "full-stop");
-		await Promise.all(["alpha", "beta", "gamma"].map(id => environment.cli("preview", id)));
+		for (const id of ["alpha", "beta", "gamma"]) {
+			await environment.cli("preview", id);
+			await ready(id);
+			console.log(`Ready: ${id}`);
+		}
 		const state = await environment.waitFor(current => current.slots.every(slot => slot.ticket), "three allocated real previews", 60_000);
 		assert.equal(new Set(state.slots.map(slot => slot.ticket)).size, 3);
+		assert.ok(["alpha", "beta", "gamma"].every(id => state.tickets[id].preview === "running"));
 		await environment.cli("preview", "delta");
 		assert.deepEqual(readState(environment.state).queue, ["delta"]);
 		const delivery = await environment.cli("delivery", "delta");
 		assert.equal(delivery.previewBlocksDelivery, false);
 		assert.equal(delivery.mergeAuthority, "selected-skill-only");
 		for (const ticket of Object.values(state.tickets)) if (ticket.process) processes.push(ticket.process);
-		return { slots: state.slots, queued: "delta", delivery };
+		return { slots: state.slots, queued: "delta", delivery, buildScheduling: "serial to bound CI memory; all three real runtimes overlap" };
 	});
 	browser = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", headless: true, userDataDir: path.join(environment.directory, "zz-prove-it-browser"), args: ["--no-sandbox", "--disable-dev-shm-usage"] });
-	page = await browser.newPage();
-	await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
-	page.setDefaultNavigationTimeout(180_000);
-	page.on("pageerror", error => consoleErrors.push(error.message));
-	await page.setRequestInterception(true);
-	page.on("request", request => {
-		const url = new URL(request.url());
-		if (["127.0.0.1", process.env.LH_PROVE_TAILNET_HOST].includes(url.hostname) || ["data:", "blob:"].includes(url.protocol)) void request.continue();
-		else void request.abort();
-	});
 	const alpha = readState(environment.state).tickets.alpha;
 	const route = new URL("zz-prove-it", alpha.reviewUrl).href;
 	async function open(url) {
+		const ticket = Object.values(readState(environment.state).tickets).find(ticket => ticket.reviewUrl && new URL(ticket.reviewUrl).origin === new URL(url).origin && ticket.preview !== "none");
+		assert.ok(ticket, "Review address must identify an allocated source");
+		await ready(ticket.id);
+		if (!sourcePages.has(ticket.origin)) {
+			const context = await browser.createBrowserContext();
+			const sourcePage = await context.newPage();
+			await sourcePage.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
+			sourcePage.setDefaultNavigationTimeout(180_000);
+			sourcePage.on("pageerror", error => consoleErrors.push(error.message));
+			await sourcePage.setRequestInterception(true);
+			sourcePage.on("request", request => {
+				const target = new URL(request.url());
+				if (["127.0.0.1", process.env.LH_PROVE_TAILNET_HOST].includes(target.hostname) || ["data:", "blob:"].includes(target.protocol)) void request.continue();
+				else void request.abort();
+			});
+			sourcePages.set(ticket.origin, sourcePage);
+		}
+		page = sourcePages.get(ticket.origin);
 		let last;
 		for (let attempt = 0; attempt < 30; attempt++) {
 			try {
@@ -108,17 +135,21 @@ try {
 		assert.ok(!fs.existsSync(path.join(alpha.profile, "auth", "auth.json")));
 		return { settings, chats, credentialRows: keys.keys.map(key => ({ id: key.id, present: key.present, source: key.source })), origin: page.url() };
 	});
-	await step("6: configured review address shows edits in its worktree without redeployment", async () => {
+	let alphaSourceEdit;
+	await step("6: running snapshot stays immutable after a dirty worktree edit", async () => {
 		const file = path.join(alpha.worktree, "app", "zz-prove-it", "page.tsx");
 		const original = fs.readFileSync(file, "utf8");
 		const before = await page.$eval('[data-proof="source"]', node => node.textContent);
+		const servingSourceHash = readState(environment.state).tickets.alpha.sandbox.sourceHash;
+		assert.match(servingSourceHash, /^[a-f0-9]{64}$/);
 		fs.writeFileSync(file, original.replace("zz-prove-it-original", "zz-prove-it-alpha-revised"));
 		await open(route);
-		await page.waitForFunction(() => document.querySelector('[data-proof="source"]')?.textContent === "zz-prove-it-alpha-revised", { timeout: 60_000 });
+		assert.equal(await page.$eval('[data-proof="source"]', node => node.textContent), before);
+		assert.equal(readState(environment.state).tickets.alpha.sandbox.sourceHash, servingSourceHash);
 		assert.ok(fs.readFileSync(path.join(environment.root, "app", "zz-prove-it", "page.tsx"), "utf8").includes("zz-prove-it-original"));
 		await page.screenshot({ path: path.join(run, "worktree-preview.png") });
-		fs.writeFileSync(file, original);
-		return { before, after: "zz-prove-it-alpha-revised", review: alpha.reviewUrl, origin: alpha.origin, rootRevisionUnchanged: git(environment.root, "rev-parse", "HEAD") === originalRoot };
+		alphaSourceEdit = { file, original, servingSourceHash };
+		return { before, after: before, dirtyEditPendingReopen: "zz-prove-it-alpha-revised", servingSourceHash, review: alpha.reviewUrl, origin: alpha.origin, rootRevisionUnchanged: git(environment.root, "rev-parse", "HEAD") === originalRoot };
 	});
 	let createdChat;
 	await step("7: persist synthetic session, settings, credential and browser state", async () => {
@@ -141,13 +172,13 @@ try {
 			});
 		});
 		assert.equal(await page.evaluate(() => document.cookie), "zz-prove-it-cookie=alpha");
-		assert.ok((await browser.cookies()).some(cookie => cookie.name === "lh-preview-alpha__zz-prove-it-cookie"));
+		assert.ok((await page.browserContext().cookies()).some(cookie => cookie.name === "zz-prove-it-cookie" && cookie.value === "alpha"));
 		return { chatsBefore: 0, chatsAfter: (await json(new URL("api/chats", alpha.origin))).chats.length, settingsAfter: (await json(new URL("api/settings", alpha.origin))).settings,
 			credentialStored: true, browser: { localStorage: "alpha", indexedDB: "alpha-ink", cookie: "alpha" }, createdChat };
 	});
 	await step("7: release alpha, next occupant inherits neither server nor browser state", async () => {
 		await environment.cli("release", "alpha");
-		const state = await environment.waitFor(current => current.tickets.delta.preview === "running" && current.tickets.alpha.preview === "none", "queued preview promotion", 60_000);
+		const state = await environment.waitFor(current => current.tickets.delta.preview === "running" && current.tickets.alpha.preview === "none", "queued preview promotion with real build", 180_000);
 		assert.equal(state.tickets.delta.slot, alpha.slot);
 		await open(new URL("zz-prove-it", state.tickets.delta.reviewUrl).href);
 		assert.equal(await page.evaluate(() => localStorage.getItem("zz-prove-it-browser")), null);
@@ -163,10 +194,13 @@ try {
 		await environment.cli("release", "beta");
 		await environment.waitFor(current => current.tickets.beta.preview === "none", "beta release");
 		await environment.cli("preview", "alpha");
-		const state = await environment.waitFor(current => current.tickets.alpha.preview === "running", "alpha reopen");
+		const state = await environment.waitFor(current => current.tickets.alpha.preview === "running", "alpha snapshot rebuild", 180_000);
 		assert.notEqual(state.tickets.alpha.slot, alpha.slot);
 		assert.equal(state.tickets.alpha.origin, alpha.origin);
 		await open(new URL("zz-prove-it", state.tickets.alpha.reviewUrl).href);
+		await page.waitForFunction(() => document.querySelector('[data-proof="source"]')?.textContent === "zz-prove-it-alpha-revised", { timeout: 60_000 });
+		assert.notEqual(state.tickets.alpha.sandbox.sourceHash, alphaSourceEdit.servingSourceHash);
+		fs.writeFileSync(alphaSourceEdit.file, alphaSourceEdit.original);
 		assert.equal(await page.evaluate(() => localStorage.getItem("zz-prove-it-browser")), "alpha");
 		assert.equal(await page.evaluate(() => document.cookie), "zz-prove-it-cookie=alpha");
 		const ink = await page.evaluate(() => new Promise((resolve, reject) => {
@@ -191,7 +225,7 @@ try {
 		const before = readState(environment.state);
 		fs.writeFileSync(path.join(before.tickets.gamma.profile, "zz-prove-it-retained.txt"), "retained");
 		environment.setPR("gamma", 8, "MERGED");
-		const after = await environment.waitFor(current => current.tickets.gamma.merged && current.tickets.beta.preview === "running", "automatic release and queued allocation", 60_000);
+		const after = await environment.waitFor(current => current.tickets.gamma.merged && current.tickets.beta.preview === "running", "automatic release and queued allocation with real build", 180_000);
 		assert.ok(!ownedGroup(before.tickets.gamma.process));
 		assert.ok(alive(after.tickets.alpha.process) && alive(after.tickets.delta.process));
 		await environment.cli("observe");
@@ -200,14 +234,14 @@ try {
 		assert.equal(fs.readFileSync(path.join(before.tickets.gamma.profile, "zz-prove-it-retained.txt"), "utf8"), "retained");
 		return { beforeSlot: before.tickets.gamma.slot, afterOwner: "beta", claim: after.tickets.beta.claim, replayPreservedOwner: true, profileRetained: true, githubTransport: "disposable fake, no live merge" };
 	});
-	await step("exploratory preview: no ticket setup, live dirty source and retained state", async () => {
+	await step("exploratory preview: no ticket setup, immutable dirty-source snapshots and retained state", async () => {
 		await environment.cli("release", "beta");
 		await environment.waitFor(current => current.tickets.beta.preview === "none", "space for exploration", 60_000);
 		const worktree = environment.exploration("spike");
 		const head = git(worktree, "rev-parse", "HEAD");
 		environment.env.LH_DELIVERY_SKILLS_DIR = path.join(environment.directory, "no-installed-skills");
 		await environment.cli("preview", "spike", "--worktree", worktree);
-		const started = await environment.waitFor(current => current.tickets.spike.preview === "running", "real exploratory app", 60_000);
+		const started = await environment.waitFor(current => current.tickets.spike.preview === "running", "real exploratory snapshot build", 180_000);
 		const spike = started.tickets.spike;
 		processes.push(spike.process);
 		assert.equal(spike.kind, "exploration");
@@ -223,18 +257,19 @@ try {
 		const file = path.join(worktree, "app", "zz-prove-it", "page.tsx");
 		fs.writeFileSync(file, fs.readFileSync(file, "utf8").replace("zz-prove-it-original", "zz-prove-it-exploratory-edit"));
 		await open(address);
-		await page.waitForFunction(() => document.querySelector('[data-proof="source"]')?.textContent === "zz-prove-it-exploratory-edit", { timeout: 60_000 });
-		await page.screenshot({ path: path.join(run, "exploratory-preview.png") });
+		assert.equal(await page.$eval('[data-proof="source"]', node => node.textContent), before);
 		await json(new URL("api/settings/general", spike.origin), { ...post({ autoUpdate: false }), method: "PUT" });
 		await page.evaluate(() => localStorage.setItem("zz-prove-it-browser", "exploratory"));
 		await environment.cli("release", "spike");
 		await environment.waitFor(current => current.tickets.spike.preview === "none", "exploratory stop", 60_000);
 		assert.ok(!ownedGroup(spike.process));
 		await environment.cli("preview", "spike");
-		const reopened = await environment.waitFor(current => current.tickets.spike.preview === "running", "exploratory reopen", 60_000);
+		const reopened = await environment.waitFor(current => current.tickets.spike.preview === "running", "exploratory snapshot rebuild", 180_000);
 		processes.push(reopened.tickets.spike.process);
 		assert.equal(reopened.tickets.spike.origin, spike.origin);
 		await open(address);
+		await page.waitForFunction(() => document.querySelector('[data-proof="source"]')?.textContent === "zz-prove-it-exploratory-edit", { timeout: 60_000 });
+		await page.screenshot({ path: path.join(run, "exploratory-preview.png") });
 		assert.equal(await page.evaluate(() => localStorage.getItem("zz-prove-it-browser")), "exploratory");
 		assert.equal((await json(new URL("api/settings", spike.origin))).settings.general.autoUpdate, false);
 		assert.equal(git(worktree, "rev-parse", "HEAD"), head);

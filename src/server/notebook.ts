@@ -1,5 +1,6 @@
 /** Session-owned notebook executor. The request/view never owns accepted work. */
 import { z } from "zod";
+import { deploymentWorkPaused } from "./deployment-barrier.ts";
 import { runNotebookEditor } from "../agent/notebook-editor.ts";
 import { piEngineForSpec, type PiEngine } from "../agent/models.ts";
 import type { ChatStore } from "../core/ports.ts";
@@ -180,11 +181,12 @@ export function createNotebookService({ chatStore, engine }: {
 		}
 	}
 	function resume(chatId: string) {
-		if (running.has(chatId)) return;
+		if (running.has(chatId) || deploymentWorkPaused()) return;
 		recover(chatId);
 		schedule(chatId);
 	}
 	function dispatch(chatId: string, command: NotebookCommand) {
+		if (deploymentWorkPaused()) throw new NotebookRefusal("Local maintenance pause", 503);
 		resume(chatId);
 		const previous = read(chatId);
 		if (command.type === "apply" || command.type === "undo" || command.type === "start-fresh") {
@@ -225,7 +227,8 @@ export function createNotebookService({ chatStore, engine }: {
 		view(chatId: string) { resume(chatId); return notebookView(read(chatId)); },
 		async settled(chatId: string) { await running.get(chatId); },
 		busy(chatId: string) {
-			const next = nextOperation(read(chatId));
+			const record = chatStore.getChat(chatId)?.notebook;
+			const next = record && nextOperation(record);
 			return running.has(chatId) || !!next && outstanding(next);
 		},
 		initialize() { for (const chat of chatStore.listChats()) { try { resume(chat.id); } catch (error) { console.error(`[notebook ${chat.id}] recovery failed`, error); } } },

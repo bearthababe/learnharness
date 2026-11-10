@@ -133,7 +133,7 @@ export function previewEnvironment(profile, prefix, host = "127.0.0.1") {
 	};
 }
 export function assertPreviewCheckout(worktree) {
-	for (const file of [".env", ".env.local", ".env.development", ".env.development.local"]) assert.ok(!fs.existsSync(path.join(worktree, file)), `Isolated previews refuse dotenv file ${file}; use a clean ticket checkout, not copied credentials`);
+	for (const file of fs.readdirSync(worktree)) assert.ok(!/^\.env(?:\.|$)/.test(file), `Isolated previews refuse dotenv file ${file}; use a clean ticket checkout, not copied credentials`);
 	assert.ok(fs.existsSync(path.join(worktree, "node_modules", "next", "dist", "bin", "next")), "Run npm ci in the ticket worktree first");
 }
 export async function stopOwned(owner) {

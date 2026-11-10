@@ -22,7 +22,7 @@ node scripts/ticket.mjs release my-experiment
 
 Initialize the shared registry once with `init` if necessary. The preview name
 identifies retained synthetic state, not a delivery ticket. It uses the same
-three slots, queue, source reload and profile isolation as ticket previews.
+three slots, queue, snapshot refresh and profile isolation as ticket previews.
 No installed delivery skill, GitHub authentication or T3 attachment is needed.
 Repeat `preview my-experiment` to reopen it; keep its worktree/dependencies intact.
 Never use `finish` to clean exploratory worktrees. Delivery steps below apply only
@@ -59,8 +59,9 @@ belong to the coordinated deployment follow-up, not this entrypoint.
    It starts the manager, claims a free slot, or queues only the preview request.
    Read `status` for `reviewUrl`, stable `origin`, `revision` and errors. Open the
    review URL; it redirects to the ticket's persistent browser origin. Do not
-   advertise a queued/starting/error preview as ready. No redeployment is needed
-   for source revisions; the development app serves the actual worktree.
+   advertise a queued/starting/error preview as ready. The running app serves an
+   isolated source snapshot. Release and request the preview again to include
+   source edits; its synthetic state survives.
 3. Run `node scripts/ticket.mjs delivery TICKET`. **Read and execute the returned
    installed `skill` now**, not just the JSON summary. Use `prove-learnharness`
    for its proof step. `full-stop` commits/pushes/reviews and hands back the open,

@@ -39,7 +39,7 @@ test("3–4,8: concurrent claims, nonblocking fourth request and automatic idemp
 	try {
 		for (const id of ["one", "two", "three", "four"]) await environment.attach(id, id === "four" ? "full-send" : "full-stop");
 		await Promise.all(["one", "two", "three"].map(id => environment.cli("preview", id)));
-		const allocated = await environment.waitFor(state => state.slots.every(slot => slot.ticket), "three allocations");
+		const allocated = await environment.waitFor(state => state.slots.every(slot => slot.ticket && state.tickets[slot.ticket].preview === "running"), "three running allocations");
 		assert.equal(new Set(allocated.slots.map(slot => slot.ticket)).size, 3);
 		assert.equal(new Set(allocated.slots.map(slot => slot.claim)).size, 3);
 		const owners = allocated.slots.map(slot => ({ ...slot }));
@@ -98,26 +98,30 @@ test("5,7: startup refuses dotenv, sanitizes ambient environment and retains pro
 		const state = await environment.waitFor(current => fs.existsSync(path.join(current.tickets.isolated.profile, "data", "launch.json")), "fake app launch");
 		const launched = JSON.parse(fs.readFileSync(path.join(state.tickets.isolated.profile, "data", "launch.json"), "utf8"));
 		assert.deepEqual({ ambient: launched.ambient, desktop: launched.desktop }, { ambient: false, desktop: false });
-		assert.ok(launched.home.startsWith(state.tickets.isolated.profile));
+		assert.equal(launched.home, "/state/home");
 		await environment.cli("release", "isolated");
 		await environment.waitFor(current => current.tickets.isolated.preview === "none", "release");
 		assert.ok(fs.existsSync(path.join(state.tickets.isolated.profile, "data", "launch.json")));
 	} finally { await environment.stop(); }
 });
 
-test("3: tailnet allocation skips occupied mappings and Funnel permissions without changing either owner", async () => {
+test("3: tailnet previews refuse missing dedicated identities without changing existing mappings", async () => {
 	const host = "zz-prove-it.tailproof.ts.net";
 	const environment = await fixture({ tailnetHost: host, httpsPorts: [24500, 24501, 24502], fakeTailnet: true });
+	const authorized = JSON.parse(fs.readFileSync(environment.tailnetFile, "utf8"));
 	const external = { TCP: { 24500: { HTTPS: true } }, Web: { [`${host}:24500`]: { Handlers: { "/": { Proxy: "http://127.0.0.1:29999" } } } }, AllowFunnel: { [`${host}:24502`]: true } };
 	fs.writeFileSync(environment.tailnetFile, JSON.stringify(external));
 	try {
+		await assert.rejects(environment.cli("configure-tailnet", "--tailnet-host", host, "--https-ports", "24500,24501,24502"), /Existing review route does not match/);
+		fs.writeFileSync(environment.tailnetFile, JSON.stringify({ ...authorized, AllowFunnel: { [`${host}:24502`]: true } }));
+		await assert.rejects(environment.cli("configure-tailnet", "--tailnet-host", host, "--https-ports", "24500,24501,24502"), /Public Funnel review routes are forbidden/);
+		fs.writeFileSync(environment.tailnetFile, JSON.stringify(external));
 		await environment.attach("one");
-		await environment.attach("two");
 		await environment.cli("preview", "one");
-		const state = await environment.waitFor(current => current.tickets.one.preview === "running", "private unoccupied mapping");
-		assert.equal(state.tickets.one.slot, 2);
-		await environment.cli("preview", "two");
-		assert.deepEqual(readState(environment.state).queue, ["two"]);
+		const state = await environment.waitFor(current => current.tickets.one.preview === "error", "missing dedicated identity refusal");
+		assert.match(state.tickets.one.error, /dedicated per-preview hostname/);
+		assert.ok(state.slots.every(slot => slot.ticket === null));
+		assert.equal(state.tickets.one.process, undefined);
 	} finally {
 		await environment.stop();
 		assert.deepEqual(JSON.parse(fs.readFileSync(environment.tailnetFile, "utf8")), external);
@@ -245,7 +249,7 @@ test("exploratory previews need no ticket, PR or delivery skill and share the ti
 	try {
 		for (const id of ["one", "two", "three"]) await environment.attach(id);
 		await Promise.all(["one", "two", "three"].map(id => environment.cli("preview", id)));
-		const full = await environment.waitFor(state => state.slots.every(slot => slot.ticket), "full ticket pool");
+		const full = await environment.waitFor(state => state.slots.every(slot => slot.ticket && state.tickets[slot.ticket].preview === "running"), "full running ticket pool");
 		const worktree = environment.exploration("spike");
 		const head = git(worktree, "rev-parse", "HEAD");
 		fs.writeFileSync(path.join(worktree, "README.md"), "uncommitted exploration\n");

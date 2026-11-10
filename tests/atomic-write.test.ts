@@ -164,12 +164,28 @@ describe("writeFileAtomicSync", () => {
 		assert.deepEqual(temps(file), []);
 	});
 
-	it("folders in the way fail at once", () => {
+	it("folders in the way fail at once", (t) => {
 		const file = target("record.json");
 		fs.mkdirSync(file);
-		const started = Date.now();
+		const rename = t.mock.method(fs, "renameSync");
+		const wait = t.mock.method(Atomics, "wait");
 		assert.throws(() => writeFileAtomicSync(file, "new"));
-		assert.ok(Date.now() - started < 50, "no waiting on folders");
+		assert.equal(rename.mock.callCount(), 1, "folders are not retried");
+		assert.equal(wait.mock.callCount(), 0, "no waiting on folders");
+		assert.deepEqual(fs.readdirSync(file), []);
+		assert.deepEqual(temps(file), []);
+	});
+
+	it("modeled Windows: folders are not mistaken for held writable files", (t) => {
+		modelWindows(t);
+		const file = target("record.json");
+		fs.mkdirSync(file);
+		const rename = t.mock.method(fs, "renameSync", () => { throw fail("EPERM"); });
+		const wait = t.mock.method(Atomics, "wait");
+		assert.throws(() => writeFileAtomicSync(file, "new"), { code: "EPERM" });
+		assert.equal(rename.mock.callCount(), 1, "folders are not retried");
+		assert.equal(wait.mock.callCount(), 0, "no waiting on folders");
+		assert.deepEqual(fs.readdirSync(file), []);
 		assert.deepEqual(temps(file), []);
 	});
 

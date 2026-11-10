@@ -102,3 +102,4 @@ export * from "./session-markdown.ts";
 export * from "./handwriting.ts";
 export * from "./writing-submission.ts";
 export * from "./handwriting-pages.ts";
+export type { RuntimeStatus } from "./contracts/runtime.ts";

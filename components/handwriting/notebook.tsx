@@ -1,4 +1,5 @@
 "use client";
+import { useDeploymentActivity } from "../deployment-activity";
 
 /** Accepted canvas/layout from c663dcecd22a, isolated from session/model state.
  * Only completed strokes touch recovery. No React/storage work on movement. */
@@ -45,6 +46,10 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const controlsRef = useRef<HTMLElement>(null), slotRef = useRef<HTMLDivElement>(null), areaRef = useRef<HTMLDivElement>(null);
 	const strokes = useRef<Stroke[]>([]), active = useRef<{ pointerId: number; stroke: Stroke; complete: (stroke: Stroke) => void } | null>(null);
 	const recovery = useRef<HandwritingPages | null>(null);
+	useDeploymentActivity("unfinished-handwriting", () => {
+		const state = recovery.current?.getSnapshot();
+		return !!active.current || decoding.current || !state?.ready || state.busy || replayHandwriting(state.working).strokes.length > 0;
+	});
 	const attachmentNotice = submission?.attachment()?.notice(normalizeHandwriting(recovery.current?.getSnapshot().working ?? { version: 1, operations: [] }).pageId);
 	const [saved, setSaved] = useState<Pick<PagesState, "ready" | "notice">>({ ready: false, notice: "Opening notebook…" });
 	const [pageId, setPageId] = useState("page_initial"), [pages, setPages] = useState<PageSummary[]>([]), [pagesOpen, setPagesOpen] = useState(false), [optionsOpen, setOptionsOpen] = useState(false);

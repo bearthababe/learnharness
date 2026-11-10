@@ -39,6 +39,8 @@ test("existing sessions migrate once to Terra medium without rewriting their acc
 	record.notebookDraft.text = "My unfinished instruction";
 	record.operations.push({ id: "old", sequence: 1, contextId: record.current.id, kind: "edit", status: "applied", candidate: "deepseek-low", acceptedAt: "2026-11-04T00:00:00Z" });
 	const before = chatStore.saveNotebook(chat.id, record.revision, record);
+	assert.equal(service.busy(chat.id), false);
+	assert.deepEqual(chatStore.getChat(chat.id)!.notebook, before);
 	assert.equal(service.view(chat.id).candidate, "terra-medium");
 	const migrated = chatStore.getChat(chat.id)!.notebook!;
 	assert.deepEqual(migrated, { ...before, revision: before.revision + 1, candidate: "terra-medium", modelPickerVersion: NOTEBOOK_MODEL_PICKER_VERSION });

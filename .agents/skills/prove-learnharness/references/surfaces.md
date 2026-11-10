@@ -37,8 +37,11 @@ diagnostics, but do not confuse proposed numbers with approved acceptance.
 4. Fourth request queues while `delivery` and PR/CI progression remain available.
 5. Empty settings/chats/key status through real HTTP; synthetic ambient secrets and
    dotenv probes must not resolve. Do not record secret values.
-6. Change a worktree source, fetch through the slot redirect and stable ticket
-   origin, observe new content without root changes or redeployment.
+6. For the approved deployment follow-up, change a worktree source and confirm
+   the running snapshot remains unchanged. Release/reopen, fetch through the slot
+   redirect and stable source origin, and require the edit plus a changed
+   `sandbox.sourceHash`, without root changes. This supersedes the original
+   ticket spec's live-reload case under the independent deployment answer key.
 7. Save settings/session/browser state; release, occupy old slot with another
    ticket, reopen original elsewhere and compare original and new state.
 8. Feed merged PR status through the real observer using a disposable GitHub
@@ -53,7 +56,12 @@ from the unchanged original ticket spec. Exercise `preview NAME --worktree PATH`
 on an existing dirty/detached worktree without delivery-skill lookup. Prove the
 shared queue with ticket previews, source/name ownership checks, retained state
 after release/reopen and refusal of ticket delivery or automatic worktree cleanup.
-The real browser run must show the exploratory worktree's edit without a commit.
+The real browser run must show the exploratory worktree's edit after snapshot
+release/reopen without a commit. The canonical workflow driver staggers real
+builds to bound CI memory, then checks three overlapping runtimes, queue promotion
+and retained state. App requests use verified Chromium, not Node fetch. Its
+separate browser contexts on loopback are not same-context cookie isolation;
+prove private per-source HTTPS identity separately through the deployment map.
 
 ## Existing surfaces and setup
 

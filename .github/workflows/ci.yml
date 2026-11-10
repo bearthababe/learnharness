@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - name: Install and verify preview sandbox prerequisites
+        uses: ./.github/actions/setup-preview-sandbox
       - uses: actions/setup-node@v7
         with:
           node-version: "26"
@@ -40,6 +42,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - name: Install and verify preview sandbox prerequisites
+        uses: ./.github/actions/setup-preview-sandbox
       - uses: actions/setup-node@v7
         with:
           node-version: "26"
@@ -127,6 +131,13 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: ${{ runner.os == 'Linux' && '0' || '1' }}
+      - name: Install and verify preview sandbox prerequisites
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/setup-preview-sandbox
+        with:
+          atomic-restore: "true"
       - uses: actions/setup-node@v7
         with:
           node-version: "26"
@@ -142,3 +153,13 @@ jobs:
       - run: node scripts/smoke-provider-runtime.mjs
       - run: node scripts/build-server.mjs
       - run: node scripts/smoke-server.mjs --electron
+      - name: Build the current private Linux package for deployment tests
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p "$HOME/.cache"
+          npx electron-builder --linux --dir --x64 --publish never
+      - name: Deployment lifecycle and preview sandbox tests
+        if: runner.os == 'Linux'
+        run: npm run test:deployment
+        env:
+          TMPDIR: /tmp

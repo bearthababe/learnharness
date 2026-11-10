@@ -49,10 +49,14 @@ export async function fixture({ real = false, tailnetHost = null, httpsPorts = n
 	fs.writeFileSync(github, "{}\n");
 	if (fakeTailnet) {
 		fs.writeFileSync(tailnetFile, JSON.stringify({ TCP: {}, Web: {}, AllowFunnel: {} }));
-		fs.writeFileSync(path.join(bin, "tailscale"), `#!${process.execPath}\nimport fs from 'node:fs';const args=process.argv.slice(2);if(args[0]==='status'){console.log(JSON.stringify({Self:{DNSName:${JSON.stringify(tailnetHost + ".")}}}));}else{if(args[0]!=='serve')throw Error('Only Serve allowed');const file=process.env.ZZ_PROVE_TAILNET;const state=JSON.parse(fs.readFileSync(file));if(args[1]==='status')console.log(JSON.stringify(state));else{const port=args.find(arg=>arg.startsWith('--https=')).split('=')[1];const key=${JSON.stringify(tailnetHost)}+':'+port;if(args.at(-1)==='off'){delete state.TCP[port];delete state.Web[key];}else{if(state.TCP[port])throw Error('Refusing occupied mapping');state.TCP[port]={HTTPS:true};state.Web[key]={Handlers:{'/':{Proxy:args.at(-1)}}};}fs.writeFileSync(file,JSON.stringify(state));}}\n`, { mode: 0o700 });
+		fs.writeFileSync(path.join(bin, "tailscale"), `#!${process.execPath}\nimport fs from 'node:fs';const args=process.argv.slice(2);if(args[0]==='status'){console.log(JSON.stringify({BackendState:'Running',Self:{ID:'synthetic-normal-node',Online:true,DNSName:${JSON.stringify(tailnetHost + ".")}}}));}else{if(args[0]!=='serve'||args[1]!=='status')throw Error('Fixture forbids route writes');console.log(fs.readFileSync(process.env.ZZ_PROVE_TAILNET,'utf8'));}\n`, { mode: 0o700 });
 	}
 	fs.writeFileSync(path.join(bin, "gh"), `#!${process.execPath}\nimport fs from 'node:fs';const args=process.argv.slice(2);if(args[0]!=='pr'||args[1]!=='view')throw Error('Only disposable PR observation is allowed');const number=args[2];const record=JSON.parse(fs.readFileSync(process.env.ZZ_PROVE_GITHUB,'utf8'))[number];if(!record)throw Error('Unknown fixture PR');if(!args.includes('--repo'))throw Error('Explicit repository required');console.log(JSON.stringify(record));\n`, { mode: 0o700 });
 	const env = { ...process.env, PATH: bin + path.delimiter + process.env.PATH, LH_DELIVERY_SKILLS_DIR: skills, ZZ_PROVE_GITHUB: github, ZZ_PROVE_TAILNET: tailnetFile, OPENAI_API_KEY: "zz-prove-it-synthetic-ambient", ANTHROPIC_API_KEY: "zz-prove-it-synthetic-ambient", LH_DESKTOP_SERVER: "1", LH_DESKTOP_API_SECRET: "zz-prove-it-not-a-real-credential" };
+	if (fakeTailnet) {
+		env.ZZ_PROVE_TAILNET_EXECUTABLE = path.join(bin, "tailscale");
+		env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ""} --import=${JSON.stringify(path.join(source, "tests/workflow/mock-tailnet.mjs"))}`;
+	}
 	if (installedSkills) delete env.LH_DELIVERY_SKILLS_DIR;
 	const cli = async (...args) => {
 		const result = await execute(process.execPath, [cliFile, ...args, "--root", root, "--state-dir", state], { env, maxBuffer: 4 * 1024 * 1024 });
@@ -61,6 +65,7 @@ export async function fixture({ real = false, tailnetHost = null, httpsPorts = n
 	const ports = [];
 	let start = real ? 3900 : 24000;
 	for (let index = 0; index < 3; index++) { const port = await choosePort(start, ports); ports.push(port); start = port + 1; }
+	if (fakeTailnet) fs.writeFileSync(tailnetFile, JSON.stringify({ TCP: Object.fromEntries(httpsPorts.map(port => [port, { HTTPS: true }])), Web: Object.fromEntries(httpsPorts.map((port, index) => [`${tailnetHost}:${port}`, { Handlers: { "/": { Proxy: `http://127.0.0.1:${ports[index]}` } } }])), AllowFunnel: {} }));
 	const init = ["init", "--ports", ports.join(","), "--origin-port", real ? "18500" : "26000", "--observe-ms", "500", "--repository", "zz-prove-it/project"];
 	if (tailnetHost) init.push("--tailnet-host", tailnetHost, "--https-ports", httpsPorts.join(","));
 	await cli(...init);
@@ -77,7 +82,8 @@ export async function fixture({ real = false, tailnetHost = null, httpsPorts = n
 		else {
 			const next = path.join(worktree, "node_modules", "next", "dist", "bin");
 			fs.mkdirSync(next, { recursive: true });
-			fs.writeFileSync(path.join(next, "next"), `const http=require('node:http');const fs=require('node:fs');fs.writeFileSync(process.env.LH_DATA_DIR+'/launch.json',JSON.stringify({ambient:!!process.env.OPENAI_API_KEY,desktop:!!process.env.LH_DESKTOP_SERVER,home:process.env.HOME}));http.createServer((req,res)=>res.end('zz-prove-it-fake-app')).listen(Number(process.argv[process.argv.indexOf('--port')+1]),'127.0.0.1');`);
+			fs.writeFileSync(path.join(next, "next"), "process.exit(0)");
+			fs.writeFileSync(path.join(worktree, "node_modules", "next", "index.js"), "module.exports=()=>({prepare:async()=>{require('node:fs').writeFileSync(process.env.LH_DATA_DIR+'/launch.json',JSON.stringify({ambient:!!process.env.OPENAI_API_KEY,desktop:!!process.env.LH_DESKTOP_SERVER,home:process.env.HOME}))},getRequestHandler:()=>((_request,response)=>response.end('zz-prove-it-fake-app')),getUpgradeHandler:()=>((_request,socket)=>socket.destroy())})");
 		}
 	}
 	function exploration(id) {

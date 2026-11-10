@@ -54,7 +54,8 @@ function createSubscriptions(options) {
 		epoch: 0, authorityRevision: 0, revision: 0, tail: Promise.resolve(), fatal: false, blocked: false, ready: false, error: undefined, authFailed: false, attempt: null, catalog: [], endpoint: null,
 	}]));
 	const entryFor = (id) => { const entry = entries.get(id); if (!entry) throw failure("unavailable"); return entry; };
-	function serialized(entry, fn) { const result = entry.tail.then(fn); entry.tail = result.catch(() => {}); return result; }
+	let queued = 0;
+	function serialized(entry, fn) { queued++; const result = entry.tail.then(fn).finally(() => { queued--; }); entry.tail = result.catch(() => {}); return result; }
 	function statusOf(entry) {
 		const available = entry.ready && !closed && !paused && !entry.fatal;
 		const attempt = entry.attempt;
@@ -244,6 +245,13 @@ function createSubscriptions(options) {
 			await entry.models.logout(providerId); entry.blocked = false; entry.authFailed = false; entry.error = undefined; changed(entry);
 		},
 		pause() { paused = true; for (const entry of entries.values()) { cancel(entry.providerId); entry.epoch++; changed(entry); } },
+		activity() { return queued > 0 || [...entries.values()].some(entry => !!entry.attempt); },
+		async quiesce() {
+			if ([...entries.values()].some(entry => !!entry.attempt)) throw failure("interaction");
+			paused = true;
+			await ready;
+			await Promise.all([...entries.values()].map(entry => entry.tail));
+		},
 		resume() { if (closed) return; paused = false; for (const entry of entries.values()) changed(entry); },
 		close() { closed = true; for (const entry of entries.values()) { cancel(entry.providerId); entry.epoch++; changed(entry); } },
 	};

@@ -76,6 +76,29 @@ test("parallel expired-token requests refresh once, preserve native extension me
 		assert.equal(saved.credential.refresh, "rotated-single-writer"); assert.equal(saved.credential.extraNativeField, "retained");
 	} finally { await f.cleanup(); }
 });
+test("deployment drain waits for native rotation without aborting or dropping returned credentials", async () => {
+	const release = deferred<OAuthCredential>();
+	const started = deferred<void>();
+	let refreshSignal: AbortSignal | undefined;
+	const scenario = await fixture({ login: async (provider) => credential(provider, 0), refresh: (_provider, _value, signal) => { refreshSignal = signal; started.resolve(); return release.promise; } });
+	try {
+		await scenario.controller.login("github-copilot", true);
+		const scope = await scenario.scope("github-copilot");
+		const deniedLease = assert.rejects(scenario.controller.lease(scope, false));
+		await started.promise;
+		assert.equal(scenario.controller.activity(), true);
+		let drained = false;
+		const draining = scenario.controller.quiesce().then(() => { drained = true; });
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(drained, false);
+		assert.equal(refreshSignal?.aborted, false);
+		release.resolve({ ...credential("github-copilot"), refresh: "zz-prove-it-drained-rotation" });
+		await draining; await deniedLease;
+		const saved = JSON.parse(await fs.readFile(path.join(scenario.directory, "github-copilot-credentials.json"), "utf8"));
+		assert.equal(saved.credential.refresh, "zz-prove-it-drained-rotation");
+		assert.equal(scenario.controller.activity(), false);
+	} finally { await scenario.cleanup(); }
+});
 test("background changes retain foreground scope; replacement and disconnect invalidate old leases", async () => {
 	const f = await fixture();
 	try {
