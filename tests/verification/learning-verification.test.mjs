@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { test } from "node:test";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { aggregate, coverage, selectStories, assertResolved, cucumberOutcomes, RunBudget, runLimits, livePreflight, outcomes, validateCatalog, catalogReport } from "../../scripts/lib/learning-verification.mjs";
+import { aggregate, coverage, selectStories, assertResolved, cucumberOutcomes, RunBudget, runLimits, outcomes, validateCatalog, catalogReport } from "../../scripts/lib/learning-verification.mjs";
 
 const catalog = JSON.parse(fs.readFileSync(new URL("../../verification/learning/stories.json", import.meta.url), "utf8"));
 const inventory = JSON.parse(fs.readFileSync(new URL("../../verification/learning/inventory.json", import.meta.url), "utf8"));
@@ -65,8 +65,10 @@ test("V-5: controlled accounting refuses dispatch past shared caps and after can
 	assert.equal(requests.status, "incomplete");
 	const turns = new RunBudget();
 	for (let index = 0; index < runLimits.learnerTurns; index++) turns.admit("learner");
-	assert.throws(() => turns.admit("model"), /cap reached/);
-	assert.equal(turns.requests, 0);
+	assert.equal(turns.learnerTurns, runLimits.learnerTurns, "every allowed learner turn is admissible");
+	assert.throws(() => turns.admit("learner"), /cap reached/);
+	turns.admit("model");
+	assert.equal(turns.requests, 1, "a run at its turn limit can still be graded");
 	let clock = 0;
 	const timed = new RunBudget(() => clock);
 	clock = runLimits.minutes * 60_000 - 1;
@@ -78,12 +80,19 @@ test("V-5: controlled accounting refuses dispatch past shared caps and after can
 	assert.throws(() => cancelled.admit("model"), /cap reached/);
 });
 
-test("unsafe live execution fails closed before credential access or model dispatch", () => {
-	const result = livePreflight();
+test("live execution without the owner's authorization refuses through the actual CLI, before any dispatch", () => {
+	const root = fileURLToPath(new URL("../../", import.meta.url));
+	const env = { ...process.env };
+	delete env.LH_LIVE_AUTHORIZATION;
+	const child = spawnSync(process.execPath, ["scripts/verify-learning.mjs", "run", "--live"], { cwd: root, encoding: "utf8", env });
+	assert.equal(child.status, 1);
+	const result = JSON.parse(child.stdout);
 	assert.equal(result.status, "blocked");
-	assert.equal(result.modelRequests, 0);
-	assert.equal(result.credentialAccess, false);
-	assert.equal(result.reasons.length, 2);
+	const saved = JSON.parse(fs.readFileSync(`${result.evidence}/result.json`, "utf8"));
+	assert.equal(saved.preflight.modelRequests, 0);
+	assert.equal(saved.preflight.credentialsCopied, false);
+	assert.match(saved.preflight.reasons.join(" "), /LH_LIVE_AUTHORIZATION/);
+	assert.equal(saved.live, undefined, "No live session or grading started");
 });
 
 test("the actual CLI exits nonzero on runtime skips and pending checks, even when Cucumber exits zero", () => {

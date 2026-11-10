@@ -5,7 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { coverage, selectStories, assertResolved, cucumberOutcomes, livePreflight, validateCatalog, catalogReport, runLimits } from "./lib/learning-verification.mjs";
+import { coverage, selectStories, assertResolved, cucumberOutcomes, validateCatalog, catalogReport, runLimits } from "./lib/learning-verification.mjs";
+import { liveReadiness } from "./lib/learning-live.mjs";
 import { sourceFingerprint } from "./mobile-browser-result.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -46,10 +47,19 @@ if (command === "validate") {
 	write("result.json", result);
 	try {
 		if (args.includes("--live")) {
-			result.preflight = livePreflight();
-			result.status = "blocked";
-			throw new Error(result.preflight.reasons.join("; "));
-		}
+			// Live dispatch: readiness first (explicit authorization, approved key, CLIs); nothing is dispatched before it passes.
+			const reasons = await liveReadiness({ root });
+			result.preflight = { status: reasons.length ? "blocked" : "ready", reasons, modelRequests: 0, credentialsCopied: false };
+			if (reasons.length) { result.status = "blocked"; throw new Error(reasons.join("; ")); }
+			const option = name => { const index = args.indexOf(name); return index >= 0 ? args[index + 1] : undefined; };
+			result.environment = { ...result.environment, target: "owned app, Chromium mobile viewport (emulation)", mode: "live tutor exercise (initial, owner-authorized 2026-11-10)" };
+			result.limits = { ...result.limits, liveDispatch: "enabled for the initial exercise" };
+			result.selected = ["LJ-TUTOR"];
+			const { runLiveExercise } = await import("./lib/learning-live-run.mjs");
+			await runLiveExercise({ root, run, result, tutorModel: option("--tutor-model") ?? "opus" });
+			Object.assign(result, coverage(catalog, { "LJ-TUTOR": result.liveOutcome ?? (result.status === "blocked" ? "blocked" : "incomplete") }));
+			if (result.status !== "checks-passed") process.exitCode = 1;
+		} else {
 		const storyIndex = args.indexOf("--story");
 		if (storyIndex >= 0) assert.ok(args[storyIndex + 1], "--story requires a story id");
 		const ids = command === "select" ? selectStories(catalog, args[0]) : storyIndex >= 0 ? selectStories(catalog, args[storyIndex + 1]) : catalog.stories.filter(story => story.automation === "executable").map(story => story.id);
@@ -71,6 +81,7 @@ if (command === "validate") {
 		cucumber(false);
 		result.status = command === "select" && aggregateSelected(result) === "checks-passed" ? "executable" : aggregateSelected(result);
 		if (aggregateSelected(result) !== "checks-passed") process.exitCode = 1;
+		}
 	} catch (error) {
 		result.error = error.message;
 		if (result.status !== "blocked") result.status = result.stories.some(story => story.outcome === "failed") ? "failed" : "blocked";
@@ -78,7 +89,7 @@ if (command === "validate") {
 	} finally {
 		result.finishedAt = new Date().toISOString();
 		write("result.json", result);
-		fs.writeFileSync(path.join(run, "coverage.md"), `# Learning verification coverage\n\nCandidate: ${result.candidate.revision} (dirty: ${result.candidate.dirty}); source ${result.candidate.sourceSha256}\n\nChecks: ${result.status}. Intended journey: ${result.journey}. No subject-accuracy or learning-efficacy claim.\n\n| Story | Availability | Readiness | Outcome | Claim |\n| --- | --- | --- | --- | --- |\n${result.stories.map(story => `| ${story.id}: ${story.title} | ${story.availability} | ${story.automation} | ${story.outcome} | ${story.claims.join("; ")} |`).join("\n")}\n\nExpectations: ${result.expectations.path}, SHA-256 ${result.expectations.sha256}.\n\nNot covered: automatic probe-to-teacher wake; actual question grading/assessment ownership; hint size and verdict quality; independent tutor evaluation; evidence-guided adaptation; cross-process durability; unsubmitted draft durability; native Electron; physical iPhone/iPad Home Screen apps.\n\nLive dispatch is disabled. Budget probes are controlled accounting tests, not proof of a live provider boundary. Evidence stays local; no automatic upload or removal.\n${result.error ? `\nError: ${result.error}\n` : ""}`);
+		fs.writeFileSync(path.join(run, "coverage.md"), `# Learning verification coverage\n\nCandidate: ${result.candidate.revision} (dirty: ${result.candidate.dirty}); source ${result.candidate.sourceSha256}\n\nChecks: ${result.status}. Intended journey: ${result.journey}. No subject-accuracy or learning-efficacy claim.\n\n| Story | Availability | Readiness | Outcome | Claim |\n| --- | --- | --- | --- | --- |\n${result.stories.map(story => `| ${story.id}: ${story.title} | ${story.availability} | ${story.automation} | ${story.outcome} | ${story.claims.join("; ")} |`).join("\n")}\n\nExpectations: ${result.expectations.path}, SHA-256 ${result.expectations.sha256}.\n\nNot covered: automatic probe-to-teacher wake; actual question grading/assessment ownership; hint size and verdict quality; independent tutor evaluation; evidence-guided adaptation; cross-process durability; unsubmitted draft durability; native Electron; physical iPhone/iPad Home Screen apps.\n\n${result.live ? `Live exercise: ${result.live.verdict ?? "not graded"} (grader said ${result.live.graderVerdict ?? "nothing"}); ended by ${result.live.endedBy ?? "n/a"}; counts ${JSON.stringify(result.live.counts)}.` : "Live dispatch was not used in this run."} Evidence stays local; no automatic upload or removal.\n${result.error ? `\nError: ${result.error}\n` : ""}`);
 		console.log(JSON.stringify({ status: result.status, journey: result.journey, selected: result.selected, error: result.error, evidence: run }, null, 2));
 	}
 }
