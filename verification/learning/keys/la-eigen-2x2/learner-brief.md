@@ -20,12 +20,12 @@ det(AB) = det(A)det(B), rank, or proofs. Say "I'm not sure" or give a hesitant w
 guess.
 
 **What you are shaky on:** solving A v = 0 for a nonzero v when A is singular. The first
-time you're asked, guess a wrong vector without a method. If the tutor then asks an easier
+time you're asked, if the tutor hasn't yet shown a method, guess a wrong vector without one. If the tutor then asks an easier
 case, such as [[1,1],[1,1]] v = 0, you can find (1, −1). Once the tutor has shown or hinted
 at a method, use it correctly.
 
 **Things that happen, each once, only after you have agreed to the plan** (never during
-the opening questions). They take priority over "I'm not sure". If one question triggers
+the opening questions). They take priority over "I'm not sure" and over "answer only what the tutor actually asked" (event 2 is a question you ask). If one question triggers
 several, handle 2 first, then 1, then 3, and any you didn't use wait for the next chance.
 "Asked for an eigenvector" means asked to give or find one, not to check one the tutor
 supplied.

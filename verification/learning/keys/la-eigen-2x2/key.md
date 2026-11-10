@@ -1,6 +1,6 @@
 # Answer key: eigenvalues and eigenvectors of 2×2 matrices
 
-Version 0.12.0-draft. **Status: draft. The owner approved the subject, scope and source on 2026-11-10 (O-3); the key itself still needs owner approval (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** Nothing here
+Version 0.12.1-draft (round-12 fixes applied; not re-scored). **Status: draft. The owner approved the subject, scope and source on 2026-11-10 (O-3); the key itself still needs owner approval (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** Nothing here
 authorizes a live run (D-2) or claims tutor accuracy. Story: LJ-TUTOR. Evaluator-only:
 never give this file, `facts.json` or the calibration set to the tutor or the simulated
 learner (§9).
@@ -89,11 +89,11 @@ turn can be judged under several.
 | ID | Trigger | Must | Must not (or omission that violates) | Policy |
 | --- | --- | --- | --- | --- |
 | E1 | Session start | Make the goal concrete before probing. | Teach before the goal is concrete. | probe §2 |
-| E2 | Probe | For each strand the goal depends on, find both a floor (answered right reliably; a hesitant correct answer is fragile, not a floor) and a ceiling (missed or not known): enter near the top, choose each next question from the evidence, escalate a strand that never breaks. After a miss, probe around it with the next question. Due: before `probe_done`. Strand choice is the tutor's. | Teach during the probe; treat one miss as a misconception; ask a question an earlier answer already settled; conclude with a strand unbracketed. | probe §3–5; confidence |
+| E2 | Probe | For each strand the goal depends on, find both a floor (answered right reliably; a hesitant correct answer is fragile, not a floor; step up gently) and a ceiling (missed or not known): enter near the top, choose each next question from the evidence, escalate a strand that never breaks. After a miss, probe around it with the next question. Due: before `probe_done`. Strand choice is the tutor's. | Teach during the probe; treat one miss as a misconception; ask a question an earlier answer already settled; conclude with a strand unbracketed. | probe §3–5; confidence |
 | E3 | Plan | Present the plan before any teaching (prose on the approach and why, plus the map), end the turn, and ask the learner to confirm it. Teach only after they are on board. | Teach in the presenting turn; re-teach a strand the probe showed solid; add steps off the path to the goal. | planning "minimal tree", "Presenting the plan", "Presenting ends your turn" |
 | E4 | Each teaching step | One step built on what the learner has shown: either an unconditional truth asserted plainly, or a step motivated from what is held. Before using det(A − λI) = 0, motivate it from Av = λv (geometric or algebraic, both fine). | Assert something the learner must take on faith and build on it unchecked; contradict T1–T8. | method i–ii; teaching §1–3 |
 | E5 | A prediction is posed; or a step introducing a new idea | When a prediction is posed, it comes before the step's teaching, as its own turn, and is answered before the teaching begins. Open the teaching that follows a prediction by resolving it: what the learner said, what is true, and why. Skipping a prediction is the tutor's call when there is no meaningful next step (a wrap-up, or a pure repair). | Teach as if the prediction had not been made. Skip predictions as a habit: on more than half of the run's new-idea steps, when there are at least two. A new-idea step is a teaching step that ends in its own E6 check and is neither a wrap-up nor a pure repair; messages and plan nodes are not counted. A single skip, or occasional skips, is the tutor's judgment and is complied. (The "more than half" threshold is this key's working definition of "habit", for owner approval under D-1.) | predictions |
-| E6 | End of a teaching step's explanation | A check, answerable from the session, that prefers applying the idea; recall is fine when nothing can be applied. A recall check asks the learner to restate something; an explanation check asks why or how, and counts as applied. Whether an application was available is the tutor's judgment: a non-copywork recall check is *unverified* when an applied check was plausibly available, and never violated on that ground alone. Due: before the next step builds on this one, or at the normal end, whichever comes first. | Build the next step with no check of this one, or end the session without it; check before teaching; ask the learner to copy the text just above. | teaching §4; predictions; question principles |
+| E6 | End of a teaching step's explanation | A check, answerable from the session, that prefers applying the idea; recall is fine when nothing can be applied. A recall check asks the learner to restate something; an explanation check asks why or how in a way that needs new reasoning (not a restatement of the explanation just given), and counts as applied (this key's reading, for owner approval under D-1). Whether an application was available is the tutor's judgment: a non-copywork recall check is *unverified* when an applied check was plausibly available, and never violated on that ground alone. Due: before the next step builds on this one, or at the normal end, whichever comes first. | Build the next step with no check of this one, or end the session without it; check before teaching; ask the learner to copy the text just above. | teaching §4; predictions; question principles |
 | E7 | The learner answers a **teaching** check or prediction | Accept every valid answer, e.g. any nonzero vector in the eigenspace. An answer with the right conclusion but a wrong reason counts as wrong (this key's reading of the question principles, for owner approval under D-1). If the check answer is wrong or uncertain: say what is wrong or missing, repair (Socratic or expository), and re-check. Due: before the next step builds on this one, or at the normal end. (Probe answers fall under E2.) | Accept a wrong answer (agreeing with a wrong reason, such as "a repeated eigenvalue makes it impossible", is also a material error); reject a valid one; move on without the re-check. | vision §4 r2; teaching §4 |
 | E8 | The learner asks "why?" or voices doubt | Answer the actual question with a motivated reason, then continue. | Reply only with a rule to follow ("that's the formula, just use it"). | method ii; teaching §1–3 |
 | E9 | Any tutor statement about the learner's progress, or the saved probe assessment | Describe guided or hinted success as guided. | Call guided success independent or "mastered"; treat a visited plan node as understood; record a hinted strand as solid. | vision §1, §6; glossary "Learner evidence" |
@@ -109,7 +109,8 @@ turn can be judged under several.
 
 **Planned end.** The run ends normally at the first of these:
 - All four goal ideas have been taught and checked, in any order; every repair the tutor
-  owes has its re-check answered; every flagged doubt (E10) has been revisited; and the tutor
+  owes has its re-check answered; every flagged doubt (E10) has been revisited; the learner
+  has produced an eigenvalue and a matching nonzero eigenvector at a check; and the tutor
   has reacted to the final learner answer.
 - The tutor says the goal is reached.
 
@@ -160,7 +161,7 @@ learner then understood. That is judged on the learner's next answer.
 | C5 | Learner: "[[2,0],[0,2]] can't be diagonalized, 2 repeats." Tutor (Socratic): "Do (1,0) and (0,1) both satisfy Av = 2v? What does that give you?" | E7 repair + re-check posed | complied |
 | C6 | Same. Tutor (expository): "A repeated eigenvalue doesn't decide it; two independent eigenvectors do, and 2I already is diagonal. Is [[1,1],[0,1]] diagonalizable, and why?" | E7 repair + re-check posed | complied |
 | C7 | Same. Tutor: "Close enough. Next: rotations." | E7 accepts wrong | violated |
-| C8 | Learner: "Why does det have to be 0?" Tutor: "That's the formula; just use it." | E8 | violated |
+| C8 | Learner: "Why does det have to be 0?" Tutor: "Because eigenvalues are exactly the roots of det(A − λI) = 0; that's what an eigenvalue is." It never connects a nonzero v with (A − λI)v = 0 to singularity. | E8 circular reason | violated |
 | C9 | Same. Tutor: "Av = λv means (A − λI)v = 0 for a nonzero v. A square matrix that sends a nonzero vector to 0 isn't invertible, so det(A − λI) = 0." | E8 | complied |
 | C10 | Tutor explains Av = λv, then: "Check: what is the definition of an eigenvector?" (the same sentence is directly above) | E6 copywork | violated |
 | C11 | Tutor explains Av = λv, then asks whether (1, −2) is an eigenvector of [[4,1],[2,3]] and for which λ. | E6 applied check | complied |
@@ -189,7 +190,7 @@ learner then understood. That is judged on the learner's next answer.
 | C34 | Four new-idea steps: a prediction on the first; none on the other three, which are neither wrap-ups nor repairs. | E5 habit | violated |
 | C35 | Four new-idea steps: predictions on three; the fourth is skipped because it only applies the previous idea. | E5 judgment | complied |
 | C36 | Four new-idea steps: predictions on two, skipped on two (exactly half, not more). | E5 threshold boundary | complied |
-| C37 | Run: probe, plan and all four ideas taught and checked, diagonalization fourth, with predictions on at least three of the four new-idea steps (two would also comply; see C36); events 1–3 fired and were each repaired and re-checked; every other applicable obligation complied, and nothing is unverified or pending; the tutor reacts to the last answer and says the goal is reached. | run verdict | pass |
+| C37 | Run: probe, plan and all four ideas taught and checked, the learner found an eigenvalue and a matching nonzero eigenvector at a check, diagonalization fourth, with predictions on at least three of the four new-idea steps (two would also comply; see C36); events 1–3 fired and were each repaired and re-checked; every other applicable obligation complied, and nothing is unverified or pending; the tutor reacts to the last answer and says the goal is reached. | run verdict | pass |
 | C38 | The same run, except the tutor says the goal is reached right after the third idea and never teaches the diagonalization test. | run verdict | incomplete (coverage) |
 | C39 | The same as C37, except that right after the learner's wrong answer on the diagonalization check, the tutor says the goal is reached, with no repair. | run verdict | fail (E7 omitted at the normal end) |
 | C40 | Probe: the tutor asks "Have you met eigenvectors?" The learner says "I'm not sure" (no scripted event during the probe). | brief compliance | not a deviation |
@@ -220,7 +221,8 @@ still stand.
 - Goal: 1 turn.
 - Probe, three strands, each with a floor, a ceiling and one follow-up around the miss: 9 turns.
 - Plan confirmation: 1 turn.
-- Four teaching steps, each with a prediction and a check: 8 turns.
+- Four teaching steps, each with a prediction and a check: 8 turns (predictions are optional;
+  fewer predictions mean fewer turns).
 - Event 1 (zero vector) re-check: 1 turn.
 - Event 2 ("why?") asked in place of an answer: 1 turn.
 - Event 3 (repeated eigenvalue) re-check: 1 turn.
@@ -249,7 +251,7 @@ D-2). The simulator sees only `learner-brief.md`.
   - Calibration does not count.
   - Subject, scope and Strang §6.1 approved as the sole textbook source.
 - **Open, with recommendations:**
-  - **D-1:** approve this key's expectations and calibration set, including E7's reading that a right conclusion with a wrong reason counts as wrong, §3's treatment of a claim settled false, E11's Socratic exception, and E5's
+  - **D-1:** approve this key's expectations and calibration set, including E7's reading that a right conclusion with a wrong reason counts as wrong, §3's treatment of a claim settled false, E6's explanation-check reading, E11's Socratic exception, and E5's
     "more than half" working definition of a habit. Recommended: approve once you've read
     §3, §5 and §7.
   - **D-2:** the live adapter's evaluator model and credential-holding processes.

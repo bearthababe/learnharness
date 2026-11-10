@@ -430,7 +430,7 @@
       },
       "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "unknown", "availabilityBasis": "tutor exists; its quality is what this evaluates",
       "automation": "blocked", "verification": { "scenarios": [], "supporting": ["tests/verification/la-eigen-key.test.mjs"] },
-      "expectations": ["section 3, V-3 through V-5"], "claims": ["draft linear-algebra key v0.5.1 (verification/learning/keys/la-eigen-2x2) awaits owner approval under D-1", "calibration and an enforceable live adapter still need approval", "blocked on D-1, D-2 and D-8"]
+      "expectations": ["section 3, V-3 through V-5"], "claims": ["draft linear-algebra key v0.12.1 (verification/learning/keys/la-eigen-2x2) awaits owner approval under D-1; subject, scope and source approved 2026-11-10", "calibration and an enforceable live adapter still need approval", "blocked on D-1, D-2 and D-8"]
     }
   ]
 }
