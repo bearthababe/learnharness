@@ -1,6 +1,6 @@
 # Answer key: eigenvalues and eigenvectors of 2×2 matrices
 
-Version 1.0.1. **Status: owner-approved, 2026-11-10 (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** A live run
+Version 1.0.2. **Status: owner-approved, 2026-11-10 (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** A live run
 additionally needs the live adapter in §10. Nothing here claims tutor accuracy. Story: LJ-TUTOR. Evaluator-only:
 never give this file, `facts.json` or the calibration set to the tutor or the simulated
 learner (§9).
@@ -89,7 +89,7 @@ turn can be judged under several.
 | ID | Trigger | Must | Must not (or omission that violates) | Policy |
 | --- | --- | --- | --- | --- |
 | E1 | Session start | Make the goal concrete before probing. | Teach before the goal is concrete. | probe §2 |
-| E2 | Probe | For each strand the goal depends on, find both a floor (answered right reliably; a hesitant correct answer is fragile, not a floor; step up gently) and a ceiling (missed or not known): enter near the top, choose each next question from the evidence, escalate a strand that never breaks. After a miss, probe around it with the next question. Due: before `probe_done`. Strand choice is the tutor's. | Teach during the probe; treat one miss as a misconception; ask a question an earlier answer already settled; conclude with a strand unbracketed. | probe §3–5; confidence |
+| E2 | Probe | For each strand the goal depends on, find both a floor (answered right reliably; a hesitant correct answer is fragile, not a floor; step up gently) and a ceiling (missed or not known): enter near the top, choose each next question from the evidence, escalate a strand that never breaks. After a miss, probe around it with the next question. Due: before `probe_done`. Strand choice is the tutor's. | Teach during the probe (the required post-answer explanation of why the correct option is correct is not teaching; teaching means going beyond it, e.g. new ideas, multi-step instruction or starting the lesson); treat one miss as a misconception; ask a question an earlier answer already settled; conclude with a strand unbracketed. | probe §3–5; confidence; question tools ("Multiple choice carries a separate explanation") |
 | E3 | Plan | Present the plan before any teaching (prose on the approach and why, plus the map), end the turn, and ask the learner to confirm it. Teach only after they are on board. | Teach in the presenting turn; re-teach a strand the probe showed solid; add steps off the path to the goal. | planning "minimal tree", "Presenting the plan", "Presenting ends your turn" |
 | E4 | Each teaching step | One step built on what the learner has shown: either an unconditional truth asserted plainly, or a step motivated from what is held. Before using det(A − λI) = 0, motivate it from Av = λv (geometric or algebraic, both fine). | Assert something the learner must take on faith and build on it unchecked; contradict T1–T8. | method i–ii; teaching §1–3 |
 | E5 | A prediction is posed; or a step introducing a new idea | When a prediction is posed, it comes before the step's teaching, as its own turn, and is answered before the teaching begins. Open the teaching that follows a prediction by resolving it: what the learner said, what is true, and why. Skipping a prediction is the tutor's call when there is no meaningful next step (a wrap-up, or a pure repair). | Teach as if the prediction had not been made. Skip predictions as a habit: on more than half of the run's new-idea steps, when there are at least two. A new-idea step is a teaching step that ends in its own E6 check and is neither a wrap-up nor a pure repair; messages and plan nodes are not counted. A single skip, or occasional skips, is the tutor's judgment and is complied. (The "more than half" threshold is the owner-approved definition of "habit", 2026-11-10.) | predictions |
@@ -190,20 +190,22 @@ learner then understood. That is judged on the learner's next answer.
 | C34 | Four new-idea steps: a prediction on the first; none on the other three, which are neither wrap-ups nor repairs. | E5 habit | violated |
 | C35 | Four new-idea steps: predictions on three; the fourth is skipped because it only applies the previous idea. | E5 judgment | complied |
 | C36 | Four new-idea steps: predictions on two, skipped on two (exactly half, not more). | E5 threshold boundary | complied |
-| C37 | Run: probe, plan and all four ideas taught and checked, the learner found an eigenvalue and a matching nonzero eigenvector at a check, diagonalization fourth, with predictions on at least three of the four new-idea steps (two would also comply; see C36); events 1–3 fired and were each repaired and re-checked; every other applicable obligation complied, and nothing is unverified or pending; the tutor reacts to the last answer and says the goal is reached. | run verdict | pass |
-| C38 | The same run, except the tutor says the goal is reached right after the third idea and never teaches the diagonalization test. | run verdict | incomplete (coverage) |
-| C39 | The same as C37, except that right after the learner's wrong answer on the diagonalization check, the tutor says the goal is reached, with no repair. | run verdict | fail (E7 omitted at the normal end) |
-| C40 | Probe: the tutor asks "Have you met eigenvectors?" The learner says "I'm not sure" (no scripted event during the probe). | brief compliance | not a deviation |
-| C41 | Learner (event 3, distinct eigenvalues): "Yes, because the eigenvalues are different; a repeated one would make it impossible, right?" Tutor: "Right." | E7 / T5 endorsing M5 | violated (material error) |
-| C42 | Same. Tutor: "Yes, distinct real eigenvalues are enough. But the claim about repeated eigenvalues is false: [[2,0],[0,2]] has a repeated eigenvalue and is already diagonal. What is the general test?" | E7 valid reason accepted, misconception repaired, re-check posed | complied |
-| C43 | One tutor message introduces det(A − λI) = 0 and asks for an eigenvector of [[2,1],[1,2]]. The learner first asks "why does the determinant have to be 0?"; after the answer, the learner's next eigenvector answer is (0, 0). | brief precedence (event 2, then deferred event 1) | not a deviation |
-| C44 | After teaching Av = λv with [[4,1],[2,3]] on screen, the tutor's only check is "In your own words, what is an eigenvector?", which asks for a restatement, not a reason. | E6 recall where an application was plainly available | unverified |
-| C45 | The step's check asks whether (1, −2) is an eigenvector of [[4,1],[2,3]]; after the learner answers, the tutor's reaction turn asks them to say in their own words what that shows. | E6 applied check with recall follow-up | complied |
-| C46 | Run: C4 happens at learner turn 14, and the 4-hour guard later stops the run. | run verdict | fail |
-| C47 | Run: everything complies through the probe; at turn 6 the simulator answers a question it was told it cannot. | run verdict | incomplete (stopped) |
-| C48 | Run: required coverage complied, but one applicable E10 judgment is unverified. | run verdict | unverified |
-| C49 | Run: no violation; a guard stops it while a re-check is *pending*. | run verdict | incomplete (stopped) |
-| C50 | Run: the same as C37, except that the tutor confidently states one claim outside T1–T8 that the evaluator cannot verify. | run verdict | unverified |
+| C37 | Probe question on det M for M = [[2,4],[1,2]]; after the learner answers, its explanation reads: "det M = 2·2 − 4·1 = 0, so the columns are dependent and a whole line of vectors, e.g. multiples of (2, −1), is sent to 0." | E2 required explanation | complied |
+| C38 | Same probe question; its explanation goes on to define eigenvectors, derive det(A − λI) = 0 and work an example before the probe has ended. | E2 teaching in the probe | violated |
+| C39 | Run: probe, plan and all four ideas taught and checked, the learner found an eigenvalue and a matching nonzero eigenvector at a check, diagonalization fourth, with predictions on at least three of the four new-idea steps (two would also comply; see C36); events 1–3 fired and were each repaired and re-checked; every other applicable obligation complied, and nothing is unverified or pending; the tutor reacts to the last answer and says the goal is reached. | run verdict | pass |
+| C40 | The same run, except the tutor says the goal is reached right after the third idea and never teaches the diagonalization test. | run verdict | incomplete (coverage) |
+| C41 | The same as C39, except that right after the learner's wrong answer on the diagonalization check, the tutor says the goal is reached, with no repair. | run verdict | fail (E7 omitted at the normal end) |
+| C42 | Probe: the tutor asks "Have you met eigenvectors?" The learner says "I'm not sure" (no scripted event during the probe). | brief compliance | not a deviation |
+| C43 | Learner (event 3, distinct eigenvalues): "Yes, because the eigenvalues are different; a repeated one would make it impossible, right?" Tutor: "Right." | E7 / T5 endorsing M5 | violated (material error) |
+| C44 | Same. Tutor: "Yes, distinct real eigenvalues are enough. But the claim about repeated eigenvalues is false: [[2,0],[0,2]] has a repeated eigenvalue and is already diagonal. What is the general test?" | E7 valid reason accepted, misconception repaired, re-check posed | complied |
+| C45 | One tutor message introduces det(A − λI) = 0 and asks for an eigenvector of [[2,1],[1,2]]. The learner first asks "why does the determinant have to be 0?"; after the answer, the learner's next eigenvector answer is (0, 0). | brief precedence (event 2, then deferred event 1) | not a deviation |
+| C46 | After teaching Av = λv with [[4,1],[2,3]] on screen, the tutor's only check is "In your own words, what is an eigenvector?", which asks for a restatement, not a reason. | E6 recall where an application was plainly available | unverified |
+| C47 | The step's check asks whether (1, −2) is an eigenvector of [[4,1],[2,3]]; after the learner answers, the tutor's reaction turn asks them to say in their own words what that shows. | E6 applied check with recall follow-up | complied |
+| C48 | Run: C4 happens at learner turn 14, and the 4-hour guard later stops the run. | run verdict | fail |
+| C49 | Run: everything complies through the probe; at turn 6 the simulator answers a question it was told it cannot. | run verdict | incomplete (stopped) |
+| C50 | Run: required coverage complied, but one applicable E10 judgment is unverified. | run verdict | unverified |
+| C51 | Run: no violation; a guard stops it while a re-check is *pending*. | run verdict | incomplete (stopped) |
+| C52 | Run: the same as C39, except that the tutor confidently states one claim outside T1–T8 that the evaluator cannot verify. | run verdict | unverified |
 
 ## 8. Run limits (owner decision, 2026-11-10; spec §3)
 
@@ -251,6 +253,10 @@ D-2). The simulator sees only `learner-brief.md`.
   - Calibration does not count.
   - Subject, scope and Strang §6.1 approved as the sole textbook source.
   - **D-1:** the key as a whole (expectations and calibration set) approved, version 1.0.0.
+  - **v1.0.2 clarification:** E2 does not treat the policy-required post-answer explanation
+    of why the correct option is correct as teaching; teaching in the probe means going
+    beyond it. The fourth live run showed that the strict reading would fail any probe that
+    follows the question policy.
   - **v1.0.1 correction:** C7, C26 and C30 now expect "violated (material error)", as
     §3 already required: each tutor states or endorses a contradiction of a truth. The
     first blind grader calibration found the inconsistency. No run verdict changes,
