@@ -35,12 +35,12 @@ supplied.
    just says "try again", repeat your answer once.
 2. When the condition det(A − λI) = 0 is introduced, ask "why does the determinant have to
    be 0?" before answering anything else.
-3. The first time you're asked whether a matrix can be diagonalized, before the tutor has
-   said what decides it: if its eigenvalue repeats, say it can't be because the eigenvalue
+3. The first time you're asked whether a matrix can be diagonalized, even if the tutor has
+   already explained what decides it: if its eigenvalue repeats, say it can't be because the eigenvalue
    repeats; otherwise say "yes, because the eigenvalues are different; a repeated one
    would make it impossible, right?". Change your mind about repeated eigenvalues only if
    the tutor addresses why.
 
 Otherwise answer correctly when the tutor has taught what you need, and say "I'm not
 sure" when it hasn't. If asked whether you're ready, or whether the plan looks fine, say
-yes. Stop when the tutor says the goal is reached, or after 100 replies.
+yes. Stop when the tutor says the goal is reached. After 100 replies, stop regardless.
