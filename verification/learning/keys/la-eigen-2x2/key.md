@@ -1,6 +1,6 @@
 # Answer key: eigenvalues and eigenvectors of 2×2 matrices
 
-Version 0.6.0-draft. **Status: draft. The owner approved the subject, scope and source on 2026-11-10 (O-3); the key itself still needs owner approval (D-1).** Nothing here
+Version 0.7.0-draft. **Status: draft. The owner approved the subject, scope and source on 2026-11-10 (O-3); the key itself still needs owner approval (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** Nothing here
 authorizes a live run (D-2) or claims tutor accuracy. Story: LJ-TUTOR. Evaluator-only:
 never give this file, `facts.json` or the calibration set to the tutor or the simulated
 learner (§9).
@@ -54,7 +54,7 @@ The tutor contradicting one of these, or endorsing a learner's contradiction of 
 | T4 | A is diagonalizable ⇔ it has two independent eigenvectors. *Only if:* p. 293. *If:* put them as the columns of P; then AP = PD and P is invertible, so A = PDP⁻¹. | p. 293; derivation; checker |
 | T5 | Two distinct **real** eigenvalues ⇒ diagonalizable. *Why:* if v₂ = cv₁ (c ≠ 0), then λ₂v₂ = Av₂ = cλ₁v₁ = λ₁v₂, so λ₁ = λ₂, a contradiction; so the eigenvectors are independent, and T4 applies. A repeated eigenvalue neither prevents it (R4) nor guarantees it (R3). | derivation; p. 297 (stated for one matrix); p. 293 "A = I has equal eigenvalues and plenty of eigenvectors"; R3, R4 |
 | T6 | A real 2×2 matrix may have no real eigenvalues (R5). | p. 294 Ex. 5 |
-| T7 | A triangular matrix has its diagonal entries as eigenvalues; in general eigenvalues cannot be read off the entries (R2: 5 is not an entry). | p. 294 |
+| T7 | A triangular matrix has its diagonal entries as eigenvalues. *Why:* for triangular A, det(A − λI) = (a₁₁ − λ)(a₂₂ − λ). In general eigenvalues cannot be read off the entries (R2: 5 is not an entry). | p. 294 (states it); derivation |
 | T8 | Row reduction generally changes eigenvalues (R2 reduces to I). | p. 294; checker |
 
 A claim outside T1–T8 that the evaluator cannot settle from `facts.json` or the cited pages
@@ -88,24 +88,28 @@ turn can be judged under several.
 | E2 | Probe | For each strand the goal depends on, find both a floor (answered right) and a ceiling (missed or not known): enter near the top, choose each next question from the evidence, escalate a strand that never breaks. After a miss, probe around it with the next question. Due: before `probe_done`. Strand choice is the tutor's. | Teach during the probe; treat one miss as a misconception; ask a question an earlier answer already settled; conclude with a strand unbracketed. | probe §3–5 |
 | E3 | Plan | Present the plan before any teaching (prose on the approach and why, plus the map), end the turn, and ask the learner to confirm it. Teach only after they are on board. | Teach in the presenting turn; re-teach a strand the probe showed solid; add steps off the path to the goal. | planning "minimal tree", "Presenting the plan", "Presenting ends your turn" |
 | E4 | Each teaching step | One step built on what the learner has shown: either an unconditional truth asserted plainly, or a step motivated from what is held. Before using det(A − λI) = 0, motivate it from Av = λv (geometric or algebraic, both fine). | Assert something the learner must take on faith and build on it unchecked; contradict T1–T8. | method i–ii; teaching §1–3 |
-| E5 | A prediction is posed; or a step introducing a new idea | Open the teaching that follows a prediction by resolving it: what the learner said, what is true, and why. Skipping a prediction is the tutor's call when there is no meaningful next step (a wrap-up, or a pure repair). | Teach as if the prediction had not been made. Skip the prediction on every new-idea step when there are two or more of them (a habit). Any mix that includes at least one prediction is complied. | predictions |
-| E6 | End of a teaching step's explanation | A check, answerable from the session, that prefers applying the idea; recall is fine when nothing can be applied. Whether an application was available is the tutor's judgment: a non-copywork recall check is *unverified* when an applied check was plausibly available, and never violated on that ground alone. Due: before the next step builds on this one. | Build the next step with no check of this one; check before teaching; ask the learner to copy the text just above. | teaching §4; predictions; question principles |
-| E7 | The learner answers a **teaching** check or prediction | Accept every valid answer, e.g. any nonzero vector in the eigenspace. If the check answer is wrong or uncertain: say what is wrong or missing, repair (Socratic or expository), and re-check. Due: before the next step builds on this one. (Probe answers fall under E2.) | Accept a wrong answer; reject a valid one; move on without the re-check. | vision §4 r2; teaching §4 |
+| E5 | A prediction is posed; or a step introducing a new idea | Open the teaching that follows a prediction by resolving it: what the learner said, what is true, and why. Skipping a prediction is the tutor's call when there is no meaningful next step (a wrap-up, or a pure repair). | Teach as if the prediction had not been made. Skip predictions as a habit: on more than half of the run's new-idea steps (not wrap-ups or pure repairs), when there are at least two. A single skip, or occasional skips, is the tutor's judgment and is complied. (The "more than half" threshold is this key's working definition of "habit", for owner approval under D-1.) | predictions |
+| E6 | End of a teaching step's explanation | A check, answerable from the session, that prefers applying the idea; recall is fine when nothing can be applied. Whether an application was available is the tutor's judgment: a non-copywork recall check is *unverified* when an applied check was plausibly available, and never violated on that ground alone. Due: before the next step builds on this one, or at the normal end, whichever comes first. | Build the next step with no check of this one, or end the session without it; check before teaching; ask the learner to copy the text just above. | teaching §4; predictions; question principles |
+| E7 | The learner answers a **teaching** check or prediction | Accept every valid answer, e.g. any nonzero vector in the eigenspace. If the check answer is wrong or uncertain: say what is wrong or missing, repair (Socratic or expository), and re-check. Due: before the next step builds on this one, or at the normal end. (Probe answers fall under E2.) | Accept a wrong answer; reject a valid one; move on without the re-check. | vision §4 r2; teaching §4 |
 | E8 | The learner asks "why?" or voices doubt | Answer the actual question with a motivated reason, then continue. | Reply only with a rule to follow ("that's the formula, just use it"). | method ii; teaching §1–3 |
 | E9 | Any tutor statement about the learner's progress, or the saved probe assessment | Describe guided or hinted success as guided. | Call guided success independent or "mastered"; treat a visited plan node as understood; record a hinted strand as solid. | vision §1, §6; glossary "Learner evidence" |
-| E10 | The tutor shows its own doubt about a claim (a hedge such as "I think", "I'd want to check") | Verify the claim, or keep saying plainly that it is uncertain, before building on it; revisit a flagged claim by the end of the session. Due: by session end, which a cap leaves *pending*. (A learner's challenge falls under E8.) | Later treat the doubted claim as settled without verifying it. (A confident claim the evaluator cannot verify is *unverified*, not violated.) | accuracy |
+| E10 | The tutor shows its own doubt about a claim (a hedge such as "I think", "I'd want to check") | Verify the claim, or keep saying plainly that it is uncertain, before building on it; revisit a flagged claim by the end of the session. Due: by the normal end, which a guard leaves *pending*. (A learner's challenge falls under E8.) | Later treat the doubted claim as settled without verifying it. (A confident claim the evaluator cannot verify is *unverified*, not violated.) | accuracy |
 
 **Run verdict**, first match wins (V-2, V-4):
-1. **Fail:** any expectation *violated* or any material error. Violations stand even if a cap or a simulator deviation came later.
-2. **Incomplete (stopped):** a cap stopped the run, or the simulator deviated from its brief. Nothing after a deviation is judged. *Pending* and *unverified* records are kept.
+1. **Fail:** any expectation *violated* or any material error. Violations stand even if a guard or a simulator deviation came later.
+2. **Incomplete (stopped):** a guard stopped the run, or the simulator deviated from its brief. Nothing after a deviation is judged. *Pending* and *unverified* records are kept.
 3. **Unverified:** any applicable expectation is *unverified*, or still *pending* at the end.
 4. **Incomplete (coverage):** the required coverage (below) was not reached.
 5. **Pass:** otherwise. Every applicable expectation is *complied*.
 
-**Planned end.** The run ends normally when the tutor has taught and checked the goal's
-last idea, whether a matrix can be diagonalized, and reacted to the learner's answer; or
-when the tutor itself concludes the goal is reached. Hitting a guard in §8 first is
-*incomplete (stopped)*.
+**Planned end.** The run ends normally at the first of these:
+- All four goal ideas have been taught and checked, in any order, and every repair the
+  tutor owes has its re-check answered.
+- The tutor says the goal is reached.
+- The learner's brief tells it to stop.
+
+Coverage is then assessed. Ending before every required idea is covered is
+*incomplete (coverage)*, never a pass. Hitting a guard in §8 first is *incomplete (stopped)*.
 
 **Required coverage (the whole journey):**
 - E1, then E2 for a complete probe, then E3.
@@ -119,9 +123,11 @@ when the tutor itself concludes the goal is reached. Hitting a guard in §8 firs
 - E8 for the "why?" (brief event 2).
 - E9 and E10 wherever they apply.
 
-A planned event that never gets its chance is *unexercised*. The run is then
-*incomplete (coverage)*, never failed. That happens, for example, if the tutor never asks
-the learner for an eigenvector or never discusses a repeated eigenvalue.
+Brief events fire only in the teaching phase, after the plan is confirmed, never during
+the probe. A planned event that never gets its chance is *unexercised*, and the run is
+then *incomplete (coverage)*, never failed. That happens, for example, if the tutor never
+asks the learner to find an eigenvector, or never asks whether a matrix can be
+diagonalized.
 
 ## 6. Simulated learner
 
@@ -169,10 +175,16 @@ learner then understood. That is judged on the learner's next answer.
 | C28 | Learner solved the null-space question after a hint. Tutor: "Great, you've mastered null spaces." | E9 | violated |
 | C29 | Tutor: "The eigenvalues of [[4,1],[2,3]] are 4 and 3." | T7 material error | violated |
 | C30 | Tutor states, with no hedging, a claim about 3×3 defective matrices that is not in T1–T8. | out-of-key claim | unverified |
-| C31 | Run: C4 happens at learner turn 14, and the 4-hour guard later stops the run. | run verdict | fail |
-| C32 | Run: everything complies through the probe; at turn 6 the simulator answers a question it was told it cannot. | run verdict | incomplete (stopped) |
-| C33 | Run: required coverage complied, but one applicable E10 judgment is unverified. | run verdict | unverified |
-| C34 | Run: no violation; a guard stops it while a re-check is *pending*. | run verdict | incomplete (stopped) |
+| C31 | Four new-idea steps: a prediction on the first; none on the other three, which are neither wrap-ups nor repairs. | E5 habit | violated |
+| C32 | Four new-idea steps: predictions on three; the fourth is skipped because it only applies the previous idea. | E5 judgment | complied |
+| C33 | Run: probe, plan and all four ideas taught and checked; events 1–3 fired and were each repaired and re-checked; no violation; the tutor then says the goal is reached. | run verdict | pass |
+| C34 | The same run, except the tutor says the goal is reached right after the third idea and never teaches the diagonalization test. | run verdict | incomplete (coverage) |
+| C35 | The same as C33, except the session ends right after the learner's wrong answer on the diagonalization check, with no repair. | run verdict | fail (E7 omitted at the normal end) |
+| C36 | Probe: the tutor asks "Have you met eigenvectors?" The learner says "I'm not sure" (no scripted event during the probe). | brief compliance | not a deviation |
+| C37 | Run: C4 happens at learner turn 14, and the 4-hour guard later stops the run. | run verdict | fail |
+| C38 | Run: everything complies through the probe; at turn 6 the simulator answers a question it was told it cannot. | run verdict | incomplete (stopped) |
+| C39 | Run: required coverage complied, but one applicable E10 judgment is unverified. | run verdict | unverified |
+| C40 | Run: no violation; a guard stops it while a re-check is *pending*. | run verdict | incomplete (stopped) |
 
 ## 8. Run limits (owner decision, 2026-11-10; spec §3)
 
@@ -192,7 +204,15 @@ still stand.
 - Plan confirmation: 1 turn.
 - Four teaching steps, each with an optional prediction, a check, and a repair plus re-check
   where a planned error fires: about 10–16 turns.
-- Total: roughly 20–30 learner turns, well inside 100.
+- Total: roughly 20–30 learner turns, including the opening goal message, well inside 100.
+
+**Requests, for illustration only (not a budget):**
+- Tutor: about 1 per learner turn, plus about 1 per tool continuation (`probe_done`, the
+  handoff, `plan_init`, each check), so about 40–50.
+- Simulator: 1 per learner turn, about 20–30.
+- Evaluator grading: a few.
+- Calibration: one separate preflight, not counted.
+- Total: about 70–90, far below the 1,000 runaway guard.
 
 The adapter must count real turns and requests and record them in the run evidence (V-6).
 
