@@ -129,6 +129,17 @@ export function graderTranscript(messages) {
 	}).join("\n\n");
 }
 
+/** Map the learner's chosen label(s) to option positions; an unknown label is a simulator deviation. */
+export function optionIndices(pending, option) {
+	if (!option) return [];
+	const norm = value => String(value).replace(/\s+/g, " ").trim();
+	return String(option).split("|").map(norm).filter(Boolean).map(label => {
+		const index = pending.options.findIndex(candidate => norm(candidate) === label);
+		if (index < 0) throw new Error(`Simulator deviation: chose "${label}", which is not one of the options`);
+		return index;
+	});
+}
+
 /** Run a CLI with stdin, bounded by a timeout; resolves stdout. */
 export function runCli(binary, args, { input, cwd, timeoutMs, env = process.env }) {
 	return new Promise((resolve, reject) => {

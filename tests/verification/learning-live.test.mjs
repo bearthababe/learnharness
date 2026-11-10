@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson } from "../../scripts/lib/learning-live.mjs";
+import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson, optionIndices } from "../../scripts/lib/learning-live.mjs";
 import { runLiveExercise } from "../../scripts/lib/learning-live-run.mjs";
 import { runLimits } from "../../scripts/lib/learning-verification.mjs";
 
@@ -150,4 +150,12 @@ test("the learner-turn guard stops the run as incomplete, never a pass, and keep
 	assert.notEqual(result.status, "checks-passed");
 	assert.ok(calls.simulate <= runLimits.learnerTurns);
 	assert.ok(fs.existsSync(path.join(run, "transcript.md")));
+});
+
+test("the learner's chosen labels map to option positions, so typeset options can be clicked; unknown labels are deviations", () => {
+	const pending = { options: ["$\\begin{pmatrix} 3 \\\\ 0 \\end{pmatrix}$", "$\\begin{pmatrix} 3 \\\\ 3 \\end{pmatrix}$", "No"] };
+	assert.deepEqual(optionIndices(pending, pending.options[1]), [1]);
+	assert.deepEqual(optionIndices(pending, `${pending.options[0]} | No`), [0, 2]);
+	assert.deepEqual(optionIndices(pending, null), []);
+	assert.throws(() => optionIndices(pending, "Maybe"), /Simulator deviation/);
 });

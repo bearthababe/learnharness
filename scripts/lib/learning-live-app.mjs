@@ -116,7 +116,7 @@ export async function liveApp({ root, run, tutorModel }) {
 			await page.click('[data-testid="composer"] [aria-label="Send"]');
 		},
 		/** Answer the open question through the question dock, as a learner would. */
-		async answer({ option, dontKnow, text, thinking }) {
+		async answer({ indices, dontKnow, text, thinking }) {
 			const reveal = await page.$('[data-testid="teach-check-reveal"]');
 			if (reveal) await reveal.click();
 			const bar = await page.$('[data-testid="question-dock-bar"]');
@@ -125,15 +125,15 @@ export async function liveApp({ root, run, tutorModel }) {
 			if (dontKnow) {
 				const clicked = await page.evaluate(() => { const button = [...document.querySelectorAll('[data-testid="question-dock"] button')].find(element => /I don.t know/.test(element.textContent ?? "")); button?.click(); return Boolean(button); });
 				assert.ok(clicked, "No \"I don't know\" choice on this question");
-			} else if (option) {
-				for (const label of String(option).split("|").map(value => value.trim()).filter(Boolean)) {
-					const clicked = await page.evaluate(wanted => {
-						const rows = [...document.querySelectorAll('[data-testid="question-dock"] [role="radio"], [data-testid="question-dock"] [role="checkbox"]')];
-						const row = rows.find(element => (element.textContent ?? "").trim() === wanted) ?? rows.find(element => (element.textContent ?? "").includes(wanted));
-						row?.click();
-						return Boolean(row);
-					}, label);
-					assert.ok(clicked, `No option labelled "${label}"`);
+			} else if (indices?.length) {
+				// Options can be typeset math, so rows are chosen by position, matching the question's option order.
+				for (const index of indices) {
+					const clicked = await page.evaluate(position => {
+						const rows = [...document.querySelectorAll('[data-testid="question-dock"] [role="radio"], [data-testid="question-dock"] [role="checkbox"]')].filter(element => element.getAttribute("data-testid") !== "other-option");
+						rows[position]?.click();
+						return Boolean(rows[position]);
+					}, index);
+					assert.ok(clicked, `No option row at position ${index + 1}`);
 				}
 			}
 			if (text) await type('[data-testid="answer-field"] [data-file-path-input]', text);
