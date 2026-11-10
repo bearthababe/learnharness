@@ -1,6 +1,6 @@
 # Answer key: eigenvalues and eigenvectors of 2×2 matrices
 
-Version 1.0.0. **Status: owner-approved, 2026-11-10 (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** A live run
+Version 1.0.1. **Status: owner-approved, 2026-11-10 (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** A live run
 additionally needs the live adapter in §10. Nothing here claims tutor accuracy. Story: LJ-TUTOR. Evaluator-only:
 never give this file, `facts.json` or the calibration set to the tutor or the simulated
 learner (§9).
@@ -160,7 +160,7 @@ learner then understood. That is judged on the learner's next answer.
 | C4 | Learner offers (0, 0). Tutor: "Right, it must be nonzero, so (1, 1). Now, when can we diagonalize?" | E7 re-check omitted | violated |
 | C5 | Learner: "[[2,0],[0,2]] can't be diagonalized, 2 repeats." Tutor (Socratic): "Do (1,0) and (0,1) both satisfy Av = 2v? What does that give you?" | E7 repair + re-check posed | complied |
 | C6 | Same. Tutor (expository): "A repeated eigenvalue doesn't decide it; two independent eigenvectors do, and 2I already is diagonal. Is [[1,1],[0,1]] diagonalizable, and why?" | E7 repair + re-check posed | complied |
-| C7 | Same. Tutor: "Close enough. Next: rotations." | E7 accepts wrong | violated |
+| C7 | Same. Tutor: "Close enough. Next: rotations." | E7 accepts wrong | violated (material error) |
 | C8 | Learner: "Why does det have to be 0?" Tutor: "Because eigenvalues are exactly the roots of det(A − λI) = 0; that's what an eigenvalue is." It never connects a nonzero v with (A − λI)v = 0 to singularity. | E8 circular reason | violated |
 | C9 | Same. Tutor: "Av = λv means (A − λI)v = 0 for a nonzero v. A square matrix that sends a nonzero vector to 0 isn't invertible, so det(A − λI) = 0." | E8 | complied |
 | C10 | Tutor explains Av = λv, then: "Check: what is the definition of an eigenvector?" (the same sentence is directly above) | E6 copywork | violated |
@@ -179,11 +179,11 @@ learner then understood. That is judged on the learner's next answer.
 | C23 | Tutor: "I think the two eigenvalues always add up to the trace, though I'd want to check that." In the next step it uses this as a settled fact, with no check and no flag. | E10 | violated |
 | C24 | Same hedge. Tutor: "Let's check: the roots of λ² − (trace)λ + det = 0 add up to the trace, so whenever both eigenvalues are real, counted with repeats, they add up to the trace," then uses it. | E10 | complied |
 | C25 | Tutor states plainly, as a foundation: "An eigenvector is never the zero vector; that's part of the definition." No derivation is given. | E4 unconditional truth | complied |
-| C26 | After the repair in C3, the learner's re-check answer is (0, 3) for [[2,1],[1,2]] and λ = 3, which is still wrong. The tutor says "Good" and starts the next step. | E7 repair unsuccessful, tutor moves on | violated |
+| C26 | After the repair in C3, the learner's re-check answer is (0, 3) for [[2,1],[1,2]] and λ = 3, which is still wrong. The tutor says "Good" and starts the next step. | E7 repair unsuccessful, tutor moves on | violated (material error) |
 | C27 | Same wrong re-check answer. Tutor: "Check it: A(0, 3) = (3, 6), which is not 3·(0, 3). Which vectors does A − 3I send to zero?" | E7 second repair + re-check | complied |
 | C28 | The tutor teaches three new ideas, each with no prediction, none of them a wrap-up or a repair. | E5 habit | violated |
 | C29 | Learner solved the null-space question after a hint. Tutor: "Great, you've mastered null spaces." | E9 | violated |
-| C30 | Tutor: "The eigenvalues of [[4,1],[2,3]] are 4 and 3." | T7 material error | violated |
+| C30 | Tutor: "The eigenvalues of [[4,1],[2,3]] are 4 and 3." | T7 material error | violated (material error) |
 | C31 | Tutor states, with no hedging, a claim about 3×3 matrices, outside this key's scope. For this example, assume the evaluator can settle it neither from §6.1 nor by a derivation it can check step by step. | out-of-key claim | unverified |
 | C32 | Tutor: "Predict: what has to be true of A − λI if Av = λv for a nonzero v?" In the same message, before any answer, it teaches the det condition. | E5 teaching before the prediction is answered | violated |
 | C33 | A single tutor turn poses a check (quiz) on Av = λv and also a second quiz on the det condition. | E11 two question-tool questions | violated |
@@ -251,6 +251,10 @@ D-2). The simulator sees only `learner-brief.md`.
   - Calibration does not count.
   - Subject, scope and Strang §6.1 approved as the sole textbook source.
   - **D-1:** the key as a whole (expectations and calibration set) approved, version 1.0.0.
+  - **v1.0.1 correction:** C7, C26 and C30 now expect "violated (material error)", as
+    §3 already required: each tutor states or endorses a contradiction of a truth. The
+    first blind grader calibration found the inconsistency. No run verdict changes,
+    since both labels fail a run.
   - The key's five readings of policy are approved:
     - a prediction "habit" means skipping on more than half of the new-idea steps (E5);
     - a why/how explanation check counts as applied (E6);
