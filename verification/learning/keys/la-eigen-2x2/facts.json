@@ -1,58 +1,48 @@
 {
-  "version": "0.1.0-draft",
+  "version": "0.2.0-draft",
   "status": "Draft for owner approval. Not an approved key; it authorizes no live run.",
-  "note": "Every number here is checked by tests/verification/la-eigen-key.test.mjs with exact integer arithmetic. Matrices are row-major 2x2 integer arrays.",
+  "conventions": "Real 2x2 integer matrices. Eigenvectors and diagonalization are over the real numbers unless a field says otherwise.",
+  "machineChecked": "tests/verification/la-eigen-key.test.mjs checks, with exact integer arithmetic: trace, determinant and characteristic polynomial; that the listed eigenvalues are exactly the real characteristic roots; every eigenpair (A v = λ v, v nonzero); eigenspace dimensions; diagonalizability over the reals, including A P = P D with det P nonzero; the R5 discriminant; and the R2 row-reduction claim. It does not check prose in key.md.",
   "problems": [
     {
-      "id": "R1", "role": "teaching example (symmetric, distinct eigenvalues)",
-      "matrix": [[2, 1], [1, 2]],
-      "trace": 4, "det": 3, "characteristic": "λ^2 - 4λ + 3",
+      "id": "R1", "role": "symmetric, two distinct eigenvalues",
+      "matrix": [[2, 1], [1, 2]], "trace": 4, "det": 3, "characteristic": "λ^2 - 4λ + 3",
       "eigen": [ { "value": 3, "vector": [1, 1] }, { "value": 1, "vector": [1, -1] } ],
       "diagonalizable": true
     },
     {
-      "id": "R2", "role": "learner practice (non-symmetric, distinct eigenvalues)",
-      "matrix": [[4, 1], [2, 3]],
-      "trace": 7, "det": 10, "characteristic": "λ^2 - 7λ + 10",
+      "id": "R2", "role": "non-symmetric, two distinct eigenvalues; eigenvalues are not its entries; row reduction changes eigenvalues",
+      "matrix": [[4, 1], [2, 3]], "trace": 7, "det": 10, "characteristic": "λ^2 - 7λ + 10",
       "eigen": [ { "value": 5, "vector": [1, 1] }, { "value": 2, "vector": [1, -2] } ],
       "diagonalizable": true,
-      "powers": { "2": [[18, 7], [14, 11]], "3": [[86, 39], [78, 47]] }
+      "rowReducedEchelonForm": [[1, 0], [0, 1]]
     },
     {
-      "id": "R3", "role": "repeated eigenvalue, NOT diagonalizable (shear)",
-      "matrix": [[1, 1], [0, 1]],
-      "trace": 2, "det": 1, "characteristic": "λ^2 - 2λ + 1",
+      "id": "R3", "role": "repeated eigenvalue, one line of eigenvectors, not diagonalizable",
+      "matrix": [[1, 1], [0, 1]], "trace": 2, "det": 1, "characteristic": "λ^2 - 2λ + 1",
       "eigen": [ { "value": 1, "vector": [1, 0] } ],
       "eigenspaceDimension": { "1": 1 },
       "diagonalizable": false
     },
     {
-      "id": "R4", "role": "repeated eigenvalue, diagonalizable (counterexample to 'repeated means not diagonalizable')",
-      "matrix": [[2, 0], [0, 2]],
-      "trace": 4, "det": 4, "characteristic": "λ^2 - 4λ + 4",
+      "id": "R4", "role": "repeated eigenvalue, every nonzero vector is an eigenvector, diagonalizable",
+      "matrix": [[2, 0], [0, 2]], "trace": 4, "det": 4, "characteristic": "λ^2 - 4λ + 4",
       "eigen": [ { "value": 2, "vector": [1, 0] }, { "value": 2, "vector": [0, 1] } ],
       "eigenspaceDimension": { "2": 2 },
       "diagonalizable": true
     },
     {
-      "id": "R5", "role": "no real eigenvalues (rotation by 90 degrees)",
-      "matrix": [[0, -1], [1, 0]],
-      "trace": 0, "det": 1, "characteristic": "λ^2 + 1",
-      "realEigenvalues": false,
-      "diagonalizable": "not over the reals; over the complex numbers with eigenvalues i and -i"
+      "id": "R5", "role": "90-degree rotation: no real eigenvalues",
+      "matrix": [[0, -1], [1, 0]], "trace": 0, "det": 1, "characteristic": "λ^2 + 1",
+      "eigen": [],
+      "diagonalizable": false,
+      "note": "Not diagonalizable over the reals. Over the complex numbers its eigenvalues are i and -i and it is diagonalizable; that is outside this key's scope."
     },
     {
-      "id": "R6", "role": "triangular: eigenvalues are the diagonal entries; singular matrix has eigenvalue 0",
-      "matrix": [[3, 5], [0, 0]],
-      "trace": 3, "det": 0, "characteristic": "λ^2 - 3λ",
+      "id": "R6", "role": "triangular and singular: eigenvalues on the diagonal, one of them 0",
+      "matrix": [[3, 5], [0, 0]], "trace": 3, "det": 0, "characteristic": "λ^2 - 3λ",
       "eigen": [ { "value": 3, "vector": [1, 0] }, { "value": 0, "vector": [5, -3] } ],
       "diagonalizable": true
     }
-  ],
-  "prerequisiteChecks": [
-    { "id": "P1", "strand": "matrix-vector multiplication", "matrix": [[4, 1], [2, 3]], "vector": [1, -2], "answer": [2, -4] },
-    { "id": "P2", "strand": "2x2 determinant and singularity", "matrix": [[2, 4], [1, 2]], "det": 0, "singular": true },
-    { "id": "P3", "strand": "null space of a singular 2x2 matrix", "matrix": [[-1, 1], [2, -2]], "nullVector": [1, 1] },
-    { "id": "P4", "strand": "linear independence of two vectors", "vectors": [[1, 1], [1, -2]], "independent": true }
   ]
 }
