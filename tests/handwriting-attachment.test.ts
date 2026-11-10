@@ -14,9 +14,9 @@ after(() => rmSync(data, { recursive: true, force: true }));
 const png = new Resvg('<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1800"><rect width="1400" height="1800" fill="white"/></svg>').render().asPng();
 const source = notebookSource(emptyHandwriting());
 const revised = notebookSource(appendHandwriting(source.journal, { id: "ink", kind: "stroke", stroke: { tool: "pen", colour: "#2563eb", penScale: 1, width: 38, points: [{ x: 100, y: 200, pressure: 0.6 }] } }));
-function capture(chatId: string, writingId: string, expectedPageRevision: number, value = source, image: Uint8Array = png) {
+function capture(chatId: string, writingId: string, expectedPageRevision: number, value = source, image: Uint8Array = png, slot = value.journal.pageId) {
 	const form = new FormData();
-	form.set("writingId", writingId); form.set("pageId", value.journal.pageId); form.set("expectedPageRevision", String(expectedPageRevision));
+	form.set("writingId", writingId); form.set("pageId", slot); form.set("expectedPageRevision", String(expectedPageRevision));
 	form.set("source", new Blob([canonicalHandwriting(value)], { type: "application/json" }), "source.json");
 	form.set("image", new Blob([new Uint8Array(image)], { type: "image/png" }), "image.png");
 	return sharedWritingResponse(new Request("http://test/writing", { method: "POST", body: form }), chatId);
@@ -48,6 +48,30 @@ it("same-page Attach replaces only its pending head; exact old retries never pro
 	assert.equal((await capture(chat.id, a, 0, revised)).status, 409);
 });
 
+it("B2 (round 18): areas of a page add up beside the page, each pending and removable on its own", async () => {
+	const chat = stores.chatStore.createChat("Areas add up"), page = identity(), areaA = identity(), areaB = identity();
+	assert.equal((await capture(chat.id, page, 0)).status, 201);
+	assert.equal((await capture(chat.id, areaA, 0, source, png, "page_initial~area_0000000a")).status, 201);
+	assert.equal((await capture(chat.id, areaB, 0, revised, png, "page_initial~area_0000000b")).status, 201);
+	const review = async () => (await sharedWritingResponse(new Request("http://test/writing"), chat.id)).json();
+	let pending = await review();
+	assert.deepEqual(new Set(pending.pending.map((item: { id: string }) => item.id)), new Set([page, areaA, areaB]), "the page and both areas are pending together");
+	assert.equal(pending.pageAttachments.page_initial.writingId, page, "the page's own slot is untouched by its areas");
+	assert.equal(pending.pageAttachments["page_initial~area_0000000a"].writingId, areaA);
+	// An area's source is its page's: another page's source, or a malformed slot, is refused.
+	const other = { ...source, journal: { ...source.journal, pageId: `page_${crypto.randomUUID()}` } };
+	assert.equal((await capture(chat.id, identity(), 0, other, png, "page_initial~area_0000000c")).status, 400);
+	assert.equal((await capture(chat.id, identity(), 0, source, png, "page_initial~area_xyz")).status, 400);
+	// Removing one leaves the others pending.
+	const removed = await sharedWritingResponse(new Request(`http://test/writing/${areaA}`, { method: "DELETE" }), chat.id, areaA);
+	assert.ok(removed.ok, `remove: ${removed.status}`);
+	pending = await review(); assert.deepEqual(new Set(pending.pending.map((item: { id: string }) => item.id)), new Set([page, areaB]));
+	// A newer whole page still replaces only the page's own slot.
+	assert.equal((await capture(chat.id, identity(), 1, revised)).status, 201);
+	pending = await review();
+	assert.ok(pending.pending.some((item: { id: string }) => item.id === areaB), "areas survive a newer page");
+	assert.ok(!pending.pending.some((item: { id: string }) => item.id === page), "the older whole page is replaced by the newer one");
+});
 it("unpublished complete bundles are inert and exact retry finishes publication; corrupt promised source is unavailable", async () => {
 	const chat = stores.chatStore.createChat("Crash boundary"), a = identity(), b = identity();
 	await capture(chat.id, a, 0);

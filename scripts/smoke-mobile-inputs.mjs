@@ -1175,6 +1175,15 @@ try {
 	await page.goto(`${origin}/chat/mobile_teaching`, { waitUntil: "networkidle2" });
 	const reading = '[data-testid="reading-thinking-field"] [data-file-path-input]';
 	await page.waitForSelector('[data-testid="teach-check-reveal"]', { visible: true });
+	// B15 (round 18): the lesson's bottom row as it is before the pane opens —
+	// the P6 regression check below compares against it.
+	const bottomRow = () => page.evaluate(() => {
+		const entry = document.querySelector('.lh-reading-entry [data-testid="teach-check-reveal"]'), r = entry?.getBoundingClientRect();
+		const hit = r && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+		return { kind: document.querySelector(".lh-dock-overlay")?.dataset.dockKind, top: r ? Math.round(r.top) : null, reachable: !!hit && !!entry?.contains(hit), scroll: Math.round(document.scrollingElement.scrollTop) };
+	});
+	const rowBeforePane = await bottomRow();
+	assert.ok(rowBeforePane.reachable && rowBeforePane.top !== null, `the lesson's Show question entry is in view before the pane opens: ${JSON.stringify(rowBeforePane)}`);
 	// Round 15 (F6): on phones the reading note is a full-screen pane that
 	// slides in from the right; the lesson keeps a labelled button for it.
 	await page.click('[data-testid="reading-pane-open"]');
@@ -1196,6 +1205,19 @@ try {
 		if (run === 1) await page.evaluate(async () => { await window.captureContext.suspend(); window.captureContext.interrupted = true; });
 	}
 	assert.equal(await page.$eval(reading, e => e.textContent), "Capture 1. Capture 2.", "Restart after interrupted audio captures and appends a second recording once");
+	// B15 (round 18, P6 regression): pane → Peek → Return → lesson leaves the
+	// lesson's bottom row exactly where it was, reachable, the page unscrolled.
+	await page.click('[data-testid="reading-pane-peek"]');
+	await page.waitForSelector('[data-testid="reading-pane-return"]', { visible: true });
+	await page.click('[data-testid="reading-pane-return"]');
+	await page.waitForSelector('[data-testid="reading-pane-return"]', { hidden: true });
+	await page.click('[data-testid="reading-pane-close"]');
+	await page.waitForSelector('[data-testid="reading-pane"]:not([data-open])');
+	await page.waitForFunction(before => { const e = document.querySelector('.lh-reading-entry [data-testid="teach-check-reveal"]'); return !!e && Math.round(e.getBoundingClientRect().top) === before; }, { timeout: 5000 }, rowBeforePane.top).catch(() => {});
+	assert.deepEqual(await bottomRow(), rowBeforePane, "pane → Peek → Return → lesson keeps the lesson's bottom row in place and reachable (P6)");
+	console.log("PASS: pane → Peek → Return → lesson keeps the bottom row in place, reachable and unscrolled (P6 regression)");
+	await page.click('[data-testid="reading-pane-open"]');
+	await page.waitForSelector('[data-testid="reading-pane"][data-open]');
 	await fill(reading, "Reading thought.");
 	await page.click(`${paneMic}[aria-label="Start dictation"]`);
 	await page.waitForFunction(() => window.speech?.readyState === 1);

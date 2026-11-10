@@ -301,22 +301,24 @@ it("the actual choice dock permits ordinary recovery with empty newer choices bu
 	assert.match(submitButton(render(null)), /\sdisabled=/);
 });
 
-it("T6 (round 17): an area snapshot of an unchanged page still attaches, as the page's next revision", async () => {
+it("B2 (round 18): an area attaches into its own slot beside the page, never as the page's next revision", async () => {
 	const source = notebookSource(emptyHandwriting());
 	const { contentFingerprint } = await handwritingFingerprints(source);
 	const draft: DurableDraft = { version: 1, chatId: "chat", targetKey: "composer", draftId: "draft", revision: 1, editor: { text: "" } };
-	const run = async (replace: boolean) => {
+	const run = async (slot: string, head: { revision: number; writingId: string; contentFingerprint: string } | undefined) => {
 		const requests: FormData[] = [];
 		const model = new HandwritingAttachment("chat", { device: device(), fetch: async (_url, init) => { requests.push(init!.body as FormData); throw new Error("Offline"); }, encode: async () => new Blob(["area"]), refresh: async () => ({ pending: [], pageAttachments: {} }), reveal() {}, changed() {} });
 		await model.open();
-		await model.attach({ pageId: "page_initial", head: { revision: 1, writingId: "writing_earlier", contentFingerprint }, valid: () => true, finish: async () => true,
-			freeze: () => ({ source, draft, raster: { width: 1400, height: 1800, rgba: new ArrayBuffer(1400 * 1800 * 4) } }), replace });
-		return { requests, notice: model.notice("page_initial")?.kind };
+		await model.attach({ pageId: slot, head, valid: () => true, finish: async () => true,
+			freeze: () => ({ source, draft, raster: { width: 1400, height: 1800, rgba: new ArrayBuffer(1400 * 1800 * 4) } }) });
+		return { requests, notice: model.notice(slot)?.kind, pageNotice: model.noticeForPage("page_initial")?.kind };
 	};
-	const page = await run(false);
+	const page = await run("page_initial", { revision: 1, writingId: "writing_earlier", contentFingerprint });
 	assert.equal(page.requests.length, 0, "the same page, unchanged, is not attached twice");
 	assert.equal(page.notice, "unchanged");
-	const area = await run(true);
+	const area = await run("page_initial~area_0000abcd", undefined);
 	assert.equal(area.requests.length, 1, "an area is a new snapshot");
-	assert.equal(area.requests[0]!.get("expectedPageRevision"), "1", "it replaces the page's pending snapshot (the next revision)");
+	assert.equal(area.requests[0]!.get("pageId"), "page_initial~area_0000abcd", "in a slot of its own");
+	assert.equal(area.requests[0]!.get("expectedPageRevision"), "0", "the area's first version: the page's pending snapshot is untouched");
+	assert.ok(area.pageNotice, "the page shows the area's notice");
 });

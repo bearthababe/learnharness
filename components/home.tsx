@@ -1,6 +1,6 @@
 "use client";
 
-import { useCoarsePointer } from "@/components/use-phone-viewport";
+import { useCoarsePointer, usePhoneLayout } from "@/components/use-phone-viewport";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -132,6 +132,7 @@ export function Home({
 	 *  the composer opens the picker; the picks seed the opening prompt).
 	 *  Not enforcing any input format — the picks are a convenience. */
 	const [mode, setMode] = useState<"teach" | "practice" | "drill">(initialMode ?? "teach");
+	const phoneLayout = usePhoneLayout();
 	// A "New session" link (drawer, shortcut) can arrive while Home is
 	// already showing: take its mode and put the cursor in the box (not on
 	// touch screens, where focusing would pop the keyboard unasked).
@@ -351,7 +352,8 @@ export function Home({
 								void start();
 							}
 						}}
-						placeholder={mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
+						/* B8 (round 18): a short form on phones, where the field sits beside the mic and Start. */
+						placeholder={phoneLayout ? (mode === "drill" ? "What to drill?" : mode === "practice" ? "What to practice?" : "What to learn?") : mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
 						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 					/></CompactLearningInput>
 					<AttachFilesButton editorRef={topicInputRef} />

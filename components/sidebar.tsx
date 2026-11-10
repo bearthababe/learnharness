@@ -171,6 +171,11 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 		return () => off?.();
 	}, []);
 
+	// B13 (round 18): until React's own state matches, CSS shows the state the
+	// boot script read before the first paint (no slide on load); once it does,
+	// the boot rules step aside and only the user's toggles animate.
+	useEffect(() => { if (mounted) document.documentElement.dataset.sidebarSynced = ""; }, [mounted]);
+
 	// Narrow-window auto-close/auto-restore (see SIDEBAR_AUTOCLOSE note):
 	// fires only on actual resizes — a boolean compare, no layout work.
 	// Both this and the mount effect land before the first paint, so a

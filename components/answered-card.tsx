@@ -177,11 +177,14 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 			    ask never had one, and records from before the feature carry no
 			    field — nothing to show, nothing rendered. */}
 			{isQuiz && answer.confidence != null && (
-				<div className="mt-3 flex items-center gap-3" data-testid="answered-confidence">
-					<ConfidenceRail value={answer.confidence} className="min-w-0 flex-1" />
-					<span className="w-9 shrink-0 text-right font-mono text-sm tabular-nums text-muted-foreground">
-						{answer.confidence}%
-					</span>
+				/* B10 (round 18): labelled as the learner's own confidence, on a row
+				   of its own under a hairline — never mistaken for a score. */
+				<div className="lh-answered-confidence mt-3 border-t pt-2.5" data-testid="answered-confidence">
+					<div className="flex items-baseline justify-between gap-3 text-sm text-muted-foreground">
+						<span className="font-medium">Your confidence</span>
+						<span className="font-mono tabular-nums" data-testid="answered-confidence-value">{answer.confidence}%</span>
+					</div>
+					<ConfidenceRail value={answer.confidence} className="mt-1.5 min-w-0" />
 				</div>
 			)}
 			{answer.dontKnow && isQuiz && (

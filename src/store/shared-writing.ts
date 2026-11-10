@@ -4,12 +4,13 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { PATHS } from "../../config.ts";
 import { CaptureConflict, commitNotebookCapture, emptyWritingIndex, writingIndexSchema, type SharedWriting, type WritingIndex } from "../core/shared-writing.ts";
-import { canonicalHandwriting, handwritingContent, notebookSourceSchema, notebookPageIdSchema } from "../core/handwriting.ts";
+import { canonicalHandwriting, handwritingContent, notebookSourceSchema } from "../core/handwriting.ts";
+import { notebookSlotIdSchema, slotPage } from "../core/shared-writing.ts";
 import type { SharedWritingStore } from "../core/ports.ts";
 
 const hash = (bytes: string | Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const digest = z.string().regex(/^[0-9a-f]{64}$/);
-const manifestSchema = z.object({ version: z.literal(1), id: z.string(), pageId: notebookPageIdSchema, expectedPageRevision: z.number().int().nonnegative(), createdAt: z.string().datetime(), imageSha256: digest, sourceSha256: digest, contentFingerprint: digest, editableSource: z.object({ version: z.literal(1) }).strict() }).strict();
+const manifestSchema = z.object({ version: z.literal(1), id: z.string(), pageId: notebookSlotIdSchema, expectedPageRevision: z.number().int().nonnegative(), createdAt: z.string().datetime(), imageSha256: digest, sourceSha256: digest, contentFingerprint: digest, editableSource: z.object({ version: z.literal(1) }).strict() }).strict();
 
 /** Immutable originals. A temporary file + rename makes a new snapshot
  * visible atomically; pending/submitted state lives in the session record. */
@@ -50,7 +51,7 @@ export function createSharedWritingStore(root: string): SharedWritingStore {
 		const manifest = manifestSchema.parse(JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")));
 		const sourceJson = fs.readFileSync(path.join(dir, "source.json"), "utf8"), image = fs.readFileSync(path.join(dir, "image.png"));
 		const source = notebookSourceSchema.parse(JSON.parse(sourceJson));
-		if (manifest.id !== id || manifest.pageId !== source.journal.pageId || hash(image) !== manifest.imageSha256 || hash(sourceJson) !== manifest.sourceSha256 || hash(handwritingContent(source.journal)) !== manifest.contentFingerprint) throw new Error("Corrupt notebook bundle");
+		if (manifest.id !== id || slotPage(manifest.pageId) !== source.journal.pageId || hash(image) !== manifest.imageSha256 || hash(sourceJson) !== manifest.sourceSha256 || hash(handwritingContent(source.journal)) !== manifest.contentFingerprint) throw new Error("Corrupt notebook bundle");
 		return { manifest, source, image };
 	}
 	function metadata(chatId: string, id: string, index: WritingIndex): SharedWriting {
@@ -95,7 +96,7 @@ export function createSharedWritingStore(root: string): SharedWritingStore {
 		},
 		putNotebook(chatId, capture) {
 			const source = notebookSourceSchema.parse(capture.source), dir = directory(chatId), target = bundlePath(chatId, capture.writingId);
-			if (!/^writing_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(capture.writingId) || source.journal.pageId !== capture.pageId || !Number.isSafeInteger(capture.expectedPageRevision) || capture.expectedPageRevision < 0) throw new Error("Invalid capture");
+			if (!/^writing_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(capture.writingId) || source.journal.pageId !== slotPage(capture.pageId) || !Number.isSafeInteger(capture.expectedPageRevision) || capture.expectedPageRevision < 0) throw new Error("Invalid capture");
 			const sourceJson = canonicalHandwriting(source), imageSha256 = hash(capture.image), sourceSha256 = hash(sourceJson);
 			const index = readIndex(chatId);
 			if (fs.existsSync(`${target}.png`)) throw new CaptureConflict("capture_conflict");

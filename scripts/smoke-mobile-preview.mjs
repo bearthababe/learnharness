@@ -82,7 +82,7 @@ async function checkLaunch(page, destination, manifestPath) {
 }
 
 async function checkReload(page, destination) {
-	const input = '[data-file-path-input][data-placeholder="What do you want to learn?"]';
+	const input = '[data-file-path-input]:is([data-placeholder="What do you want to learn?"], [data-placeholder="What to learn?"])'; // B8 (round 18): phones show the short form
 	const draft = "Preview verification: unsent draft must reset on reload.";
 	await page.locator(input).fill(draft);
 	assert.equal(await page.$eval(input, element => element.textContent), draft);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
-import { sharedWritingImageUrl, type LhMessage, type SharedWriting, type PageAttachments } from "@/src/core";
+import { isAreaSlot, sharedWritingImageUrl, type LhMessage, type SharedWriting, type PageAttachments } from "@/src/core";
 import { useServerEvent, useServerResync } from "@/components/server-events";
 import { HandwritingPagesContext } from "./handwriting/pages-context";
 import type { OpenChoice, SnapshotWriting } from "./handwriting/pages";
@@ -51,7 +51,7 @@ export function useSharedWriting(chatId: string, messages: readonly LhMessage[])
 	return { pending, pageAttachments, error, refresh, ids: () => pending.map((w) => w.id) };
 }
 
-export function SharedWritingImages({ chatId, writing, onRemove }: { chatId: string; writing: readonly Pick<SharedWriting, "id">[]; onRemove?: (id: string) => void }) {
+export function SharedWritingImages({ chatId, writing, onRemove }: { chatId: string; writing: readonly Pick<SharedWriting, "id" | "notebook">[]; onRemove?: (id: string) => void }) {
 	const actions = useContext(HandwritingPagesContext);
 	const [opened, setOpened] = useState<{ item: SnapshotWriting; label: string; decision?: boolean } | null>(null), [menu, setMenu] = useState<string | null>(null), [notice, setNotice] = useState<string | null>(null), [busy, setBusy] = useState(false);
 	async function run(item: SnapshotWriting, duplicate: boolean) {
@@ -63,8 +63,8 @@ export function SharedWritingImages({ chatId, writing, onRemove }: { chatId: str
 		{writing.map((item, index) => <div key={item.id} className="flex shrink-0 items-end gap-1" data-writing-id={item.id}><span className="lh-writing-thumb relative inline-block">{onRemove && <button type="button" className="lh-writing-remove" aria-label={`Remove handwritten working ${index + 1} from this message`} title="Remove from this message" data-testid="writing-remove" disabled={busy} onClick={() => { setMenu(null); onRemove(item.id); }}><XIcon aria-hidden /></button>}<button type="button" onClick={() => { setMenu(null); setOpened({ item, label: `Handwritten working ${index + 1}` }); }} className="rounded border bg-white p-1" style={{ filter: "var(--lh-writing-image-filter)" }} aria-label={`Open handwritten working ${index + 1}`}>
 			{/* Theme presentation only; the private endpoint retains original PNG bytes. */}
 			{/* eslint-disable-next-line @next/next/no-img-element */}
-			<img src={sharedWritingImageUrl(chatId, item.id)} alt={`Handwritten working ${index + 1}`} className="lh-writing-img" />
-		</button></span>{actions && <button type="button" className="lh-writing-actions" aria-label="Snapshot actions" aria-expanded={menu === item.id} disabled={busy} onClick={() => setMenu(value => value === item.id ? null : item.id)}><MoreHorizontalIcon aria-hidden /><span aria-hidden="true">Actions</span></button>}
+			<img src={sharedWritingImageUrl(chatId, item.id)} alt={`Handwritten working ${index + 1}${item.notebook && isAreaSlot(item.notebook.pageId) ? " (an area of a page)" : ""}`} className="lh-writing-img" />
+		</button>{/* B2 (round 18): each attachment says what it is — a whole page or an area. */}{item.notebook && <span className="lh-writing-kind" data-testid="writing-kind" aria-hidden="true">{isAreaSlot(item.notebook.pageId) ? "Area" : "Page"}</span>}</span>{actions && <button type="button" className="lh-writing-actions" aria-label="Snapshot actions" aria-expanded={menu === item.id} disabled={busy} onClick={() => setMenu(value => value === item.id ? null : item.id)}><MoreHorizontalIcon aria-hidden /><span aria-hidden="true">Actions</span></button>}
 		</div>)}
 	</div>{menu && <SnapshotMenu duplicate={() => void run(writing.find(item => item.id === menu)!, true)} open={() => void run(writing.find(item => item.id === menu)!, false)} close={() => { const id = menu; setMenu(null); document.querySelector<HTMLButtonElement>(`[data-writing-id="${id}"] [aria-label="Snapshot actions"]`)?.focus(); }} />}
 	{notice && <p role="status" data-testid="snapshot-action-status">{notice}</p>}

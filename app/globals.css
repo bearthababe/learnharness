@@ -2582,12 +2582,13 @@ html[data-focus-source="keyboard"] [data-attachment-composer] :is(textarea, [con
 	box-shadow: 0 0 0 2px var(--background);
 }
 
-/* Phones: the composer hint fits its field. */
+/* B8 (round 18): phones show a field's short placeholder (data-placeholder-short),
+   so the hint fits beside the mic and Send at 320–375px. */
 @media (max-width: 767px) {
-	[data-testid="composer"] [data-file-path-input][data-empty="true"][data-placeholder="Ask, answer, or steer the lesson…"]::before {
-		content: "Message your tutor…";
-	}
+	[data-file-path-input][data-empty="true"][data-placeholder-short]::before { content: attr(data-placeholder-short); }
 }
+.lh-next-short { display: none; }
+@media (max-width: 359px) { .lh-next-long { display: none; } .lh-next-short { display: inline; } }
 .lh-setup button.h-7 > span:first-child, .lh-settings-content button.h-7 > span:first-child {
 	text-align: left;
 }
@@ -5037,8 +5038,9 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 :root .lh-topbar > .lh-focus-corner { display: none; }
 @media (max-width: 767px) {
 	:root .lh-topbar > .lh-title-block { min-height: 32px; }
-	:root .lh-topbar > .lh-focus-corner { display: inline-flex; flex: none; width: 48px; min-width: 48px; padding: 0; }
-	:root .lh-topbar > .lh-focus-corner svg { width: 20px; height: 20px; color: var(--muted-foreground); }
+	:root .lh-topbar > .lh-focus-corner { display: inline-flex; flex: none; width: auto; min-width: 52px; padding: 0 6px; }
+	:root .lh-topbar > .lh-focus-corner > .lh-focus-corner-label { font-size: 13px; line-height: 1; font-weight: 600; }
+	:root .lh-topbar > .lh-focus-corner svg { width: 18px; height: 18px; color: var(--muted-foreground); }
 	:root[data-focus-mode] .session-tutor { padding-top: 0; }
 	:root .lh-focus-exit {
 		top: var(--lh-focus-spot-top, 8px); right: var(--lh-focus-spot-right, 16px); width: var(--lh-focus-spot-width, 48px); height: var(--lh-focus-spot-height, 48px);
@@ -5056,9 +5058,11 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 @media (max-width: 767px) {
 	:root .lh-topbar > div.min-w-4.flex-1[aria-hidden="true"] { display: none; }
 	:root .lh-topbar > .lh-page-menu-button { margin-left: auto; }
-	:root .lh-topbar > .lh-header-chip, :root .lh-topbar > .lh-notebook-opener { flex: 1 1 64px; min-width: 0; max-width: 96px; }
+	/* B9 (round 18): every bar item is sized by its own icon and label, so
+	   Notebook no longer stretches wider than its neighbours. */
+	:root .lh-topbar > .lh-header-chip, :root .lh-topbar > .lh-notebook-opener { flex: none; min-width: 0; }
 	:root .lh-topbar > .lh-header-chip:first-of-type { margin-left: auto; }
-	:root .lh-topbar > .lh-notebook-opener > .lh-notebook-toggle { width: 100%; }
+	:root .lh-topbar > .lh-notebook-opener > .lh-notebook-toggle { width: auto; }
 	:root .lh-topbar > .lh-header-chip[data-empty] { color: var(--muted-foreground); }
 	:root .lh-topbar > .lh-header-chip[data-empty] svg { opacity: .7; }
 }
@@ -5585,7 +5589,16 @@ html:not([data-hydrated]) .lh-reading-row > .lh-mic-slot:empty { width: 48px; he
 /* T3: margins round the page; the page controls under the paper, always in
    view; notices and the pen hint over the paper, never over the controls. */
 :root .hw-paperStack { margin: 16px auto; }
-:root .hw-paperScroll, :root .hw-paper { touch-action: pan-x pan-y; }
+/* B1 (round 18): a finger pans the paper only along an axis where it can
+   actually scroll (pinch is the notebook's own). With nothing to scroll
+   sideways, a sideways swipe is no browser gesture at all, so it can never
+   chain to the page and become history navigation; along a scrollable axis
+   the paper's overscroll-behavior keeps it contained. */
+:root .hw-paperScroll { overscroll-behavior: contain; }
+:root .hw-paperScroll, :root .hw-paperScroll .hw-paper { touch-action: none; }
+:root .hw-paperScroll[data-pan="y"], :root .hw-paperScroll[data-pan="y"] .hw-paper { touch-action: pan-y; }
+:root .hw-paperScroll[data-pan="x"], :root .hw-paperScroll[data-pan="x"] .hw-paper { touch-action: pan-x; }
+:root .hw-paperScroll[data-pan="xy"], :root .hw-paperScroll[data-pan="xy"] .hw-paper { touch-action: pan-x pan-y; }
 :root .hw-pageFooter { flex: none; padding: 4px 8px; border-top: 1px solid var(--border); background: var(--card); }
 .hw-noticeStack { position: absolute; top: 8px; inset-inline: 8px; z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
 .hw-noticeStack > .hw-notice { position: static; pointer-events: auto; max-width: 100%; }
@@ -5732,3 +5745,47 @@ html:not([data-hydrated]) .lh-reading-row > .lh-mic-slot:empty { width: 48px; he
 	:root .hw-zoom { display: none; }
 	:root .hw-notebookHeader h2 { display: none; }
 }
+
+/* ---- Round 18 (bug fixes) ---- */
+/* B2: each pending attachment says whether it is a whole page or an area. */
+.lh-writing-kind { position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border-radius: 6px; background: color-mix(in oklab, var(--card) 88%, transparent); color: var(--foreground); font-size: 13px; font-weight: 600; line-height: 18px; pointer-events: none; }
+/* B3: the area bar is placed by the notebook outside the selection (top set inline). */
+:root .hw-paperArea > .hw-areaBar { position: absolute; inset-inline: 8px; bottom: auto; z-index: 7; }
+/* B5: the notebook header in three calm groups — the notebook's own (title,
+   Pages, ⋯), Attach, and the view at the end (zoom as one bordered control,
+   Expand, Close). Readable 14px labels, 44px targets, nothing removed; on a
+   narrow card the row wraps rather than crowding. */
+:root .hw-notebookHeader { display: flex; flex-wrap: wrap; align-items: center; column-gap: 6px; row-gap: 4px; }
+:root:root:root .hw-notebookHeader .hw-headerAction { font-size: 14px; }
+:root .hw-notebookHeader h2 { margin-right: 4px; }
+:root .hw-zoom { margin-left: auto; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+:root .hw-zoom .hw-headerAction { border-radius: 0; min-width: 44px; padding-inline: 6px; }
+:root .hw-zoom .hw-zoomValue { min-width: 54px; border-inline: 1px solid var(--border); color: var(--foreground); }
+/* B6: the transcript's row toggles (Your thinking, Thinking while reading, the
+   tutor's thinking, Metadata) were bare text, about 18px tall. They are real
+   targets: 44px on touch screens, 28px with a mouse. */
+.lh-row-toggle { min-height: 28px; }
+@media (pointer: coarse) { .lh-row-toggle { min-height: 44px; } }
+/* B7: the session's name in the phone notebook pane's head (one line). */
+.lh-pane-session { margin: 0; overflow: hidden; color: var(--muted-foreground); font-size: 14px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+/* B13: before React has applied the remembered sidebar state, the boot script's
+   reading (<html data-sidebar-boot>) shows it — the docked list open and its
+   opener folded away — so a page load never slides the sidebar in. */
+html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-sessions-panel { width: 18rem; }
+html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle { width: 0; margin-right: -0.75rem; }
+html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [data-testid="open-sidebar"] { opacity: 0; pointer-events: none; }
+/* B14: one question card (tablets and laptops). The folded reading row is the
+   card's top: the card's 20px corners and border colour, and it follows the
+   card's focus colour (the card's glow ring steps aside while it is joined, so
+   no seam shows). The answer and reasoning fields line up with the option rows:
+   the same 16px inset and 12px corners. */
+@media (min-width: 768px) {
+	:root .lh-reading-input[data-reading-claim="false"] { border-radius: 20px 20px 0 0; border-color: color-mix(in oklab, var(--border) 80%, var(--muted-foreground) 20%); }
+	:root .lh-reading-input[data-reading-claim="false"]:has(+ [data-attachment-composer]:focus-within) { border-color: color-mix(in oklab, var(--primary) 55%, var(--border)); }
+	:root .lh-reading-input[data-reading-claim="false"] + [data-attachment-composer]:focus-within { box-shadow: var(--lh-shadow-dock); }
+	:root .lh-question-form :is([data-testid="answer-field"], [data-testid="thinking-field"]) { margin-inline: 10px; margin-bottom: 10px; border-radius: 12px; }
+}
+/* B7: in the phone pane the notebook's heading moved into the head below, so
+   its three header icons sit at the row's end. */
+.notebook-panel[data-pane] .notebook-frame-header { justify-content: flex-end; }
+:root:root:root .hw-notebookHeader h2 { font-size: 15px; }

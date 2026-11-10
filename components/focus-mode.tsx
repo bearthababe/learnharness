@@ -25,14 +25,18 @@ export function setFocusMode(next: boolean) {
 	// opens and closes); the reading line stays the top line across the
 	// switch, though the bar goes.
 	if (next && typeof document !== "undefined") {
-		const icon = document.querySelector<HTMLElement>(".lh-focus-corner");
-		const box = icon?.checkVisibility?.() ? icon.getBoundingClientRect() : null;
+		// B9 (round 18): the button is labelled now (icon over "Focus"), so the
+		// bare exit icon is centred exactly on the button's icon — a 44px target.
+		const corner = document.querySelector<HTMLElement>(".lh-focus-corner");
+		const icon = corner?.checkVisibility?.() ? corner.querySelector("svg") ?? corner : null;
+		const box = icon?.getBoundingClientRect() ?? null;
 		const style = document.documentElement.style;
 		if (box && box.width) {
-			style.setProperty("--lh-focus-spot-top", `${Math.round(box.top)}px`);
-			style.setProperty("--lh-focus-spot-right", `${Math.round(window.innerWidth - box.right)}px`);
-			style.setProperty("--lh-focus-spot-width", `${Math.round(box.width)}px`);
-			style.setProperty("--lh-focus-spot-height", `${Math.round(box.height)}px`);
+			const size = 44, x = box.left + box.width / 2, y = box.top + box.height / 2;
+			style.setProperty("--lh-focus-spot-top", `${Math.round(y - size / 2)}px`);
+			style.setProperty("--lh-focus-spot-right", `${Math.round(window.innerWidth - x - size / 2)}px`);
+			style.setProperty("--lh-focus-spot-width", `${size}px`);
+			style.setProperty("--lh-focus-spot-height", `${size}px`);
 		}
 	}
 	keepReadingPlace(() => { on = next; apply(); });
@@ -81,7 +85,7 @@ export function FocusModeButton() {
 export function FocusCornerButton() {
 	return (
 		<button type="button" className="lh-nav-chip lh-focus-corner lh-no-drag" data-testid="focus-corner" aria-label="Focus on the lesson" title="Focus on the lesson" onClick={() => setFocusMode(true)}>
-			<MaximizeIcon aria-hidden />
+			<MaximizeIcon aria-hidden /><span className="lh-focus-corner-label" aria-hidden="true">Focus</span>
 		</button>
 	);
 }

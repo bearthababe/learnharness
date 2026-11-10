@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownIcon, ChevronRightIcon, PaperclipIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useRevealStyle } from "@/components/device-prefs";
+import { keyboardOff, useRevealStyle } from "@/components/device-prefs";
 import { PathInput } from "@/components/path-input";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { dictationCheckpoint, finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
@@ -1112,4 +1112,22 @@ function QuestionDockForm({
 			</form>
 		</div>
 	);
+}
+
+/** B12 (round 18): opening a question puts the learner in it — focus goes to
+ *  its first answer control (the first option, or the answer field). On a
+ *  touch screen a text field is focused only when the keyboard is kept
+ *  closed (S3), so opening a question never raises the keyboard unasked;
+ *  the first option is always safe to focus. */
+export function focusFirstAnswerControl(root: HTMLElement | null) {
+	if (!root || typeof window === "undefined") return;
+	const usable = (el: HTMLElement | null) => !!el && el.getClientRects().length > 0 && !el.closest("[inert]") && (typeof el.checkVisibility !== "function" || el.checkVisibility({ visibilityProperty: true } as CheckVisibilityOptions));
+	const row = root.querySelector<HTMLElement>('[data-kbdrow="0"]');
+	const rowTarget = row ? (row.querySelector<HTMLElement>("input, [data-file-path-input]") ?? row) : null;
+	const field = root.querySelector<HTMLElement>('[data-testid="answer-field"] [data-file-path-input], [data-testid="practice-thinking-field"] [data-file-path-input], [data-testid="thinking-field"] [data-file-path-input]');
+	const target = usable(rowTarget) ? rowTarget! : usable(field) ? field! : null;
+	if (!target) return;
+	const text = target.matches("[data-file-path-input], input[type=text], textarea");
+	if (text && window.matchMedia?.("(pointer: coarse)").matches && !keyboardOff()) return;
+	target.focus({ preventScroll: true });
 }

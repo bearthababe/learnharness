@@ -83,7 +83,7 @@ import { MermaidOverlay, SessionMermaidContext } from "@/components/session-over
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
 import { ArrowRightIcon, ChevronLeftIcon, DumbbellIcon, MessageCircleIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, TargetIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
-import { QuestionDock } from "@/components/question-dock";
+import { focusFirstAnswerControl, QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
 import { SessionMessageNavigation } from "@/components/session-navigation";
 import { friendlyProviderError } from "@/components/friendly-error";
@@ -1811,6 +1811,7 @@ export function Chat({
 							nextProblem={nextReady}
 							onNext={sendNext}
 							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : undefined}
+							shortPlaceholder={nextReady ? "Ask anything…" : undefined}
 						/>
 						</div>
 	);
@@ -2474,7 +2475,7 @@ export function Chat({
 						}}>
 						{controls => <NotebookPanel session={notebook.session} dictation={dictation} viewControls={controls} workspaceId={workspaceId}
 							activity={notebookActivity}
-							pane={notebookPane ? { peeking: notebookPeek, peek: () => setNotebookPeek(true), unpeek: () => setNotebookPeek(false) } : undefined} />}
+							pane={notebookPane ? { peeking: notebookPeek, peek: () => setNotebookPeek(true), unpeek: () => setNotebookPeek(false) } : undefined} sessionTitle={titleText} />}
 					</NotebookFrame>
 				</>}
 			</div>
@@ -3037,7 +3038,17 @@ function DockOverlay({
 			expandIntentRef.current = false;
 		});
 	};
+	// B12 (round 18): a question the learner opens takes focus to its first
+	// answer control once it has expanded (see focusFirstAnswerControl).
+	const focusAnswerOnOpen = useRef(false);
+	useEffect(() => {
+		if (!expanded || !focusAnswerOnOpen.current) return;
+		focusAnswerOnOpen.current = false;
+		const frame = requestAnimationFrame(() => focusFirstAnswerControl(shellRef.current));
+		return () => cancelAnimationFrame(frame);
+	}, [expanded]);
 	const expandAndReveal = () => {
+		focusAnswerOnOpen.current = true;
 		const view = scrollRef.current;
 		if (view && !expandedRef.current) readingTopRef.current = view.scrollTop;
 		setRevealed(true); // the teach-check invitation was accepted (W5)
@@ -3308,6 +3319,7 @@ function DockOverlay({
 									input={practice.input as { statement: string }}
 									expanded={expanded}
 									onExpand={() => {
+										focusAnswerOnOpen.current = true;
 										setExpanded(true);
 										void suppressFoldDuringReveal();
 									}}

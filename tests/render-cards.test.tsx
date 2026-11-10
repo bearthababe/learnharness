@@ -286,6 +286,8 @@ describe("render smoke tests", () => {
 		assert.match(html, /data-testid="answered-confidence"/);
 		assert.match(html, /data-testid="confidence-rail"/);
 		assert.match(html, /70%/);
+		// B10 (round 18): labelled as the learner's own confidence, so it never reads as a score.
+		assert.match(html, /Your confidence<\/span>/);
 		// It is a RECORD, not a control — no range input on the card.
 		assert.ok(!html.includes('type="range"'));
 	});

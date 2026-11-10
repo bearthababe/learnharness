@@ -21,7 +21,10 @@ export function useFieldCycle(fields: () => readonly HTMLElement[]) {
 	useEffect(() => {
 		const onCycle = (event: Event) => {
 			if (document.querySelector('[data-session-destination="notebook"]')) return;
-			const list = fields().filter((el) => el.isConnected);
+			// B11 (round 18): only fields that can take focus join the cycle. A field
+			// inside a question that is not open yet is in the DOM but hidden, and
+			// "moving" to it left focus where it was (Tab was stuck in the reading note).
+			const list = fields().filter(canTakeFocus);
 			if (list.length === 0) return;
 			const active = document.activeElement;
 			const idx = active ? list.findIndex((el) => el === active || el.contains(active)) : -1;
@@ -41,4 +44,9 @@ export function useFieldCycle(fields: () => readonly HTMLElement[]) {
 		window.addEventListener("lh:kbd-cycle-fields", onCycle);
 		return () => window.removeEventListener("lh:kbd-cycle-fields", onCycle);
 	}, [fields]);
+}
+
+function canTakeFocus(el: HTMLElement): boolean {
+	return el.isConnected && !el.closest("[inert], [aria-hidden='true']") && el.getClientRects().length > 0
+		&& (typeof el.checkVisibility !== "function" || el.checkVisibility({ visibilityProperty: true, contentVisibilityAuto: true } as CheckVisibilityOptions));
 }

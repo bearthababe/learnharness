@@ -13,7 +13,7 @@ import type { HandwritingPage, PageSummary } from "@/src/core";
 import { HandwritingToolbar, setWheelSpot, useWheelSpot } from "./toolbar";
 import { useWritingPalette } from "@/components/device-features";
 import { HANDWRITING_DELETED_EVENT } from "./device";
-import { notebookSource, normalizeHandwriting, replayHandwriting, HANDWRITING_PAGE, HANDWRITING_PEN_COLOURS, HANDWRITING_PEN_SCALES, HANDWRITING_BROAD_WIDTHS, HANDWRITING_HIGHLIGHT_COLOUR, type HandwritingStroke as Stroke } from "@/src/core";
+import { notebookSource, normalizeHandwriting, replayHandwriting, slotPage, HANDWRITING_PAGE, HANDWRITING_PEN_COLOURS, HANDWRITING_PEN_SCALES, HANDWRITING_BROAD_WIDTHS, HANDWRITING_HIGHLIGHT_COLOUR, type HandwritingStroke as Stroke } from "@/src/core";
 import type { AttachmentReview } from "./attachment";
 import { HandwritingSubmissionContext } from "./submission";
 import { dictationCheckpoint, finishDictation } from "../dictation";
@@ -51,7 +51,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const controlsRef = useRef<HTMLElement>(null), slotRef = useRef<HTMLDivElement>(null), areaRef = useRef<HTMLDivElement>(null);
 	const strokes = useRef<Stroke[]>([]), active = useRef<{ pointerId: number; stroke: Stroke; complete: (stroke: Stroke) => void } | null>(null);
 	const recovery = useRef<HandwritingPages | null>(null);
-	const attachmentNotice = submission?.attachment()?.notice(normalizeHandwriting(recovery.current?.getSnapshot().working ?? { version: 1, operations: [] }).pageId);
+	const attachmentNotice = submission?.attachment()?.noticeForPage(normalizeHandwriting(recovery.current?.getSnapshot().working ?? { version: 1, operations: [] }).pageId);
 	// The confirmation folds away once seen (round 11); failures stay.
 	const confirmation = attachmentNotice && (attachmentNotice.kind === "attached" || attachmentNotice.kind === "updated" || attachmentNotice.kind === "unchanged") ? `${attachmentNotice.kind}:${attachmentNotice.text}` : "";
 	const [seenConfirmation, setSeenConfirmation] = useState("");
@@ -127,17 +127,30 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const [zoom, setZoomState] = useState(() => readZoom());
 	const setZoom = useCallback((next: number) => { const value = clampZoom(next); setZoomState(value); try { localStorage.setItem(ZOOM_KEY, String(value)); } catch { /* this view only */ } }, []);
 	const paperSize = { width: baseWidth * zoom, height: baseWidth * zoom * HEIGHT / WIDTH };
+	// B4 (round 18): ink is drawn at the paper's displayed size × the screen's
+	// pixel ratio (in quarter steps, so zoom does not repaint on every step),
+	// never below page resolution and at most 2.5× it (Safari's per-canvas
+	// size limit). Drawing stays in page units through the canvas transform.
+	const [pixelRatio, setPixelRatio] = useState(1);
+	useEffect(() => {
+		const read = () => setPixelRatio(window.devicePixelRatio || 1); read();
+		const query = window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+		query?.addEventListener?.("change", read); window.addEventListener("resize", read);
+		return () => { query?.removeEventListener?.("change", read); window.removeEventListener("resize", read); };
+	}, []);
+	const inkScale = Math.min(2.5, Math.max(1, Math.ceil(paperSize.width * pixelRatio / WIDTH * 4) / 4));
 	const viewRef = useRef({ expanded, paperSize }); viewRef.current = { expanded, paperSize };
 	const paperPositions = useRef<{ split: number; full?: number }>({ split: 0 }), restorePaperPosition = useRef<number | null>(null);
 	const mergeHighlight = useCallback((context: CanvasRenderingContext2D) => {
 		const overlay = highlightRef.current!;
 		context.save();
-		try { context.globalCompositeOperation = "multiply"; context.globalAlpha = HIGHLIGHT_OPACITY; context.drawImage(overlay, 0, 0); }
+		try { context.globalCompositeOperation = "multiply"; context.globalAlpha = HIGHLIGHT_OPACITY; context.drawImage(overlay, 0, 0, WIDTH, HEIGHT); }
 		finally { context.restore(); }
 		overlay.getContext("2d")!.clearRect(0, 0, WIDTH, HEIGHT);
 	}, []);
 	const redraw = useCallback(() => {
 		const context = canvasRef.current?.getContext("2d"); if (!context) return;
+		for (const canvas of [canvasRef.current!, highlightRef.current!]) { const k = canvas.width / WIDTH; canvas.getContext("2d")!.setTransform(k, 0, 0, k, 0, 0); }
 		context.clearRect(0, 0, WIDTH, HEIGHT);
 		const background = backgroundRef.current!.getContext("2d")!; background.fillStyle = "white"; background.fillRect(0, 0, WIDTH, HEIGHT);
 		if (decodedBackground.current) background.drawImage(decodedBackground.current, 0, 0);
@@ -201,7 +214,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		return () => { live = false; decodeGeneration++; unregister(); unsubscribe(); model.dispose(); clearInterval(timer); window.removeEventListener(HANDWRITING_DELETED_EVENT, deleted); window.removeEventListener("online", retry); window.removeEventListener("focus", retry); document.removeEventListener("visibilitychange", visible); };
 	}, [chatId, redraw, register]);
 	useEffect(() => {
-		const unregister = submissionRef.current?.registerNotebook({ canUpdate: () => !active.current, reveal: pageId => { if (recovery.current?.getSnapshot().working.pageId !== pageId) return; if (active.current) reviewDeferred.current = true; else callbacks.current.onReview(); } });
+		const unregister = submissionRef.current?.registerNotebook({ canUpdate: () => !active.current, reveal: slot => { if (recovery.current?.getSnapshot().working.pageId !== slotPage(slot)) return; if (active.current) reviewDeferred.current = true; else callbacks.current.onReview(); } });
 		return () => { unregister?.(); for (const resolve of strokeWaiters.current.splice(0)) resolve(); };
 	}, [chatId]);
 	// T6 (round 17): Attach says what it attaches to, and says why when it
@@ -219,11 +232,15 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		setAttachNote("");
 		const field = transfer.activeField(), pageId = normalizeHandwriting(working.getSnapshot().working).pageId, validSpeech = dictationCheckpoint();
 		const valid = () => recovery.current === working && normalizeHandwriting(working.getSnapshot().working).pageId === pageId && transfer.activeField() === field && !!field && validSpeech();
+		// B2 (round 18): the whole page attaches into the page's own slot (a newer
+		// version replaces its older one, and says so); each area gets a slot of
+		// its own, so areas add up beside the page and each other.
+		const slot = area ? `${pageId}~area_${crypto.getRandomValues(new Uint32Array(1))[0]!.toString(16).padStart(8, "0")}` : pageId;
 		try {
-			if (uploader.hasCapture(pageId) && !area) { await uploader.retry(pageId); return; }
+			if (uploader.hasCapture(slot) && !area) { await uploader.retry(slot); return; }
 			const observed = await callbacks.current.review();
 			if (!valid()) return;
-			await uploader.attach({ pageId, head: observed.pageAttachments[pageId], valid, replace: !!area, finish: async () => {
+			await uploader.attach({ pageId: slot, head: observed.pageAttachments[slot], valid, finish: async () => {
 				await finishDictation();
 				if (active.current) await new Promise<void>(resolve => strokeWaiters.current.push(resolve));
 				return valid() && working.getSnapshot().ready && !decoding.current;
@@ -233,7 +250,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				transfer.release();
 				return { source, draft, raster };
 			} });
-		} catch { uploader.report(pageId, "review_unavailable"); }
+		} catch { uploader.report(slot, "review_unavailable"); }
 		finally { transfer.release(); }
 	}
 	useLayoutEffect(() => {
@@ -287,6 +304,59 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		area.addEventListener("pointerup", up); area.addEventListener("pointercancel", up);
 		return () => { area.removeEventListener("pointerdown", down); area.removeEventListener("pointermove", move); area.removeEventListener("pointerup", up); area.removeEventListener("pointercancel", up); };
 	}, []);
+	// B1 (round 18): the paper's finger panning follows what can actually scroll
+	// (see the CSS), and a sideways wheel or trackpad swipe that the paper cannot
+	// take is consumed here rather than turning into browser back/forward.
+	useEffect(() => {
+		const area = areaRef.current; if (!area) return;
+		const stack = area.querySelector<HTMLElement>(".hw-paperStack");
+		const update = () => {
+			const x = area.scrollWidth > area.clientWidth + 1, y = area.scrollHeight > area.clientHeight + 1;
+			const pan = x && y ? "xy" : x ? "x" : y ? "y" : "none";
+			if (area.dataset.pan !== pan) area.dataset.pan = pan;
+		};
+		update();
+		const observer = new ResizeObserver(update);
+		observer.observe(area); if (stack) observer.observe(stack);
+		const wheel = (event: WheelEvent) => {
+			if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+			const max = area.scrollWidth - area.clientWidth;
+			const atEdge = max <= 1 || (event.deltaX < 0 && area.scrollLeft <= 0) || (event.deltaX > 0 && area.scrollLeft >= max - 1);
+			if (atEdge && event.cancelable) event.preventDefault();
+		};
+		area.addEventListener("wheel", wheel, { passive: false });
+		return () => { observer.disconnect(); area.removeEventListener("wheel", wheel); };
+	}, []);
+	// B4: a new ink resolution resized (and so cleared) the canvases: repaint
+	// before the browser paints, including any stroke still being drawn.
+	useLayoutEffect(() => {
+		redraw();
+		const current = active.current; if (!current) return;
+		const target = (current.stroke.tool === "highlighter" ? highlightRef.current : canvasRef.current)?.getContext("2d"); if (!target) return;
+		current.stroke.points.forEach((point, index) => paint(target, current.stroke, current.stroke.points[Math.max(0, index - 1)]!, point));
+	}, [inkScale, redraw]);
+	const paperAreaRef = useRef<HTMLDivElement>(null), areaBarRef = useRef<HTMLDivElement>(null);
+	const [areaBarPlace, setAreaBarPlace] = useState<{ top: number; side: "top" | "below" | "above" | "edge" }>({ top: 8, side: "top" });
+	useLayoutEffect(() => {
+		if (!selecting) return;
+		const paper = paperAreaRef.current, scroll = areaRef.current; if (!paper || !scroll) return;
+		const place = () => {
+			const bar = areaBarRef.current, canvas = canvasRef.current; if (!bar || !canvas) return;
+			const margin = 8, view = paper.getBoundingClientRect(), page = canvas.getBoundingClientRect(), height = bar.offsetHeight;
+			let next: { top: number; side: "top" | "below" | "above" | "edge" } = { top: margin, side: "top" };
+			if (area && area.width > 0 && area.height > 0) {
+				const top = page.top + area.y / HEIGHT * page.height - view.top, bottom = page.top + (area.y + area.height) / HEIGHT * page.height - view.top;
+				if (bottom + margin + height <= view.height - margin) next = { top: Math.max(margin, bottom + margin), side: "below" };
+				else if (top - margin - height >= margin) next = { top: Math.min(view.height - margin - height, top - margin - height), side: "above" };
+				else next = top > view.height - bottom ? { top: margin, side: "edge" } : { top: Math.max(margin, view.height - margin - height), side: "edge" };
+			}
+			setAreaBarPlace(prior => prior.top === next.top && prior.side === next.side ? prior : next);
+		};
+		place();
+		scroll.addEventListener("scroll", place, { passive: true });
+		const observer = new ResizeObserver(place); observer.observe(paper);
+		return () => { scroll.removeEventListener("scroll", place); observer.disconnect(); };
+	}, [selecting, area, zoom]);
 	const zoomRef = useRef(zoom); zoomRef.current = zoom;
 	/** Zoom, keeping the paper under (x, y) — or the view's centre — in place. */
 	function zoomAround(next: number, x?: number, y?: number) {
@@ -462,11 +532,11 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				<button type="button" className="min-h-11 underline" {...handlers("Reload preview", () => location.reload())}>Reload preview</button>
 				<p>Reload keeps your notebook, Undo and Redo, attached snapshots and explanation saved at Attach.</p>
 			</div>}
-			<div className="hw-drawingWorkspace"><div className="hw-paperArea"><div ref={areaRef} className="hw-paperScroll" data-testid="notebook-paper-scroll">
+			<div className="hw-drawingWorkspace"><div ref={paperAreaRef} className="hw-paperArea"><div ref={areaRef} className="hw-paperScroll" data-testid="notebook-paper-scroll">
 				<div className={`hw-paperStack ${dimPaper ? "hw-dimPaper" : ""}`} style={{ width: paperSize.width, height: paperSize.height }}>
 					<canvas ref={backgroundRef} width={WIDTH} height={HEIGHT} className="hw-figureBackground" aria-hidden="true" data-testid="notebook-background" />
-					<canvas ref={canvasRef} width={WIDTH} height={HEIGHT} className="hw-paper" style={{ cursor: tool === "eraser" ? "cell" : "crosshair" }} aria-label="Handwriting page — use Pencil or mouse; fingers do not draw" data-testid="notebook-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onContextMenu={e => e.preventDefault()} />
-					<canvas ref={highlightRef} width={WIDTH} height={HEIGHT} className="hw-highlightOverlay" style={{ opacity: HIGHLIGHT_OPACITY }} aria-hidden="true" data-testid="notebook-highlight-overlay" />
+					<canvas ref={canvasRef} width={Math.round(WIDTH * inkScale)} height={Math.round(HEIGHT * inkScale)} data-ink-scale={inkScale} className="hw-paper" style={{ cursor: tool === "eraser" ? "cell" : "crosshair" }} aria-label="Handwriting page — use Pencil or mouse; fingers do not draw" data-testid="notebook-canvas" onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish} onContextMenu={e => e.preventDefault()} />
+					<canvas ref={highlightRef} width={Math.round(WIDTH * inkScale)} height={Math.round(HEIGHT * inkScale)} className="hw-highlightOverlay" style={{ opacity: HIGHLIGHT_OPACITY }} aria-hidden="true" data-testid="notebook-highlight-overlay" />
 					{/* T6: draw a box round the part to attach (finger, Pencil or mouse). */}
 					{selecting && <div className="hw-areaSelect" data-testid="notebook-area-select" aria-label="Drag over the part of the page to attach"
 						onPointerDown={event => {
@@ -486,13 +556,16 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 				</div>
 
 			</div>{fingerHint && <p className="hw-fingerHint" role="status" data-testid="finger-hint">Write with your pen · fingers scroll the page</p>}
-			{/* Notices sit at the top of the paper, never over the page controls. */}
-			<div className="hw-noticeStack">
-			{selecting && <div className="hw-notice hw-areaBar" role="group" aria-label="Select an area" data-testid="notebook-area-bar">
+			{/* B3 (round 18): the area bar sits outside the selection — below it, or
+			    above it, wherever the paper has room — so the learner sees exactly
+			    what will be sent. */}
+			{selecting && <div ref={areaBarRef} className="hw-notice hw-areaBar" role="group" aria-label="Select an area" data-testid="notebook-area-bar" data-place={areaBarPlace.side} style={{ top: areaBarPlace.top }}>
 				<span>{area && area.width > 20 && area.height > 20 ? `Attach this area to ${attachTarget}?` : "Drag over the part to attach."}</span>
 				<button type="button" className="min-h-11 px-3" {...handlers("Cancel area", () => { setSelecting(false); setArea(null); })} data-testid="notebook-area-cancel">Cancel</button>
 				<button type="button" className="hw-areaAttach min-h-11 px-3" disabled={!area || area.width <= 20 || area.height <= 20} {...handlers("Attach area", () => { const chosen = area; setSelecting(false); setArea(null); if (chosen) void attachSnapshot(chosen); })} data-testid="notebook-area-attach">Attach area</button>
 			</div>}
+			{/* Notices sit at the top of the paper, never over the page controls. */}
+			<div className="hw-noticeStack">
 			{attachNote && <p className="hw-notice" role="status" data-testid="notebook-attach-note">{attachNote}</p>}
 			{flattened && <p className="hw-notice">Flattened image · original marks cannot be erased</p>}
 			{clearedAt !== null && !saved.notice && <div className="hw-notice hw-clearedNotice" role="status" data-testid="notebook-cleared">Page cleared<button type="button" className="min-h-11 px-3 underline" {...handlers("Undo clear", () => { setClearedAt(null); undoLast(); })}>Undo</button></div>}

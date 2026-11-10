@@ -263,7 +263,7 @@ export function ReadingThinkingField({
 				}}
 				// P8 (round 14): on phones the field is a one-line invitation whose
 				// placeholder carries the step's name (the label row steps back).
-				placeholder={paneMode ? "Write, or tap the mic below and speak" : "Whatever comes to mind as you read."}
+				placeholder={paneMode ? "Write, or tap the mic and speak" : "Whatever comes to mind as you read."}
 				className="field-sizing-content lh-input max-h-40 w-full resize-none bg-transparent py-0.5 outline-none placeholder:text-muted-foreground/70"
 			/></CompactLearningInput>;
 	const label = <div className="pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground lh-reading-label">Thinking while reading</div>;

@@ -21,7 +21,9 @@ export async function decodeHandwritingBackground(background: BackgroundPixels):
 export function freezeHandwritingRaster(background: HTMLCanvasElement, ink: HTMLCanvasElement): NonNullable<CaptureRecord["raster"]> {
 	const canvas = document.createElement("canvas"); canvas.width = HANDWRITING_PAGE.width; canvas.height = HANDWRITING_PAGE.height;
 	const context = canvas.getContext("2d")!;
-	context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(background, 0, 0); context.drawImage(ink, 0, 0);
+	// B4 (round 18): the live canvases may be drawn above page resolution; the
+	// snapshot is always the page at 1400×1800.
+	context.fillStyle = "white"; context.fillRect(0, 0, canvas.width, canvas.height); context.drawImage(background, 0, 0, canvas.width, canvas.height); context.drawImage(ink, 0, 0, canvas.width, canvas.height);
 	return { ...HANDWRITING_PAGE, rgba: context.getImageData(0, 0, canvas.width, canvas.height).data.buffer as ArrayBuffer };
 }
 export async function encodeHandwritingRaster(raster: NonNullable<CaptureRecord["raster"]>): Promise<Blob> {
@@ -36,7 +38,7 @@ export function freezeHandwritingArea(background: HTMLCanvasElement, ink: HTMLCa
 	const { width: W, height: H } = HANDWRITING_PAGE;
 	const page = document.createElement("canvas"); page.width = W; page.height = H;
 	const source = page.getContext("2d")!;
-	source.fillStyle = "white"; source.fillRect(0, 0, W, H); source.drawImage(background, 0, 0); source.drawImage(ink, 0, 0);
+	source.fillStyle = "white"; source.fillRect(0, 0, W, H); source.drawImage(background, 0, 0, W, H); source.drawImage(ink, 0, 0, W, H);
 	const canvas = document.createElement("canvas"); canvas.width = W; canvas.height = H;
 	const context = canvas.getContext("2d")!;
 	context.fillStyle = "white"; context.fillRect(0, 0, W, H);

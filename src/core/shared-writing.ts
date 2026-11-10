@@ -1,6 +1,15 @@
 import type { LhMessage } from "./native-messages.ts";
 import { z } from "zod";
-import { notebookPageIdSchema, type NotebookSource } from "./handwriting.ts";
+import { type NotebookSource } from "./handwriting.ts";
+
+/** B2 (round 18): an attachment's slot is the whole page (its page id) or one
+ * area of it (the page id + "~area_" + 8 hex). Each slot has its own pending
+ * head, so areas add up beside the page; the page's own slot keeps versioning
+ * (a newer snapshot of the whole page replaces the older one, and says so). */
+export const notebookSlotIdSchema = z.string().regex(/^page_(?:initial|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:~area_[0-9a-f]{8})?$/);
+/** The page an attachment slot belongs to. */
+export const slotPage = (slot: string): string => slot.split("~")[0]!;
+export const isAreaSlot = (slot: string): boolean => slot.includes("~area_");
 
 /** Original PNGs shared into a session. Submission is derived from the
  * session record, so a failed send cannot consume pending work. */
@@ -15,8 +24,8 @@ const writingId = z.string().regex(/^writing_[A-Za-z0-9_-]+$/);
 const revision = z.number().int().positive();
 export const writingIndexSchema = z.object({
 	version: z.literal(1),
-	pages: z.record(notebookPageIdSchema, z.object({ revision, writingId }).strict()),
-	committed: z.record(writingId, z.object({ pageId: notebookPageIdSchema, pageRevision: revision }).strict()),
+	pages: z.record(notebookSlotIdSchema, z.object({ revision, writingId }).strict()),
+	committed: z.record(writingId, z.object({ pageId: notebookSlotIdSchema, pageRevision: revision }).strict()),
 }).strict().superRefine((index, context) => {
 	for (const [pageId, head] of Object.entries(index.pages)) {
 		const receipt = index.committed[head.writingId];

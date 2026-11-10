@@ -1,12 +1,11 @@
-import { canonicalHandwriting, handwritingFingerprints, notebookSourceSchema, type NotebookSource, type PageAttachments, type SharedWriting } from "../../src/core/index.ts";
+import { canonicalHandwriting, handwritingFingerprints, isAreaSlot, notebookSourceSchema, slotPage, type NotebookSource, type PageAttachments, type SharedWriting } from "../../src/core/index.ts";
 import { CaptureRetiredError, type CaptureRecord, type DurableDraft, type TransferDevice } from "./transfer-device.ts";
 
 export type AttachmentReview = { pending: SharedWriting[]; pageAttachments: PageAttachments };
 type Dependencies = { device: TransferDevice; fetch: typeof fetch; encode: (raster: NonNullable<CaptureRecord["raster"]>) => Promise<Blob>; refresh: () => Promise<AttachmentReview>; reveal: (pageId: string) => void; changed: () => void };
-export type AttachPreparation = { pageId: string; head: PageAttachments[string] | undefined; valid: () => boolean; finish: () => Promise<boolean>; freeze: () => { source: NotebookSource; draft: DurableDraft; raster: NonNullable<CaptureRecord["raster"]> };
-	/** T6 (round 17): an area of the page — a new snapshot even when the page's
-	 *  working has not changed (it replaces the page's pending one). */
-	replace?: boolean };
+/** `pageId` is the attachment's slot: the page itself, or one area of it
+ *  (B2, round 18 — areas add up as their own pending attachments). */
+export type AttachPreparation = { pageId: string; head: PageAttachments[string] | undefined; valid: () => boolean; finish: () => Promise<boolean>; freeze: () => { source: NotebookSource; draft: DurableDraft; raster: NonNullable<CaptureRecord["raster"]> } };
 const LIMIT = 25 * 1024 * 1024;
 const noticeText = {
 	preparing: "Preparing snapshot…",
@@ -20,7 +19,8 @@ const noticeText = {
 	superseded: "A newer snapshot of this page is attached.",
 	unchanged: "This page version is already attached.",
 	attached: "Snapshot attached · not sent",
-	updated: "Snapshot updated · not sent",
+	// B2 (round 18): a newer whole-page snapshot replaces that page's older one — said, never silent.
+	updated: "Page updated · its earlier snapshot is replaced · not sent",
 	sent: "This version was already sent.",
 	unavailable: "This session is unavailable. Your device recovery has been kept.",
 } as const;
@@ -53,9 +53,15 @@ export class HandwritingAttachment {
 	constructor(private chatId: string, private deps: Dependencies) {}
 	notice(pageId: string) {
 		const notice = this.notices.get(pageId); if (!notice) return;
-		return { ...notice, text: noticeText[notice.kind] + (notice.limit ? ` ${new CaptureSizeError(notice.limit).message}` : ""), refresh: notice.kind === "refresh_failed" || notice.kind === "review_unavailable" };
+		const text = isAreaSlot(pageId) && notice.kind === "attached" ? "Area attached · not sent" : noticeText[notice.kind];
+		return { ...notice, text: text + (notice.limit ? ` ${new CaptureSizeError(notice.limit).message}` : ""), refresh: notice.kind === "refresh_failed" || notice.kind === "review_unavailable" };
 	}
 	noticeEntries() { return [...this.notices.keys()].map(pageId => ({ pageId, ...this.notice(pageId)! })); }
+	/** The most recent notice for any slot of this page (the page or one of its areas). */
+	noticeForPage(pageId: string) {
+		const slot = [...this.notices.keys()].filter(key => slotPage(key) === pageId).at(-1);
+		return slot === undefined ? undefined : this.notice(slot);
+	}
 	report(pageId: string, kind: NoticeKind) { this.update(pageId, kind); }
 	/** A page taken out of the next message (or sent) is no longer "attached ·
 	 *  not sent": drop attachment notices for pages with nothing pending. */
@@ -82,10 +88,11 @@ export class HandwritingAttachment {
 			if (!this.disposed) this.deps.changed();
 		};
 	}
-	private update(pageId: string, kind: NoticeKind, limit?: SizeLimit) { this.notices.set(pageId, { kind, limit }); if (!this.disposed) this.deps.changed(); }
+	// Re-inserted so the newest notice is last (noticeForPage shows the latest).
+	private update(pageId: string, kind: NoticeKind, limit?: SizeLimit) { this.notices.delete(pageId); this.notices.set(pageId, { kind, limit }); if (!this.disposed) this.deps.changed(); }
 	private async validateSource(capture: CaptureRecord) {
 		const source = notebookSourceSchema.parse(JSON.parse(capture.sourceJson)), fingerprints = await handwritingFingerprints(source);
-		if (source.journal.pageId !== capture.pageId || fingerprints.sourceFingerprint !== capture.sourceFingerprint || fingerprints.contentFingerprint !== capture.contentFingerprint) throw new Error("Corrupt saved capture");
+		if (source.journal.pageId !== slotPage(capture.pageId) || fingerprints.sourceFingerprint !== capture.sourceFingerprint || fingerprints.contentFingerprint !== capture.contentFingerprint) throw new Error("Corrupt saved capture");
 	}
 	private async showReview(capture: Pick<CaptureRecord, "pageId" | "writingId" | "expectedPageRevision">) {
 		try {
@@ -162,10 +169,10 @@ export class HandwritingAttachment {
 			// Freeze all inputs in the caller's one synchronous completed-stroke task.
 			const frozen = preparation.freeze();
 			const source = notebookSourceSchema.parse(frozen.source), sourceJson = canonicalHandwriting(source);
-			if (source.journal.pageId !== pageId || frozen.draft.chatId !== this.chatId) throw new Error("Capture target changed");
+			if (source.journal.pageId !== slotPage(pageId) || frozen.draft.chatId !== this.chatId) throw new Error("Capture target changed");
 			const fingerprints = await handwritingFingerprints(source);
 			if (this.deleted) return;
-			if (!preparation.replace && preparation.head?.contentFingerprint === fingerprints.contentFingerprint) {
+			if (preparation.head?.contentFingerprint === fingerprints.contentFingerprint) {
 				await this.deps.device.saveDraft(this.chatId, this.generation, frozen.draft);
 				this.update(pageId, "unchanged");
 				if (!this.disposed && preparation.valid()) this.deps.reveal(pageId);

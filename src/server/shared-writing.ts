@@ -1,7 +1,7 @@
 import { ChatInputError, type TurnInput } from "../core/input-events.ts";
 import { emit } from "../core/events.ts";
 import type { LhMessage } from "../core/native-messages.ts";
-import { CaptureConflict, pendingSharedWriting, pageAttachments, type SharedWritingReference } from "../core/shared-writing.ts";
+import { CaptureConflict, pendingSharedWriting, pageAttachments, notebookSlotIdSchema, slotPage, type SharedWritingReference } from "../core/shared-writing.ts";
 import { notebookSourceSchema, handwritingSha256, isFullPageHandwritingPng } from "../core/handwriting.ts";
 import { stores } from "./stores.ts";
 
@@ -92,7 +92,7 @@ async function uploadNotebook(request: Request, chatId: string, bytes: Uint8Arra
 	let source;
 	try {
 		source = notebookSourceSchema.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await sourceFile.arrayBuffer())));
-		if (source.journal.pageId !== pageId) throw new Error("Page mismatch");
+		if (!notebookSlotIdSchema.safeParse(pageId).success || source.journal.pageId !== slotPage(pageId)) throw new Error("Page mismatch");
 		for (const [id, background] of Object.entries(source.journal.backgrounds)) {
 			const backgroundBytes = Buffer.from(background.data, "base64");
 			if (backgroundBytes.toString("base64") !== background.data || !isFullPageHandwritingPng(backgroundBytes) || await handwritingSha256(backgroundBytes) !== id) throw new Error("Invalid background");

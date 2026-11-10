@@ -1,7 +1,7 @@
 import { appendHandwriting, canonicalHandwriting, copyHandwriting, handwritingAtHead, handwritingContent, handwritingFingerprints, handwritingPageSchema, handwritingPrefix, handwritingSchema, initialHandwritingPage, normalizeHandwriting, notebookSource, notebookSourceSchema, orderedPages, pageSummary, pageSummarySchema, reconcileHandwritingPage, adoptHandwritingPageMetadata, replayHandwriting, restoreHandwriting, importHandwritingBackground, type BackgroundPixels, type HandwritingPage, type HandwritingStroke, type HandwritingOperation, type HandwritingV2, type NotebookSource, type PageCreation, type PageSummary, type SharedWriting } from "../../src/core/index.ts";
 import { compactPage, hydratePage, pageDeviceKey, pageRecoveryKey, PageDeviceConflict, type PagesDevice, type PageAction } from "./pages-device.ts";
 import { handwritingKey, handwritingRecoveryKey } from "./device.ts";
-import { HandwritingConflict } from "../../src/core/index.ts";
+import { HandwritingConflict, slotPage } from "../../src/core/index.ts";
 
 type StoragePort = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 type Dependencies = { device: PagesDevice; storage: () => StoragePort; fetch: typeof fetch; prepare: (page: HandwritingPage) => Promise<void>; flatten: (url: string) => Promise<BackgroundPixels>; preserveDrafts?: () => Promise<void> };
@@ -281,7 +281,7 @@ export class HandwritingPages {
 			let source: NotebookSource, external = false, target: HandwritingPage | null = null;
 			if (response.ok) {
 				source = notebookSourceSchema.parse(await response.json());
-				if (writing.notebook && writing.notebook.pageId !== source.journal.pageId) throw new Error("Snapshot page identity mismatch");
+				if (writing.notebook && slotPage(writing.notebook.pageId) !== source.journal.pageId) throw new Error("Snapshot page identity mismatch");
 				if (writing.notebook && writing.notebook.contentFingerprint !== (await handwritingFingerprints(source)).contentFingerprint) throw new Error("Snapshot content identity mismatch");
 			} else {
 				const result = await response.json();

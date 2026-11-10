@@ -62,6 +62,7 @@ export function ChatSessionComposer({
 	inputRef,
 	onEscape,
 	placeholder,
+	shortPlaceholder,
 	nextProblem,
 	onNext,
 }: {
@@ -79,6 +80,7 @@ export function ChatSessionComposer({
 	inputRef?: React.RefObject<HTMLDivElement | null>;
 	onEscape?: () => void;
 	placeholder?: string;
+	shortPlaceholder?: string;
 	nextProblem?: boolean;
 	onNext?: () => void;
 }) {
@@ -103,6 +105,7 @@ export function ChatSessionComposer({
 			inputRef={inputRef}
 			onEscape={onEscape}
 			placeholder={placeholder}
+			shortPlaceholder={shortPlaceholder}
 			nextProblem={nextProblem}
 			onNext={onNext}
 		/>
@@ -120,6 +123,9 @@ export function Composer({
 	inputRef,
 	onEscape,
 	placeholder = "Ask, answer, or steer the lesson…",
+	// B8 (round 18): phones show a short form that fits beside the mic and
+	// Send (or Next) at 320–375px; the long one is for wider fields.
+	shortPlaceholder = placeholder === "Ask, answer, or steer the lesson…" ? "Message your tutor…" : undefined,
 	nextProblem = false,
 	onNext,
 	dictation,
@@ -141,6 +147,8 @@ export function Composer({
 	 *  active sessions read "Ask, answer, or steer the lesson…"; the fresh
 	 *  new-session page asks the graph view's opening question instead. */
 	placeholder?: string;
+	/** Shown instead on phones, where the field is narrow. */
+	shortPlaceholder?: string;
 	/** The practice pause is live (owner round 16): Enter on the empty
 	 *  composer fires the next-problem signal instead of doing nothing —
 	 *  the keyboard-first move-on. */
@@ -199,6 +207,7 @@ export function Composer({
 					}
 				}}
 				placeholder={placeholder}
+				data-placeholder-short={shortPlaceholder}
 				autoFocus={autoFocus}
 				className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 			/></CompactLearningInput>
@@ -226,7 +235,7 @@ export function Composer({
 						aria-label="Next problem"
 						className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full bg-green-600 px-4 font-ui text-sm font-semibold text-white transition-colors hover:bg-green-500"
 					>
-						Next problem
+						<span className="lh-next-long">Next problem</span><span className="lh-next-short" aria-hidden="true">Next</span>
 						<ArrowRightIcon className="size-4" />
 					</button>
 				) : (

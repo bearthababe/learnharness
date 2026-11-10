@@ -16,11 +16,14 @@ import { BigMic, KeyboardToggle, PaneBar, PeekReturn, settleDocumentScroll } fro
 import { NotebookPeekSheet } from "./notebook-peek-sheet";
 import { useTryout } from "./device-prefs";
 
-export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId, pane }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string;
+export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId, pane, sessionTitle }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string;
 	/** P5 (round 17, phones): the notebook takes over the screen like the
 	 *  thinking pane — "‹ Lesson", the big mic bar, the keyboard button and
 	 *  Peek (the lesson, with the working in a pull-up sheet). */
-	pane?: { peeking: boolean; peek: () => void; unpeek: () => void } }) {
+	pane?: { peeking: boolean; peek: () => void; unpeek: () => void };
+	/** B7 (round 18): the session's title, shown in the phone pane so a session
+	 *  reopened in its notebook says which session it is. */
+	sessionTitle?: string }) {
 	const { view, draftText, saving, editing, inputLocked, error, cursorLineId, expressionSelection } = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
 	const speech = useSyncExternalStore(session.speech.subscribe, session.speech.getSnapshot, session.speech.getSnapshot);
 	const drafts = useSyncExternalStore(session.tutor.subscribe, session.tutor.getSnapshot, session.tutor.getSnapshot);
@@ -108,7 +111,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 	</>;
 	return <section aria-label="Notebook" data-input-owner="notebook" data-learning-surface="" data-pane={pane ? (card ? "card" : "plain") : undefined} data-testid="notebook-panel" className="notebook-panel flex min-h-0 min-w-0 flex-col border-border bg-background">
 		<div className="notebook-surface">
-		<header className="notebook-frame-header" data-notebook-view-control=""><h2 className={scopeText ? "sr-only" : undefined}>Notebook</h2>
+		<header className="notebook-frame-header" data-notebook-view-control=""><h2 className={scopeText || pane ? "sr-only" : undefined}>Notebook</h2>
 			{scopeText && <p className="notebook-scope" data-testid="notebook-scope">
 				<span><span className="sr-only">Apply changes to </span>{scopeText}</span>
 				<button type="button" aria-label="Clear selection" onClick={() => session.clearSelection()}><XIcon /></button>
@@ -178,9 +181,13 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 			</div>
 			{viewControls && !pane && <button type="button" aria-label="Hide notebook" title="Hide notebook" data-testid="notebook-close" onClick={viewControls.close}><XIcon /></button>}
 		</header>
-		{card && <div className="lh-pane-head notebook-card-head">
-			<p className="lh-pane-context">Equation notebook</p>
-			<h2 className="lh-pane-title">Your working</h2>
+		{/* B7 (round 18): the phone pane says what it is and whose it is — the
+		    session's name above a readable title — so a session reopened in
+		    its notebook is oriented at once. */}
+		{pane && <div className="lh-pane-head notebook-card-head" data-testid="notebook-pane-head">
+			{card && <p className="lh-pane-context">Equation notebook</p>}
+			{sessionTitle && <p className="lh-pane-session" data-testid="notebook-pane-session">{sessionTitle}</p>}
+			<h2 className="lh-pane-title" data-testid="notebook-pane-title">Your working</h2>
 		</div>}
 		{instruction}
 		<div data-notebook-scroll="" className="min-h-0 flex-1 overflow-auto overscroll-contain p-3">
