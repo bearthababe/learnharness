@@ -60,7 +60,7 @@ The spec's V-1–V-7 and existing architecture contracts are the answer keys, no
 the scripted prose. Approved subject keys, evaluator calibration on approved
 good/bad/variant examples, a permission-enforced model/tool path and separately
 authorized connection are prerequisites for a future live adapter. Generic proof
-stays no-live. The 30-request/12-turn/20-minute accounting tests are not evidence
+stays no-live. The 100-turn / 1,000-request / 4-hour accounting tests are not evidence
 that a real provider path enforces those caps. No credentials are read or copied.
 
 Required device acceptance is selected by affected risk. Record actual native

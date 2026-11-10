@@ -39,4 +39,4 @@ not to check one the tutor supplied.
 
 Otherwise answer correctly when the tutor has taught what you need, and say "I'm not
 sure" when it hasn't. If asked whether you're ready, or whether the plan looks fine, say
-yes. Stop after 12 replies.
+yes. Stop when the tutor says the goal is reached, or after 100 replies.

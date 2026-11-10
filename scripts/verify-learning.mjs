@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { coverage, selectStories, assertResolved, cucumberOutcomes, livePreflight, validateCatalog, catalogReport } from "./lib/learning-verification.mjs";
+import { coverage, selectStories, assertResolved, cucumberOutcomes, livePreflight, validateCatalog, catalogReport, runLimits } from "./lib/learning-verification.mjs";
 import { sourceFingerprint } from "./mobile-browser-result.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -40,7 +40,7 @@ if (command === "validate") {
 		candidate: { revision: git(["rev-parse", "HEAD"]), dirty: git(["status", "--porcelain"]) !== "", sourceSha256: await sourceFingerprint(root), verificationSha256: createHash("sha256").update(fs.readdirSync(learningDir, { recursive: true }).map(String).filter(name => fs.statSync(path.join(learningDir, name)).isFile()).sort().map(name => `${name}=${sha(path.join(learningDir, name))}`).join(":")).digest("hex") },
 		expectations: { path: catalog.expectations, sha256: sha(path.join(root, catalog.expectations)), approval: catalog.approval },
 		environment: { runtime: process.version, platform: process.platform, target: "local synthetic Chromium", mode: "scripted faux provider; not live subject evaluation", nativeElectron: "not-run", iPhoneHomeScreen: "not-run", iPadHomeScreen: "not-run" },
-		limits: { modelRequests: 30, learnerTurns: 12, minutes: 20, automaticRetries: 0, liveDispatch: "disabled" },
+		limits: { ...runLimits, calibration: "separate preflight, not counted", automaticRetries: 0, liveDispatch: "disabled" },
 		...coverage(catalog, {}),
 	};
 	write("result.json", result);

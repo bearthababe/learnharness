@@ -1,6 +1,6 @@
 # Answer key: eigenvalues and eigenvectors of 2×2 matrices
 
-Version 0.5.1-draft (round-5 council fixes applied; not re-scored). **Status: draft for owner approval (decision D-1).** Nothing here
+Version 0.6.0-draft. **Status: draft. The owner approved the subject, scope and source on 2026-11-10 (O-3); the key itself still needs owner approval (D-1).** Nothing here
 authorizes a live run (D-2) or claims tutor accuracy. Story: LJ-TUTOR. Evaluator-only:
 never give this file, `facts.json` or the calibration set to the tutor or the simulated
 learner (§9).
@@ -99,19 +99,29 @@ turn can be judged under several.
 1. **Fail:** any expectation *violated* or any material error. Violations stand even if a cap or a simulator deviation came later.
 2. **Incomplete (stopped):** a cap stopped the run, or the simulator deviated from its brief. Nothing after a deviation is judged. *Pending* and *unverified* records are kept.
 3. **Unverified:** any applicable expectation is *unverified*, or still *pending* at the end.
-4. **Incomplete (coverage):** the minimum coverage set (below) was not reached.
+4. **Incomplete (coverage):** the required coverage (below) was not reached.
 5. **Pass:** otherwise. Every applicable expectation is *complied*.
 
-**Planned end.** The run ends normally after the tutor's reaction to the minimum-set
-re-check. Hitting a turn, request or time cap before that is *incomplete (stopped)*.
+**Planned end.** The run ends normally when the tutor has taught and checked the goal's
+last idea, whether a matrix can be diagonalized, and reacted to the learner's answer; or
+when the tutor itself concludes the goal is reached. Hitting a guard in §8 first is
+*incomplete (stopped)*.
 
-**Minimum coverage set (under the current caps):** E1; E2 for a complete probe; E3; and
-for one teaching step, E4, E6 and E7, including one wrong answer, its repair and its
-re-check. Everything else counts if reached and is otherwise *unexercised*. See §8 for why
-this is all that fits. The wrong answer comes from brief event 1, which fires the first time the
-learner is asked for an eigenvector, whether in the probe, a prediction or a check. If it
-fires outside a teaching check, or never fires (for example after a C11-style check), the
-minimum set may not be reached. The run is then *incomplete (coverage)*, never failed.
+**Required coverage (the whole journey):**
+- E1, then E2 for a complete probe, then E3.
+- Teaching steps that together reach the goal's four ideas: Av = λv; the
+  det(A − λI) = 0 condition; eigenvectors as the null space of A − λI; and the
+  two-independent-eigenvectors test for diagonalization. The tutor may order, merge or
+  split them. Each step is judged under E4 and E6.
+- E5 wherever predictions occur.
+- E7 for each planned learner error that fires: the zero vector (brief event 1) and the
+  repeated eigenvalue (brief event 3), each with its repair and re-check.
+- E8 for the "why?" (brief event 2).
+- E9 and E10 wherever they apply.
+
+A planned event that never gets its chance is *unexercised*. The run is then
+*incomplete (coverage)*, never failed. That happens, for example, if the tutor never asks
+the learner for an eigenvector or never discusses a repeated eigenvalue.
 
 ## 6. Simulated learner
 
@@ -159,38 +169,32 @@ learner then understood. That is judged on the learner's next answer.
 | C28 | Learner solved the null-space question after a hint. Tutor: "Great, you've mastered null spaces." | E9 | violated |
 | C29 | Tutor: "The eigenvalues of [[4,1],[2,3]] are 4 and 3." | T7 material error | violated |
 | C30 | Tutor states, with no hedging, a claim about 3×3 defective matrices that is not in T1–T8. | out-of-key claim | unverified |
-| C31 | Run: C4 happens at learner turn 9, and the cap stops the run at turn 12. | run verdict | fail |
+| C31 | Run: C4 happens at learner turn 14, and the 4-hour guard later stops the run. | run verdict | fail |
 | C32 | Run: everything complies through the probe; at turn 6 the simulator answers a question it was told it cannot. | run verdict | incomplete (stopped) |
-| C33 | Run: minimum set complied, but one applicable E10 judgment is unverified. | run verdict | unverified |
-| C34 | Run: no violation; the cap stops it while a re-check is *pending*. | run verdict | incomplete (stopped) |
+| C33 | Run: required coverage complied, but one applicable E10 judgment is unverified. | run verdict | unverified |
+| C34 | Run: no violation; a guard stops it while a re-check is *pending*. | run verdict | incomplete (stopped) |
 
-## 8. Fit to the authorized exercise (spec §3)
+## 8. Run limits (owner decision, 2026-11-10; spec §3)
 
-Limits: ≤ 12 learner turns; ≤ 30 model requests, including planning, grading and any
-retries; ≤ 20 minutes; no automatic retries; teaching, question and planning tools only.
+- **Learner turns:** at most 100.
+- **Model requests:** not budgeted. A guard of 1,000 only breaks runaway loops.
+- **Time:** a 4-hour guard stops a hung run.
+- **Calibration** (§7) is a separate preflight and does not count.
+- **Retries:** none automatic.
+- **Tools:** teaching, question and planning only.
 
-**Counted policy-compliant route.** This is one valid route; others may be longer.
+A guard that triggers ends the run *incomplete (stopped)*. Violations observed before it
+still stand.
 
-| Learner turn | Episode |
-| --- | --- |
-| 1 | goal (a clarifying exchange for E1 costs +1) |
-| 2–7 | probe, three strands, each with a floor and a ceiling: determinant/invertibility (right, then a harder one not known), independence (right, then not known), null space (wrong guess, then an easier one right). A strict reading of "probe around a miss" adds one follow-up per ceiling, up to 3 more turns. Those push the teaching step past the cap, and the run ends *incomplete (stopped)*. |
-| 8 | confirms the plan (E3) |
-| 9 | answers the step-1 prediction (Av = λv) |
-| 10 | step-1 check: the zero-vector answer (brief event 1) |
-| 11 | re-check after repair, with the tutor's closing reaction |
-| 12 | spare, absorbing one extra turn anywhere above; no second step is expected |
+**One policy-compliant route, for scale.** Other routes are fine, and none is required.
+- Goal: 1–2 turns.
+- Probe: three strands, each bracketed and probed around its miss, about 6–9 turns.
+- Plan confirmation: 1 turn.
+- Four teaching steps, each with an optional prediction, a check, and a repair plus re-check
+  where a planned error fires: about 10–16 turns.
+- Total: roughly 20–30 learner turns, well inside 100.
 
-**Requests (estimate).**
-- Tutor: about 1 per learner turn, plus about 3 tool continuations (the `probe_done` result, the teacher handoff and `plan_init`), plus the closing reaction. About 16.
-- Simulator: 12.
-- Grading: about 2.
-- Total: about 30, at the cap, with **no headroom**. A request cap is likely to stop a real run. These are estimates; the live adapter must count real requests.
-
-**Conclusion.** Under the current caps, a policy-compliant session reaches the probe, the
-plan and at most one teaching step. A tutor that probes around every miss reaches no teaching step at all, and the request cap is likely to stop the run either way. That is why
-the minimum coverage set is so small. The diagonalization criterion, M5 and most of §5 will normally be *unexercised*.
-Covering more takes an owner decision (O-1).
+The adapter must count real turns and requests and record them in the run evidence (V-6).
 
 ## 9. Independence and leakage
 
@@ -198,17 +202,14 @@ The tutor and simulator never see this file, `facts.json` or §7. The live adapt
 make them unreachable to the tutor's file tools and keep them out of every prompt (V-5,
 D-2). The simulator sees only `learner-brief.md`.
 
-## 10. Open questions for the owner
+## 10. Owner decisions recorded, and what remains open
 
-- **O-1, budget.** The current caps fit the probe, the plan and about one teaching step.
-  Options:
-  - (a) Keep the caps and accept this small coverage.
-  - (b) Two bounded exercises: probe plus plan from the goal, then teaching from an approved fixture of a probed session, each within today's caps.
-  - (c) Raise the caps for this exercise to about 20 learner turns and 50 requests.
-
-  Recommended: (b). Each run stays small, the request budget gets headroom, and teaching gets enough turns to reach the diagonalization criterion.
-- **O-2, calibration.** Calibration must precede any live verdict. Does it count against
-  the 30 requests? Recommended: no. Run it as a separate preflight, capped at 1 request
-  (every example in one batch, with no retry).
-- **O-3:** Approve the subject, the scope, the minimum coverage set and Strang §6.1 as the
-  sole textbook source.
+- **Decided, 2026-11-10:**
+  - Limits as in §8.
+  - Calibration does not count.
+  - Subject, scope and Strang §6.1 approved as the sole textbook source.
+- **Open:**
+  - **D-1:** approval of this key's expectations and calibration set.
+  - **D-2:** the live adapter's evaluator model and credential-holding processes.
+  - **D-8:** whether this exercise's tool restriction (teaching, question and planning
+    tools only) is separate from #49's normal-functionality live harness.

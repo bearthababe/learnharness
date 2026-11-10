@@ -1,5 +1,5 @@
 {
-  "version": "0.5.1-draft",
+  "version": "0.6.0-draft",
   "status": "Draft for owner approval. Not an approved key; it authorizes no live run.",
   "conventions": "Real 2x2 integer matrices. Eigenvectors and diagonalization are over the real numbers unless a field says otherwise.",
   "machineChecked": "tests/verification/la-eigen-key.test.mjs checks, with exact integer arithmetic: trace, determinant and characteristic polynomial; that the listed eigenvalues are exactly the real characteristic roots; every eigenpair (A v = λ v, v nonzero); eigenspace dimensions; diagonalizability over the reals, including A P = P D with det P nonzero; the R5 discriminant; the R2 row-reduction claim; and the numeric claims in the calibration examples and learner brief as mirrored by hand in proseClaims. It checks those mirrored values, not the prose itself.",
