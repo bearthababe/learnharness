@@ -21,8 +21,9 @@ test("readiness refuses without explicit authorization or a CLI, and passes only
 	assert.match((await liveReadiness({ root, env: { LH_LIVE_AUTHORIZATION: "standing" }, which: all })).join(" "), /initial exercise only/);
 });
 
-test("calibration covers all 50 examples and hides every expected outcome and its hinting label", () => {
-	assert.equal(rows.length, 50);
+test("calibration covers every §7 example and hides every expected outcome and its hinting label", () => {
+	assert.equal(rows.length, keyText.split("\n").filter(line => /^\| C\d+ \|/.test(line)).length, "every calibration row parses");
+	assert.ok(rows.length >= 50);
 	const blind = keyWithoutExpected(keyText);
 	for (const row of rows) {
 		const line = blind.split("\n").find(item => item.startsWith(`| ${row.id} |`));
@@ -112,7 +113,7 @@ test("a failed calibration blocks before any tutor session or learner request", 
 	const { calls, deps } = fakes({ calibration: { ...expected, C5: "violated" } });
 	const result = await runLiveExercise({ root, run: tempRun(), result: {}, deps });
 	assert.equal(result.status, "blocked");
-	assert.match(result.error, /calibration failed on 1 of 50/);
+	assert.match(result.error, new RegExp(`calibration failed on 1 of ${rows.length}`));
 	assert.equal(calls.appStarted, 0);
 	assert.equal(calls.simulate, 0);
 });
