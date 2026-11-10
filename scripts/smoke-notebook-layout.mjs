@@ -93,7 +93,12 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	// Round 14 (T1/P1): the one Notebook button sits in the page bar on every device.
 	assert.equal(await page.$eval('button[data-input-owner="notebook"][aria-expanded]', e => !!e.closest('.lh-topbar')), true, "Notebook button: in the page bar on every device");
 	await openNotebookMenu(page, "Review attached working");
-	assert.ok(await page.$eval('[aria-label="Earlier explanation"]', e => e.value.includes("My independent Tutor draft.")), "Tutor prose survives snapshot handoff and is available in review");
+	// P5 (round 17): leaving the phone's notebook pane is itself the handoff that
+	// files the working, so prose typed in the lesson afterwards is the draft's
+	// continuation ("Current explanation"); with no new working it stays there
+	// through the reopen. Either way it survives and is editable in review.
+	const reviewed = await page.$$eval('[aria-label="Earlier explanation"], [aria-label="Current explanation"]', els => els.map(e => [e.getAttribute("aria-label"), e.value]));
+	assert.ok(reviewed.some(([, value]) => value.includes("My independent Tutor draft.")), `Tutor prose survives the handoffs and is available in review: ${JSON.stringify(reviewed)}`);
 	await page.click('[aria-label="Earlier explanation"]');
 	await page.waitForFunction(() => !document.querySelector('.session-workspace').inert);
 	await page.focus('[aria-label="Earlier explanation"]');
@@ -117,7 +122,7 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	await page.waitForFunction(() => document.querySelector('.session-workspace').dataset.keyboardOpen === "true");
 	await page.waitForFunction(() => Math.abs(document.querySelector('.notebook-slot').getBoundingClientRect().bottom - 500) < 2);
 	p = await pane();
-	assert.ok(p.bar.bottom <= 501 && p.bar.top >= 0, `the pane's bar sits above the keyboard: ${JSON.stringify(p.bar)}`);
+	assert.ok(p.bar.bottom <= 501 && p.bar.y >= 0, `the pane's bar sits above the keyboard: ${JSON.stringify(p.bar)}`);
 	const instruction = await page.$eval('#notebook-instruction', e => ({ top: e.getBoundingClientRect().top, bottom: e.getBoundingClientRect().bottom }));
 	assert.ok(instruction.top >= 0 && instruction.bottom <= 500, JSON.stringify(instruction));
 	const before = await page.evaluate(() => ({ y: scrollY, x: scrollX, top: document.querySelector('.notebook-frame-header').getBoundingClientRect().top }));

@@ -5587,7 +5587,6 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 .lh-dock-overlay[data-flow] .lh-dock-block { background: transparent; }
 /* T6 (round 17): Attach names what it attaches to; a menu offers the
    whole page or an area of it. */
-.hw-attachChevron { width: 14px !important; height: 14px !important; opacity: .7; }
 :root .hw-attachPanel { width: min(340px, calc(100% - 16px)); padding: 10px; }
 .hw-attachFor { margin: 2px 6px 8px !important; color: var(--muted-foreground); font-size: 13.5px; line-height: 1.4; }
 :root .hw-attachPanel .hw-optionRow { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 8px; border-radius: 10px; text-align: left; }
@@ -5639,7 +5638,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	:root .lh-reading-fold-label { font-size: 12.5px; }
 }
 /* T5: the attached pages fold the same way — a chevron with what they are. */
-.lh-tray-fold { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 4px; text-align: left; font-weight: 600; }
+.lh-tray-fold { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; text-align: left; font-weight: 600; }
 .lh-tray-fold svg { width: 16px; height: 16px; flex: none; color: var(--muted-foreground); transition: transform .15s ease; }
 .lh-tray-fold[aria-expanded="true"] svg { transform: rotate(90deg); }
 .lh-tray-hint { color: var(--muted-foreground); font-weight: 500; }
@@ -5709,4 +5708,16 @@ html[data-answer-follow] .lh-jump-down { display: none; }
    room Plan left, so the bar has no hole before ⋯ and Focus. */
 @media (max-width: 767px) {
 	:root .lh-topbar > .lh-notebook-opener { max-width: none; }
+}
+/* T6: the split Attach — the page in one tap, ▾ for the menu. */
+.hw-attachSplit { display: inline-flex; align-items: center; margin-inline: 4px; border: 1px solid var(--border); border-radius: 999px; }
+:root .hw-attachSplit > [data-testid="notebook-attach"] { margin: 0; border: 0; border-radius: 999px 0 0 999px; padding-right: 10px; }
+:root .hw-attachSplit > .hw-attachMore { min-width: 44px; padding-inline: 10px; border-left: 1px solid var(--border); border-radius: 0 999px 999px 0; }
+/* Phones (handwriting switched on): the notebook already fills the screen —
+   no card handle; pinch zooms (no zoom buttons); the header keeps its
+   actions in one row (the title steps aside). */
+@media (max-width: 767px) {
+	:root .hw-cardHandle { display: none; }
+	:root .hw-zoom { display: none; }
+	:root .hw-notebookHeader h2 { display: none; }
 }

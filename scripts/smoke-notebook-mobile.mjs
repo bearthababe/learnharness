@@ -145,7 +145,11 @@ export async function verifyNotebookMobile(browser, origin) {
 	assert.equal(await page.$('[data-snapshot-id]'), null, 'No inline snapshot previews');
 	await openNotebookMenu(page, "Review attached working");
 	assert.equal(await page.$$eval('[data-snapshot-id]', nodes => nodes.length), 1);
+	// P5 (round 17): reopening the phone's notebook pane made it the destination,
+	// so choosing the tutor's prose here hands back to Tutor first (input waits,
+	// then focus returns to the chosen part) before typing lands.
 	await page.focus('[aria-label="Earlier explanation"]');
+	await page.waitForFunction(() => !document.querySelector('.session-workspace').inert && !document.querySelector('[data-notebook-workspace]')?.inert && document.activeElement?.getAttribute('aria-label') === 'Earlier explanation');
 	await page.keyboard.press('End');
 	await page.keyboard.press('Enter');
 	await page.keyboard.type('Reviewed earlier text.');

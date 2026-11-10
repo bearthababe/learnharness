@@ -26,6 +26,9 @@ export async function checkHandwritingTransfers({ page, origin, transferFaults }
 		const response = page.waitForResponse(response => response.request().method() === "POST" && response.url().endsWith("/writing") && response.status() === 201);
 		await page.click('[data-testid="notebook-attach"]'); const receipt = await (await response).json();
 		await page.waitForFunction(() => document.querySelector('[data-testid="notebook-slot"]').hidden);
+		// T5 (round 17): inside a question the attached pages start folded; open them.
+		await page.waitForSelector('[data-testid="shared-writing-fold"]', { visible: true });
+		if (await page.$eval('[data-testid="shared-writing-fold"]', e => e.getAttribute("aria-expanded") === "false")) await page.click('[data-testid="shared-writing-fold"]');
 		await page.waitForFunction(id => [...document.querySelectorAll('.lh-shared-writing img')].some(image => image.getAttribute("src")?.endsWith(`/${id}`)), {}, receipt.writing.id);
 		return receipt.writing;
 	};

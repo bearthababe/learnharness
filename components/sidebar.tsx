@@ -1229,7 +1229,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 	useEffect(() => {
 		const main = document.querySelector<HTMLElement>('main[data-testid="file-path-drop-zone"]');
 		if (!underBar || !main) return;
-		const bar = [...main.querySelectorAll<HTMLElement>(".lh-topbar")].find((el) => el.getClientRects().length);
+		// The bar holding the visible Sessions chip: a session's or Ideas' top
+		// bar, or Home's navigation row.
+		const chip = [...main.querySelectorAll<HTMLElement>('[data-testid="open-sidebar"]')].find((el) => el.getClientRects().length);
+		const bar = chip?.closest<HTMLElement>(".lh-topbar, .lh-home-navigation") ?? null;
 		if (!bar) { main.inert = true; return () => { main.inert = false; }; }
 		const marked: HTMLElement[] = [];
 		for (let node: HTMLElement | null = bar; node && node !== main; node = node.parentElement) {

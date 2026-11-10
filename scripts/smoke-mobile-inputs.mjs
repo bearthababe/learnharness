@@ -289,6 +289,12 @@ try {
 		assert.ok(await page.$eval(selector, e => e.scrollHeight > e.clientHeight), "Long draft scrolls internally in a keyboard-sized viewport");
 		await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
 	};
+	// T5 (round 17): inside a question the attached pages start folded to one
+	// line (a chevron with what they are); unfold them to see the page.
+	const unfoldTray = async () => {
+		await page.waitForSelector('[data-testid="shared-writing-fold"]', { visible: true });
+		if (await page.$eval('[data-testid="shared-writing-fold"]', e => e.getAttribute("aria-expanded") === "false")) await page.click('[data-testid="shared-writing-fold"]');
+	};
 	// P3 (round 17): phones open Plan from the top of ⋯ (wider screens: the chip).
 	const openPlan = async () => {
 		if (await page.$eval('[data-testid="plan-chip"]', e => e.checkVisibility()).catch(() => false)) { await page.click('[data-testid="plan-chip"]'); return; }
@@ -1228,7 +1234,7 @@ try {
 	assert.equal(await page.$eval(answer, e => e.textContent), "Answer draft.");
 	await page.click('[data-testid="question-dock-bar"]');
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { hidden: true });
-	await upload("mobile_teaching"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
+	await upload("mobile_teaching"); await unfoldTray(); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="answer-field"] [aria-label="Start dictation"]');
 	await page.waitForFunction(() => window.speech.readyState === 1);
 	await page.evaluate(() => window.speech.final("Spoken answer."));
@@ -1256,7 +1262,7 @@ try {
 	await page.waitForSelector('[data-testid="plan-popup"]');
 	await page.keyboard.press("Escape");
 	assert.equal(await page.$eval('[data-testid="thinking-field"] [data-file-path-input]', e => e.textContent), "The force stays the same.", "Real Plan dismissal preserves the question draft");
-	await upload("mobile_selection"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
+	await upload("mobile_selection"); await unfoldTray(); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
 	const selected = await (await fetch(`${origin}/api/chats/mobile_selection`)).json();
@@ -1270,7 +1276,7 @@ try {
 	await page.locator('[role="checkbox"]').filter(button => button.textContent.includes("Start with force")).click();
 	await fill('[data-testid="other-option"] [data-file-path-input]', "Compare both areas.");
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "My custom reasoning.");
-	await upload("mobile_other_answer"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
+	await upload("mobile_other_answer"); await unfoldTray(); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
 	const otherRecord = (await (await fetch(`${origin}/api/chats/mobile_other_answer`)).json()).messages.find(m => m.role === "toolResult" && m.toolCallId === "question");
@@ -1284,7 +1290,7 @@ try {
 		assert.ok(await page.$('[data-testid="practice-thinking-field"] [aria-label="Start dictation"]'), "Practice/drill thinking owns the same in-field microphone");
 		await checkPhoneInput('[data-testid="practice-thinking-field"]');
 		await fill(thinking, "100 divided by 2.");
-		await upload(id); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
+		await upload(id); await unfoldTray(); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 		await page.locator('[data-testid="practice-thinking-field"] [aria-label="Start dictation"]').click();
 		await page.waitForFunction(() => window.speech?.readyState === 1);
 		await scrollBack();

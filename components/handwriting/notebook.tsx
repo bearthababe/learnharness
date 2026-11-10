@@ -111,7 +111,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	const [selecting, setSelecting] = useState(false), [area, setArea] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 	const areaDrag = useRef<{ id: number; x: number; y: number } | null>(null);
 	useMenuEscape(hidden ? null : pagesOpen ? "pages" : optionsOpen ? "options" : toolsOpen ? "tools" : conceptsOpen ? "concepts" : attachOpen ? "attach" : selecting ? "select-area" : null, () => {
-		const trigger = pagesOpen ? "Pages" : attachOpen || selecting ? "Attach" : "Notebook options";
+		const trigger = pagesOpen ? "Pages" : attachOpen || selecting ? "More ways to attach" : "Notebook options";
 		setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); setAttachOpen(false); setSelecting(false); setArea(null);
 		controlsRef.current?.querySelector<HTMLButtonElement>(`[aria-label="${trigger}"]`)?.focus();
 	});
@@ -250,12 +250,17 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	}, [expanded, hidden]);
 	useEffect(() => {
 		redraw();
-		const layout = slotRef.current?.parentElement;
+		// The box the expanded notebook fills: the split layout where it is a
+		// box (tablets, laptops); on phones it is display: contents, so the
+		// first sized ancestor (the session's workspace).
+		let layout = slotRef.current?.parentElement ?? null;
+		while (layout && (!layout.clientWidth || !layout.clientHeight)) layout = layout.parentElement;
 		if (!layout) return;
-		const measure = () => { const width = fittedPaperWidth(layout); if (width > 1) setBaseWidth(prior => Math.abs(prior - width) < 1 ? prior : width); };
+		const box = layout;
+		const measure = () => { const width = fittedPaperWidth(box); if (width > 1) setBaseWidth(prior => Math.abs(prior - width) < 1 ? prior : width); };
 		measure();
 		const observer = new ResizeObserver(measure);
-		observer.observe(layout); return () => observer.disconnect();
+		observer.observe(box); return () => observer.disconnect();
 	}, [redraw]);
 	// Pinch to zoom (two fingers on the paper); the point between the fingers
 	// stays where it is. One finger still scrolls, and the pen still writes.
@@ -396,7 +401,12 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 			<header className="hw-notebookHeader"><h2>Notebook</h2>
 				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Pages" aria-expanded={pagesOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Pages", () => { setPagesOpen(value => !value); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); void recovery.current?.refreshPages().catch(() => {}); })}><FilesIcon aria-hidden />Pages</Button>
 				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label="Notebook options" aria-expanded={optionsOpen} {...handlers("Notebook options", () => { setOptionsOpen(v => !v); setPagesOpen(false); setToolsOpen(false); setConceptsOpen(false); })} data-testid="notebook-options-toggle"><MoreHorizontalIcon /></Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction" aria-label={`Attach to ${attachTarget}`} aria-expanded={attachOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Attach", () => { setAttachOpen(open => !open); setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); })} data-testid="notebook-attach"><PaperclipIcon aria-hidden />Attach to {attachShort}<ChevronDownIcon aria-hidden className="hw-attachChevron" /></Button>
+				{/* T6 (round 17): a split button — one tap attaches the whole page
+				    (named after where it goes); ▾ offers Whole page or an area. */}
+				<span className="hw-attachSplit">
+					<Button variant="ghost" size="sm" className="hw-headerAction" aria-label={`Attach the page to ${attachTarget}`} disabled={!saved.ready || submission?.preparing} {...handlers("Attach", () => { setAttachOpen(false); void attachSnapshot(); })} data-testid="notebook-attach"><PaperclipIcon aria-hidden />Attach to {attachShort}</Button>
+					<Button variant="ghost" size="sm" className="hw-headerAction hw-attachMore" aria-label="More ways to attach" aria-haspopup="menu" aria-expanded={attachOpen} disabled={!saved.ready || submission?.preparing} {...handlers("Attach menu", () => { setAttachOpen(open => !open); setPagesOpen(false); setOptionsOpen(false); setToolsOpen(false); setConceptsOpen(false); })} data-testid="notebook-attach-more"><ChevronDownIcon aria-hidden /></Button>
+				</span>
 				{/* T3: zoom is the only thing that changes the paper's size. */}
 				<span className="hw-zoom" role="group" aria-label="Zoom">
 					<Button variant="ghost" size="sm" className="hw-headerAction hw-zoomButton" aria-label="Zoom out" disabled={zoom <= ZOOMS.min} {...handlers("Zoom out", () => zoomAround(zoom / 1.25))} data-testid="notebook-zoom-out"><MinusIcon aria-hidden /></Button>
