@@ -5,7 +5,7 @@
 import { handleChatRequest, stores, deliverJobResult } from "@/src/server";
 import { createProberAgent, createTeacherAgent } from "@/src/agent/teacher-agent";
 
-const ALLOWED = new Set(["probe", "recall", "quiz", "explain", "ask_user_question", "probe_done", "plan_init"]);
+const ALLOWED = new Set(["probe", "recall", "quiz", "explain", "ask_user_question", "probe_done", "plan_init", "send_to_user"]);
 const DENIED = ["read", "ls", "find", "grep", "show_image", "research", "pdf", "demo", "visual", "list_sessions", "list_propositions", "find_candidates"];
 
 export async function POST(req: Request) {

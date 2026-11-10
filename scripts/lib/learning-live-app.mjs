@@ -82,6 +82,9 @@ export async function liveApp({ root, run, tutorModel }) {
 		let stableSince = 0;
 		while (Date.now() < deadline) {
 			assert.equal(server.exitCode, null, "Owned server exited");
+			const log = await fs.readFile(path.join(run, "server.log"), "utf8").catch(() => "");
+			const refusal = /D-8 tool boundary violated: [^\n]*/.exec(log);
+			if (refusal) throw new Error(refusal[0]);
 			const current = await record();
 			const idle = await page.evaluate(() => !document.body.innerText.includes("THINKING…") && !document.body.innerText.includes("COMPACTING CONTEXT…")
 				&& Boolean(document.querySelector('[data-testid="question-dock"], [data-testid="teach-check-reveal"], [data-testid="question-dock-bar"]') || document.querySelector('[data-testid="composer"] [aria-label="Send"][disabled]'))).catch(() => false);

@@ -9,7 +9,8 @@ import path from "node:path";
 
 export const LIVE_AUTHORIZATION = "initial-exercise-2026-11-10";
 /** D-8: teaching, question and planning tools only. Anything else in a tutor registry refuses the run. */
-export const TUTOR_TOOLS = Object.freeze(["probe", "recall", "quiz", "explain", "ask_user_question", "probe_done", "plan_init"]);
+/** send_to_user is the Claude models' message channel (display only); the app adds it for Claude routes. */
+export const TUTOR_TOOLS = Object.freeze(["probe", "recall", "quiz", "explain", "ask_user_question", "probe_done", "plan_init", "send_to_user"]);
 export const DENIED_TOOLS = Object.freeze(["read", "ls", "find", "grep", "show_image", "research", "pdf", "demo", "visual", "list_sessions", "list_propositions", "find_candidates"]);
 const QUESTION_TOOLS = new Set(["probe", "recall", "quiz", "explain", "ask_user_question"]);
 

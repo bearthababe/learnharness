@@ -72,7 +72,7 @@ test("the learner sees the question and its options, never the answer, explanati
 });
 
 test("the fixture route and settings enforce D-8 and use the Claude Code route with no API provider", () => {
-	assert.deepEqual([...TUTOR_TOOLS].sort(), ["ask_user_question", "explain", "plan_init", "probe", "probe_done", "quiz", "recall"]);
+	assert.deepEqual([...TUTOR_TOOLS].sort(), ["ask_user_question", "explain", "plan_init", "probe", "probe_done", "quiz", "recall", "send_to_user"]);
 	const route = fs.readFileSync(path.join(root, LIVE_ROUTE_FILE), "utf8");
 	assert.match(route, /D-8 tool boundary violated/);
 	const list = name => JSON.parse(new RegExp(`const ${name} = (?:new Set\\()?(\\[[^\\]]*\\])`).exec(route)[1]);
