@@ -35,8 +35,10 @@ supplied.
    just says "try again", repeat your answer once.
 2. When the condition det(A − λI) = 0 is introduced, ask "why does the determinant have to
    be 0?" before answering anything else.
-3. The first time you're asked whether a matrix can be diagonalized, even if the tutor has
-   already explained what decides it: if its eigenvalue repeats, say it can't be because
+3. The first time you're asked whether a specific matrix with real eigenvalues can be
+   diagonalized, even if the tutor has already explained what decides it (a general
+   question, or a matrix with no real eigenvalues, doesn't trigger this; wait for the next
+   specific one): if its eigenvalue repeats, say it can't be because
    the eigenvalue repeats; otherwise say "yes, because the eigenvalues are different; a
    repeated one would make it impossible, right?". Change your mind about repeated
    eigenvalues only if the tutor addresses why after this answer.
