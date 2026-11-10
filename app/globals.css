@@ -5317,6 +5317,9 @@ html[data-answer-follow] .lh-jump-down { display: none; }
    the recording strip, so the recording state is always in view. */
 .lh-mic-slot { display: inline-flex; flex: none; align-items: center; }
 .lh-mic-slot:empty { display: none; }
+/* The row is as tall as the mic from first paint (the mic arrives in its slot
+   after hydration): a row with a slot reserves the mic's 44px. */
+form.lh-compact-row:has(> .lh-mic-slot) > .lh-compact-field { min-height: 44px; }
 .lh-mic-button {
 	display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 999px;
 	border: 1px solid color-mix(in oklab, var(--foreground) 16%, transparent);
@@ -5358,7 +5361,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 /* ---- The phone's full-screen panes (P1 thinking, P5 notebook) ---- */
 .lh-pane-surface { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .lh-pane-head { display: flex; flex: none; flex-direction: column; gap: 2px; padding: 14px 16px 6px; }
-.lh-pane-context { display: none; margin: 0; color: var(--muted-foreground); font-size: 12.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.lh-pane-context { display: none; margin: 0; color: var(--muted-foreground); font-size: 13px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
 .lh-pane-title { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.3; }
 .lh-pane-hint { margin: 0; color: var(--muted-foreground); font-size: 14px; line-height: 1.4; }
 .lh-pane-body { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 8px; padding: 8px 16px 10px; }
@@ -5381,7 +5384,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 .lh-pane-bar-end { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
 .lh-pane-peek, .lh-pane-keyboard {
 	display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 56px; min-height: 52px; padding: 0 6px;
-	border: 1px solid var(--border); border-radius: 14px; background: var(--card); color: var(--foreground); font-size: 12.5px; font-weight: 600; line-height: 1;
+	border: 1px solid var(--border); border-radius: 14px; background: var(--card); color: var(--foreground); font-size: 13px; font-weight: 600; line-height: 1;
 }
 .lh-pane-peek svg, .lh-pane-keyboard svg { width: 20px; height: 20px; flex: none; }
 .lh-pane-keyboard[aria-pressed="false"] { border-color: color-mix(in oklab, var(--primary) 45%, var(--border)); color: color-mix(in oklab, var(--primary) 70%, var(--foreground)); }
@@ -5398,8 +5401,11 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 .lh-big-mic-ring { position: absolute; inset: -5px; border: 2px solid transparent; border-radius: 999px; transition: transform 90ms linear; pointer-events: none; }
 .lh-big-mic[data-recording] .lh-big-mic-ring { border-color: color-mix(in oklab, var(--destructive) 55%, transparent); }
 .lh-big-mic:disabled { opacity: .5; }
-.lh-big-mic-status { position: absolute; top: calc(100% + 1px); left: 50%; translate: -50% 0; color: var(--destructive); font-size: 11.5px; font-weight: 650; white-space: nowrap; pointer-events: none; }
-.lh-big-mic-status:empty { display: none; }
+/* The status line has its own reserved row under the mic, inside the bar, so it
+   is never cut off at the screen's edge and starting to record moves nothing. */
+.lh-big-mic-status { display: block; min-height: 16px; margin-top: 4px; color: var(--destructive); font-size: 13px; font-weight: 650; line-height: 16px; white-space: nowrap; pointer-events: none; }
+.lh-pane-bar { align-items: start; }
+.lh-pane-bar > .lh-pane-bar-start, .lh-pane-bar > .lh-pane-bar-end { margin-top: 6px; }
 /* The thinking pane's field fills its pane (no mic of its own). */
 :root .lh-reading-pane .lh-pane-body .lh-compact-field > [data-file-path-input] { width: 100%; padding-right: 14px; }
 /* S2 Peek: the lesson with only a quiet Return (and the dictation
@@ -5527,7 +5533,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 		flex: 1 1 auto; min-height: 0; margin-top: 10px; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior: contain;
 		border-radius: 24px; background: var(--card); box-shadow: 0 10px 30px rgb(0 0 0 / .28);
 	}
-	:root .lh-dock-overlay[data-question-open][data-layout="card"] .lh-eyebrow { padding-top: 8px; font-size: 12.5px; letter-spacing: .08em; }
+	:root .lh-dock-overlay[data-question-open][data-layout="card"] .lh-eyebrow { padding-top: 8px; font-size: 13px; letter-spacing: .08em; }
 	:root .lh-dock-overlay[data-question-open][data-layout="card"] .lh-question-text { font-size: 21px; line-height: 1.3; font-weight: 650; }
 	:root .lh-dock-overlay[data-layout="card"] .lh-option { min-height: 56px; align-items: center; padding: 14px 16px; border-radius: 16px; font-size: 16.5px; }
 	:root .lh-dock-overlay[data-layout="card"] .lh-option[aria-checked="true"] { border-color: var(--primary); background: color-mix(in oklab, var(--primary) 14%, var(--card)); }
@@ -5592,7 +5598,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 :root .hw-attachPanel .hw-optionRow { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 8px; border-radius: 10px; text-align: left; }
 :root .hw-attachPanel .hw-optionRow:hover { background: var(--accent); }
 .hw-attachPanel .hw-optionRow svg { width: 18px; height: 18px; flex: none; color: var(--muted-foreground); }
-.hw-attachPanel .hw-optionHint { margin-left: auto; color: var(--muted-foreground); font-size: 12.5px; }
+.hw-attachPanel .hw-optionHint { margin-left: auto; color: var(--muted-foreground); font-size: 13px; }
 .hw-areaSelect { position: absolute; inset: 0; z-index: 3; overflow: hidden; cursor: crosshair; touch-action: none; background: rgb(0 0 0 / .08); }
 .hw-areaBox { position: absolute; border: 2px dashed var(--primary); background: color-mix(in oklab, var(--primary) 10%, transparent); box-shadow: 0 0 0 9999px rgb(0 0 0 / .28); pointer-events: none; }
 :root .hw-areaBar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; }
@@ -5614,7 +5620,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 :root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-arc_eraser { left: 12px; top: 129px; }
 :root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) > .hw-arc_highlighter { left: 12px; top: 43px; }
 :root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) .hw-wheelHub { left: 86px; top: 86px; width: 64px; height: 64px; }
-:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) .hw-ringLabel { font-size: 12.5px; line-height: 1.1; letter-spacing: 0; }
+:root .hw-overlay[data-variant="wheel"] .hw-arc:not([data-folded]) .hw-ringLabel { font-size: 14px; line-height: 1.1; letter-spacing: 0; }
 .hw-overlay .hw-wheelFold { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; pointer-events: auto; border-radius: 999px; color: var(--foreground); border: 1px dashed var(--tool-edge); }
 .hw-overlay .hw-wheelFold:hover { background: var(--accent); }
 /* The opened wheel's settings card clears the larger wheel. */
@@ -5635,7 +5641,7 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 	:root .lh-reading-input[data-reading-claim="false"]:not([data-folded]) { padding-bottom: 8px; }
 	:root .lh-reading-input[data-reading-claim="false"] + [data-attachment-composer] { border-top-left-radius: 0; border-top-right-radius: 0; }
 	:root .lh-reading-input[data-reading-claim="false"] > .lh-reading-fold { min-height: 44px; padding: 0 8px; }
-	:root .lh-reading-fold-label { font-size: 12.5px; }
+	:root .lh-reading-fold-label { font-size: 13px; }
 }
 /* T5: the attached pages fold the same way — a chevron with what they are. */
 .lh-tray-fold { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; text-align: left; font-weight: 600; }
