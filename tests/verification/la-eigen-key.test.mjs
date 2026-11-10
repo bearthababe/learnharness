@@ -76,6 +76,7 @@ test("numeric claims in the calibration examples and learner brief", () => {
 			entry: () => a.flat().includes(claim.value),
 			eigenvalues: () => JSON.stringify(realRoots(a)) === JSON.stringify([...claim.values].sort((x, y) => x - y)),
 			traceSum: () => claim.matrices.every(m => realRoots(m).length === 2 && realRoots(m).reduce((x, y) => x + y) === trace(m)),
+			product: () => JSON.stringify(mul(a, claim.vector)) === JSON.stringify(claim.result),
 			nullVector: () => mul(a, claim.vector).every(entry => entry === 0) && claim.vector.some(Boolean),
 		}[claim.kind]();
 		assert.equal(actual, claim.holds, `${claim.where}: ${claim.kind}`);

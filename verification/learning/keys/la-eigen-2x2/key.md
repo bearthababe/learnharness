@@ -1,6 +1,6 @@
 # Answer key: eigenvalues and eigenvectors of 2×2 matrices
 
-Version 0.5.0-draft. **Status: draft for owner approval (decision D-1).** Nothing here
+Version 0.5.1-draft (round-5 council fixes applied; not re-scored). **Status: draft for owner approval (decision D-1).** Nothing here
 authorizes a live run (D-2) or claims tutor accuracy. Story: LJ-TUTOR. Evaluator-only:
 never give this file, `facts.json` or the calibration set to the tutor or the simulated
 learner (§9).
@@ -31,8 +31,9 @@ verifies it for every fixture. Other textbooks are not cited because their text 
 inspected.
 
 **Machine check.** `tests/verification/la-eigen-key.test.mjs` checks every number in
-`facts.json` exactly, including each numeric claim made in §7 and in the learner brief
-(`proseClaims`). Other prose is not machine-checked.
+`facts.json` exactly. `proseClaims` mirrors, by hand, each numeric claim made in §7 and in
+the learner brief. The test checks those mirrored values, not the prose text itself, so a
+reviewer must confirm that the two still match.
 
 **Teaching expectations.** Only LearnHarness's own policy, by file:
 `docs/fork-vision.md` §4; `src/agent/prompts/prober/10-probe-doctrine.md`;
@@ -87,8 +88,8 @@ turn can be judged under several.
 | E2 | Probe | For each strand the goal depends on, find both a floor (answered right) and a ceiling (missed or not known): enter near the top, choose each next question from the evidence, escalate a strand that never breaks. After a miss, probe around it with the next question. Due: before `probe_done`. Strand choice is the tutor's. | Teach during the probe; treat one miss as a misconception; ask a question an earlier answer already settled; conclude with a strand unbracketed. | probe §3–5 |
 | E3 | Plan | Present the plan before any teaching (prose on the approach and why, plus the map), end the turn, and ask the learner to confirm it. Teach only after they are on board. | Teach in the presenting turn; re-teach a strand the probe showed solid; add steps off the path to the goal. | planning "minimal tree", "Presenting the plan", "Presenting ends your turn" |
 | E4 | Each teaching step | One step built on what the learner has shown: either an unconditional truth asserted plainly, or a step motivated from what is held. Before using det(A − λI) = 0, motivate it from Av = λv (geometric or algebraic, both fine). | Assert something the learner must take on faith and build on it unchecked; contradict T1–T8. | method i–ii; teaching §1–3 |
-| E5 | A prediction is posed; or a step introducing a new idea | Open the teaching that follows a prediction by resolving it: what the learner said, what is true, and why. Skipping a prediction is the tutor's call when there is no meaningful next step (a wrap-up, or a pure repair). | Teach as if the prediction had not been made. Skip the prediction on every new-idea step when there are two or more of them (a habit). One skipped step alone is not judged. | predictions |
-| E6 | End of a teaching step's explanation | A check, answerable from the session, that prefers applying the idea; recall is fine when nothing can be applied. Due: before the next step builds on this one. | Build the next step with no check of this one; check before teaching; ask the learner to copy the text just above. | teaching §4; predictions; question principles |
+| E5 | A prediction is posed; or a step introducing a new idea | Open the teaching that follows a prediction by resolving it: what the learner said, what is true, and why. Skipping a prediction is the tutor's call when there is no meaningful next step (a wrap-up, or a pure repair). | Teach as if the prediction had not been made. Skip the prediction on every new-idea step when there are two or more of them (a habit). Any mix that includes at least one prediction is complied. | predictions |
+| E6 | End of a teaching step's explanation | A check, answerable from the session, that prefers applying the idea; recall is fine when nothing can be applied. Whether an application was available is the tutor's judgment: a non-copywork recall check is *unverified* when an applied check was plausibly available, and never violated on that ground alone. Due: before the next step builds on this one. | Build the next step with no check of this one; check before teaching; ask the learner to copy the text just above. | teaching §4; predictions; question principles |
 | E7 | The learner answers a **teaching** check or prediction | Accept every valid answer, e.g. any nonzero vector in the eigenspace. If the check answer is wrong or uncertain: say what is wrong or missing, repair (Socratic or expository), and re-check. Due: before the next step builds on this one. (Probe answers fall under E2.) | Accept a wrong answer; reject a valid one; move on without the re-check. | vision §4 r2; teaching §4 |
 | E8 | The learner asks "why?" or voices doubt | Answer the actual question with a motivated reason, then continue. | Reply only with a rule to follow ("that's the formula, just use it"). | method ii; teaching §1–3 |
 | E9 | Any tutor statement about the learner's progress, or the saved probe assessment | Describe guided or hinted success as guided. | Call guided success independent or "mastered"; treat a visited plan node as understood; record a hinted strand as solid. | vision §1, §6; glossary "Learner evidence" |
@@ -133,7 +134,7 @@ learner then understood. That is judged on the learner's next answer.
 | C3 | Learner offers (0, 0). Tutor explains that A·0 = λ·0 holds for every λ, so eigenvectors must be nonzero, then asks: "Find a nonzero one for λ = 3." | E7 repair + re-check posed | complied |
 | C4 | Learner offers (0, 0). Tutor: "Right, it must be nonzero, so (1, 1). Now, when can we diagonalize?" | E7 re-check omitted | violated |
 | C5 | Learner: "[[2,0],[0,2]] can't be diagonalized, 2 repeats." Tutor (Socratic): "Do (1,0) and (0,1) both satisfy Av = 2v? What does that give you?" | E7 repair + re-check posed | complied |
-| C6 | Same. Tutor (expository): "A repeated eigenvalue doesn't decide it; two independent eigenvectors do, and 2I already is diagonal. Is [[3,0],[0,3]] diagonalizable, and why?" | E7 repair + re-check posed | complied |
+| C6 | Same. Tutor (expository): "A repeated eigenvalue doesn't decide it; two independent eigenvectors do, and 2I already is diagonal. Is [[1,1],[0,1]] diagonalizable, and why?" | E7 repair + re-check posed | complied |
 | C7 | Same. Tutor: "Close enough. Next: rotations." | E7 accepts wrong | violated |
 | C8 | Learner: "Why does det have to be 0?" Tutor: "That's the formula; just use it." | E8 | violated |
 | C9 | Same. Tutor: "Av = λv means (A − λI)v = 0 for a nonzero v. A square matrix that sends a nonzero vector to 0 isn't invertible, so det(A − λI) = 0." | E8 | complied |
@@ -150,17 +151,18 @@ learner then understood. That is judged on the learner's next answer.
 | C20 | Same prediction. The tutor's next teaching never mentions it and starts on det(A − λI). | E5 ignored | violated |
 | C21 | The tutor presents the plan and, in the same message, begins teaching the first node. | E3 teaching in the presenting turn | violated |
 | C22 | Tutor: "I think the two eigenvalues always add up to the trace, though I'd want to check that." In the next step it uses this as a settled fact, with no check and no flag. | E10 | violated |
-| C23 | Same hedge. Tutor: "Let's check: the roots of λ² − (trace)λ + det = 0 add up to the trace, so yes, for every 2×2 matrix," then uses it. (Testing a few matrices would not establish it for every matrix.) | E10 | complied |
+| C23 | Same hedge. Tutor: "Let's check: the roots of λ² − (trace)λ + det = 0 add up to the trace, so whenever both eigenvalues are real, counted with repeats, they add up to the trace," then uses it. (Testing a few matrices would not establish the general claim.) | E10 | complied |
 | C24 | Tutor states plainly, as a foundation: "An eigenvector is never the zero vector; that's part of the definition." No derivation is given. | E4 unconditional truth | complied |
-| C25 | After teaching why an eigenvector must be nonzero, the tutor asks: "In your own words, why can't (0, 0) count as an eigenvector?" (not a copy of the text above) | E6 recall check | complied |
-| C26 | The tutor teaches three new ideas, each with no prediction, none of them a wrap-up or a repair. | E5 habit | violated |
-| C27 | Learner solved the null-space question after a hint. Tutor: "Great, you've mastered null spaces." | E9 | violated |
-| C28 | Tutor: "The eigenvalues of [[4,1],[2,3]] are 4 and 3." | T7 material error | violated |
-| C29 | Tutor states, with no hedging, a claim about 3×3 defective matrices that is not in T1–T8. | out-of-key claim | unverified |
-| C30 | Run: C4 happens at learner turn 9, and the cap stops the run at turn 12. | run verdict | fail |
-| C31 | Run: everything complies through the probe; at turn 6 the simulator answers a question it was told it cannot. | run verdict | incomplete (stopped) |
-| C32 | Run: minimum set complied, but one applicable E10 judgment is unverified. | run verdict | unverified |
-| C33 | Run: no violation; the cap stops it while a re-check is *pending*. | run verdict | incomplete (stopped) |
+| C25 | After the repair in C3, the learner's re-check answer is (0, 3) for [[2,1],[1,2]] and λ = 3, which is still wrong. The tutor says "Good" and starts the next step. | E7 repair unsuccessful, tutor moves on | violated |
+| C26 | Same wrong re-check answer. Tutor: "Check it: A(0, 3) = (3, 6), which is not 3·(0, 3). Which vectors does A − 3I send to zero?" | E7 second repair + re-check | complied |
+| C27 | The tutor teaches three new ideas, each with no prediction, none of them a wrap-up or a repair. | E5 habit | violated |
+| C28 | Learner solved the null-space question after a hint. Tutor: "Great, you've mastered null spaces." | E9 | violated |
+| C29 | Tutor: "The eigenvalues of [[4,1],[2,3]] are 4 and 3." | T7 material error | violated |
+| C30 | Tutor states, with no hedging, a claim about 3×3 defective matrices that is not in T1–T8. | out-of-key claim | unverified |
+| C31 | Run: C4 happens at learner turn 9, and the cap stops the run at turn 12. | run verdict | fail |
+| C32 | Run: everything complies through the probe; at turn 6 the simulator answers a question it was told it cannot. | run verdict | incomplete (stopped) |
+| C33 | Run: minimum set complied, but one applicable E10 judgment is unverified. | run verdict | unverified |
+| C34 | Run: no violation; the cap stops it while a re-check is *pending*. | run verdict | incomplete (stopped) |
 
 ## 8. Fit to the authorized exercise (spec §3)
 
@@ -172,7 +174,7 @@ retries; ≤ 20 minutes; no automatic retries; teaching, question and planning t
 | Learner turn | Episode |
 | --- | --- |
 | 1 | goal (a clarifying exchange for E1 costs +1) |
-| 2–7 | probe, three strands, each with a floor and a ceiling: determinant/invertibility (right, then a harder one not known), independence (right, then not known), null space (wrong guess, then an easier one right) |
+| 2–7 | probe, three strands, each with a floor and a ceiling: determinant/invertibility (right, then a harder one not known), independence (right, then not known), null space (wrong guess, then an easier one right). A strict reading of "probe around a miss" adds one follow-up per ceiling, up to 3 more turns. Those push the teaching step past the cap, and the run ends *incomplete (stopped)*. |
 | 8 | confirms the plan (E3) |
 | 9 | answers the step-1 prediction (Av = λv) |
 | 10 | step-1 check: the zero-vector answer (brief event 1) |
@@ -186,7 +188,7 @@ retries; ≤ 20 minutes; no automatic retries; teaching, question and planning t
 - Total: about 30, at the cap, with **no headroom**. A request cap is likely to stop a real run. These are estimates; the live adapter must count real requests.
 
 **Conclusion.** Under the current caps, a policy-compliant session reaches the probe, the
-plan and one teaching step, and even that is likely to hit the request cap. That is why
+plan and at most one teaching step. A tutor that probes around every miss reaches no teaching step at all, and the request cap is likely to stop the run either way. That is why
 the minimum coverage set is so small. The diagonalization criterion, M5 and most of §5 will normally be *unexercised*.
 Covering more takes an owner decision (O-1).
 

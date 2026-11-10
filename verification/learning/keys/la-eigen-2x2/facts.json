@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0-draft",
+  "version": "0.5.1-draft",
   "status": "Draft for owner approval. Not an approved key; it authorizes no live run.",
   "conventions": "Real 2x2 integer matrices. Eigenvectors and diagonalization are over the real numbers unless a field says otherwise.",
-  "machineChecked": "tests/verification/la-eigen-key.test.mjs checks, with exact integer arithmetic: trace, determinant and characteristic polynomial; that the listed eigenvalues are exactly the real characteristic roots; every eigenpair (A v = λ v, v nonzero); eigenspace dimensions; diagonalizability over the reals, including A P = P D with det P nonzero; the R5 discriminant; the R2 row-reduction claim; and every numeric claim made in the calibration examples and learner brief (proseClaims). Other prose in key.md is not checked.",
+  "machineChecked": "tests/verification/la-eigen-key.test.mjs checks, with exact integer arithmetic: trace, determinant and characteristic polynomial; that the listed eigenvalues are exactly the real characteristic roots; every eigenpair (A v = λ v, v nonzero); eigenspace dimensions; diagonalizability over the reals, including A P = P D with det P nonzero; the R5 discriminant; the R2 row-reduction claim; and the numeric claims in the calibration examples and learner brief as mirrored by hand in proseClaims. It checks those mirrored values, not the prose itself.",
   "problems": [
     {
       "id": "R1",
@@ -270,15 +270,15 @@
       "kind": "diagonalizable",
       "matrix": [
         [
-          3,
-          0
+          1,
+          1
         ],
         [
           0,
-          3
+          1
         ]
       ],
-      "holds": true
+      "holds": false
     },
     {
       "where": "C11",
@@ -336,7 +336,7 @@
       "holds": true
     },
     {
-      "where": "C28",
+      "where": "C29",
       "kind": "eigenvalues",
       "matrix": [
         [
@@ -407,6 +407,49 @@
       "vector": [
         1,
         -1
+      ],
+      "holds": true
+    },
+    {
+      "where": "C25-C26",
+      "kind": "eigenvector",
+      "matrix": [
+        [
+          2,
+          1
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "value": 3,
+      "vector": [
+        0,
+        3
+      ],
+      "holds": false
+    },
+    {
+      "where": "C26",
+      "kind": "product",
+      "matrix": [
+        [
+          2,
+          1
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "vector": [
+        0,
+        3
+      ],
+      "result": [
+        3,
+        6
       ],
       "holds": true
     }
