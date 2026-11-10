@@ -1224,6 +1224,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 	// P4 (round 17, phones): the sessions page under the bar keeps the page's
 	// bar live (Sessions closes it, Home goes home); everything else beneath
 	// is inert while it is open. The page with its own header covers it all.
+	// Hydrated: placeholders kept for content that arrives after hydration (the
+	// mic slots) can step aside where nothing came.
+	useEffect(() => { document.documentElement.dataset.hydrated = ""; }, []);
 	const sessionsPage = useTryout("sessionsPage");
 	const underBar = phone && open && sessionsPage === "toolbar";
 	useEffect(() => {

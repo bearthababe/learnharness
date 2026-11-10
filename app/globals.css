@@ -5320,6 +5320,11 @@ html[data-answer-follow] .lh-jump-down { display: none; }
 /* The row is as tall as the mic from first paint (the mic arrives in its slot
    after hydration): a row with a slot reserves the mic's 44px. */
 form.lh-compact-row:has(> .lh-mic-slot) > .lh-compact-field { min-height: 44px; }
+/* Until the app has hydrated, an empty mic slot holds the mic's place, so the
+   mic arriving (it is portaled in after hydration) moves nothing. If no mic comes
+   (dictation unavailable), the slot collapses as before. */
+html:not([data-hydrated]) .lh-mic-slot:empty { display: inline-flex; width: 44px; height: 44px; }
+html:not([data-hydrated]) .lh-reading-row > .lh-mic-slot:empty { width: 48px; height: 48px; }
 .lh-mic-button {
 	display: inline-grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 999px;
 	border: 1px solid color-mix(in oklab, var(--foreground) 16%, transparent);
