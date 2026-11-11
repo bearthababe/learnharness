@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ArrowLeftIcon, CheckIcon, ChevronLeftIcon, EllipsisIcon, EyeIcon, InfoIcon, Loader2Icon, Maximize2Icon, Minimize2Icon, Undo2Icon, XIcon } from "lucide-react";
+import { ArrowLeftIcon, CheckIcon, ChevronLeftIcon, ChevronRightIcon, EllipsisIcon, EyeIcon, InfoIcon, Loader2Icon, Maximize2Icon, Minimize2Icon, Undo2Icon, XIcon } from "lucide-react";
 import type { NotebookSession } from "./notebook-session";
 import { NotebookWorking } from "./notebook-working";
 import { DEFAULT_NOTEBOOK_CANDIDATE, NOTEBOOK_CANDIDATES, NOTEBOOK_PICKER_MODELS, notebookCandidateFor, notebookPickerModel, type NotebookPickerModel, type TutorDraftOwner } from "@/src/core";
@@ -32,6 +32,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 	const hasWorking = attached.some(draft => draft.parts.some(part => part.kind === "working"));
 	const [menu, setMenu] = useState<"options" | "model" | "history" | "usage" | "review" | "help" | null>(null);
 	const bugPress = useBugPress(() => setMenu(null));
+	const askTutor = useTryout("askTutor") === "on";
 	const [micSlot, setMicSlot] = useMicSlot();
 	const card = useTryout("cardLayout") === "card" && !!pane;
 	useOneMenu("notebook-options", menu !== null, () => setMenu(null));
@@ -201,13 +202,20 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 		</div>
 		{pane && card && <div className="lh-pane-actions notebook-card-actions" data-testid="notebook-pane-actions">
 			<button type="button" className="lh-pane-main" data-testid="notebook-card-apply" disabled={!speech.active && !draftText.trim() || applyWaiting} onClick={apply}>Apply</button>
-			<button type="button" className="lh-pane-quiet" data-testid="notebook-pane-back" onClick={() => { viewControls?.close(); settleDocumentScroll(); }}>Back to lesson</button>
+			<div className="lh-pane-quiet-row">
+				<button type="button" className="lh-pane-quiet" data-testid="notebook-pane-back" onClick={() => { viewControls?.close(); settleDocumentScroll(); }}>Back to lesson</button>
+				{askTutor && viewControls?.askTutor && <button type="button" className="lh-pane-quiet" data-testid="notebook-ask-tutor" onClick={() => { viewControls.askTutor!(); settleDocumentScroll(); }}>Ask tutor</button>}
+			</div>
 		</div>}
 		</div>
 		{pane && !card && <nav className="lh-pane-nav" aria-label="Leave the notebook">
 			<button type="button" className="lh-pane-back" data-testid="notebook-pane-back" aria-label="Back to lesson" onClick={() => { viewControls?.close(); settleDocumentScroll(); }}>
 				<ChevronLeftIcon aria-hidden />Lesson
 			</button>
+			{/* P2 (round 19, a try-out): the lesson's own chat box, with this working attached. */}
+			{askTutor && viewControls?.askTutor && <button type="button" className="lh-pane-shortcut" data-testid="notebook-ask-tutor" onClick={() => { viewControls.askTutor!(); settleDocumentScroll(); }}>
+				Ask tutor<ChevronRightIcon aria-hidden />
+			</button>}
 		</nav>}
 		{pane && <PaneBar testid="notebook-pane-bar"
 			start={<button type="button" className="lh-pane-peek" data-testid="notebook-pane-peek" aria-label="Peek at the lesson" onClick={() => { pane.peek(); settleDocumentScroll(); }}>

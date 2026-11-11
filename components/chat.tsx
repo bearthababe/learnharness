@@ -7,7 +7,8 @@ import { OPEN_HELPERS_EVENT, PageMenuButton } from "@/components/page-menu";
 import { SessionHelperFailures } from "@/components/activity-dock";
 import { NotebookOpener } from "@/components/notebook-opener";
 import { useMarkSessionSeen } from "@/components/session-seen";
-import { FocusCornerButton, FocusModeButton, FocusModeExit, setFocusMode } from "@/components/focus-mode";
+import { FocusCornerButton, FocusDockButton, FocusEdgeTabs, FocusModeButton, FocusModeExit, FocusPlaceSync, setFocusMode, useFocusPlace } from "@/components/focus-mode";
+import { KeyboardToggle } from "@/components/pane-kit";
 import { useHeaderLook, useTryout } from "@/components/device-prefs";
 import { usePhoneLayout, useStackedNotebook, useTouchLayout } from "@/components/use-phone-viewport";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
@@ -1785,6 +1786,14 @@ export function Chat({
 			void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
 		} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
 	};
+	// P1 (round 19): where Focus lives on this phone or tablet (null on laptops).
+	const focusPlace = useFocusPlace();
+	const [askTutorNotice, setAskTutorNotice] = useState(false);
+	useEffect(() => {
+		if (!askTutorNotice) return;
+		const timer = window.setTimeout(() => setAskTutorNotice(false), 5000);
+		return () => window.clearTimeout(timer);
+	}, [askTutorNotice]);
 	const notebookOpenerEl = <NotebookOpener
 		equations={notebookOn ? { open: notebookVisible, toggle: toggleEquations } : undefined}
 		handwriting={writingOn ? { open: handwriting.open, toggle: () => handwriting.show(!handwriting.open) } : undefined}
@@ -2002,9 +2011,13 @@ export function Chat({
 					{/* Phones: model, reasoning and Usage live here (owner O1). */}
 					<PageMenuButton
 						topRows={phoneLayout && kind !== "practice" ? [{ id: "plan", label: "Plan", value: planTree ? undefined : "Not made yet", open: () => setPlanOpen(true) }] : []}
-						extraRows={phoneLayout ? [] : [{ id: "focus", label: "Focus on the lesson", value: "Hides this bar", open: () => setFocusMode(true) }]} />
+						extraRows={phoneLayout || focusPlace ? [] : [{ id: "focus", label: "Focus on the lesson", value: "Hides this bar", open: () => setFocusMode(true) }]} />
 					<FocusModeButton />
 				</TopBar>
+				{/* Round 19: where Focus lives (phone, tablet) and Ask tutor (phone notebook pane). */}
+				<PrototypeSwitch tryout="focus-place" anchors={[{ selector: "[data-focus-control]", places: ["left", "below-start", "above-start", "below-end"] }]} />
+				<PrototypeSwitch tryout="focus-place-tablet" anchors={[{ selector: "[data-focus-control]", places: ["left", "below-start", "above-start", "below-end"] }]} />
+				<PrototypeSwitch tryout="ask-tutor" anchors={[{ selector: '.notebook-panel[data-pane] .lh-pane-nav', places: ["inside-end", "above-end"] }, { selector: '[data-testid="notebook-pane-actions"]', places: ["above-end", "inside-bottom-end"] }]} />
 				{/* B18 (round 18): Prototype view's in-place switches (nothing when it is off). */}
 				{/* The bar's switch sits just under the bar; with a question open that spot is the question's own (its Layout switch). */}
 				<PrototypeSwitch tryout="header-look" anchors={[{ selector: 'html:not(:has(.lh-sessions-panel[aria-hidden="false"])):not(:has(.lh-dock-overlay[data-question-open])) header.lh-topbar', places: ["below-end", "below-start"] }]} />
@@ -2020,6 +2033,8 @@ export function Chat({
 					{ selector: '.lh-dock-overlay[data-dock-kind="practice"] [data-attachment-composer]', places: ["above-end", "above-start"] },
 				]} />
 				<FocusModeExit />
+				<FocusPlaceSync />
+				{askTutorNotice && <div role="status" className="lh-ask-notice" data-testid="ask-tutor-notice">Your working is attached. Ask the tutor below.</div>}
 				{!notebookVisible && notebook.error && (friendlyNetworkError(notebook.error)
 					? <p role="status" className="lh-quiet-status px-3 py-1">Offline — your notebook working is kept and syncs when you're back.</p>
 					: <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>)}
@@ -2396,7 +2411,7 @@ export function Chat({
 					contextTokens={contextTokens}
 					cliContextWindow={cliContextWindowOf(nativeMessages)}
 					pricing={pricing}
-					notebookToggle={null}
+					notebookToggle={notebookOpenerEl}
 					onReserve={setDockReserve}
 					flow={handwriting.open && !handwriting.expanded && stackedNotebook}
 					dictationSlot={<DictationBar dictation={dictation} />}
@@ -2493,6 +2508,15 @@ export function Chat({
 					<NotebookFrame hidden={!notebookVisible} expanded={notebookLayout.expanded} pane={notebookPane}
 						onExpand={() => { void notebook.session.speech.choose({ kind: "notebook" }).then(notebookLayout.expand).catch(() => {}); }}
 						onBack={notebookLayout.back}
+						onAskTutor={() => {
+							// P2 (round 19): the same return as Back (the working is snapshot into
+							// the tutor's draft), then the lesson's chat box, said in so many words.
+							if (!workspaceRef.current) return;
+							void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).then(() => {
+								requestAnimationFrame(focusDictationDestination);
+								setAskTutorNotice(true);
+							}).catch(() => {});
+						}}
 						onClose={() => {
 							if (!workspaceRef.current) return;
 							void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).then(() => {
@@ -2755,6 +2779,7 @@ function DockOverlay({
 	 *  home and /chat/new carry, above the composer while slots are unset. */
 	setupCta?: React.ReactNode;
 }) {
+	const focusPlace = useFocusPlace();
 	const dockPhone = usePhoneLayout();
 	const { isAtBottom, scrollToBottom, scrollRef, stopScroll } = useStickToBottomContext();
 	const wideQuestion = fullQuestionWidth && (!!pending || !!practice);
@@ -3255,6 +3280,10 @@ function DockOverlay({
 			</div>}
 			<div ref={fadeRef} className="lh-dock-fade h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
 			<div ref={blockRef} className="lh-dock-block relative bg-background pb-5">
+				{/* P1 (round 19): Focus by the chat box, or the right-edge tabs (Notebook
+				    and Keys at the bottom, by the chat box; Focus near the top). */}
+				{focusPlace === "bottom" && <FocusDockButton />}
+				{focusPlace === "tabs" && <FocusEdgeTabs bottom={<>{notebookToggle}<KeyboardToggle testid="edge-tab-keys" /></>} />}
 				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
 					{!notebook.getSnapshot().view && <div data-tutor-draft-loading="" role={notebook.getSnapshot().error ? "alert" : "status"} className="px-3 py-2 text-xs text-muted-foreground">

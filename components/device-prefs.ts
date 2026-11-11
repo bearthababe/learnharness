@@ -54,6 +54,11 @@ function subscribe(listener: () => void) {
 export const TRYOUTS = {
 	cardLayout: { options: ["plain", "card"] },
 	sessionsPage: { options: ["toolbar", "header"] },
+	// Round 19 (P1, phones and tablets): where Focus lives — the toolbar
+	// (beside ⋯, as before), the bottom row (by the chat box), or the
+	// owner's right-edge tabs. (P2, phones): "Ask tutor" in the notebook pane.
+	focusPlace: { options: ["toolbar", "bottom", "tabs"] },
+	askTutor: { options: ["on", "off"] },
 } as const;
 export type Tryout = keyof typeof TRYOUTS;
 export type TryoutValue<T extends Tryout> = (typeof TRYOUTS)[T]["options"][number];
@@ -61,6 +66,8 @@ const TRYOUT_PREFIX = "lh:try:";
 const TRYOUT_KEY: Record<Tryout, string> = {
 	cardLayout: `${TRYOUT_PREFIX}card-layout`,
 	sessionsPage: `${TRYOUT_PREFIX}sessions-page`,
+	focusPlace: `${TRYOUT_PREFIX}focus-place`,
+	askTutor: `${TRYOUT_PREFIX}ask-tutor`,
 };
 /** Keys of round 16's retired try-outs: dropped once, so nothing stale lingers. */
 const RETIRED_TRYOUT_KEYS = ["pane-controls", "pane-peek", "tablet-pane", "notebook-input"].map((name) => `${TRYOUT_PREFIX}${name}`);

@@ -3,6 +3,27 @@
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { BugIcon, ChevronRightIcon, EllipsisIcon } from "lucide-react";
 import { useBugPress } from "@/components/bug-capture";
+import { useFocusPlace } from "@/components/focus-mode";
+import { useMountedPrototypeSwitches } from "@/components/prototype-switch";
+import { usePrototypeView } from "@/components/device-prefs";
+import { tryoutDef, type TryoutId } from "@/components/tryout-registry";
+import { ArrowLeftRightIcon } from "lucide-react";
+
+/** L9 (round 19): one Prototype view switch in ⋯ — flips in place, the menu stays open. */
+function PrototypeMenuRow({ id }: { id: TryoutId }) {
+	const def = tryoutDef(id);
+	const value = def.useValue();
+	const index = Math.max(0, def.variants.findIndex(v => v.value === value));
+	const current = def.variants[index]!, next = def.variants[(index + 1) % def.variants.length]!;
+	return (
+		<button type="button" role="menuitem" className="lh-page-menu-row lh-page-menu-proto" data-testid={`page-menu-proto-${id}`} data-variant={current.value}
+			aria-label={`Prototype: ${def.title} is ${current.label}. Switch to ${next.label}.`} onClick={() => def.set(next.value)}>
+			<span className="lh-page-menu-label"><ArrowLeftRightIcon aria-hidden className="lh-page-menu-proto-icon" />{def.title}</span>
+			<span className="lh-page-menu-value">{current.label}</span>
+			<span aria-hidden className="lh-page-menu-proto-next">⇆</span>
+		</button>
+	);
+}
 import { MenuShell } from "@/components/menu-shell";
 import { useOneMenu } from "@/components/one-menu";
 import { useCardDismiss } from "@/components/card-dismiss";
@@ -77,6 +98,9 @@ export function PageMenuButton({ extraRows = [], topRows: ownTopRows, secondary 
 	// §0 (round 19, owner): 🐞 in the menu — a tap closes the menu, then
 	// captures; holding ~0.5 s captures with the menu still open.
 	const bugPress = useBugPress(() => setOpen(false));
+	const focusPlace = useFocusPlace();
+	const prototypeView = usePrototypeView();
+	const protoSwitches = useMountedPrototypeSwitches();
 	useEffect(() => { if (!secondary) primaryTopRows = ownTopRows ?? []; }, [secondary, ownTopRows]);
 	const topRows = ownTopRows ?? (secondary ? primaryTopRows : []);
 	// F4 (round 15): once, when a field stays without a keyboard, say where
@@ -130,7 +154,8 @@ export function PageMenuButton({ extraRows = [], topRows: ownTopRows, secondary 
 		</button>
 	);
 	let keyboardSwitch: ReactNode = null;
-	if (touch) keyboardSwitch = (
+	// P1 (round 19): with the right-edge tabs, Keys lives in its own tab instead.
+	if (touch && focusPlace !== "tabs") keyboardSwitch = (
 		// Round 15 (F2): the row is the same size on and off (a fixed subtitle,
 		// a fixed-width state word), so the menu never moves or resizes.
 		<button type="button" role="menuitemcheckbox" aria-checked={keyboardOff} className="lh-page-menu-row lh-page-menu-switch" data-testid="page-menu-keyboard"
@@ -162,6 +187,12 @@ export function PageMenuButton({ extraRows = [], topRows: ownTopRows, secondary 
 					phoneTriggerTestid={triggerTestid} onClose={() => setOpen(false)}
 					menuClass="lh-page-menu lh-glass rounded-xl border bg-card p-1.5 shadow-xl">
 					<div role="menu" aria-label="More options">
+						{/* L9 (round 19): Prototype view's switches for this screen, always reachable here. */}
+						{prototypeView && protoSwitches.length > 0 && <div role="group" aria-label="Prototype view" className="lh-page-menu-proto-group" data-testid="page-menu-proto">
+							<p className="lh-page-menu-proto-heading">Prototype view</p>
+							{protoSwitches.map(id => <PrototypeMenuRow key={id} id={id} />)}
+							<div role="separator" className="lh-page-menu-divider" />
+						</div>}
 						{/* P3 (round 17): a lesson's Plan heads the menu. */}
 						{topRows.length > 0 && <>{topRows.map(row)}<div role="separator" className="lh-page-menu-divider" /></>}
 						{keyboardSwitch}

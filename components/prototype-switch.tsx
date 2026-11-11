@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeftRightIcon } from "lucide-react";
 import { usePrototypeView } from "@/components/device-prefs";
@@ -26,13 +26,34 @@ export type ProtoPlace = "below-end" | "below-start" | "above-end" | "above-star
 export type ProtoAnchor = { selector: string; places?: ProtoPlace[]; text?: boolean };
 const DEFAULT_PLACES: ProtoPlace[] = ["below-end", "above-end", "right", "left", "below-start", "above-start"];
 
+/**
+ * L9 (round 19): a switch never covers content and never hides. In place it
+ * takes only bare background beside what it controls; and every switch the
+ * screen holds is also in ⋯ ("Prototype view" at the top of the menu), where
+ * it is always reachable — even when no bare spot exists (a full list, a
+ * lesson's text under the bar).
+ */
+const mounted = new Map<TryoutId, number>();
+const mountedListeners = new Set<() => void>();
+let mountedSnapshot: TryoutId[] = [];
+function publishMounted() { mountedSnapshot = [...mounted.keys()]; for (const listener of mountedListeners) listener(); }
+export function useMountedPrototypeSwitches(): TryoutId[] {
+	return useSyncExternalStore((listener) => { mountedListeners.add(listener); return () => { mountedListeners.delete(listener); }; }, () => mountedSnapshot, () => mountedSnapshot);
+}
+
 export function PrototypeSwitch({ tryout, anchors }: { tryout: TryoutId; anchors: ProtoAnchor[] }) {
 	const on = usePrototypeView();
 	const device = useDeviceClass();
 	const def = tryoutDef(tryout);
 	const value = def.useValue();
 	const applies = def.useApplies?.().applies ?? true;
-	if (!on || device !== def.on || !applies || typeof document === "undefined") return null;
+	const live = on && device === def.on && applies;
+	useEffect(() => {
+		if (!live) return;
+		mounted.set(tryout, (mounted.get(tryout) ?? 0) + 1); publishMounted();
+		return () => { const n = (mounted.get(tryout) ?? 1) - 1; if (n > 0) mounted.set(tryout, n); else mounted.delete(tryout); publishMounted(); };
+	}, [live, tryout]);
+	if (!live || typeof document === "undefined") return null;
 	return createPortal(<FloatingSwitch def={def} value={value} anchors={anchors} />, document.body);
 }
 
@@ -109,10 +130,9 @@ function FloatingSwitch({ def, value, anchors }: { def: TryoutDef; value: string
 			const w = self.offsetWidth, h = self.offsetHeight;
 			const candidates = anchorsInView(anchors).flatMap(({ anchor, el }) => spotsAround(el, anchor.places ?? DEFAULT_PLACES, w, h, anchor.text));
 			const clear = (s: Spot, strict: boolean) => [s.left + 2, s.left + w / 2, s.left + w - 2].every((x) => [s.top + 2, s.top + h / 2, s.top + h - 2].every((y) => freeAt(x, y, self, strict)));
-			// Bare background first; else, outside what it controls, over text but
-			// never a control; else, where an anchor allows it, over a note's text
-			// inside it; else hidden (it never covers a control).
-			const found = candidates.find((s) => clear(s, true)) ?? candidates.find((s) => !s.inside && clear(s, false)) ?? candidates.find((s) => s.text && clear(s, false)) ?? null;
+			// L9 (round 19): bare background only — never text, never a control.
+			// With no such spot, the switch is in ⋯ (always) rather than over content.
+			const found = candidates.find((s) => clear(s, true)) ?? null;
 			const next = found && { left: found.left, top: found.top };
 			setSpot((prior) => (prior?.left === next?.left && prior?.top === next?.top ? prior : next));
 		};

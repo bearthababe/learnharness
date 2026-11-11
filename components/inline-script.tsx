@@ -16,5 +16,7 @@ export function InlineScript({ html }: { html: string }) {
 /** B13 (round 18): the laptop sidebar's remembered state, known before the
  *  first paint. Mirrors SidebarProvider: only the docked sidebar (not phones,
  *  not the tablet drawer) restores "lh:sidebar-open" (open by default), and a
- *  narrow Electron window starts closed. Sets <html data-sidebar-boot>. */
-export const SIDEBAR_BOOT_SCRIPT = `try{var d=document.documentElement,m=function(q){return window.matchMedia&&matchMedia(q).matches},s=localStorage.getItem("lh:sidebar-open"),e=navigator.userAgent.indexOf("Electron")>=0;var o=!m("(max-width: 767px)")&&!m("(min-width: 768px) and (max-width: 1023px)")&&(s===null||s==="1")&&!(e&&innerWidth<928);d.dataset.sidebarBoot=o?"open":"closed"}catch(_){}`;
+ *  narrow Electron window starts closed. Sets <html data-sidebar-boot>.
+ *  Round 19 (P1): also where Focus lives on a phone or tablet
+ *  (<html data-focus-place>), so a chosen placement paints at once. */
+export const SIDEBAR_BOOT_SCRIPT = `try{var d=document.documentElement,m=function(q){return window.matchMedia&&matchMedia(q).matches},s=localStorage.getItem("lh:sidebar-open"),e=navigator.userAgent.indexOf("Electron")>=0;var o=!m("(max-width: 767px)")&&!m("(min-width: 768px) and (max-width: 1023px)")&&(s===null||s==="1")&&!(e&&innerWidth<928);d.dataset.sidebarBoot=o?"open":"closed";var f=localStorage.getItem("lh:try:focus-place");if(m("(max-width: 767px)")||m("(min-width: 768px) and (pointer: coarse)"))d.dataset.focusPlace=f==="bottom"||f==="tabs"?f:"toolbar"}catch(_){}`;

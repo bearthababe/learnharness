@@ -7,6 +7,8 @@ export interface NotebookViewControls {
 	expanded: boolean;
 	toggleExpanded: () => void;
 	close: () => void;
+	/** P2 (round 19): back to the lesson's chat box with the working attached. */
+	askTutor?: () => void;
 }
 
 /** Presentation only, following handwriting/session.tsx at 329677b. Content,
@@ -159,8 +161,8 @@ export function NotebookSplit({ hidden }: { hidden: boolean }) {
 
 /** The accepted four-corner frame and expanded overlay, independent of editor
  * implementation. Retained DOM keeps input state; each view has its own scroll. */
-export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, pane = false, children }: {
-	hidden: boolean; expanded: boolean; onExpand: () => void; onBack: () => void; onClose: () => void;
+export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, onAskTutor, pane = false, children }: {
+	hidden: boolean; expanded: boolean; onExpand: () => void; onBack: () => void; onClose: () => void; onAskTutor?: () => void;
 	/** P5 (round 17, phones): the notebook takes over the screen, fitted to
 	 *  the visible viewport so its bar sits above the keyboard. */
 	pane?: boolean;
@@ -210,7 +212,7 @@ export function NotebookFrame({ hidden, expanded, onExpand, onBack, onClose, pan
 	return <div ref={slot} hidden={hidden} className="notebook-slot" style={{ position: expanded ? "absolute" : "relative", inset: expanded ? 0 : undefined, flex: "1 1 0px", minWidth: 0, minHeight: 0, boxSizing: "border-box", padding: 16, overflow: "hidden" }}>
 		<aside aria-label="Equation Notebook" className="notebook-frame rounded-2xl border bg-card shadow-lg"
 			style={{ position: "absolute", inset: 16, margin: 0, display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
-			{children({ expanded, toggleExpanded: () => changeView(expanded ? onBack : onExpand), close: () => changeView(onClose) })}
+			{children({ expanded, toggleExpanded: () => changeView(expanded ? onBack : onExpand), close: () => changeView(onClose), askTutor: onAskTutor ? () => changeView(onAskTutor) : undefined })}
 		</aside>
 	</div>;
 }

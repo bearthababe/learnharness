@@ -29,7 +29,7 @@ export type TryoutDef = {
 };
 
 /** Which device each try-out belongs to. */
-export const TRYOUT_DEVICE = { "header-look": "phone", "reveal-style": "phone", "card-layout": "phone", "sessions-page": "phone", "writing-palette": "tablet", "wheel-look": "tablet" } as const satisfies Record<string, DeviceClass>;
+export const TRYOUT_DEVICE = { "header-look": "phone", "reveal-style": "phone", "card-layout": "phone", "sessions-page": "phone", "focus-place": "phone", "ask-tutor": "phone", "writing-palette": "tablet", "wheel-look": "tablet", "focus-place-tablet": "tablet" } as const satisfies Record<string, DeviceClass>;
 export type TryoutId = keyof typeof TRYOUT_DEVICE;
 
 export const TRYOUT_DEFS: readonly TryoutDef[] = [
@@ -74,6 +74,27 @@ export const TRYOUT_DEFS: readonly TryoutDef[] = [
 		set: (value) => setTryout("sessionsPage", value as "toolbar" | "header"),
 	},
 	{
+		id: "focus-place", title: "Where Focus lives", short: "Focus", on: "phone",
+		description: "The Focus control (hides the page bar; the way back is in the same spot).",
+		variants: [
+				{ value: "toolbar", label: "Toolbar", description: "Directly left of ⋯ in the page bar (as before)." },
+				{ value: "bottom", label: "Bottom row", switchLabel: "Bottom", description: "By the chat box, in thumb reach." },
+				{ value: "tabs", label: "Right-edge tabs", switchLabel: "Tabs", description: "Small tabs on the right edge, like page markers in a book: Focus near the top; Notebook and Keys at the bottom." },
+			],
+		useValue: () => useTryout("focusPlace"),
+		set: (value) => setTryout("focusPlace", value as "toolbar" | "bottom" | "tabs"),
+	},
+	{
+		id: "ask-tutor", title: "Ask tutor in the notebook", short: "Ask tutor", on: "phone",
+		description: "A quiet Ask tutor in the notebook pane: back to the lesson's chat box with your working attached.",
+		variants: [
+			{ value: "on", label: "On", description: "Ask tutor shows in the notebook pane." },
+			{ value: "off", label: "Off", description: "Only Back to lesson (the working comes along either way)." },
+		],
+		useValue: () => useTryout("askTutor"),
+		set: (value) => setTryout("askTutor", value as "on" | "off"),
+	},
+	{
 		id: "writing-palette", title: "Writing tools", short: "Tools", on: "tablet",
 		description: "The pen, eraser and colours in the handwriting notebook.",
 		variants: [
@@ -99,6 +120,9 @@ export const TRYOUT_DEFS: readonly TryoutDef[] = [
 		set: (value) => setWheelLook(value as "solid" | "glass"),
 	},
 ];
+
+// The tablet's Focus placement: the same choice, on the tablet.
+(TRYOUT_DEFS as TryoutDef[]).push({ ...TRYOUT_DEFS.find(def => def.id === "focus-place")!, id: "focus-place-tablet", on: "tablet" });
 
 export function tryoutDef(id: TryoutId): TryoutDef {
 	return TRYOUT_DEFS.find((def) => def.id === id)!;

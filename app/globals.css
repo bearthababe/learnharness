@@ -5927,3 +5927,116 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 .lh-about-report { padding: 8px 0 4px; }
 .lh-about-report-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border); font-size: 15px; font-weight: 550; }
 .lh-about-report-button svg { width: 18px; height: 18px; color: #f59e0b; }
+
+/* ===================================================================
+   Round 19 — P1: where Focus lives (phones and tablets; a try-out).
+   toolbar (default): directly left of ⋯, as before — tablets too now.
+   bottom: one button by the chat box, in thumb reach.
+   tabs: the owner's right-edge tabs — Focus near the top; the notebook
+   and the keyboard switch at the bottom, by the chat box.
+   In focus mode the bar goes; the way back is the control's own spot.
+   =================================================================== */
+@media (min-width: 768px) and (pointer: coarse) {
+	:root:root[data-focus-place="toolbar"] .lh-topbar > .lh-focus-corner { display: inline-flex; flex: none; gap: 6px; padding: 0 14px; }
+	:root:root[data-focus-place="toolbar"] .lh-topbar > .lh-focus-corner svg { width: 18px; height: 18px; color: var(--muted-foreground); }
+	/* The bare exit icon on the Focus button's own icon (B9's rule, tablets too). */
+	:root .lh-focus-exit {
+		top: var(--lh-focus-spot-top, 12px); right: var(--lh-focus-spot-right, 16px); width: var(--lh-focus-spot-width, 44px); height: var(--lh-focus-spot-height, 44px);
+		justify-content: center; padding: 0; border: 0; border-radius: 12px; background: transparent !important; box-shadow: none;
+		-webkit-backdrop-filter: none !important; backdrop-filter: none !important; color: var(--foreground);
+	}
+	:root .lh-focus-exit svg { width: 22px; height: 22px; filter: drop-shadow(0 0 3px var(--background)) drop-shadow(0 0 6px var(--background)); }
+	:root .lh-focus-exit-label { display: none; }
+}
+/* Not the toolbar: the bar's Focus goes; ⋯ keeps its corner (the bar reads
+   like Home's: Sessions, Home … ⋯), and nothing else moves. */
+:root:root:is([data-focus-place="bottom"], [data-focus-place="tabs"]) .lh-topbar > .lh-focus-corner { display: none; }
+:root:root:is([data-focus-place="bottom"], [data-focus-place="tabs"]) .lh-topbar > .lh-page-menu-button { margin-left: auto; }
+:root:root[data-focus-place="bottom"] .lh-topbar > .lh-notebook-opener { flex: none; }
+:root:root[data-focus-place="tabs"] .lh-topbar > .lh-notebook-opener { display: none; }
+/* (b) Bottom row: framed when off; in focus mode the bare icon, same spot. */
+.lh-focus-dock { display: none; }
+:root[data-focus-place="bottom"] .lh-focus-dock {
+	position: absolute; z-index: 6; right: 16px; bottom: calc(100% + 6px);
+	display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; height: 44px; padding: 0 14px;
+	border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--muted-foreground); font-size: 14px; font-weight: 600;
+}
+:root[data-focus-place="bottom"] .lh-focus-dock svg { width: 18px; height: 18px; }
+:root[data-focus-place="bottom"] .lh-focus-dock[data-active] { border-color: transparent; background: transparent; color: var(--foreground); }
+:root[data-focus-place="bottom"] .lh-focus-dock[data-active] > span { visibility: hidden; }
+:root[data-focus-place="bottom"] .lh-focus-dock[data-active] svg { width: 22px; height: 22px; filter: drop-shadow(0 0 3px var(--background)) drop-shadow(0 0 6px var(--background)); }
+/* (c) Right-edge tabs: small, quiet markers on the screen's edge; the lesson
+   keeps a lane, so they never sit over text the learner is reading. */
+.lh-edge-tabs { display: none; }
+:root[data-focus-place="tabs"] .lh-edge-tabs { display: flex; flex-direction: column; gap: 8px; z-index: 6; pointer-events: auto; }
+:root[data-focus-place="tabs"] .lh-edge-tabs-top { position: fixed; right: 0; top: calc(env(safe-area-inset-top) + 112px); }
+@media (min-width: 768px) { :root[data-focus-place="tabs"] .lh-edge-tabs-top { top: calc(env(safe-area-inset-top) + 80px); } }
+:root[data-focus-place="tabs"] .lh-edge-tabs-bottom { position: absolute; right: 0; bottom: calc(100% + 8px); }
+:root[data-focus-place="tabs"] :is(.lh-edge-tab, .lh-edge-tabs-bottom .lh-notebook-toggle, .lh-edge-tabs-bottom .lh-pane-keyboard) {
+	position: relative; display: grid; place-items: center; width: 44px; height: 44px; min-width: 44px; padding: 0; margin: 0;
+	border: 1px solid var(--border); border-right: 0; border-radius: 12px 0 0 12px;
+	background: color-mix(in oklab, var(--card) 92%, transparent); color: var(--muted-foreground); box-shadow: none;
+}
+:root[data-focus-place="tabs"] :is(.lh-edge-tab, .lh-edge-tabs-bottom .lh-notebook-toggle, .lh-edge-tabs-bottom .lh-pane-keyboard) svg { width: 18px; height: 18px; }
+/* The labels stay as accessible names; the tabs show their icons only. */
+:root[data-focus-place="tabs"] .lh-edge-tabs-bottom :is(.lh-notebook-toggle, .lh-pane-keyboard) > span:not(:has(svg)) {
+	position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+:root[data-focus-place="tabs"] .lh-edge-tabs-bottom .lh-notebook-opener { display: contents; }
+:root[data-focus-place="tabs"] .lh-edge-tab-focus[data-active] { border-color: transparent; background: transparent; color: var(--foreground); }
+:root[data-focus-place="tabs"] .lh-edge-tab-focus[data-active] svg { width: 22px; height: 22px; filter: drop-shadow(0 0 3px var(--background)) drop-shadow(0 0 6px var(--background)); }
+:root[data-focus-place="tabs"] .session-tutor [data-session-find-root] { padding-right: 40px; }
+/* P2 (round 19): Ask tutor in the notebook pane, and its confirmation. */
+.lh-pane-quiet-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.lh-ask-notice {
+	position: fixed; z-index: 55; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 132px); transform: translateX(-50%);
+	padding: 10px 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--foreground);
+	font-size: 15px; font-weight: 600; box-shadow: 0 8px 24px rgb(0 0 0 / .35); white-space: nowrap;
+}
+/* L9 (round 19): Prototype view's switches for this screen, at the top of ⋯. */
+.lh-page-menu-proto-heading { margin: 4px 12px 2px; font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #f59e0b; }
+.lh-page-menu-proto .lh-page-menu-label { display: inline-flex; align-items: center; gap: 8px; }
+.lh-page-menu-proto-icon { width: 16px; height: 16px; color: #f59e0b; }
+.lh-page-menu-proto .lh-page-menu-value { font-family: ui-monospace, monospace; color: #f59e0b; }
+.lh-page-menu-proto-next { color: #f59e0b; font-size: 16px; }
+
+/* ===================================================================
+   Round 19 — T1 (owner: "make it larger"): tablets get a larger
+   interface by default — buttons, labels, menus, chips and the notebook
+   header — not only the reading text, which keeps its own setting
+   (--lh-prose-size, in px, unchanged). Hierarchy and 44px targets hold.
+   =================================================================== */
+@media (min-width: 768px) and (pointer: coarse) {
+	/* rem-based interface text and spacing (Tailwind) grow by an eighth. */
+	html { font-size: 112.5%; }
+	/* The page bar. */
+	:root:root .lh-topbar :is(.lh-nav-chip, .lh-header-chip, .lh-header-write, .lh-notebook-toggle, .lh-focus-corner, .lh-page-menu-button) { height: 48px; min-height: 48px; }
+	:root:root .lh-topbar :is(.lh-nav-chip-label, .lh-header-chip-label, .lh-notebook-toggle-label, .lh-focus-corner-label) { font-size: 17px; }
+	:root:root .lh-topbar :is(.lh-nav-chip, .lh-header-chip, .lh-notebook-toggle, .lh-focus-corner) svg { width: 20px; height: 20px; }
+	:root:root .lh-session-title { font-size: 22px; }
+	/* With the larger chips the name keeps its full width: the phone's two
+	   rows (F1) — the toolbar first, the session's name on a row of its own. */
+	:root:root .lh-topbar { flex-wrap: wrap; height: auto; min-height: 0; padding-top: 8px; padding-bottom: 8px; row-gap: 4px; align-content: flex-start; }
+	:root:root .lh-topbar > :is(.lh-title-block, input.lh-session-title) { order: 99; flex: 1 0 100%; max-width: 100%; }
+	:root:root .lh-topbar > .lh-title-block { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: baseline; height: auto; gap: 12px; min-width: 0; margin-inline: 0; padding: 0 8px; }
+	:root:root .lh-topbar > .lh-title-block > .lh-session-title { flex: 0 1 auto; min-width: 0; }
+	:root:root .lh-session-subtitle, :root:root .lh-phase-tag { font-size: 15px; }
+	/* ⋯ and the menus built from its rows. */
+	:root:root :is(.lh-page-menu[data-lh-menu], [data-testid="page-menu"]) { width: min(380px, calc(100vw - 24px)); }
+	:root:root .lh-page-menu-row { min-height: 56px; }
+	:root:root .lh-page-menu-label { font-size: 17px; }
+	:root:root .lh-page-menu-value { font-size: 16px; }
+	:root:root .lh-page-menu-switch-hint { font-size: 14.5px; }
+	/* The sessions list. */
+	:root:root .lh-session-name { font-size: 16.5px; }
+	:root:root .lh-session-meta, :root:root .lh-your-turn-hint, :root:root .lh-your-turn-note { font-size: 15px; }
+	:root:root .lh-sessions-create :is(button, a), :root:root .lh-sessions-filter-caption, :root:root .lh-sessions-list-label, :root:root .lh-mode-switch > :is(button, a) { font-size: 15.5px; }
+	/* The lesson's own chips and controls (model, reasoning, Usage, Dictate). */
+	:root:root :is(.lh-phone-usage-label, .lh-stats-bar button, .lh-model-chip, .lh-dictate-label) { font-size: 16.5px; }
+	/* The notebook card's header (B5's groups, now larger). */
+	:root:root:root:root .hw-notebookHeader .hw-headerAction { font-size: 16px; }
+	:root:root:root:root .hw-notebookHeader h2 { font-size: 17px; }
+	:root:root:root:root .hw-notebookHeader .hw-zoom :is(button, span) { font-size: 16px; }
+	/* Settings uses the tablet's height instead of floating small in it. */
+	:root:root .lh-settings.settings-dialog-pop { height: calc(100dvh - 48px); max-height: none; width: min(960px, calc(100vw - 32px)); max-width: none; }
+}

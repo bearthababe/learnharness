@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { MaximizeIcon, MinimizeIcon } from "lucide-react";
+import { useTryout } from "@/components/device-prefs";
+import { useDeviceClass } from "@/components/device-features";
 
 /**
  * Focus mode (round 14, owner P2): an explicit choice, never hide-on-scroll
@@ -27,8 +29,10 @@ export function setFocusMode(next: boolean) {
 	if (next && typeof document !== "undefined") {
 		// B9 (round 18): the button is labelled now (icon over "Focus"), so the
 		// bare exit icon is centred exactly on the button's icon — a 44px target.
-		const corner = document.querySelector<HTMLElement>(".lh-focus-corner");
-		const icon = corner?.checkVisibility?.() ? corner.querySelector("svg") ?? corner : null;
+		// Round 19 (P1): whichever Focus control this device shows (toolbar,
+		// bottom row or right-edge tab) gives the spot.
+		const corner = [...document.querySelectorAll<HTMLElement>("[data-focus-control]")].find(el => el.checkVisibility?.());
+		const icon = corner ? corner.querySelector("svg") ?? corner : null;
 		const box = icon?.getBoundingClientRect() ?? null;
 		const style = document.documentElement.style;
 		if (box && box.width) {
@@ -84,7 +88,7 @@ export function FocusModeButton() {
  *  icon that leaves it (FocusModeExit). */
 export function FocusCornerButton() {
 	return (
-		<button type="button" className="lh-nav-chip lh-focus-corner lh-no-drag" data-testid="focus-corner" aria-label="Focus on the lesson" title="Focus on the lesson" onClick={() => setFocusMode(true)}>
+		<button type="button" className="lh-nav-chip lh-focus-corner lh-no-drag" data-focus-control="" data-testid="focus-corner" aria-label="Focus on the lesson" title="Focus on the lesson" onClick={() => setFocusMode(true)}>
 			<MaximizeIcon aria-hidden /><span className="lh-focus-corner-label" aria-hidden="true">Focus</span>
 		</button>
 	);
@@ -94,6 +98,7 @@ export function FocusCornerButton() {
  *  ends focus mode too. */
 export function FocusModeExit() {
 	const active = useFocusMode();
+	const place = useFocusPlace();
 	useEffect(() => () => setFocusMode(false), []);
 	useEffect(() => {
 		if (!active) return;
@@ -101,10 +106,67 @@ export function FocusModeExit() {
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, [active]);
-	if (!active) return null;
+	// The bottom row and the right-edge tab are their own way back (P1).
+	if (!active || place === "bottom" || place === "tabs") return null;
 	return (
 		<button type="button" className="lh-focus-exit lh-glass" data-testid="focus-exit" aria-label="Exit focus" title="Exit focus" onClick={() => setFocusMode(false)}>
 			<MinimizeIcon aria-hidden /><span className="lh-focus-exit-label">Exit<span className="lh-focus-exit-more"> focus</span></span>
 		</button>
 	);
 }
+
+/** Round 19 (P1): where Focus lives on this phone or tablet (a try-out);
+ *  laptops keep their own Focus button (null). */
+export type FocusPlace = "toolbar" | "bottom" | "tabs";
+export function useFocusPlace(): FocusPlace | null {
+	const device = useDeviceClass();
+	const place = useTryout("focusPlace");
+	return device === "phone" || device === "tablet" ? place : null;
+}
+/** Mirrors the placement on <html data-focus-place> for the CSS (bar slots, the reading lane). */
+export function FocusPlaceSync() {
+	const place = useFocusPlace();
+	useEffect(() => {
+		const html = document.documentElement;
+		if (place) html.dataset.focusPlace = place; else delete html.dataset.focusPlace;
+		return () => { delete html.dataset.focusPlace; };
+	}, [place]);
+	return null;
+}
+
+/** P1 (b): Focus in the bottom row, by the chat box — and, in focus mode,
+ *  the bare icon that leaves it in the very same spot. */
+export function FocusDockButton() {
+	const active = useFocusMode();
+	return (
+		<button type="button" className="lh-focus-dock pointer-events-auto" data-focus-control="" data-active={active || undefined} data-testid="focus-dock"
+			aria-label={active ? "Exit focus" : "Focus on the lesson"} title={active ? "Exit focus" : "Focus on the lesson (hides the page bar)"}
+			onClick={() => setFocusMode(!active)}>
+			{/* The label keeps its room in focus mode, so the bare icon stays on the very spot. */}
+			{active ? <MinimizeIcon aria-hidden /> : <MaximizeIcon aria-hidden />}<span aria-hidden="true">Focus</span>
+		</button>
+	);
+}
+
+/**
+ * P1 (c), the owner's idea: small, quiet tabs on the right edge, like the
+ * sticky markers in a book. Focus near the top (in focus mode it is the way
+ * back); at the bottom, by the chat box, the notebook and the keyboard
+ * switch, moved in from the bar and ⋯. The lesson keeps a lane free for them.
+ */
+export function FocusEdgeTabs({ bottom }: { bottom: ReactNode }) {
+	const active = useFocusMode();
+	return (
+		<>
+			<nav className="lh-edge-tabs lh-edge-tabs-top" aria-label="Quick actions">
+				<button type="button" className="lh-edge-tab lh-edge-tab-focus" data-focus-control="" data-active={active || undefined} data-testid="focus-tab"
+					aria-label={active ? "Exit focus" : "Focus on the lesson"} title={active ? "Exit focus" : "Focus on the lesson (hides the page bar)"}
+					onClick={() => setFocusMode(!active)}>
+					{active ? <MinimizeIcon aria-hidden /> : <MaximizeIcon aria-hidden />}
+				</button>
+			</nav>
+			<nav className="lh-edge-tabs lh-edge-tabs-bottom pointer-events-auto" aria-label="Notebook and keyboard" data-testid="edge-tabs-bottom">{bottom}</nav>
+		</>
+	);
+}
+
