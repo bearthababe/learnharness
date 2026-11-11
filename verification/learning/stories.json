@@ -1,14 +1,436 @@
 {
-  "version": 1,
+  "version": 2,
   "expectations": "specs/2026-11-06-learning-journey-verification.md",
   "approval": "Owner-approved requirements, November 6, 2026",
+  "catalogStatus": "Draft for owner review (issue #66). Not yet accepted as the complete acceptance contract.",
+  "sources": {
+    "SPEC": { "ref": "specs/2026-11-06-learning-journey-verification.md", "approval": "Owner-approved requirements, 2026-11-06" },
+    "VISION": { "ref": "docs/fork-vision.md", "approval": "Owner approved, 2026-10-29" },
+    "I49": { "ref": "https://github.com/bearthababe/learnharness/issues/49", "approval": "Consolidates owner-approved decisions #30–#35; implementation plan not yet approved" },
+    "GLOSSARY": { "ref": "GLOSSARY.md", "approval": "Project glossary; distinctions only" },
+    "ARCH": { "ref": "docs/architecture.md", "approval": "Current architecture contract" },
+    "I15": { "ref": "https://github.com/bearthababe/learnharness/issues/15", "approval": "Open owner questions; not a requirement source" }
+  },
+  "fields": {
+    "availability": "Product availability from source inspection: available | partial | unavailable | unknown. Independent of verification. 'unavailable' means no implementation was found for an approved behavior; it is reported, not built, by verification work.",
+    "automation": "Verification readiness: executable (real Cucumber scenario) | missing-verification | blocked (prerequisite or owner decision absent).",
+    "outcome": "Run outcome is never stored here; it comes only from a run's result.json.",
+    "supporting": "Lower-level tests that support but do not replace story-level verification."
+  },
+  "decisions": [
+    { "id": "D-1", "question": "Which reference subject, trusted sources and versioned answer key/rubric should the tutor evaluation use, including approved good, bad and acceptable-variant examples for evaluator calibration?", "source": "SPEC §3 Expectations and evaluator independence", "blocks": ["LJ-TUTOR"] },
+    { "id": "D-2", "question": "Which evaluator model/configuration and which credential-holding processes may the initial live exercise use? The spec authorizes the bounded exercise but requires owner approval for any new credential access and an enforceable process/tool boundary before dispatch.", "source": "SPEC §3 Actors, permissions and effects", "blocks": ["LJ-TUTOR"] },
+    { "id": "D-3", "question": "Which native Electron runtime and which physical iPhone/iPad Home Screen setups are available for target evidence? Issue #49 names laptop plus physical iPhone; the spec names Electron, iPhone and iPad. Confirm whether 'laptop' means native Electron.", "source": "SPEC §3 Devices; I49 Testing §5", "blocks": ["LJ-DEVICE-CONTINUITY"] },
+    { "id": "D-4", "question": "How should learner and tutor move between teaching, practice, drills and review, how may the tutor prescribe a drill, and when should teaching revisit earlier capabilities? These are open in #15 and are not settled by this catalog.", "source": "I15; VISION §5 Drills", "blocks": ["LJ-MOVE-ACTIVITIES", "LJ-DRILL-PRESCRIBED"] },
+    { "id": "D-5", "question": "What are on-demand check mechanics: scope selection, feedback timing and relationship to review scheduling? The vision leaves these to later decisions.", "source": "VISION §5 On-demand checks", "blocks": ["LJ-CHECK"] },
+    { "id": "D-6", "question": "How do learner evidence and graph propositions relate for exploration? The vision requires domain alignment with upstream before design.", "source": "VISION §6 Explore and find earlier learning", "blocks": ["LJ-EXPLORE-EVIDENCE"] },
+    { "id": "D-7", "question": "Is grouping #49's 86 user stories into the LJ-REVIEW, LJ-RECORDS, LJ-REPAIR and LJ-SCHEDULE families (each citing story numbers) the right granularity, or should each #49 story get its own ID before its implementation is planned?", "source": "I49 User Stories", "blocks": [] },
+    { "id": "D-8", "question": "The spec's initial live exercise allows only teaching, question and planning tools, while #49 acceptance requires a live run with normal functionality enabled (background reader, graph processing). Confirm these are separate authorizations and that #49's live harness needs its own approval.", "source": "SPEC §3 vs I49 Testing §1", "blocks": ["LJ-TUTOR"] },
+    { "id": "D-9", "question": "How are cross-device continuity and synchronization delivered (native/web, sync)? The vision leaves these open.", "source": "VISION §7", "blocks": ["LJ-DEVICE-CONTINUITY"] }
+  ],
   "stories": [
-    { "id": "LJ-START", "title": "Start learning from a goal and probe prerequisites", "dependencies": [], "tickets": [], "availability": "available", "automation": "executable", "expectations": ["section 4, checks 1 and 2"], "claims": ["synthetic goal persisted", "successful probe_done persisted"] },
-    { "id": "LJ-PROGRESS", "title": "Plan, teach, respond to uncertainty and retry", "dependencies": ["LJ-START"], "tickets": [], "availability": "available", "automation": "executable", "expectations": ["section 4, checks 2 and 5"], "claims": ["validated plan persisted", "scripted feedback and retry persisted, not tutor accuracy"] },
-    { "id": "LJ-RETURN", "title": "Close, reopen and continue with earlier work accessible", "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "available", "automation": "executable", "expectations": ["section 4, check 3"], "claims": ["same-process continuity only", "earlier messages and plan survive reopen"] },
-    { "id": "LJ-REVIEW", "title": "Review earlier learning", "dependencies": ["LJ-RETURN"], "tickets": [], "availability": "unknown", "automation": "missing-verification", "expectations": ["section 2, goal 2"], "claims": ["requires a separately approved review scenario; no product-gap inference"] },
-    { "id": "LJ-CHECK", "title": "Check understanding on demand", "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "unknown", "automation": "missing-verification", "expectations": ["section 2, goal 2"], "claims": ["requires approved assessment expectations; visited is not mastery"] },
-    { "id": "LJ-CONTINUE", "title": "Continue toward the goal using learner evidence", "dependencies": ["LJ-RETURN", "LJ-CHECK"], "tickets": [], "availability": "unknown", "automation": "missing-verification", "expectations": ["section 2, goals 2 and 3"], "claims": ["saved conversation alone does not establish evidence-guided adaptation"] },
-    { "id": "LJ-TUTOR", "title": "Independent subject and teaching evaluation", "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "unknown", "automation": "blocked", "expectations": ["section 3, V-3 through V-5"], "claims": ["subject key, calibration and enforceable live adapter need approval"] }
+    {
+      "id": "LJ-START", "title": "Start learning from a goal and probe prerequisites",
+      "learnerGoal": "As a learner, I state what I want to learn and the tutor finds my prerequisite boundary before teaching, so teaching starts from what I actually understand.",
+      "sources": ["SPEC §2 goal 3", "VISION §4 rule 1", "ARCH probe_done handoff"],
+      "acceptance": {
+        "happy": ["A goal leads to probing questions; a successful probe_done result (not merely an attempted call) is saved and the session moves to planning."],
+        "alternative": ["A learner who already knows much of the material reaches the handoff with fewer probing turns."],
+        "failureOrReturn": ["A failed or invalid probe_done does not move the session into teaching."]
+      },
+      "dependencies": [], "tickets": [], "availability": "available", "availabilityBasis": "src/agent/tools/probe.ts; createProberAgent",
+      "automation": "executable", "verification": { "scenarios": ["reference.feature @LJ-START"], "supporting": ["tests/chat-flow.test.ts"] },
+      "expectations": ["section 4, checks 1 and 2"], "claims": ["synthetic goal persisted", "successful probe_done persisted"]
+    },
+    {
+      "id": "LJ-START-REFERENCE", "title": "Start from a goal together with a reference",
+      "learnerGoal": "As a learner, I supply a book or other reference with my goal, so the tutor uses its notation, jargon and required knowledge while building my own path.",
+      "sources": ["VISION §3", "SPEC §1 fork-vision line 55"],
+      "acceptance": {
+        "happy": ["The tutor reads the supplied reference and its explanations use the reference's notation for the goal."],
+        "alternative": ["The tutor teaches in a different order from the book when that suits the learner; no fixed lesson sequence is required."],
+        "failureOrReturn": ["An unreadable or missing reference is reported to the learner rather than silently ignored or invented."]
+      },
+      "dependencies": ["LJ-START"], "tickets": ["#36"], "availability": "partial", "availabilityBasis": "read/pdf_* tools and file attachments exist; faithful book extraction is follow-up #36",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] },
+      "expectations": [], "claims": ["no reference-alignment check exists yet"]
+    },
+    {
+      "id": "LJ-PROGRESS", "title": "Plan, teach, respond to uncertainty and retry",
+      "learnerGoal": "As a learner, I get a teaching plan, learn step by step, and when I am wrong or unsure I get feedback and can try again, so a mistake becomes part of learning.",
+      "sources": ["SPEC §2 goal 3", "VISION §4 rules 2 and 3"],
+      "acceptance": {
+        "happy": ["A validated plan is saved; an uncertain answer receives feedback; the retry is saved as a separate attempt."],
+        "alternative": ["The tutor may explain directly instead of asking for discovery when the learner asks or seems stuck."],
+        "failureOrReturn": ["A wrong answer does not end the step or erase the earlier attempt."]
+      },
+      "dependencies": ["LJ-START"], "tickets": [], "availability": "available", "availabilityBasis": "src/agent/tools/plan.ts; teacher agent",
+      "automation": "executable", "verification": { "scenarios": ["reference.feature @LJ-PROGRESS"], "supporting": [] },
+      "expectations": ["section 4, checks 2 and 5"], "claims": ["validated plan persisted", "scripted feedback and retry persisted, not tutor accuracy"]
+    },
+    {
+      "id": "LJ-PLAN-REVISE", "title": "Revise the teaching plan as learning proceeds",
+      "learnerGoal": "As a learner, when the route is wrong or misses a step, the tutor revises the plan, so the plan keeps serving my goal instead of a fixed syllabus.",
+      "sources": ["VISION §2 Teaching plan (revisable)", "VISION §4 agent autonomy"],
+      "acceptance": {
+        "happy": ["After the learner points out a missing step, the presented plan shows the revised route and earlier messages are unchanged."],
+        "alternative": ["The tutor revises the plan on its own after new learner evidence."],
+        "failureOrReturn": ["An invalid revision is rejected and the previous plan stays presented."]
+      },
+      "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "available", "availabilityBasis": "plan_init replaces the tree wholesale (src/agent/tools/plan.ts)",
+      "automation": "executable", "verification": { "scenarios": ["reference.feature @LJ-PLAN-REVISE"], "supporting": [] },
+      "expectations": [], "claims": ["learner-prompted scripted rewrite only; whether the tutor revises at the right moments needs LJ-TUTOR"]
+    },
+    {
+      "id": "LJ-HELP", "title": "Ask for explanation, help or a side question while learning",
+      "learnerGoal": "As a learner, I can ask for an explanation, a hint or a side question at any point, so I get help without losing my place.",
+      "sources": ["VISION §4 rule 3", "VISION §6 side questions"],
+      "acceptance": {
+        "happy": ["A side question is answered and the plan position and earlier work are unchanged."],
+        "alternative": ["The tutor answers briefly and returns to the current step, or offers to revise the plan."],
+        "failureOrReturn": ["A request for help is not recorded as independent success on the current step."]
+      },
+      "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "available", "availabilityBasis": "conversation-led teaching",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] },
+      "expectations": [], "claims": []
+    },
+    {
+      "id": "LJ-PRESENTATION", "title": "Read, see and experiment with the material",
+      "learnerGoal": "As a learner, I get readable mathematics, useful diagrams and interactive demonstrations, so I can study, experiment and do my own work.",
+      "sources": ["VISION §7"],
+      "acceptance": {
+        "happy": ["Mathematics renders readably, a requested diagram or demo appears in the conversation and stays there on reopen."],
+        "alternative": ["The tutor chooses text when a visual would not help."],
+        "failureOrReturn": ["A failed diagram/demo job is shown as failed without breaking the conversation."]
+      },
+      "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "available", "availabilityBasis": "visual/demo jobs, mermaid and math rendering",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": ["tests/demos.test.tsx"] },
+      "expectations": [], "claims": ["presentation quality also needs owner UX judgment (V-7)"]
+    },
+    {
+      "id": "LJ-INPUTS", "title": "Work in typed, spoken, handwritten or mixed form",
+      "learnerGoal": "As a learner, I can answer by typing, speaking, writing by hand, or sending photos and PDFs, so I can work in the form that suits the problem and device.",
+      "sources": ["VISION §7"],
+      "acceptance": {
+        "happy": ["Spoken, handwritten and typed work reaches the tutor and the original work is preserved in the record."],
+        "alternative": ["Mixed input (handwriting plus speech) is submitted as one attempt."],
+        "failureOrReturn": ["Uncertain interpretation is clarified before assessment; a failed transcription keeps the original work."]
+      },
+      "dependencies": [], "tickets": ["#37", "#39"], "availability": "partial", "availabilityBasis": "dictation, notebook/handwriting and learner images exist; chat image attachments are in an open PR",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": ["tests/dictation-flow.test.tsx", "docs/verification/mobile-browser-checks.md"] },
+      "expectations": [], "claims": ["mobile browser checks cover input plumbing, not assessment of interpreted work"]
+    },
+    {
+      "id": "LJ-NOTEBOOK", "title": "Keep continuing mathematical working in a notebook",
+      "learnerGoal": "As a learner, my mathematical working lives in a notebook beside the conversation, spans several questions and topics, and I can share a snapshot of it with the tutor.",
+      "sources": ["GLOSSARY Notebook", "VISION §7 inputs and devices"],
+      "acceptance": {
+        "happy": ["Working written for one question is still in the notebook for the next; sharing a snapshot gives the tutor that working without moving it into the conversation."],
+        "alternative": ["The learner refers to a numbered line or selected expression when asking the tutor about a step."],
+        "failureOrReturn": ["Reopening the session keeps the notebook working; a failed snapshot share keeps the working and reports the failure."]
+      },
+      "dependencies": ["LJ-INPUTS"], "tickets": [], "availability": "available", "availabilityBasis": "components/notebook-*.tsx, src/server/notebook.ts, app/api/chats/[id]/notebook",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": ["tests/notebook-flow.test.ts", "docs/notebook-mobile-verification.md"] },
+      "expectations": [], "claims": ["device routing (canvas on tablet, equation notebook on phone) is a settings choice, not a separate story"]
+    },
+    {
+      "id": "LJ-PRACTICE", "title": "Practise with graduated help after a wrong answer",
+      "learnerGoal": "As a learner, when my practice answer is wrong I get the smallest useful help and keep working until I solve it or choose to stop, and the record shows that I needed help.",
+      "sources": ["VISION §4 rules 4 and 5", "GLOSSARY Learner evidence"],
+      "acceptance": {
+        "happy": ["A posed problem hides its committed solution; a wrong answer gets feedback while the problem stays open; a corrected answer concludes as helped success with the help recorded and the solution revealed; the next problem waits for the learner's go-ahead."],
+        "alternative": ["An independent correct first answer concludes as solved with no help recorded."],
+        "failureOrReturn": ["The learner explicitly ends the problem; it concludes without being counted as success."]
+      },
+      "dependencies": [], "tickets": [], "availability": "available", "availabilityBasis": "src/agent/tools/practice.ts problem/conclude; components/practice-dock.tsx",
+      "automation": "executable", "verification": { "scenarios": ["practice.feature @LJ-PRACTICE"], "supporting": ["tests/drill-flow.test.ts"] },
+      "expectations": [], "claims": ["scripted outcome and rung persisted and solution hidden until conclusion; hint size and verdict quality need LJ-TUTOR"]
+    },
+    {
+      "id": "LJ-PRACTICE-RESUME", "title": "Return to an unfinished practice problem",
+      "learnerGoal": "As a learner, if I stop mid-problem and come back, the same problem and my earlier attempts are still there, so stopping is not failure.",
+      "sources": ["VISION §6 returning preserves position", "I49 stories 41 and 42"],
+      "acceptance": {
+        "happy": ["Reopening shows the same open problem and earlier attempt, the solution stays hidden, and the problem can still be completed."],
+        "alternative": ["The learner discusses the problem before continuing it."],
+        "failureOrReturn": ["Stopping records no outcome. Unsubmitted drafts across reload are not yet durable (I49 story 42)."]
+      },
+      "dependencies": ["LJ-PRACTICE"], "tickets": ["#49"], "availability": "partial", "availabilityBasis": "open problem is derived from saved messages (activeProblemOf); durable drafts are #49 scope",
+      "automation": "executable", "verification": { "scenarios": ["practice.feature @LJ-PRACTICE-RESUME"], "supporting": [] },
+      "expectations": [], "claims": ["submitted work and open problem survive same-process reopen; unsubmitted draft durability not covered"]
+    },
+    {
+      "id": "LJ-DRILL", "title": "Take an optional focused drill as a separate activity",
+      "learnerGoal": "As a learner, I can choose a focused drill on a specific difficulty that stays separate from my main learning, so repetition does not distort ordinary mixed practice.",
+      "sources": ["VISION §5 Drills", "GLOSSARY Drill"],
+      "acceptance": {
+        "happy": ["A learner-created drill keeps its drill identity through help and conclusion; other sessions are unchanged."],
+        "alternative": ["The drill uses a mental model to scaffold the work rather than pure repetition."],
+        "failureOrReturn": ["Helped success in a drill is not recorded as independent success."]
+      },
+      "dependencies": [], "tickets": ["#11"], "availability": "available", "availabilityBasis": "kind practice + practiceMode drill (src/agent/drill-instructions.ts)",
+      "automation": "executable", "verification": { "scenarios": ["practice.feature @LJ-DRILL"], "supporting": ["tests/drill-flow.test.ts"] },
+      "expectations": [], "claims": ["created through the same chats API the New drill screen uses; drill method quality needs LJ-TUTOR"]
+    },
+    {
+      "id": "LJ-DRILL-PRESCRIBED", "title": "Tutor suggests a drill the learner may accept",
+      "learnerGoal": "As a learner, the tutor can suggest a drill when it sees a need, and I choose whether to do it.",
+      "sources": ["VISION §5 Drills"],
+      "acceptance": {
+        "happy": ["After repeated unit-conversion slips the tutor suggests a drill; accepting opens it with that context."],
+        "alternative": ["The learner declines and teaching continues unchanged."],
+        "failureOrReturn": ["No drill starts without the learner's choice."]
+      },
+      "dependencies": ["LJ-DRILL"], "tickets": ["#15"], "availability": "unknown", "availabilityBasis": "no prescription-to-drill handoff found; the transition design is open in #15",
+      "automation": "blocked", "verification": { "scenarios": [], "supporting": [] },
+      "expectations": [], "claims": ["blocked on D-4"]
+    },
+    {
+      "id": "LJ-RETURN", "title": "Close, reopen and continue with earlier work accessible",
+      "learnerGoal": "As a returning learner, my earlier messages, plan and position are still there and I can continue, so stopping costs nothing.",
+      "sources": ["SPEC §2 goal 2", "VISION §6"],
+      "acceptance": {
+        "happy": ["After reopen, earlier messages and the plan are visible and a continuation is appended without changing them."],
+        "alternative": ["The learner returns through the session list instead of a direct link."],
+        "failureOrReturn": ["A restart of the app (cross-process) preserves the same history; not yet verified."]
+      },
+      "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "available", "availabilityBasis": "JSON chat store",
+      "automation": "executable", "verification": { "scenarios": ["reference.feature @LJ-RETURN"], "supporting": ["tests/data-dir-seam.test.ts"] },
+      "expectations": ["section 4, check 3"], "claims": ["same-process continuity only", "earlier messages and plan survive reopen"]
+    },
+    {
+      "id": "LJ-FIND-EARLIER", "title": "Find earlier explanations, sources and work",
+      "learnerGoal": "As a learner, I can search across sessions for an earlier explanation, source, attempt or feedback and return to it in context.",
+      "sources": ["VISION §6 Explore and find earlier learning"],
+      "acceptance": {
+        "happy": ["Searching for a term finds the earlier explanation in another session and opens it at that point."],
+        "alternative": ["Finding within the open session highlights matches in place."],
+        "failureOrReturn": ["No match is shown as no match, not as an empty history."]
+      },
+      "dependencies": ["LJ-RETURN"], "tickets": [], "availability": "partial", "availabilityBasis": "session list search and in-session find exist; cross-session content search not found",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] },
+      "expectations": [], "claims": []
+    },
+    {
+      "id": "LJ-MOVE-ACTIVITIES", "title": "Move between teaching, practice, drills and review without losing purpose",
+      "learnerGoal": "As a learner, I can move between activities and come back, with each keeping its purpose, work and history.",
+      "sources": ["I15", "VISION §6", "I49 stories 58, 62 and 63"],
+      "acceptance": {
+        "happy": ["Leaving teaching for a drill and returning preserves the teaching position and the drill's separate record."],
+        "alternative": ["Decided in #15."],
+        "failureOrReturn": ["Decided in #15."]
+      },
+      "dependencies": ["LJ-RETURN", "LJ-DRILL"], "tickets": ["#15"], "availability": "partial", "availabilityBasis": "sessions are separate and resumable; no designed transitions",
+      "automation": "blocked", "verification": { "scenarios": [], "supporting": [] },
+      "expectations": [], "claims": ["blocked on D-4"]
+    },
+    {
+      "id": "LJ-REVIEW", "title": "Review earlier learning",
+      "learnerGoal": "As a learner, I revisit earlier understanding and application after a delay through varied fresh activities, so I retain what I learned.",
+      "sources": ["SPEC §2 goal 2", "VISION §5 Delayed review", "I49 stories 17–45"],
+      "acceptance": {
+        "happy": ["See the child stories LJ-REVIEW-ENTRY, LJ-REVIEW-WORK and LJ-REVIEW-SESSION."],
+        "alternative": ["Review fits a time constraint the learner gives in conversation."],
+        "failureOrReturn": ["When nothing can start, the reason is explained."]
+      },
+      "dependencies": ["LJ-RETURN", "LJ-RECORDS"], "tickets": ["#49"], "availability": "unavailable", "availabilityBasis": "no Review mode or capability records found; specified by #49",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] },
+      "expectations": ["section 2, goal 2"], "claims": ["parent story; #49 requires its own approved implementation plan and live harness"]
+    },
+    {
+      "id": "LJ-REVIEW-ENTRY", "parent": "LJ-REVIEW", "title": "Enter Review directly and resume or select due work",
+      "learnerGoal": "As a learner, one Review entry resumes my unfinished work or picks useful due material for my goals.",
+      "sources": ["I49 stories 17–25"],
+      "acceptance": {
+        "happy": ["Review resumes an unfinished problem, otherwise selects due, ready material across active goals."],
+        "alternative": ["A conversational time limit shapes the session; already-ready work is available during background catch-up."],
+        "failureOrReturn": ["With nothing eligible, the learner sees whether nothing is due, repair is pending or records are not ready; explicit pauses are respected."]
+      },
+      "dependencies": ["LJ-RECORDS"], "tickets": ["#49"], "availability": "unavailable", "availabilityBasis": "#49 not implemented",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] }, "expectations": [], "claims": []
+    },
+    {
+      "id": "LJ-REVIEW-WORK", "parent": "LJ-REVIEW", "title": "Work varied review problems with honest capability assessment",
+      "learnerGoal": "As a learner, review exercises explanation, derivation, calculation and application, assessing each capability separately and honestly.",
+      "sources": ["I49 stories 26–32", "VISION §5 Delayed review"],
+      "acceptance": {
+        "happy": ["A circuit problem keeps its figure, uses Practice's adaptive help, and records separate capability outcomes when help was needed for one part."],
+        "alternative": ["A local weakness gets a smaller component follow-up instead of repeating the whole task."],
+        "failureOrReturn": ["Slips, clarifications and real gaps are interpreted in context rather than as identical misses."]
+      },
+      "dependencies": ["LJ-REVIEW-ENTRY", "LJ-PRACTICE"], "tickets": ["#49"], "availability": "unavailable", "availabilityBasis": "#49 not implemented",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] }, "expectations": [], "claims": []
+    },
+    {
+      "id": "LJ-REVIEW-SESSION", "parent": "LJ-REVIEW", "title": "Rate, discuss, pause and finish Review on my terms",
+      "learnerGoal": "As a learner, I can rate or skip, discuss concluded work, pause mid-problem and finish when I choose, and a completed Review stays discussable.",
+      "sources": ["I49 stories 33–45"],
+      "acceptance": {
+        "happy": ["Rating or explicit Skip precedes the tutor's judgment; Next waits; Finish is honored; drafts and ratings survive reload."],
+        "alternative": ["Ordinary Review works with temporary calibration disabled."],
+        "failureOrReturn": ["Stopping mid-problem pauses it intact; new exercises after completion start a fresh Review."]
+      },
+      "dependencies": ["LJ-REVIEW-WORK"], "tickets": ["#49"], "availability": "unavailable", "availabilityBasis": "#49 not implemented",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] }, "expectations": [], "claims": []
+    },
+    {
+      "id": "LJ-SCHEDULE", "parent": "LJ-REVIEW", "title": "Review timing follows genuine work and corrections",
+      "learnerGoal": "As a learner, review timing reflects my real substantive work, counts connected help as one attempt, and updates when an assessment is corrected.",
+      "sources": ["I49 stories 46–55"],
+      "acceptance": {
+        "happy": ["A qualifying early success informs timing; an accepted correction updates the schedule and keeps its history."],
+        "alternative": ["Late-discovered earlier work is reconciled chronologically."],
+        "failureOrReturn": ["Insufficient component work does not postpone broader review; a timing update does not interrupt a problem underway."]
+      },
+      "dependencies": ["LJ-RECORDS"], "tickets": ["#49"], "availability": "unavailable", "availabilityBasis": "#49 not implemented",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] }, "expectations": [], "claims": ["synthetic scheduler probes validate mechanics, not retention"]
+    },
+    {
+      "id": "LJ-CHECK", "title": "Check understanding on demand",
+      "learnerGoal": "As a learner, I can ask to be checked on selected studied topics to find out what I can independently explain or apply, and the results join my learning history.",
+      "sources": ["SPEC §2 goal 2", "VISION §5 On-demand checks"],
+      "acceptance": {
+        "happy": ["Choosing studied topics yields independent checks whose results are saved as learner evidence."],
+        "alternative": ["Mechanics and feedback timing as decided under D-5."],
+        "failureOrReturn": ["A visited plan node or encountered proposition is never reported as a passed check."]
+      },
+      "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "partial", "availabilityBasis": "practice from picked graph propositions exists; no distinct check activity or shared evidence history",
+      "automation": "blocked", "verification": { "scenarios": [], "supporting": [] },
+      "expectations": ["section 2, goal 2"], "claims": ["requires approved assessment expectations; visited is not mastery", "blocked on D-5"]
+    },
+    {
+      "id": "LJ-REPAIR", "title": "Repair a confirmed understanding gap through Teaching",
+      "learnerGoal": "As a learner, a real understanding gap found in review leads to an arranged Teaching session I choose when to enter, while other review continues.",
+      "sources": ["I49 stories 56–66", "VISION §4 rule 2 (repair)"],
+      "acceptance": {
+        "happy": ["A supported gap holds only the affected capability; opening the prepared session starts the owed first turn; supported reasoning restores readiness."],
+        "alternative": ["Ordinary retrieval difficulty stays within Practice; a matching unfinished repair is reused."],
+        "failureOrReturn": ["A recurrence after repair opens a new episode with earlier context; opening or finishing Teaching alone is not repair."]
+      },
+      "dependencies": ["LJ-REVIEW-WORK"], "tickets": ["#49"], "availability": "unavailable", "availabilityBasis": "#49 not implemented",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] }, "expectations": [], "claims": []
+    },
+    {
+      "id": "LJ-RECORDS", "title": "Lasting, honest learning records",
+      "learnerGoal": "As a learner, my teaching and practice contribute to lasting, dated capability records that distinguish what I encountered, did with help, did independently and retained later.",
+      "sources": ["I49 stories 1–16", "VISION §6", "GLOSSARY Learner evidence"],
+      "acceptance": {
+        "happy": ["New and earlier Teaching produce dated capability records with scope, help and uncertainty preserved."],
+        "alternative": ["Intended capabilities are recorded as unassessed until evidence exists; shared capabilities have one history across goals."],
+        "failureOrReturn": ["Old evidence is treated as uncertain freshness, not as a gap; graph propositions and plan landmarks are not evidence about the learner."]
+      },
+      "dependencies": ["LJ-PROGRESS"], "tickets": ["#49"], "availability": "unavailable", "availabilityBasis": "learner evidence exists only inside session records (practice outcomes, probe assessment)",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] }, "expectations": [], "claims": []
+    },
+    {
+      "id": "LJ-RECORDS-INSPECT", "parent": "LJ-RECORDS", "title": "Inspect and correct what the app thinks I know",
+      "learnerGoal": "As a learner, I can inspect conclusions about my learning with their evidence and history, challenge them, and have accepted corrections take effect with reasons kept.",
+      "sources": ["I49 stories 67–71", "VISION §6"],
+      "acceptance": {
+        "happy": ["From navigation or review feedback, a record shows summary, scope, dates and original-work links; a challenge with evidence leads to an accepted correction."],
+        "alternative": ["Disagreement that is not accepted is kept but does not change the record."],
+        "failureOrReturn": ["A correction revises history without manufacturing a new attempt."]
+      },
+      "dependencies": ["LJ-RECORDS"], "tickets": ["#49"], "availability": "unavailable", "availabilityBasis": "#49 not implemented",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] }, "expectations": [], "claims": []
+    },
+    {
+      "id": "LJ-RECORDS-RELIABLE", "parent": "LJ-RECORDS", "title": "Background record processing survives interruptions",
+      "learnerGoal": "As a learner, background processing recovers after restart without duplicates, shows paused, blocked and failed states, and never fabricates or erases history.",
+      "sources": ["I49 stories 72–76"],
+      "acceptance": {
+        "happy": ["Records are available before graph linking completes; restart resumes processing without duplicates."],
+        "alternative": ["The learner pauses and resumes processing."],
+        "failureOrReturn": ["Missing sources are shown honestly; permission or configuration blockers are distinct from failures."]
+      },
+      "dependencies": ["LJ-RECORDS"], "tickets": ["#49"], "availability": "unavailable", "availabilityBasis": "#49 not implemented",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] }, "expectations": [], "claims": []
+    },
+    {
+      "id": "LJ-CONTINUE", "title": "Continue toward the goal using learner evidence",
+      "learnerGoal": "As a learner, teaching, practice and later study form one coherent view of what I understand and need next, so the tutor continues from my actual evidence.",
+      "sources": ["SPEC §2 goals 2 and 3", "VISION §6"],
+      "acceptance": {
+        "happy": ["After a gap shown in practice, later teaching addresses it without the learner restating it."],
+        "alternative": ["Evidence from a check or review changes the next teaching focus."],
+        "failureOrReturn": ["A saved conversation alone is not reported as evidence-guided adaptation."]
+      },
+      "dependencies": ["LJ-RETURN", "LJ-CHECK", "LJ-RECORDS"], "tickets": ["#49", "#15"], "availability": "unknown", "availabilityBasis": "cross-session evidence reuse is a stated fork extension; not established",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] },
+      "expectations": ["section 2, goals 2 and 3"], "claims": ["saved conversation alone does not establish evidence-guided adaptation"]
+    },
+    {
+      "id": "LJ-EXPLORE-EVIDENCE", "title": "Explore demonstrated understanding alongside connections between ideas",
+      "learnerGoal": "As a learner, I can see demonstrated understanding and uncertainty next to how ideas connect, to decide what to explore or revisit.",
+      "sources": ["VISION §6 Explore and find earlier learning"],
+      "acceptance": {
+        "happy": ["Pending D-6 domain alignment."],
+        "alternative": ["Pending D-6."],
+        "failureOrReturn": ["Subject content is never presented as learner mastery."]
+      },
+      "dependencies": ["LJ-RECORDS", "LJ-GRAPH"], "tickets": [], "availability": "partial", "availabilityBasis": "knowledge graph view exists; no learner-evidence layer",
+      "automation": "blocked", "verification": { "scenarios": [], "supporting": [] }, "expectations": [], "claims": ["blocked on D-6"]
+    },
+    {
+      "id": "LJ-GRAPH", "title": "Teaching and imported notes build the shared knowledge graph",
+      "learnerGoal": "As a learner, propositions and reasoning chains from teaching and my imported notes are kept with their origins, so later learning can connect to them.",
+      "sources": ["VISION §2 Knowledge graph", "GLOSSARY Knowledge graph"],
+      "acceptance": {
+        "happy": ["After teaching, extracted propositions appear in the graph with their source session."],
+        "alternative": ["Imported notes produce propositions with the note as origin."],
+        "failureOrReturn": ["Extraction off or failing is shown explicitly; the graph is never labeled as mastery."]
+      },
+      "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "available", "availabilityBasis": "app/api/graph/*; components/graph-view.tsx; notes-import",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] }, "expectations": [], "claims": []
+    },
+    {
+      "id": "LJ-INTERRUPT", "title": "Interruptions and failures do not lose learning work",
+      "learnerGoal": "As a learner, stopping a running reply, a provider failure or a missing model setup is explained and my earlier work stays intact.",
+      "sources": ["SPEC §2 goal 4", "VISION §6", "ARCH credential ownership"],
+      "acceptance": {
+        "happy": ["Aborting a running turn keeps earlier messages and lets the learner continue."],
+        "alternative": ["A provider error is shown and the learner can resend."],
+        "failureOrReturn": ["Missing configuration explains what to set up; no silent API-billing fallback."]
+      },
+      "dependencies": ["LJ-RETURN"], "tickets": [], "availability": "available", "availabilityBasis": "app/api/activity/abort; components/abort-turn-dialog.tsx; setup CTA",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": ["tests/byok-refusal.test.ts"] }, "expectations": [], "claims": []
+    },
+    {
+      "id": "LJ-DEVICE-CONTINUITY", "title": "Continue one journey on whatever device is available",
+      "learnerGoal": "As a learner, I continue the same learning on desktop, phone or iPad with activities and inputs suited to each.",
+      "sources": ["VISION §7", "SPEC §3 Devices"],
+      "acceptance": {
+        "happy": ["Work started on desktop continues on an iPad Home Screen app with the same history."],
+        "alternative": ["The phone suits spoken short answers and the iPad written derivations."],
+        "failureOrReturn": ["An unavailable target is reported blocked, never passed."]
+      },
+      "dependencies": ["LJ-RETURN", "LJ-INPUTS"], "tickets": [], "availability": "partial", "availabilityBasis": "web app on phone/iPad and Electron desktop exist; synchronization is open",
+      "automation": "blocked", "verification": { "scenarios": [], "supporting": ["docs/verification/mobile-browser-checks.md"] }, "expectations": [], "claims": ["blocked on D-3 and D-9; mobile emulation is not physical-device evidence"]
+    },
+    {
+      "id": "LJ-BACKUP", "title": "Back up and restore my learning history",
+      "learnerGoal": "As a learner, I can back up and restore all learning history and unfinished work, including original attempts, feedback and corrections.",
+      "sources": ["VISION §9"],
+      "acceptance": {
+        "happy": ["A backup restored into a fresh data directory reproduces sessions, attempts and unfinished work."],
+        "alternative": ["Restoring onto existing data is explicit about what changes."],
+        "failureOrReturn": ["A corrupt or partial backup is refused without damaging current data."]
+      },
+      "dependencies": [], "tickets": [], "availability": "unavailable", "availabilityBasis": "no backup/restore feature found; data is plain files under LH_DATA_DIR",
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": [] }, "expectations": [], "claims": ["no ticket exists yet"]
+    },
+    {
+      "id": "LJ-TUTOR", "title": "Independent subject and teaching evaluation",
+      "learnerGoal": "As a learner, the tutor's subject content is correct and its teaching follows the approved approach: probe the boundary, check each step, choose discovery or explanation, give minimal graduated help.",
+      "sources": ["SPEC §3 V-3 to V-5", "VISION §4 rules 1–5", "I49 stories 77–83"],
+      "acceptance": {
+        "happy": ["Against an approved key, every required expectation in a live multi-turn run passes per turn purpose."],
+        "alternative": ["Valid alternative conversations and explanations pass; there is no exact-transcript oracle."],
+        "failureOrReturn": ["One material subject error or required teaching violation fails the scenario; uncertain judgments stay unverified; a reached cap is incomplete."]
+      },
+      "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "unknown", "availabilityBasis": "tutor exists; its quality is what this evaluates",
+      "automation": "blocked", "verification": { "scenarios": [], "supporting": [] },
+      "expectations": ["section 3, V-3 through V-5"], "claims": ["subject key, calibration and enforceable live adapter need approval", "blocked on D-1, D-2 and D-8"]
+    }
   ]
 }

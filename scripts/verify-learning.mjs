@@ -5,16 +5,29 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { coverage, selectStories, assertResolved, cucumberOutcomes, livePreflight } from "./lib/learning-verification.mjs";
+import { coverage, selectStories, assertResolved, cucumberOutcomes, livePreflight, validateCatalog, catalogReport } from "./lib/learning-verification.mjs";
 import { sourceFingerprint } from "./mobile-browser-result.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const catalogPath = path.join(root, "verification/learning/stories.json");
+const learningDir = path.join(root, "verification/learning");
 const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
+const inventory = JSON.parse(fs.readFileSync(path.join(learningDir, "inventory.json"), "utf8"));
+const features = fs.readdirSync(learningDir).filter(name => name.endsWith(".feature")).sort();
+const featureTags = new Set(features.flatMap(name => fs.readFileSync(path.join(learningDir, name), "utf8").match(/@LJ-[A-Z0-9-]+/g) ?? []));
 const [command = "list", ...args] = process.argv.slice(2);
-assert.ok(["list", "select", "run"].includes(command), "Usage: verify-learning.mjs list | select STORY | run [--story STORY] [--live]");
-if (command === "list") {
+assert.ok(["list", "report", "validate", "select", "run"].includes(command), "Usage: verify-learning.mjs list | report | validate | select STORY | run [--story STORY] [--live]");
+const problems = validateCatalog(catalog, inventory, featureTags);
+if (problems.length) {
+	console.error(`Story catalog is invalid; no selection or run is admitted:\n- ${problems.join("\n- ")}`);
+	process.exit(1);
+}
+if (command === "validate") {
+	console.log(JSON.stringify({ status: "valid", stories: catalog.stories.length, inventoryRows: inventory.rows.length, decisions: catalog.decisions.length }, null, 2));
+} else if (command === "list") {
 	console.log(JSON.stringify(coverage(catalog, {}), null, 2));
+} else if (command === "report") {
+	process.stdout.write(catalogReport(catalog, inventory));
 } else {
 	const stamp = new Date().toISOString().replaceAll(":", "-");
 	fs.mkdirSync(path.join(root, ".prove-it/runs"), { recursive: true });
@@ -24,7 +37,7 @@ if (command === "list") {
 	const git = params => execFileSync("git", params, { cwd: root, encoding: "utf8" }).trim();
 	const result = {
 		schemaVersion: 1, status: "incomplete", startedAt: new Date().toISOString(),
-		candidate: { revision: git(["rev-parse", "HEAD"]), dirty: git(["status", "--porcelain"]) !== "", sourceSha256: await sourceFingerprint(root), verificationSha256: createHash("sha256").update(["stories.json", "reference.feature", "steps.mjs"].map(name => sha(path.join(root, "verification/learning", name))).join(":")).digest("hex") },
+		candidate: { revision: git(["rev-parse", "HEAD"]), dirty: git(["status", "--porcelain"]) !== "", sourceSha256: await sourceFingerprint(root), verificationSha256: createHash("sha256").update(fs.readdirSync(learningDir).sort().map(name => `${name}=${sha(path.join(learningDir, name))}`).join(":")).digest("hex") },
 		expectations: { path: catalog.expectations, sha256: sha(path.join(root, catalog.expectations)), approval: catalog.approval },
 		environment: { runtime: process.version, platform: process.platform, target: "local synthetic Chromium", mode: "scripted faux provider; not live subject evaluation", nativeElectron: "not-run", iPhoneHomeScreen: "not-run", iPadHomeScreen: "not-run" },
 		limits: { modelRequests: 30, learnerTurns: 12, minutes: 20, automaticRetries: 0, liveDispatch: "disabled" },
@@ -44,7 +57,7 @@ if (command === "list") {
 		const tags = ids.map(id => `@${id}`).join(" or ");
 		const cucumber = dry => {
 			const file = path.join(run, dry ? "resolution.json" : "cucumber.json");
-			const child = spawnSync(process.execPath, [path.join(root, "node_modules/@cucumber/cucumber/bin/cucumber.js"), "verification/learning/reference.feature", "--import", "verification/learning/steps.mjs", "--tags", tags, "--format", `json:${file}`, "--format", "progress", ...(dry ? ["--dry-run"] : [])], {
+			const child = spawnSync(process.execPath, [path.join(root, "node_modules/@cucumber/cucumber/bin/cucumber.js"), ...features.map(name => `verification/learning/${name}`), "--import", "verification/learning/steps.mjs", "--tags", tags, "--format", `json:${file}`, "--format", "progress", ...(dry ? ["--dry-run"] : [])], {
 				cwd: root, env: { PATH: process.env.PATH, HOME: path.join(run, "home"), LANG: "C.UTF-8", CHROMIUM_PATH: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", LH_JOURNEY_RUN: run }, encoding: "utf8", timeout: 20 * 60_000,
 			});
 			fs.writeFileSync(path.join(run, dry ? "resolution.log" : "cucumber.log"), `${child.stdout ?? ""}\n${child.stderr ?? ""}\n${child.error?.stack ?? ""}`);
@@ -65,7 +78,7 @@ if (command === "list") {
 	} finally {
 		result.finishedAt = new Date().toISOString();
 		write("result.json", result);
-		fs.writeFileSync(path.join(run, "coverage.md"), `# Learning verification coverage\n\nCandidate: ${result.candidate.revision} (dirty: ${result.candidate.dirty}); source ${result.candidate.sourceSha256}\n\nChecks: ${result.status}. Intended journey: ${result.journey}. No subject-accuracy or learning-efficacy claim.\n\n| Story | Availability | Verification | Claim |\n| --- | --- | --- | --- |\n${result.stories.map(story => `| ${story.id}: ${story.title} | ${story.availability} | ${story.outcome} | ${story.claims.join("; ")} |`).join("\n")}\n\nExpectations: ${result.expectations.path}, SHA-256 ${result.expectations.sha256}.\n\nNot covered: automatic probe-to-teacher wake; actual question grading/assessment ownership; independent tutor evaluation; evidence-guided adaptation; cross-process durability; native Electron; physical iPhone/iPad Home Screen apps.\n\nLive dispatch is disabled. Budget probes are controlled accounting tests, not proof of a live provider boundary. Evidence stays local; no automatic upload or removal.\n${result.error ? `\nError: ${result.error}\n` : ""}`);
+		fs.writeFileSync(path.join(run, "coverage.md"), `# Learning verification coverage\n\nCandidate: ${result.candidate.revision} (dirty: ${result.candidate.dirty}); source ${result.candidate.sourceSha256}\n\nChecks: ${result.status}. Intended journey: ${result.journey}. No subject-accuracy or learning-efficacy claim.\n\n| Story | Availability | Readiness | Outcome | Claim |\n| --- | --- | --- | --- | --- |\n${result.stories.map(story => `| ${story.id}: ${story.title} | ${story.availability} | ${story.automation} | ${story.outcome} | ${story.claims.join("; ")} |`).join("\n")}\n\nExpectations: ${result.expectations.path}, SHA-256 ${result.expectations.sha256}.\n\nNot covered: automatic probe-to-teacher wake; actual question grading/assessment ownership; hint size and verdict quality; independent tutor evaluation; evidence-guided adaptation; cross-process durability; unsubmitted draft durability; native Electron; physical iPhone/iPad Home Screen apps.\n\nLive dispatch is disabled. Budget probes are controlled accounting tests, not proof of a live provider boundary. Evidence stays local; no automatic upload or removal.\n${result.error ? `\nError: ${result.error}\n` : ""}`);
 		console.log(JSON.stringify({ status: result.status, journey: result.journey, selected: result.selected, error: result.error, evidence: run }, null, 2));
 	}
 }
