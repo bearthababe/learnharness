@@ -61,7 +61,7 @@ export async function liveApp({ root, run, tutorModel, gate }) {
 			if (!ready) await sleep(500);
 		}
 		assert.ok(ready, "Owned application never became usable");
-		browser = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", userDataDir: path.join(run, "chromium"), headless: true, handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false, args: ["--no-sandbox"] });
+		browser = await puppeteer.launch({ executablePath: process.env.CHROMIUM_PATH ?? "/usr/bin/chromium", userDataDir: path.join(fixture, ".chromium-profile"), headless: true, handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false, args: ["--no-sandbox"] });
 		page = await browser.newPage();
 		page.on("pageerror", error => errors.push(error.message));
 		await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
@@ -69,6 +69,7 @@ export async function liveApp({ root, run, tutorModel, gate }) {
 	} catch (error) {
 		if (browser) await browser.close().catch(() => {});
 		await processes.close();
+		await fs.rm(fixture, { recursive: true, force: true });
 		throw error;
 	}
 
@@ -156,7 +157,10 @@ export async function liveApp({ root, run, tutorModel, gate }) {
 		async close() {
 			await browser.close().catch(() => {});
 			await processes.close();
-			await save("cleanup.json", { stopped: true, pid: server.pid, evidenceRetained: true });
+			// The app copy and browser profile are rebuildable scaffolding (gigabytes per run). Evidence stays in
+			// the run folder: chat data, snapshots, screenshots, transcript and logs.
+			await fs.rm(fixture, { recursive: true, force: true });
+			await save("cleanup.json", { stopped: true, pid: server.pid, evidenceRetained: true, scaffoldingRemoved: fixture });
 		},
 	};
 }

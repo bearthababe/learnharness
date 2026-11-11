@@ -92,7 +92,7 @@ The run keeps a fixed order (`scripts/lib/learning-live-run.mjs`):
    the grader's per-expectation findings in key §5 order, and a disagreement with the
    grader's own verdict is recorded.
 
-Evidence stays in the run folder: `calibration.json`, the `learner-*.json` turns,
+The app copy and browser profile are removed when the run closes (gigabytes each); evidence stays in the run folder: `calibration.json`, the `learner-*.json` turns,
 numbered snapshots and screenshots, `transcript.md`, `grading.json`, `result.json`.
 A faux-provider pass is never live tutor evidence.
 
