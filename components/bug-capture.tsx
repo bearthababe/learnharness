@@ -58,8 +58,11 @@ export const SECRET_FIELDS = [
 	'input[name*="key" i]', 'input[name*="token" i]', 'input[name*="secret" i]', 'input[placeholder*="key" i]',
 ].join(", ");
 const DOTS = "••••••••";
+/** How many secret fields the last screenshot masked (the report says so). */
+let maskedCount = 0;
 function maskClone(node: Node) {
 	if (!(node instanceof Element) || !node.matches(SECRET_FIELDS)) return;
+	maskedCount += 1;
 	if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
 		const masked = node.value || node.getAttribute("value") ? DOTS : "";
 		node.value = masked; node.setAttribute("value", masked);
@@ -142,6 +145,9 @@ export function BugCapture() {
 			if (draftRef.current?.value.id === value.id) continue;
 			void new BugDraft({ ...value, closed: true }, transport, persistDraft).flush().catch(() => {});
 		}
+		// The screenshot code loads ahead, when the device is idle (a built app
+		// has the chunk ready; a dev server would compile it on every first visit).
+		if (process.env.NODE_ENV !== "production") return;
 		const load = () => { void import("modern-screenshot"); };
 		const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
 		if (w.requestIdleCallback) w.requestIdleCallback(load); else window.setTimeout(load, 3000);
@@ -211,6 +217,7 @@ export function BugCapture() {
 			await new Promise(r => setTimeout(r, keepMenus ? 60 : 420));
 			try {
 				const { domToBlob } = await import("modern-screenshot");
+				maskedCount = 0;
 				const h = innerHeight;
 				const blob = await domToBlob(document.body, {
 					width: innerWidth, height: h, scale: 1, font: false, type: "image/jpeg", quality: 0.85,
@@ -223,6 +230,8 @@ export function BugCapture() {
 				if (draft.value.discardPending) return;
 				const res = await fetch(`/api/bugs/${reportId}/screenshot`, { method: "PUT", headers: { "Content-Type": blob.type }, body: blob });
 				if (!res.ok) throw new Error(String(res.status));
+				// The report records what its screenshot hid (keys, passwords, secret fields).
+				void fetch(`/api/bugs/${reportId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ screenshotMasked: maskedCount }) }).catch(() => {});
 				if (draftRef.current === draft) setShot("ok");
 			} catch {
 				if (draftRef.current === draft) setShot("failed");

@@ -112,7 +112,7 @@ export function createReport(id: string, page: Record<string, unknown>): StoredR
 }
 
 /** Note and kind; an older edit (lower seq) never overwrites a newer one. */
-export function updateReport(id: string, patch: { note?: string; kind?: ReportKind; seq?: number; issue?: string }): StoredReport | null {
+export function updateReport(id: string, patch: { note?: string; kind?: ReportKind; seq?: number; issue?: string; screenshotMasked?: number }): StoredReport | null {
 	const report = readReport(id);
 	if (!report) return null;
 	const seq = typeof patch.seq === "number" ? patch.seq : null;
@@ -121,6 +121,7 @@ export function updateReport(id: string, patch: { note?: string; kind?: ReportKi
 	if (patch.note !== undefined) next.note = redactSecrets(String(patch.note)).slice(0, 4000);
 	if (seq !== null) next.noteSeq = seq;
 	if (patch.issue) next.issue = patch.issue;
+	if (typeof patch.screenshotMasked === "number") next.screenshotMasked = Math.max(0, Math.floor(patch.screenshotMasked));
 	if (patch.kind === "change" || patch.kind === "bug") next = shaped({ ...next, kind: patch.kind });
 	writeReport(next);
 	return next;
