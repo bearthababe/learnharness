@@ -6040,6 +6040,9 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 	:root:root .lh-home-navigation .lh-nav-chip svg { width: 20px; height: 20px; }
 	:root:root .lh-home-toolbar :is(.lh-graph-chains, .lh-graph-import) button { height: 48px; font-size: 17px; }
 	:root:root .lh-home-toolbar .lh-graph-search input { height: 48px; font-size: 17px; }
+	/* Ideas' bar: its search field keeps round 18's width (not T1's larger rem),
+	   so the count beside Home keeps room for its chains. */
+	:root:root .lh-chains-search input { width: 200px; }
 	/* With the larger chips the name keeps its full width: the phone's two
 	   rows (F1) — the toolbar first, the session's name on a row of its own. */
 	:root:root .lh-topbar { flex-wrap: wrap; height: auto; min-height: 0; padding-top: 8px; padding-bottom: 8px; row-gap: 4px; align-content: flex-start; }
@@ -6147,3 +6150,10 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 	html:root:root:root:root .lh-activity-count { font-size: 13.5px; color: color-mix(in oklab, var(--foreground) 72%, transparent); }
 	html:root:root:root:root .lh-activity-count[data-failed] { color: var(--destructive); font-weight: 600; }
 }
+
+/* Round 19 (T1): Ideas' count shortens with its room — "204 chains · 1,234 nodes",
+   then "204 chains", then nothing — never cut to "2…". */
+.lh-chains-count { container-type: inline-size; }
+.lh-chains-count-short { display: none; }
+@container (max-width: 200px) { .lh-chains-count-full { display: none; } .lh-chains-count-short { display: inline; } }
+@container (max-width: 70px) { .lh-chains-count-short { display: none; } }

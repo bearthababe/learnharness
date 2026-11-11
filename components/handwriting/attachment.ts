@@ -20,7 +20,8 @@ const noticeText = {
 	unchanged: "This page version is already attached.",
 	attached: "Snapshot attached · not sent",
 	// B2 (round 18): a newer whole-page snapshot replaces that page's older one — said, never silent.
-	updated: "Page updated · its earlier snapshot is replaced · not sent",
+	// L11 (round 19): said as the success it is ("…is replaced · not sent" read like a failure).
+	updated: "Newer version attached · it replaces the earlier one · not sent yet",
 	sent: "This version was already sent.",
 	unavailable: "This session is unavailable. Your device recovery has been kept.",
 } as const;

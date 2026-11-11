@@ -367,8 +367,12 @@ export function ChainTableBody({
 			    close only. Search + close carve out with lh-no-drag (the mask
 			    law: later in the DOM). */}
 			<TopBar onHome={onClose}>
+				{/* Round 19 (T1): where the bar is crowded (a portrait tablet at the
+				    larger size) the count shortens to its chains, and with no room
+				    for that it steps aside — never a cut "2…" (container query). */}
 				<span className="lh-chains-count min-w-0 flex-1 truncate text-xs text-muted-foreground">
-					{chains.length} {chains.length === 1 ? "chain" : "chains"} · {nodes.length} {nodes.length === 1 ? "node" : "nodes"}
+					<span className="lh-chains-count-full">{chains.length} {chains.length === 1 ? "chain" : "chains"} · {nodes.length} {nodes.length === 1 ? "node" : "nodes"}</span>
+					<span className="lh-chains-count-short" aria-hidden="true">{chains.length} {chains.length === 1 ? "chain" : "chains"}</span>
 				</span>
 				{/* R4 (round 15): importing is findable where the ideas are. */}
 				{!selectMode && <ImportNotesLink testid="ideas-import" label="Import" className="lh-ideas-import lh-no-drag" />}

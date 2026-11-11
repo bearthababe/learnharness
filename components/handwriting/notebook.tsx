@@ -66,31 +66,7 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		const timer = window.setTimeout(() => setSeenConfirmation(confirmation), 4000);
 		return () => window.clearTimeout(timer);
 	}, [confirmation]);
-	const settledNotice = confirmation && seenConfirmation === confirmation ? undefined : attachmentNotice;
-	// L11 (round 19): Submit captures the page's latest version on its way out,
-	// which used to flash "Page updated · its earlier snapshot is replaced" —
-	// reading like a failure. While the answer goes, it says Sending…; once this
-	// page's attachments have left the pending list, a plain "Sent".
-	const currentPage = normalizeHandwriting(recovery.current?.getSnapshot().working ?? { version: 1, operations: [] }).pageId;
-	const pendingHere = (submission?.reviewed() ?? []).filter(item => item.notebook && slotPage(item.notebook.pageId) === currentPage).length;
-	const sending = !!submission?.preparing;
-	const sendingRef = useRef({ sending: false, pending: 0 }), sentAt = useRef(0);
-	const [sentFlash, setSentFlash] = useState(false);
-	useEffect(() => {
-		const before = sendingRef.current;
-		// The pending list refreshes after the send settles: remember the send,
-		// and say Sent when this page's attachments leave the list soon after.
-		if (before.sending && !sending && before.pending > 0) sentAt.current = Date.now();
-		sendingRef.current = { sending, pending: pendingHere };
-		if (!sentAt.current || pendingHere !== 0 || Date.now() - sentAt.current > 8000) return;
-		sentAt.current = 0;
-		setSentFlash(true);
-		const timer = window.setTimeout(() => setSentFlash(false), 3000);
-		return () => window.clearTimeout(timer);
-	}, [sending, pendingHere]);
-	const shownNotice = sending && attachmentNotice && (attachmentNotice.kind === "updated" || attachmentNotice.kind === "attached")
-		? { ...attachmentNotice, text: "Sending…", refresh: false }
-		: sentFlash && !attachmentNotice ? { kind: "attached" as const, text: "Sent", refresh: false } : settledNotice;
+	const shownNotice = confirmation && seenConfirmation === confirmation ? undefined : attachmentNotice;
 	const [saved, setSaved] = useState<Pick<PagesState, "ready" | "notice">>({ ready: false, notice: "Opening notebook…" });
 	const [pageId, setPageId] = useState("page_initial"), [pages, setPages] = useState<PageSummary[]>([]), [pagesOpen, setPagesOpen] = useState(false), [optionsOpen, setOptionsOpen] = useState(false);
 	const palette = useWritingPalette();
