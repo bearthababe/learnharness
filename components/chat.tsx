@@ -3411,8 +3411,10 @@ function DockOverlay({
 					{/* The stats row: beneath the composer/question shell, not
 					    flush to the screen bottom — static height, outside the
 					    morphing shell so it never joins a height animation. */}
+					{/* No leading slot: the Notebook opener lives in the page bar (or the
+					    right-edge tabs, P1) — in the stats row it only showed until the
+					    device was known, and then left a 324px shift on laptops. */}
 					<StatsBar
-						leadingSlot={notebookToggle}
 						turns={turns}
 						contextTokens={contextTokens}
 						cliContextWindow={cliContextWindow}
