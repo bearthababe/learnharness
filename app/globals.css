@@ -5993,6 +5993,10 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 	padding: 10px 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--foreground);
 	font-size: 15px; font-weight: 600; box-shadow: 0 8px 24px rgb(0 0 0 / .35); white-space: nowrap;
 }
+/* L9 (round 19): in a Card pane the quiet action (Back to lesson) is as wide
+   as its words (still 44px tall, centred), so the row's ends stay bare
+   background — the layout switch's spot now that ⋯ holds the card's corner. */
+.lh-pane-actions > .lh-pane-quiet { align-self: center; padding-inline: 16px; }
 /* L9 (round 19): Prototype view's switches for this screen, at the top of ⋯. */
 .lh-page-menu-proto-heading { margin: 4px 12px 2px; font-family: ui-monospace, monospace; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #f59e0b; }
 .lh-page-menu-proto .lh-page-menu-label { display: inline-flex; align-items: center; gap: 8px; }
@@ -6037,6 +6041,10 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 	:root:root:root:root .hw-notebookHeader .hw-headerAction { font-size: 16px; }
 	:root:root:root:root .hw-notebookHeader h2 { font-size: 17px; }
 	:root:root:root:root .hw-notebookHeader .hw-zoom :is(button, span) { font-size: 16px; }
+	/* Expanded on a portrait tablet the row also carries "Show question too":
+	   at this size the title steps aside (the notebook fills the screen, as on
+	   phones), so Close keeps the far right of one row (B5). */
+	@media (max-width: 1023px) { :root:root:root:root [data-expanded="true"] .hw-notebookHeader h2 { display: none; } }
 	/* Settings uses the tablet's height instead of floating small in it. */
 	:root:root .lh-settings.settings-dialog-pop { height: calc(100dvh - 48px); max-height: none; width: min(960px, calc(100vw - 32px)); max-width: none; }
 }
