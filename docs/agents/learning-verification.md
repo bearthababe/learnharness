@@ -67,7 +67,7 @@ authorization. The answer key must be owner-approved and both the `claude` and `
 The run keeps a fixed order (`scripts/lib/learning-live-run.mjs`):
 
 1. **Calibration.** GPT Sol (through the owner's Codex login, read-only sandbox) must
-   reproduce every §7 outcome (52 in key v1.0.2) from a copy of the key with the outcomes and hinting
+   reproduce every §7 outcome (56 in key v1.0.5) from a copy of the key with the outcomes and hinting
    labels removed. One mismatch blocks the run before any tutor session.
 2. **Session.**
    - The tutor is an owned app copy on the Claude Code route. Its chat route,
