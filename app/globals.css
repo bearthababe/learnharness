@@ -6089,7 +6089,7 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
    space between Home and ⋯, so no gap opens where Search would be. */
 @media (max-width: 767px) {
 	:root:root .lh-home-toolbar:not(:has(.lh-graph-search)) .lh-home-toolbar-actions { flex: 1 1 auto; }
-	:root:root .lh-home-toolbar:not(:has(.lh-graph-search)) .lh-graph-chains { flex: 1 1 auto; }
+	:root:root .lh-home-toolbar:not(:has(.lh-graph-search)) .lh-graph-chains { flex: 1 1 auto; max-width: none; }
 	:root:root .lh-home-toolbar:not(:has(.lh-graph-search)) .lh-graph-chains button { width: 100%; }
 }
 /* L11 (round 19): the tray — every Actions button alike (no hover that
