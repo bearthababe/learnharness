@@ -31,9 +31,19 @@ nothing: successful `probe_done` results are checked, automatic wake is not.
    `select LJ-DEVICE-CONTINUITY` must also refuse. `select LJ-PRACTICE-RESUME` resolves and
    executes its dependency scenarios; undefined, pending or failing checks
    cannot pass.
-5. `npm run verify:learning -- run --live` must exit nonzero with status blocked,
-   zero model requests and no credential access. The subject/key and calibration
-   are not approved, and no permission-enforced live adapter is implemented.
+5. Without `LH_LIVE_AUTHORIZATION`, `npm run verify:learning -- run --live` must exit
+   nonzero with status blocked, zero model requests and no credentials copied.
+   `npm run test:learning` and `tests/live-tutor-tools.test.ts` check, without models:
+   - readiness refusals;
+   - blind calibration;
+   - the §5 verdict order;
+   - the learner seeing no hidden fields;
+   - guard accounting at 100 turns;
+   - the real tutor registries keeping only D-8 tools.
+
+   A live run happens only under an explicit owner authorization (see
+   docs/agents/learning-verification.md) and is judged by its run folder: calibration
+   result, transcript, grading, recomputed verdict and counts.
 
 Run folders are printed and retained under `.prove-it/runs/`. `result.json` names
 the candidate, dirty application fingerprint, verification fingerprint, approved

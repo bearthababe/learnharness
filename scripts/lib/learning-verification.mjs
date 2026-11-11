@@ -64,27 +64,26 @@ export class RunBudget {
 		this.requests = 0;
 		this.learnerTurns = 0;
 		this.status = "running";
+		this.halted = false;
 	}
 	admit(kind) {
 		assert.ok(["model", "learner"].includes(kind));
-		if (this.status !== "running" || this.now() - this.started >= runLimits.minutes * 60_000 || this.requests >= runLimits.modelRequests || this.learnerTurns >= runLimits.learnerTurns) {
+		// Time, the request guard and cancellation halt everything. The learner-turn limit only stops
+		// further learner turns, so a run at its turn limit can still be graded. Either way the run is incomplete.
+		const timeUp = this.now() - this.started >= runLimits.minutes * 60_000;
+		const requestsUp = kind === "model" && this.requests >= runLimits.modelRequests;
+		const turnsUp = kind === "learner" && this.learnerTurns >= runLimits.learnerTurns;
+		if (this.halted || timeUp || requestsUp || turnsUp) {
 			this.status = "incomplete";
+			if (timeUp || requestsUp) this.halted = true;
 			throw new Error("Run cap reached; retain partial evidence; no retries or fallback");
 		}
 		if (kind === "model") this.requests++;
 		else this.learnerTurns++;
 	}
-	stop() { this.status = "incomplete"; }
+	stop() { this.status = "incomplete"; this.halted = true; }
 }
 
-export function livePreflight() {
-	return {
-		status: "blocked",
-		reasons: ["No owner-approved reference subject/key and evaluator calibration", "No live adapter with proven process/tool isolation and shared dispatch accounting"],
-		modelRequests: 0,
-		credentialAccess: false,
-	};
-}
 
 export const availabilities = ["available", "partial", "unavailable", "unknown"];
 export const readiness = ["executable", "missing-verification", "blocked"];

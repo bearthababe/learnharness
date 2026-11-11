@@ -57,12 +57,44 @@ reference workflow portions. Read its local `coverage.md` and `result.json`;
 checks-passed does not mean the entire journey is verified. Evidence and fixture
 profiles survive owned-process cleanup. Keep runs private and git-ignored.
 
-`npm run verify:learning -- run --live` currently refuses before any credential
-access or dispatch. Unlocking it requires owner-approved reference subject and
-keys, independent evaluator calibration and an enforceable process/tool boundary
-with shared accounting and cancellation. Do not copy normal connection secrets,
-fall back to billing, infer an isolated data directory is a sandbox, or substitute
-a passing faux-provider run for live tutor evidence.
+### Live tutor exercise (LJ-TUTOR)
+
+`npm run verify:learning -- run --live` refuses before any dispatch unless
+`LH_LIVE_AUTHORIZATION=initial-exercise-2026-11-10` is set. That value covers the
+owner-authorized initial exercise only; later live runs need a new owner
+authorization. The answer key must be owner-approved and both the `claude` and `codex` CLIs present.
+
+The run keeps a fixed order (`scripts/lib/learning-live-run.mjs`):
+
+1. **Calibration.** GPT Sol (through the owner's Codex login, read-only sandbox) must
+   reproduce every §7 outcome (56 in key v1.0.5) from a copy of the key with the outcomes and hinting
+   labels removed. One mismatch blocks the run before any tutor session.
+2. **Session.**
+   - The tutor is an owned app copy on the Claude Code route. Its chat route,
+     `verification/learning/live/chat-route.ts`, allows only teaching, question and
+     planning tools (D-8) and refuses anything else.
+   - The learner is Claude with no tools, in an empty directory, seeing only the brief
+     and the visible screen. It drives the real learner UI.
+   - No credential is copied. The app gets an allowlisted environment with no API keys;
+     the CLIs use their own logins.
+   - Turns and requests are admitted against `runLimits` before each dispatch. Every tutor
+     model call passes a shared gate (`scripts/lib/live-gate.mjs`) inside the tutor's route,
+     so a tool loop cannot dispatch past the request guard or the deadline. A deadline aborts
+     the running turn.
+   - Compaction calls models outside the tutor's gated route. The test profile pushes its
+     threshold out of reach, and a run in which compaction happens stops as
+     *incomplete (stopped)*.
+   - A CLI's own transport reconnects after a failed connection (for example Codex's
+     bounded "Reconnecting… n/5") produce no model work and are not harness retries; the
+     harness never re-sends a request.
+3. **Grading.** If the guard refuses the grading request, the run stays
+   *incomplete (stopped)* with its evidence, and nothing more is dispatched. Otherwise GPT Sol grades the full transcript. The run verdict is recomputed from
+   the grader's per-expectation findings in key §5 order, and a disagreement with the
+   grader's own verdict is recorded.
+
+The app copy and browser profile are removed when the run closes (gigabytes each); evidence stays in the run folder: `calibration.json`, the `learner-*.json` turns,
+numbered snapshots and screenshots, `transcript.md`, `grading.json`, `result.json`.
+A faux-provider pass is never live tutor evidence.
 
 ## Final acceptance handoff
 
