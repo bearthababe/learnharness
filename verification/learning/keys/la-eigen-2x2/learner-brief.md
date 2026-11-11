@@ -10,7 +10,7 @@ diagonalized." If asked to narrow it, say you want the 2×2 case only, by hand, 
 enough to explain it.
 
 **What you know well (answer correctly and confidently):**
-- multiplying a 2×2 matrix by a vector;
+- multiplying a 2×2 matrix by a vector, and multiplying two 2×2 matrices;
 - computing a 2×2 determinant, and knowing that determinant 0 means the matrix is not
   invertible, which means some nonzero vector is sent to 0 (you don't yet know how to find it);
 - deciding whether two vectors in the plane are independent.
