@@ -6040,3 +6040,73 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 	/* Settings uses the tablet's height instead of floating small in it. */
 	:root:root .lh-settings.settings-dialog-pop { height: calc(100dvh - 48px); max-height: none; width: min(960px, calc(100vw - 32px)); max-width: none; }
 }
+/* L1 (round 19): import progress and results float above Ideas (or any
+   surface over Home), where the import started — buttons working. */
+.lh-import-float {
+	position: fixed; z-index: 110; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 16px); transform: translateX(-50%);
+	width: min(520px, calc(100vw - 24px)); display: flex; flex-direction: column; gap: 8px;
+}
+.lh-import-float > * { pointer-events: auto; }
+.lh-import-float :is(.lh-import-error-panel, .lh-import-done-panel, .lh-import-progress) { box-shadow: 0 12px 32px rgb(0 0 0 / .4); background: var(--card); }
+.lh-import-progress { margin: 0; padding: 10px 14px; border-radius: 12px; border: 1px solid var(--border); font-size: 14px; color: var(--foreground); }
+/* L2 (round 19): plain words first; raw errors only behind a disclosure. */
+.lh-tech-detail { margin-top: 6px; font-size: 13px; color: var(--muted-foreground); }
+.lh-tech-detail summary { display: inline-flex; align-items: center; min-height: 32px; cursor: pointer; }
+@media (pointer: coarse) { .lh-tech-detail summary { min-height: 44px; } }
+.lh-tech-detail pre { max-height: 12rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; padding: 8px; border-radius: 8px; background: var(--muted); }
+.lh-helper-failure .lh-tech-detail { flex-basis: 100%; }
+/* L3 (round 19): phone Ideas keeps ⋯ in the corner (Home's coordinates);
+   Import is ⋯'s first row there, as on Home's own bar. */
+@media (max-width: 767px) {
+	:root:root [data-testid="chain-table"] .lh-topbar .lh-ideas-import { display: none; }
+	:root:root [data-testid="chain-table"] .lh-topbar .lh-ideas-page-menu { display: contents; }
+	:root:root [data-testid="chain-table"] .lh-topbar .lh-page-menu-button { flex: none; width: 44px; margin-left: 0; }
+}
+.lh-ideas-page-menu { display: none; }
+/* L4 (round 19): with a question open (Plain, phones), Submit stays in
+   reach — pinned to the screen's bottom while the card runs past it. */
+@media (max-width: 767px) {
+	:root .lh-dock-overlay[data-question-open]:not([data-layout="card"]) .lh-question-submit {
+		position: sticky; bottom: 0; z-index: 3; background: var(--card); border-top: 1px solid var(--border);
+		padding-bottom: max(4px, env(safe-area-inset-bottom));
+	}
+}
+/* L6 (round 19): the notebook pane — its name fills the header's left; a
+   disabled Apply still reads clearly; changed lines keep a marker. */
+.notebook-pane-kicker { margin: 0 auto 0 4px; align-self: center; font-size: 13px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-foreground); white-space: nowrap; }
+:root:root .lh-pane-main:disabled { opacity: 1; background: var(--muted); color: color-mix(in oklab, var(--foreground) 62%, var(--muted)); border: 1px solid var(--border); }
+:root:root .notebook-working-line[data-changed] { box-shadow: inset 3px 0 0 var(--primary); background: color-mix(in oklab, var(--primary) 8%, transparent); }
+:root:root .notebook-apply:disabled { opacity: 1; color: color-mix(in oklab, var(--foreground) 55%, transparent); }
+/* L8 (round 19): the copy corner (tables, code) is a 44px target on touch
+   — the same 24px look, a larger invisible hit area — and visible there,
+   where nothing hovers. */
+@media (pointer: coarse) {
+	:root [data-testid="md-copy"] { position: relative; opacity: .8; }
+	:root [data-testid="md-copy"]::before { content: ""; position: absolute; inset: -10px; }
+}
+:root [data-attachment-composer][data-empty] { border-color: transparent; box-shadow: none; }
+/* L8 (round 19): first run (no graph, so no Search) — Ideas takes the whole
+   space between Home and ⋯, so no gap opens where Search would be. */
+@media (max-width: 767px) {
+	:root:root .lh-home-toolbar-minimal .lh-home-toolbar-actions { flex: 1 1 auto; }
+	:root:root .lh-home-toolbar-minimal .lh-graph-chains { flex: 1 1 auto; }
+	:root:root .lh-home-toolbar-minimal .lh-graph-chains button { width: 100%; }
+}
+/* L11 (round 19): the tray — every Actions button alike (no hover that
+   sticks after a tap), ✕ beside the thumbnail instead of over its corner,
+   and the real crop of an area (contain, not a cover-cropped middle). */
+:root:root .lh-writing-thumb { padding: 0; }
+:root:root .lh-writing-actions { border: 1px solid var(--border); background: var(--card); color: var(--foreground); }
+@media (hover: none) { :root:root .lh-writing-actions:hover { background: var(--card); } }
+:root:root .lh-writing-remove { position: relative; top: auto; right: auto; flex: none; width: 36px; height: 36px; box-shadow: none; align-self: flex-start; }
+@media (pointer: coarse) { :root:root .lh-writing-remove { width: 44px; height: 44px; } }
+:root:root .lh-writing-img { object-fit: contain; object-position: center; background: var(--lh-writing-paper, #fff); }
+/* L14 (round 19, laptops): the lesson's Usage and model chips and the
+   helpers' count read at a glance — larger, and in readable contrast. */
+@media (min-width: 1024px) and (not (pointer: coarse)) {
+	:root:root .lh-stats-bar { font-size: 14px; color: color-mix(in oklab, var(--foreground) 76%, transparent); }
+	:root:root .lh-stats-bar :is(button, span) { font-size: 14px; }
+	:root:root .lh-stats-bar [data-testid="stats-model"], :root:root .lh-stats-bar [data-testid="stats-thinking"] { color: color-mix(in oklab, var(--foreground) 86%, transparent); }
+	:root:root .lh-activity-count { font-size: 13.5px; color: color-mix(in oklab, var(--foreground) 72%, transparent); }
+	:root:root .lh-activity-count[data-failed] { color: var(--destructive); font-weight: 600; }
+}

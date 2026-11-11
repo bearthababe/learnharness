@@ -33,7 +33,12 @@ export function useFieldCycle(fields: () => readonly HTMLElement[]) {
 				// browser's own Tab order.
 				if (active && active !== document.body && active !== document.documentElement) return;
 				event.preventDefault();
-				list[0]!.focus();
+				// L13 (round 19): in a question, the first stop is its first option,
+				// never "Type your own answer…" (a text field placed after them).
+				const first = list[0]!, question = first.closest('[data-testid="question-dock"]');
+				const option = question?.querySelector<HTMLElement>('[data-kbdrow="0"]');
+				if (option && canTakeFocus(option) && option.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING) { option.focus(); return; }
+				first.focus();
 				return;
 			}
 			// A lone field has nowhere to cycle: Tab moves on to its controls.

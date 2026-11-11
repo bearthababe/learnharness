@@ -1,6 +1,7 @@
 "use client";
 
 import { DispatchCard } from "@/components/artifacts/dispatch-card";
+import { readableJobError } from "@/components/activity-dock";
 import { MessageResponse } from "@/components/ai-elements/message";
 import type { ArtifactPartProps, PdfResult, ResearchResult } from "@/src/core";
 
@@ -55,9 +56,9 @@ export function PdfBriefCard({ output }: { output: unknown }) {
 				PDF brief
 				{failed && <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-red-500">failed</span>}
 			</div>
-			<div className="text-sm [&_p:first-child]:mt-0 [&_p:last-child]:mb-0">
+			{failed ? <FailedBrief text={result.brief} /> : <div className="text-sm [&_p:first-child]:mt-0 [&_p:last-child]:mb-0">
 				<MessageResponse>{result.brief}</MessageResponse>
-			</div>
+			</div>}
 			{!failed && readList.length > 0 && (
 				<div className="mt-3 border-t pt-2 text-xs text-muted-foreground">
 					Pages read: {readList.join(", ")}
@@ -92,9 +93,9 @@ export function ResearchBriefCard({ output }: { output: unknown }) {
 				Research brief
 				{failed && <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-red-500">failed</span>}
 			</div>
-			<div className="text-sm [&_p:first-child]:mt-0 [&_p:last-child]:mb-0">
+			{failed ? <FailedBrief text={result.brief} /> : <div className="text-sm [&_p:first-child]:mt-0 [&_p:last-child]:mb-0">
 				<MessageResponse>{result.brief}</MessageResponse>
-			</div>
+			</div>}
 			{result.sources.length > 0 && (
 				<div className="mt-3 border-t pt-2">
 					<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Sources</div>
@@ -117,3 +118,16 @@ export function ResearchBriefCard({ output }: { output: unknown }) {
 		</div>
 	);
 }
+
+/** L2 (round 19): a failed helper's brief says what happened in plain words
+ *  (no ENOENT, no file paths); the raw text waits behind a disclosure. */
+function FailedBrief({ text }: { text: string }) {
+	const raw = text.replace(/^(?:PDF|Research) failed:?\s*/i, "");
+	return (
+		<div className="lh-failed-brief" data-testid="failed-brief">
+			<p className="text-sm">{readableJobError(raw)}</p>
+			<details className="lh-tech-detail"><summary>Technical detail</summary><pre>{raw}</pre></details>
+		</div>
+	);
+}
+

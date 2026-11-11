@@ -26,10 +26,11 @@ export function NotebookWorking({ lines, selectedLineId, expressionSelection, on
 			if (expressions && rendered) return <li key={line.id} data-changed={changedIds?.has(line.id) || undefined} data-selected={selectedLineId === line.id || expressionSelection?.lineId === line.id || undefined} className="notebook-working-line flex min-w-0 items-center gap-2">
 				{onSelect ? <button type="button" aria-label={`Select line ${index + 1}`} aria-pressed={selectedLineId === line.id && !expressionSelection} className="min-h-11 shrink-0 rounded px-2 text-xs text-muted-foreground hover:bg-accent aria-pressed:bg-accent" onClick={() => onSelect(line.id)}>{index + 1}.</button>
 					: <span className="shrink-0 px-2 text-xs text-muted-foreground">{index + 1}.</span>}
-				<span className="flex min-w-0 items-center overflow-x-auto py-1">{expressions.map((part, i) => {
+				{/* L7 (round 19): terms and relations share the math baseline, so "=" sits on it. */}
+				<span className="flex min-w-0 items-baseline overflow-x-auto py-1">{expressions.map((part, i) => {
 					const html = rendered[i]!.expression;
 					const content = <><span className="notebook-expression-number" aria-hidden="true">{part.number}</span>{html === null ? <code data-notebook-source="" className="whitespace-pre-wrap">{part.text}</code> : <span dangerouslySetInnerHTML={{ __html: html }} />}{!part.text.trim() && <span className="sr-only">Empty expression</span>}</>;
-					return <span key={part.number} className="inline-flex shrink-0 items-center">
+					return <span key={part.number} className="inline-flex shrink-0 items-baseline">
 						{onSelectExpression ? <button type="button" className="notebook-expression rounded hover:bg-accent aria-pressed:bg-accent" aria-label={`Select expression ${part.number} on line ${index + 1}`} aria-pressed={expressionSelection?.lineId === line.id && expressionSelection.number === part.number} onClick={() => onSelectExpression(line.id, part.number)}>{content}</button>
 							: <span className="notebook-expression" aria-label={`Expression ${part.number} on line ${index + 1}`}>{content}</span>}
 						{part.relationAfter && <span className="notebook-relation px-1" dangerouslySetInnerHTML={{ __html: rendered[i]!.relation }} />}

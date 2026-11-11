@@ -48,9 +48,9 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 		if (!prior) return;
 		const ids = new Set(lines.filter(line => prior.get(line.id) !== line.latex).map(line => line.id));
 		if (ids.size === 0) return;
+		// L6 (round 19): the lines Apply changed keep a quiet marker until the
+		// next change (they glow first), so they are easy to find afterwards.
 		setChanged(ids);
-		const timer = window.setTimeout(() => setChanged(new Set()), 2200);
-		return () => window.clearTimeout(timer);
 	}, [view?.lines]);
 	const trigger = useRef<HTMLButtonElement>(null);
 	const helpTrigger = useRef<HTMLButtonElement>(null);
@@ -115,6 +115,8 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 	return <section aria-label="Notebook" data-input-owner="notebook" data-learning-surface="" data-pane={pane ? (card ? "card" : "plain") : undefined} data-testid="notebook-panel" className="notebook-panel flex min-h-0 min-w-0 flex-col border-border bg-background">
 		<div className="notebook-surface">
 		<header className="notebook-frame-header" data-notebook-view-control=""><h2 className={scopeText || pane ? "sr-only" : undefined}>Notebook</h2>
+			{/* L6 (round 19): the pane's header names it at the left (no empty corner). */}
+			{pane && !scopeText && <p className="notebook-pane-kicker" data-testid="notebook-pane-kicker" aria-hidden="true">Equation notebook</p>}
 			{scopeText && <p className="notebook-scope" data-testid="notebook-scope">
 				<span><span className="sr-only">Apply changes to </span>{scopeText}</span>
 				<button type="button" aria-label="Clear selection" onClick={() => session.clearSelection()}><XIcon /></button>
@@ -190,7 +192,6 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 		    session's name above a readable title — so a session reopened in
 		    its notebook is oriented at once. */}
 		{pane && <div className="lh-pane-head notebook-card-head" data-testid="notebook-pane-head">
-			{card && <p className="lh-pane-context">Equation notebook</p>}
 			{sessionTitle && <p className="lh-pane-session" data-testid="notebook-pane-session">{sessionTitle}</p>}
 			<h2 className="lh-pane-title" data-testid="notebook-pane-title">Your working</h2>
 		</div>}

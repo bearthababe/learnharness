@@ -29,14 +29,20 @@ it("B18 (round 18): every try-out is declared once, for the device it belongs to
 		for (const v of def.variants) assert.ok((v.switchLabel ?? v.label).length <= 10, `${def.id} ${v.value}: "${v.switchLabel ?? v.label}"`);
 		assert.equal(tryoutDef(def.id), def);
 	}
-	assert.deepEqual(tryoutIdsFor("phone"), ["header-look", "reveal-style", "card-layout", "sessions-page"]);
-	assert.deepEqual(tryoutIdsFor("tablet"), ["writing-palette", "wheel-look"]);
+	assert.deepEqual(tryoutIdsFor("phone"), ["header-look", "reveal-style", "card-layout", "sessions-page", "focus-place", "ask-tutor"]);
+	assert.deepEqual(tryoutIdsFor("tablet"), ["writing-palette", "wheel-look", "focus-place-tablet"]);
 	assert.deepEqual(tryoutIdsFor("laptop"), []);
 });
 
 it("B18: the layout and Sessions variants are the stored options, the first being the default", () => {
 	assert.deepEqual(tryoutDef("card-layout").variants.map((v) => v.value), [...TRYOUTS.cardLayout.options]);
 	assert.deepEqual(tryoutDef("sessions-page").variants.map((v) => v.value), [...TRYOUTS.sessionsPage.options]);
+	// Round 19: where Focus lives (phone and tablet share the choice) and Ask tutor.
+	assert.deepEqual(tryoutDef("focus-place").variants.map((v) => v.value), [...TRYOUTS.focusPlace.options]);
+	assert.deepEqual(tryoutDef("focus-place-tablet").variants.map((v) => v.value), [...TRYOUTS.focusPlace.options]);
+	assert.deepEqual(tryoutDef("ask-tutor").variants.map((v) => v.value), [...TRYOUTS.askTutor.options]);
+	assert.equal(readTryout("focusPlace"), "toolbar");
+	assert.equal(readTryout("askTutor"), "on");
 	assert.equal(readTryout("cardLayout"), "plain");
 	assert.equal(readTryout("sessionsPage"), "toolbar");
 });
@@ -45,6 +51,7 @@ it("B18: each switch's setter stores the variant where its design reads it", () 
 	const keys: Record<string, string> = {
 		"header-look": "lh:header-look", "reveal-style": "lh:reveal-style", "card-layout": "lh:try:card-layout",
 		"sessions-page": "lh:try:sessions-page", "writing-palette": "lh:writing-palette", "wheel-look": "lh:writing-wheel-look",
+		"focus-place": "lh:try:focus-place", "focus-place-tablet": "lh:try:focus-place", "ask-tutor": "lh:try:ask-tutor",
 	};
 	for (const def of TRYOUT_DEFS) {
 		for (const v of [...def.variants].reverse()) {

@@ -24,7 +24,7 @@ import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { GraphCostControl } from "@/components/graph-view.tsx";
 import { useDesktopPaths } from "@/components/attach-files-button";
 import { sourceFileLabel } from "@/src/core";
-import { ImportNotesLink, NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
+import { ImportNotesLink, NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, NotesImportResults, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import { Hint } from "@/components/ui/hint";
 import { useSidebar } from "@/components/sidebar";
@@ -184,9 +184,11 @@ export function MinimalHome({
 					</div>
 					<NotesImportControl importing={importing} onImportFiles={onImportFiles} />
 				</div>
+				<NotesImportResults floating={chainsOpen} importing={notesImport.importing}>
 				<NotesImportErrors errors={notesImport.errors} onOpenSettings={(section) => openSettings(section)} onDismiss={dismissNotesImportResults} />
 				<NotesImportDone done={notesImport.done} importing={notesImport.importing} onShowIdeas={() => { setIdeasQuery(notesImport.done.length ? sourceFileLabel(notesImport.done[0]!.filePath) : undefined); dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
 				<NotesImportNotices notices={notesImport.notices} />
+				</NotesImportResults>
 				{costs && costs.runs.length > 0 && <GraphCostControl costs={costs} />}
 			</div>
 

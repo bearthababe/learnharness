@@ -782,6 +782,12 @@ export function Chat({
 	// (or found in the device copy after a reload).
 	const returningQuestionIds = useRef(new Set<string>());
 	const [questionOpenRequest, setQuestionOpenRequest] = useState(0);
+	// L10 (round 19): the notebook's Attach opens a folded question first.
+	useEffect(() => {
+		const open = () => { if (pendingKeyRef.current) setQuestionOpenRequest((n) => n + 1); };
+		window.addEventListener("lh:open-question", open);
+		return () => window.removeEventListener("lh:open-question", open);
+	}, []);
 	useLayoutEffect(() => {
 		if (restoreStoredQuestionDrafts()) setStoredDraftEpoch((epoch) => epoch + 1);
 		const key = pendingKeyRef.current;
@@ -1946,10 +1952,12 @@ export function Chat({
 							{titleText}
 							</button>
 						</Hint>
-						{/* Phones fold the phase/mode chip into a quiet subtitle. */}
-						<span className="lh-session-subtitle" aria-hidden="true" data-kind={kind === "practice" ? (practiceMode === "drill" ? "drill" : "practice") : "teach"}>
-							{kind === "practice" ? (practiceMode === "drill" ? "Drill session" : "Practice session") : phaseLabel(phases.at(-1) ?? "probe")}
-						</span>
+						{/* Phones fold the phase/mode chip into a quiet subtitle. L5 (round 19):
+						    the session's name gets the room — "Practice"/"Drill" only, and
+						    nothing when the name already says it ("Practice: …"). */}
+						{!(phoneLayout && kind === "practice" && /^(practice|drill)\b/i.test(titleText)) && <span className="lh-session-subtitle" aria-hidden="true" data-kind={kind === "practice" ? (practiceMode === "drill" ? "drill" : "practice") : "teach"}>
+							{kind === "practice" ? (practiceMode === "drill" ? (phoneLayout ? "Drill" : "Drill session") : (phoneLayout ? "Practice" : "Practice session")) : phaseLabel(phases.at(-1) ?? "probe")}
+						</span>}
 						</span>
 							{/* flex-1 spacer: keeps the chips at the right edge AND stays a
 							    drag surface (no carve-out) — the freed bar is grippable. */}
@@ -2946,6 +2954,17 @@ function DockOverlay({
 		: practice
 			? `practice:${practice.toolCallId}`
 			: "chat";
+	// L8 (round 19): an empty shell (a check waiting behind its reveal) draws
+	// no outline — it was a stray thin rule at the bottom of the lesson.
+	useEffect(() => {
+		const content = contentRef.current, shell = shellRef.current;
+		if (!content || !shell || typeof ResizeObserver === "undefined") return;
+		const mark = () => { if (content.getBoundingClientRect().height < 1) shell.dataset.empty = ""; else delete shell.dataset.empty; };
+		mark();
+		const observer = new ResizeObserver(mark);
+		observer.observe(content);
+		return () => observer.disconnect();
+	}, [mode]);
 
 	// The plan marginalia's flank width (owner, plan-placement round): from
 	// the DOCK container's right edge to the block's right edge — the bare

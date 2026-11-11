@@ -459,7 +459,7 @@ export function ActivitySection({ feed: feedProp, trailing, sheet = false }: {
 				<span className="truncate" aria-hidden="true">Helpers</span>
 				<span className="sr-only">Helpers</span>
 				{blobs.length === 0 && (
-					<span className="ml-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground/80">
+					<span className="lh-activity-count ml-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground/80" data-failed={failedCount > 0 || undefined}>
 						{failedCount > 0 ? `${failedCount} failed` : recent.length > 0 ? `${recent.length} recent` : "Idle"}
 						{recent.length > 0 && <ChevronDownIcon className={cn("size-3.5 transition-transform", historyOpen && "rotate-180")} aria-hidden />}
 					</span>
@@ -679,22 +679,30 @@ export function SessionHelperFailures({ chatId, onOpenHelpers }: { chatId: strin
 			setRetrying((s) => ({ ...s, [jobId]: "failed" }));
 		}
 	};
+	// L2 (round 19): one concise card however many helpers failed — what
+	// happened in plain words, Retry, and each one's technical detail behind
+	// a disclosure, so repeated Retry cards never take over the lesson.
+	const one = failed.length === 1 ? failed[0]! : null;
+	const pending = failed.some((job) => retrying[job.id] === "pending"), refused = failed.some((job) => retrying[job.id] === "failed");
 	return (
-		<div className="lh-helper-failures" data-testid="session-helper-failures">
-			{failed.map((job) => (
-				<div key={job.id} role="status" className="lh-helper-failure">
-					<span className="lh-helper-failure-text">
-						<strong>A helper couldn&apos;t finish</strong> ({KIND_LABEL[job.kind] ?? "Helper"} · {job.title}). {readableJobError(job.error ?? "")}
-						{retrying[job.id] === "failed" && " Couldn't start it again — ask the tutor instead."}
-					</span>
-					<span className="lh-helper-failure-actions">
-						<button type="button" className="lh-activity-action" data-testid="session-helper-retry" disabled={retrying[job.id] === "pending"} onClick={() => void retry(job.id)}>
-							<RotateCwIcon aria-hidden />{retrying[job.id] === "pending" ? "Retrying…" : "Retry"}
-						</button>
-						{onOpenHelpers && <button type="button" className="lh-activity-action" onClick={onOpenHelpers}>Helpers<ChevronRightIcon aria-hidden /></button>}
-					</span>
-				</div>
-			))}
+		<div className="lh-helper-failures" data-testid="session-helper-failures" data-count={failed.length}>
+			<div role="status" className="lh-helper-failure">
+				<span className="lh-helper-failure-text">
+					<strong>{one ? "A helper couldn't finish" : `${failed.length} helpers couldn't finish`}</strong>
+					{one ? <> ({KIND_LABEL[one.kind] ?? "Helper"} · {one.title}). {readableJobError(one.error ?? "")}</> : ". Retry them, or open Helpers for each one."}
+					{refused && " Couldn't start one again — ask the tutor instead."}
+				</span>
+				<span className="lh-helper-failure-actions">
+					<button type="button" className="lh-activity-action" data-testid="session-helper-retry" disabled={pending} onClick={() => { for (const job of failed) void retry(job.id); }}>
+						<RotateCwIcon aria-hidden />{pending ? "Retrying…" : one ? "Retry" : "Retry all"}
+					</button>
+					{onOpenHelpers && <button type="button" className="lh-activity-action" onClick={onOpenHelpers}>Helpers<ChevronRightIcon aria-hidden /></button>}
+				</span>
+				<details className="lh-tech-detail" data-testid="session-helper-detail">
+					<summary>Technical detail</summary>
+					{failed.map((job) => <div key={job.id}>{!one && <p>{KIND_LABEL[job.kind] ?? "Helper"} · {job.title}: {readableJobError(job.error ?? "")}</p>}<pre>{job.error ?? "No error text."}</pre></div>)}
+				</details>
+			</div>
 		</div>
 	);
 }

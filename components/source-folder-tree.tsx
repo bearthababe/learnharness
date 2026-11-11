@@ -397,7 +397,9 @@ export function SourceFolderTree<T extends TreeSource>({ groups, directory, quer
 			className={`min-h-16 flex-1 transition-colors ${dropTarget === null ? "bg-accent/30" : ""}`} {...dropProps(null)} />}
 		{/* B1 (round 17): the label sits left of the finger (the handles are on
 		    the right) and says how to cancel by touch. */}
-		{drag && <div className="lh-drag-ghost" aria-hidden="true" style={{ left: drag.x - 18, top: drag.y - 46 }}>
+		{/* L12 (round 19): it stays on screen — left of the finger, but never
+		    past the left edge (its own width, clamped by max()), nor the top. */}
+		{drag && <div className="lh-drag-ghost" aria-hidden="true" style={{ left: drag.x - 18, top: Math.max(8, drag.y - 46), translate: `max(-100%, ${Math.round(8 - (drag.x - 18))}px) 0` }}>
 			<span className="lh-drag-ghost-name">{drag.name}</span>
 			<span className="lh-drag-ghost-target">{drag.target === undefined ? (drag.touch ? "Drop on a folder · let go anywhere else to cancel" : "Drop on a folder · Esc cancels") : drag.target === null ? "→ Top level" : `→ ${state.folders.find((f) => f.id === drag.target)?.name ?? "folder"}`}</span>
 		</div>}

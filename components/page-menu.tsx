@@ -71,12 +71,14 @@ export type PageMenuRow = { id: string; label: string; value?: string; hint?: st
 
 /** The page's own rows (Plan), shared with a secondary copy (the pane's ⋯). */
 let primaryTopRows: PageMenuRow[] = [];
-export function PageMenuButton({ extraRows = [], topRows: ownTopRows, secondary = false }: {
+export function PageMenuButton({ extraRows = [], topRows: ownTopRows, secondary = false, testid }: {
 	/** Rows of this page placed after Usage (Home: import, graph display). */
 	extraRows?: PageMenuRow[];
 	/** Round 19: a second copy (the thinking pane's own ⋯) — the page's copy
 	 *  keeps the window-wide listeners (helpers, the keyboard hint). */
 	secondary?: boolean;
+	/** The trigger's own test id (a secondary copy: the pane's, Ideas'). */
+	testid?: string;
 	/** P3 (round 17): rows at the very top — a lesson's Plan. */
 	topRows?: PageMenuRow[];
 }) {
@@ -88,7 +90,7 @@ export function PageMenuButton({ extraRows = [], topRows: ownTopRows, secondary 
 	const touch = useCoarsePointer();
 	const keyboardOff = useKeyboardOff();
 	const { open: openSettings } = useSettingsDialog();
-	const triggerTestid = secondary ? "pane-page-menu-button" : "page-menu-button";
+	const triggerTestid = testid ?? (secondary ? "pane-page-menu-button" : "page-menu-button");
 	useOneMenu("page-menu", open, () => setOpen(false));
 	useOneMenu("helpers-sheet", helpers, () => setHelpers(false));
 	useCardDismiss(open, () => setOpen(false), ['[data-testid="page-menu"]', `[data-testid="${triggerTestid}"]`]);

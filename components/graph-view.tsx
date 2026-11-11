@@ -66,7 +66,7 @@
 import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useDesktopPaths } from "@/components/attach-files-button";
 import { sourceFileLabel } from "@/src/core";
-import { ImportNotesLink, NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
+import { ImportNotesLink, NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, NotesImportResults, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
 import { FileTextIcon, ListTreeIcon, Loader2Icon, Maximize2Icon, Minimize2Icon, ScanIcon, SearchIcon, SlidersHorizontalIcon, WaypointsIcon, XIcon } from "lucide-react";
@@ -1618,9 +1618,11 @@ export function GraphView({
 	// The import result or error, and running pipelines (R1, round 15): in the
 	// bar's column on wider screens, a full-width row of their own on phones.
 	const importStatus = <>
+		<NotesImportResults floating={chainsOpen} importing={importing}>
 		<NotesImportErrors errors={notesImport.errors} onOpenSettings={(section) => openSettings(section)} onDismiss={dismissNotesImportResults} />
 		<NotesImportDone done={notesImport.done} importing={importing} onShowIdeas={() => { setIdeasQuery(notesImport.done.length ? sourceFileLabel(notesImport.done[0]!.filePath) : undefined); dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
 		<NotesImportNotices notices={notesImport.notices} />
+		</NotesImportResults>
 	</>;
 	const pipelinePills = <>{pipelineRuns.map((run) => (
 				<div

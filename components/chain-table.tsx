@@ -80,6 +80,7 @@ import Link from "next/link";
 import { chainRow, useChainNavigation } from "./chain-navigation";
 import { useServerEvent, useServerResync } from "./server-events";
 import { TopBar } from "@/components/top-bar";
+import { PageMenuButton } from "@/components/page-menu";
 import { DeleteSourceDialog } from "@/components/delete-source-dialog";
 import { LatexGlyph } from "@/components/latex-glyph";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
@@ -406,6 +407,9 @@ export function ChainTableBody({
 				>
 					<XIcon className="size-4" />
 				</button>
+				{/* L3 (round 19): ⋯ keeps the corner here too — phones, where the
+				    Ideas bar covers Home's (Import to knowledge map is its row). */}
+				{phone && <span className="lh-ideas-page-menu"><PageMenuButton secondary testid="ideas-page-menu-button" /></span>}
 			</TopBar>
 
 			{/* The list: NO per-row lines (owner ruling) — the ONLY horizontal

@@ -2,7 +2,8 @@
 
 import { useDeploymentActivity } from "./deployment-activity";
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { FileTextIcon, FolderOpenIcon, ImportIcon, WaypointsIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { usePhoneLayout, useTouchLayout } from "./use-phone-viewport";
@@ -105,6 +106,8 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 	useOneMenu("extract-files", open, () => setOpen(false));
 	const hintId = useId();
 	const onChange = (event: ChangeEvent<HTMLInputElement>) => {
+		// L1 (round 19): a chosen file closes the Import menu, wherever it opened.
+		if (event.target.files?.length) { setOpen(false); setAnchored(false); anchorRef.current = null; }
 		onImportFiles(event.target.files);
 		event.target.value = "";
 	};
@@ -247,3 +250,19 @@ export function NotesImportDone({ done, importing, onShowIdeas, onDismiss }: { d
 export function NotesImportNotices({ notices }: { notices: readonly string[] }) {
 	return <>{notices.map((notice, i) => <p key={i} role="status" className="max-w-full whitespace-pre-wrap break-words text-xs text-muted-foreground">{notice}</p>)}</>;
 }
+
+/**
+ * L1 (round 19): progress and results show where the import started — on top
+ * of whatever surface is active. While Ideas (or another full-screen surface)
+ * covers Home, they float above it, their buttons working; otherwise they sit
+ * in Home's own column as before.
+ */
+export function NotesImportResults({ floating, importing, children }: { floating: boolean; importing: boolean; children: ReactNode }) {
+	const body = <>
+		{importing && floating && <p role="status" className="lh-import-progress" data-testid="import-progress">Importing to your knowledge map… you can keep working.</p>}
+		{children}
+	</>;
+	if (!floating || typeof document === "undefined") return body;
+	return createPortal(<div className="lh-import-float" data-testid="import-float">{body}</div>, document.body);
+}
+

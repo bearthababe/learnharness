@@ -17,7 +17,7 @@
 .notebook-expression { position: relative; display: inline-flex; min-width: 28px; min-height: 44px; align-items: center; justify-content: center; padding: 14px 4px 4px; }
 .notebook-expression-number { position: absolute; top: 1px; left: 4px; color: var(--muted-foreground); opacity: .7; font: 10px/1.1 var(--font-sans); font-variant-numeric: tabular-nums; pointer-events: none; }
 .notebook-expression .katex-display { margin: 0; }
-.notebook-relation { padding-top: 10px; }
+.notebook-relation { padding-top: 0; }
 .notebook-instruction-form { flex: none; max-height: calc(100% - 52px); padding: 8px; overflow-y: auto; overscroll-behavior: contain; }
 .notebook-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px; }
 .notebook-input-row .lh-compact-field { display: flex; position: relative; min-width: 0; min-height: 54px; border: 1px solid var(--border); border-radius: 12px; background: var(--background); }
