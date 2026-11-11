@@ -15,9 +15,12 @@ describe("round 17 §0: try-out designs after the owner's picks", () => {
 		const before = g.window;
 		g.window = { localStorage: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => { store.set(k, v); }, removeItem: (k: string) => { store.delete(k); } }, addEventListener() {}, removeEventListener() {} };
 		try {
-			assert.deepEqual(Object.keys(TRYOUTS).sort(), ["cardLayout", "sessionsPage"]);
+			// Round 19: where Focus lives (toolbar first) and Ask tutor (on first) join them.
+			assert.deepEqual(Object.keys(TRYOUTS).sort(), ["askTutor", "cardLayout", "focusPlace", "sessionsPage"]);
 			assert.equal(tryoutDefault("cardLayout"), "plain");
 			assert.equal(tryoutDefault("sessionsPage"), "toolbar");
+			assert.equal(tryoutDefault("focusPlace"), "toolbar");
+			assert.equal(tryoutDefault("askTutor"), "on");
 			for (const name of Object.keys(TRYOUTS) as (keyof typeof TRYOUTS)[]) assert.equal(readTryout(name), tryoutDefault(name));
 			assert.equal(store.has("lh:try:pane-peek"), false, "retired try-outs are cleared");
 			assert.equal(store.has("lh:try:tablet-pane"), false);
@@ -29,8 +32,8 @@ describe("round 17 §0: try-out designs after the owner's picks", () => {
 	});
 
 	it("each device lists only its own options; a computer has none", () => {
-		assert.deepEqual(tryoutIdsFor("phone"), ["header-look", "reveal-style", "card-layout", "sessions-page"]);
-		assert.deepEqual(tryoutIdsFor("tablet"), ["writing-palette", "wheel-look"]);
+		assert.deepEqual(tryoutIdsFor("phone"), ["header-look", "reveal-style", "card-layout", "sessions-page", "focus-place", "ask-tutor"]);
+		assert.deepEqual(tryoutIdsFor("tablet"), ["writing-palette", "wheel-look", "focus-place-tablet"]);
 		assert.deepEqual(tryoutIdsFor("laptop"), []);
 	});
 
