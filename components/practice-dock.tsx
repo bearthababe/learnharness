@@ -8,6 +8,7 @@ import { finishDictation, dictationCheckpoint, isDictationActive, joinDictation,
 import { explanationHasContent, type NotebookInputFields } from "@/src/core";
 import type { NotebookSession } from "./notebook-session";
 import { useNotebookActivityDraft } from "./notebook-activity-draft";
+import { useDeploymentActivity } from "./deployment-activity";
 import { useHandwritingEditor } from "./handwriting/submission";
 import type { SharedWriting } from "@/src/core";
 import { CompactLearningInput, useMicSlot } from "@/components/compact-learning-input";
@@ -82,6 +83,10 @@ export function PracticeDock({ chatId, dictation, problemCallId, input, expanded
 	// discipline): a submit resuming after `await finishDictation()` reads
 	// the tail, never a stale closure.
 	const thinkingRef = useRef("");
+	// Busy signal (main's updater): "Your thinking" for this problem, whether
+	// the card is open or folded to its bar — the notebook's copy where one
+	// owns it, else this field's.
+	useDeploymentActivity("unsent-practice", () => owned.enabled ? explanationHasContent(owned.draft?.parts ?? []) : !!thinkingRef.current.trim());
 	const sending = useRef(false);
 	const activated = useRef<string | null>(null);
 	useEffect(() => {

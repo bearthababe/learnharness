@@ -6,11 +6,13 @@ import { useServerEvent, useServerResync } from "@/components/server-events";
 import { HandwritingPagesContext } from "./handwriting/pages-context";
 import type { OpenChoice, SnapshotWriting } from "./handwriting/pages";
 import { useMenuEscape } from "./menu-escape";
+import { useDeploymentActivity } from "./deployment-activity";
 import { ChevronRightIcon, MoreHorizontalIcon, XIcon } from "lucide-react";
 
 export function useSharedWriting(chatId: string, messages: readonly LhMessage[]) {
 	const submittedKey = messages.flatMap((m) => m.sharedWriting?.map((w) => w.id) ?? []).join(",");
 	const [pending, setPending] = useState<SharedWriting[]>([]);
+	useDeploymentActivity("unsubmitted-upload", () => pending.length > 0);
 	const [pageAttachments, setPageAttachments] = useState<PageAttachments | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const generation = useRef(0);

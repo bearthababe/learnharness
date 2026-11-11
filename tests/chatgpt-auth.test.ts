@@ -234,6 +234,28 @@ test("logout wins an in-flight refresh and retains only account/client/host mapp
 		assert.equal(f.url.searchParams.get("client_id"), "oaiapp_scratch");
 	} finally { f.service.close(); }
 });
+test("deployment drain persists an in-flight ChatGPT token rotation before returning", async () => {
+	const started = deferred(), release = deferred();
+	const scenario = await loggedIn({ token: async (form, url) => {
+		if (form.get("grant_type") === "refresh_token") {
+			started.resolve(); await release.promise;
+			return Response.json({ access_token: "zz-prove-it-new-access", refresh_token: "zz-prove-it-new-refresh", token_type: "Bearer", expires_in: 3600 });
+		}
+		return Response.json({ access_token: "zz-prove-it-old-access", refresh_token: "zz-prove-it-old-refresh", id_token: await signed(form.get("client_id")!, url.searchParams.get("nonce")!), token_type: "Bearer", expires_in: 1, scope: SCOPES.join(" ") });
+	} });
+	try {
+		const deniedLease = assert.rejects(scenario.service.lease(false));
+		await started.promise;
+		assert.equal(scenario.service.activity(), true);
+		let drained = false;
+		const draining = scenario.service.quiesce().then(() => { drained = true; });
+		await new Promise(resolve => setImmediate(resolve));
+		assert.equal(drained, false);
+		release.resolve(); await draining; await deniedLease;
+		assert.equal(scenario.saved.registrations[0].tokens.refreshToken, "zz-prove-it-new-refresh");
+		assert.equal(scenario.service.activity(), false);
+	} finally { scenario.service.close(); }
+});
 
 test("account catalog is scoped, visibility filtered, and cleared on disconnect", async () => {
 	const f = await loggedIn();

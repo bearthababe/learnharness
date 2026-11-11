@@ -6,8 +6,9 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createContext, runInContext } from "node:vm";
+import { createContext } from "node:vm";
 import { describe, it } from "node:test";
+import { loadNormalShell } from "./helpers/electron-main-vm.ts";
 
 const mainFile = fileURLToPath(new URL("../electron/main.cjs", import.meta.url));
 const mainSource = readFileSync(mainFile, "utf8");
@@ -106,8 +107,7 @@ function fixture({ packaged = true, updaterMissing = false } = {}) {
 		setTimeout() {},
 		fixtureChild: { kill: (signal: string) => order.push(signal) },
 	});
-	runInContext(mainSource, context, { filename: mainFile });
-	const run = (code: string) => runInContext(code, context);
+	const run = loadNormalShell(mainSource, context, { filename: mainFile });
 	return {
 		run, updater, windows, intervals, handles, settingsReads, order, app,
 		setSettings: (value: unknown) => { settings = JSON.stringify(value); },

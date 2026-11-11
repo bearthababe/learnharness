@@ -130,7 +130,7 @@ Extraction is the construction writer, not the only mutation: source/session/nod
 
 ## Storage and notifications
 
-[`config.ts`](../config.ts) anchors immutable prompt assets to the application root and mutable state to `LH_DATA_DIR` (default repo `data/`). Storage ports are semantic interfaces in [`ports.ts`](../src/core/ports.ts).
+[`config.ts`](../config.ts) anchors immutable prompt assets to the application root and mutable state to the external profile (`~/.config/learnharness`, overridden by `LH_PROFILE_DIR`). Its defaults are `data/` and `auth.json` within that profile; legacy `LH_DATA_DIR`/`LH_AUTH_FILE` overrides remain supported without implicit migration. See [profile administration](local-deployment-profiles.md) for conflict handling, ownership and local backup/restore commands. Storage ports are semantic interfaces in [`ports.ts`](../src/core/ports.ts).
 
 | Data | Files |
 | --- | --- |
@@ -141,7 +141,7 @@ Extraction is the construction writer, not the only mutation: source/session/nod
 | Preferences and prompt overrides | `settings.json`, `prompts/` |
 | Keys and custom-endpoint binding | Separate `auth.json`, selected by `LH_AUTH_FILE` |
 
-Adapters use synchronous filesystem operations. JSONL reads skip corrupt/invalid lines; graph derivation merges repeated assertions. Some replacements use temp-file rename, but ordinary whole-file writes are not database transactions. Same-event-loop serialization is not cross-process locking or crash atomicity. Use **one server owner per data/auth profile**.
+Adapters use synchronous filesystem operations. JSONL reads skip corrupt/invalid lines; graph derivation merges repeated assertions. Some replacements use temp-file rename, but ordinary whole-file writes are not database transactions. Same-event-loop serialization is not cross-process locking or crash atomicity. Use **one server owner per data/auth profile**. Linux Next startup acquires a process-identity lease before writing recovery runs; profile administration uses the same exclusion contract. The [managed Linux service](local-service.md) holds both learning and native credential writers; its explicit attached shell is only a client. [ADR 0002](adr/0002-local-service-profile-custody.md) fixes custody invariants and distinguishes implemented boundaries from planned rollback and sandbox work. Full independent deployment/native parity proof remains blocked.
 
 Chats and graph-family files have separate version guards; absent stamps read as v1, and newer versions are refused. Positions are rebuildable and unstamped. Settings have their own version/sanitization policy. Format counters are not app versions. Golden fixtures exercise compatibility. Graph-store initialization removes retired ledgers, so importing stores is not a universally read-only inspection method.
 

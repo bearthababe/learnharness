@@ -1,0 +1,61 @@
+name: Set up preview sandbox
+description: Install and validate fail-closed Linux preview isolation prerequisites
+inputs:
+  atomic-restore:
+    description: Build a pinned GNU mv and verify kernel-atomic directory exchange
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Install namespace and ELF inspection tools
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends bubblewrap binutils apparmor
+    - name: Allow bubblewrap namespaces under Ubuntu AppArmor restrictions
+      shell: bash
+      run: |
+        /usr/bin/bwrap --version
+        policy=/proc/sys/kernel/apparmor_restrict_unprivileged_userns
+        if [[ -r "$policy" ]]; then
+          printf 'AppArmor unprivileged user namespace restriction: %s\n' "$(cat "$policy")"
+          if [[ "$(cat "$policy")" == "1" ]]; then
+            sudo tee /etc/apparmor.d/learnharness-preview-bwrap > /dev/null <<'PROFILE'
+        abi <abi/4.0>,
+        include <tunables/global>
+        profile learnharness-preview-bwrap /usr/bin/bwrap flags=(unconfined) {
+          userns,
+        }
+        PROFILE
+            sudo apparmor_parser --replace /etc/apparmor.d/learnharness-preview-bwrap
+          fi
+        fi
+    - name: Verify actual isolated namespace startup
+      shell: bash
+      run: /usr/bin/bwrap --unshare-all --unshare-net --die-with-parent --new-session --cap-drop ALL --ro-bind / / --proc /proc --dev /dev -- /usr/bin/true
+    - name: Prepare atomic restore tooling
+      if: inputs.atomic-restore == 'true'
+      shell: bash
+      run: |
+        sudo apt-get install --yes --no-install-recommends build-essential curl xz-utils
+        root=$(mktemp -d "${RUNNER_TEMP:?}/learnharness-coreutils-XXXXXX")
+        archive="$root/coreutils-9.7.tar.xz"
+        curl --proto '=https' --tlsv1.2 --fail --location --output "$archive" https://ftp.gnu.org/gnu/coreutils/coreutils-9.7.tar.xz
+        printf '%s  %s\n' e8bb26ad0293f9b5a1fc43fb42ba970e312c66ce92c1b0b16713d7500db251bf "$archive" | sha256sum --check --strict
+        tar --extract --xz --file "$archive" --directory "$root"
+        cd "$root/coreutils-9.7"
+        ./configure --disable-nls
+        make --jobs=2
+        install -D --mode=0755 src/mv "$root/bin/mv"
+        printf '%s\n' "$root/bin" >> "${GITHUB_PATH:?}"
+        "$root/bin/mv" --version
+        help=$("$root/bin/mv" --help)
+        [[ "$help" == *"--exchange"* && "$help" == *"--no-copy"* ]]
+        probe="$root/probe"
+        mkdir -p "$probe/current" "$probe/staged"
+        printf 'current' > "$probe/current/value"
+        printf 'staged' > "$probe/staged/value"
+        "$root/bin/mv" --exchange --no-copy --no-target-directory -- "$probe/current" "$probe/staged"
+        [[ "$(cat "$probe/current/value")" == staged && "$(cat "$probe/staged/value")" == current ]]
+        "$root/bin/mv" --exchange --no-copy --no-target-directory -- "$probe/current" "$probe/staged"
+        [[ "$(cat "$probe/current/value")" == current && "$(cat "$probe/staged/value")" == staged ]]

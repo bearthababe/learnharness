@@ -1,4 +1,5 @@
 "use client";
+import { useDeploymentActivity } from "../deployment-activity";
 
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { canonicalHandwriting, type ChatInput, type SharedWriting, type WritingInputOutcome } from "@/src/core";
@@ -17,6 +18,7 @@ export const HandwritingSubmissionContext = createContext<Bridge | null>(null);
 export function useHandwritingSubmission(chatId: string, review: () => Promise<AttachmentReview>, send: (input: ChatInput, accepted?: () => void, outcome?: (value: WritingInputOutcome) => void) => Promise<boolean>, pending: SharedWriting[]) {
 	const [epoch, render] = useState(0), [ready, setReady] = useState(false), [preparing, setPreparing] = useState(false);
 	const preparingRef = useRef(false), fields = useRef(new Map<string, Field>()), callbacks = useRef({ review, send, pending }); callbacks.current = { review, send, pending };
+	useDeploymentActivity("upload-or-handwriting-submission", () => preparingRef.current || !!modelRef.current?.busy || !!modelRef.current?.attempt || !!attachmentRef.current?.noticeEntries().some(entry => attachmentRef.current?.busy(entry.pageId)));
 	const modelRef = useRef<HandwritingSubmission | null>(null);
 	const attachmentRef = useRef<HandwritingAttachment | null>(null), notebookView = useRef<{ canUpdate: () => boolean; reveal: (pageId: string) => void } | null>(null);
 	const reconcile = () => { const model = modelRef.current; if (model?.attempt && !model.busy) void model.check(); };

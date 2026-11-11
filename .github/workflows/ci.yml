@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - name: Install and verify preview sandbox prerequisites
+        uses: ./.github/actions/setup-preview-sandbox
       - uses: actions/setup-node@v7
         with:
           node-version: "26"
@@ -30,6 +32,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:workflow
+      - run: npm run test:learning
       - run: npm run lint
 
   mobile-browser:
@@ -38,6 +42,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - name: Install and verify preview sandbox prerequisites
+        uses: ./.github/actions/setup-preview-sandbox
       - uses: actions/setup-node@v7
         with:
           node-version: "26"
@@ -70,6 +76,21 @@ jobs:
       - run: npm run test:mobile
         env:
           LH_MOBILE_TEST_DIR: ${{ runner.temp }}/mobile-browser-artifacts
+      - name: Ticket workflow real-app isolation
+        run: npm run test:workflow:browser
+      - name: Retain ticket workflow evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ticket-workflow-result-${{ github.run_attempt }}
+          path: |
+            .prove-it/runs/**/result.json
+            .prove-it/runs/**/worktree-preview.png
+            .prove-it/runs/**/exploratory-preview.png
+            .prove-it/runs/**/failure.png
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
       - name: Retain browser run result
         if: always()
         uses: actions/upload-artifact@v7
@@ -110,6 +131,13 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: ${{ runner.os == 'Linux' && '0' || '1' }}
+      - name: Install and verify preview sandbox prerequisites
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/setup-preview-sandbox
+        with:
+          atomic-restore: "true"
       - uses: actions/setup-node@v7
         with:
           node-version: "26"
@@ -125,3 +153,13 @@ jobs:
       - run: node scripts/smoke-provider-runtime.mjs
       - run: node scripts/build-server.mjs
       - run: node scripts/smoke-server.mjs --electron
+      - name: Build the current private Linux package for deployment tests
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p "$HOME/.cache"
+          npx electron-builder --linux --dir --x64 --publish never
+      - name: Deployment lifecycle and preview sandbox tests
+        if: runner.os == 'Linux'
+        run: npm run test:deployment
+        env:
+          TMPDIR: /tmp

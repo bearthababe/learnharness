@@ -1,0 +1,211 @@
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { createHash, randomUUID, X509Certificate } from "node:crypto";
+import fs from "node:fs";
+import http from "node:http";
+import https from "node:https";
+import path from "node:path";
+import puppeteer from "puppeteer-core";
+import { createAdmission } from "../electron/local-service-ingress.cjs";
+import { buildIdentity } from "../electron/deployment-build.cjs";
+import { previewCookiePrefix, proxyFor } from "./lib/preview-proxy.mjs";
+import { probeBrowserRTC } from "./lib/prove-browser-rtc.mjs";
+
+const root = path.resolve(import.meta.dirname, "..");
+const diagnosticPath = "/__prove__/ingress-negative-control";
+const fingerprint = () => Object.fromEntries(["scripts/prove-preview-browser.mjs", "scripts/lib/preview-proxy.mjs", "scripts/lib/preview-browser-admission.mjs", "scripts/lib/prove-browser-rtc.mjs", "electron/local-service-ingress.cjs", "electron/deployment-build.cjs"].map(filename => [filename, createHash("sha256").update(fs.readFileSync(path.join(root, filename))).digest("hex")]));
+const run = path.resolve(process.argv[2] ?? path.join(root, ".prove-it", "runs", `${new Date().toISOString().replaceAll(":", "-")}-preview-browser-boundary`));
+fs.mkdirSync(run, { recursive: true, mode: 0o700 });
+const temporary = fs.mkdtempSync("/tmp/lh-boundary-");
+const certificate = path.join(temporary, "certificate.pem");
+const key = path.join(temporary, "key.pem");
+execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", certificate, "-days", "1", "-subj", "/CN=normal.boundary.test", "-addext", "subjectAltName=DNS:normal.boundary.test,DNS:preview-a.boundary.test,DNS:preview-b.boundary.test"], { stdio: "ignore" });
+fs.chmodSync(key, 0o600);
+const tls = { key: fs.readFileSync(key), cert: fs.readFileSync(certificate) };
+const pin = createHash("sha256").update(new X509Certificate(tls.cert).publicKey.export({ type: "spki", format: "der" })).digest("base64");
+const browserPath = process.env.CHROMIUM_PATH ?? path.join(process.env.HOME, ".cache/puppeteer/chrome/linux-152.0.7977.42/chrome-linux64/chrome");
+const record = { schemaVersion: 1, status: "running", checker: "builder; independent final acceptance required", source: buildIdentity(root), proofSource: fingerprint(), startedAt: new Date().toISOString(), environment: { browserPath, transport: "real local HTTPS; explicit fixture SPKI pin, not tailnet TLS proof" }, steps: [], requests: [], previewRequests: [], negativeControlExceptions: [], limitations: ["Synthetic HTTP backend, not complete LearnHarness browser/helper/native proof", "Tailnet hostname registration and real HTTPS remain unproved", "Full deployment acceptance remains BLOCKED"] };
+const save = () => fs.writeFileSync(path.join(run, "result.json"), JSON.stringify(record, null, 2));
+const step = (name, observed) => { record.steps.push({ name, status: "passed", observed, at: new Date().toISOString() }); save(); };
+const servers = [];
+const proxies = [];
+const connections = new Set();
+let browser;
+let writes = 0;
+let previewWrites = 0;
+let admission;
+let origin;
+let previewOrigins;
+const listen = async (server, address) => {
+	servers.push(server);
+	server.on("connection", socket => { connections.add(socket); socket.once("close", () => connections.delete(socket)); });
+	await new Promise((resolve, reject) => { server.once("error", reject); typeof address === "string" ? server.listen(address, resolve) : server.listen(0, "127.0.0.1", resolve); });
+	return server;
+};
+const probeIngress = async (page, targetOrigin, requests) => {
+	const firstRequest = requests.length;
+	const sourceOrigin = new URL(page.url()).origin;
+	const browserObservation = await page.evaluate(async origin => {
+		let post;
+		try { const response = await fetch(`${origin}/api/write`, { method: "POST", credentials: "include", headers: { "Content-Type": "text/plain" }, body: "must-not-write" }); post = { status: response.status }; }
+		catch (error) { post = { browserRefusal: error.name }; }
+		await new Promise(resolve => {
+			const image = new Image();
+			image.onload = image.onerror = () => resolve();
+			image.src = `${origin}/pixel?must-not-run`;
+		});
+		return { post };
+	}, targetOrigin);
+	const observed = requests.slice(firstRequest);
+	const post = observed.find(request => request.path === "/api/write" && request.method === "POST" && request.origin === sourceOrigin && request.status === 403 && request.site === "same-site" && request.hasSessionCookie);
+	const image = observed.find(request => request.path === "/pixel?must-not-run" && request.method === "GET" && !request.origin && request.status === 403 && request.site === "same-site" && request.hasSessionCookie);
+	assert.ok(post, "Ingress must observe and deny the actual cookie-bearing same-site POST; a browser policy refusal is not ingress proof");
+	assert.ok(image, "Ingress must observe and deny the actual cookie-bearing originless same-site image GET");
+	return { browserObservation, post, image };
+};
+save();
+try {
+	const socketPath = path.join(temporary, "app.sock");
+	await listen(http.createServer((request, response) => {
+		if (request.method === "POST" && request.url === "/api/write" || request.url.startsWith("/pixel")) previewWrites++;
+		response.writeHead(200, { "Content-Type": "text/html", "Set-Cookie": "session=synthetic-preview; Path=/; Secure; HttpOnly; SameSite=Strict" });
+		response.end("<!doctype html><h1>Hostile preview fixture</h1>");
+	}), socketPath);
+	const routing = new Map();
+	const server = await listen(https.createServer(tls, (request, response) => {
+		const destination = routing.get(request.headers.host);
+		if (destination) return destination.emit("request", request, response);
+		response.once("finish", () => { record.requests.push({ path: request.url, method: request.method, host: request.headers.host, origin: request.headers.origin ?? null, site: request.headers["sec-fetch-site"] ?? null, status: response.statusCode, hasSessionCookie: (request.headers.cookie ?? "").includes("__Host-lh-local-session=") }); save(); });
+		void admission.handle(request, response, () => {
+			if (request.url === "/api/write" && request.method === "POST" || request.url.startsWith("/pixel")) writes++;
+			response.writeHead(200, { "Content-Type": "text/html", "Cache-Control": "no-store" });
+			response.end("<!doctype html><h1>Admitted normal fixture</h1>");
+		});
+	}));
+	origin = `https://normal.boundary.test:${server.address().port}`;
+	admission = createAdmission([origin]);
+	previewOrigins = ["preview-a", "preview-b"].map(host => `https://${host}.boundary.test:${server.address().port}`);
+	for (const [index, previewOrigin] of previewOrigins.entries()) {
+		const ticket = { id: `isolation-${index}`, origin: previewOrigin };
+		const proxy = proxyFor(ticket, socketPath);
+		proxy.prependListener("request", (request, response) => {
+			response.once("finish", () => { record.previewRequests.push({ path: request.url, method: request.method, host: request.headers.host, origin: request.headers.origin ?? null, site: request.headers["sec-fetch-site"] ?? null, status: response.statusCode, hasSessionCookie: (request.headers.cookie ?? "").includes(`${previewCookiePrefix(ticket)}session=`) }); save(); });
+			if (request.method !== "GET" || request.url !== diagnosticPath || request.headers["sec-fetch-dest"] !== "document") return;
+			const writeHead = response.writeHead.bind(response);
+			response.writeHead = (status, headers) => {
+				const outgoing = { ...headers };
+				const removed = outgoing["connection-allowlist"];
+				delete outgoing["connection-allowlist"];
+				record.negativeControlExceptions.push({ origin: previewOrigin, path: diagnosticPath, method: request.method, destination: "document", removedHeader: "Connection-Allowlist", removedValue: removed, cspRetained: outgoing["content-security-policy"], purpose: "Actual ingress POST/image refusal only; not preview egress proof" });
+				save();
+				return writeHead(status, outgoing);
+			};
+		});
+		proxies.push(proxy);
+		routing.set(new URL(previewOrigin).host, proxy);
+	}
+	const baselineServer = await listen(https.createServer(tls), null);
+	const baselineOrigin = `https://normal.boundary.test:${baselineServer.address().port}`;
+	const baselineProxy = proxyFor({ id: "same-host-control", origin: baselineOrigin }, socketPath);
+	proxies.push(baselineProxy);
+	baselineServer.on("request", (request, response) => baselineProxy.emit("request", request, response));
+	browser = await puppeteer.launch({ executablePath: browserPath, headless: true, args: [`--ignore-certificate-errors-spki-list=${pin}`, "--host-resolver-rules=MAP *.boundary.test 127.0.0.1", "--proxy-server=direct://", "--proxy-bypass-list=*", "--disable-dev-shm-usage"] });
+	record.environment.browserVersion = await browser.version();
+	record.owned = { browserPid: browser.process()?.pid, ports: servers.map(server => server.address()).filter(address => address && typeof address === "object").map(address => address.port), certificateDirectory: temporary, socketPath };
+	const context = await browser.createBrowserContext();
+	const normal = await context.newPage();
+	await normal.goto(`${origin}/__local/admit#${admission.issue(origin)}`, { waitUntil: "networkidle0" });
+	await normal.waitForFunction(() => document.body.textContent.includes("Admitted normal fixture"));
+	await normal.evaluate(() => { document.cookie = "lh-normal-canary=original; Path=/; Secure; SameSite=Strict"; });
+	const normalSession = (await context.cookies(origin)).find(cookie => cookie.name === "__Host-lh-local-session");
+	assert.ok(normalSession?.httpOnly && normalSession.secure);
+	step("real-browser-admission", { admitted: true, cookieName: normalSession.name, httpOnly: normalSession.httpOnly, secure: normalSession.secure });
+	const control = await context.newPage();
+	await control.goto(baselineOrigin, { waitUntil: "networkidle0" });
+	const baseline = await control.evaluate(() => {
+		const before = document.cookie;
+		document.cookie = "lh-normal-canary=baseline-overwrite; Path=/; Secure; SameSite=Strict";
+		return { before, after: document.cookie };
+	});
+	assert.match(baseline.before, /lh-normal-canary=original/);
+	assert.match(await normal.evaluate(() => document.cookie), /lh-normal-canary=baseline-overwrite/);
+	step("negative-control-same-host-different-port-is-unsafe", { reproducedRead: true, reproducedOverwrite: true });
+	await control.close();
+	await normal.evaluate(() => { document.cookie = "lh-normal-canary=original; Path=/; Secure; SameSite=Strict"; });
+	const attacker = await context.newPage();
+	const primaryResponse = await attacker.goto(previewOrigins[0], { waitUntil: "networkidle0" });
+	assert.equal(primaryResponse.headers()["connection-allowlist"], "(response-origin); redirects=allow");
+	assert.match(primaryResponse.headers()["content-security-policy"], /connect-src 'self'/);
+	step("primary-preview-retains-production-headers", { connectionAllowlist: primaryResponse.headers()["connection-allowlist"], csp: primaryResponse.headers()["content-security-policy"], cspBypassed: false });
+	const previewRTC = await probeBrowserRTC(attacker);
+	const controlRTC = await probeBrowserRTC(normal);
+	assert.ok(controlRTC.datagrams > 0, "The independent normal-page control must reach the owned STUN endpoint");
+	assert.equal(previewRTC.datagrams, 0, "Preview WebRTC must not contact an unrelated UDP service");
+	step("browser-webrtc-egress-refused", { preview: previewRTC, normalControl: controlRTC, ownedEndpointsClosed: true });
+	const attack = await attacker.evaluate(normalOrigin => {
+		const visible = document.cookie;
+		document.cookie = "lh-normal-canary=wrong-host-overwrite; Path=/; Secure; SameSite=Strict";
+		document.cookie = "__Host-lh-local-session=forged; Domain=boundary.test; Path=/; Secure; SameSite=Strict";
+		return { visible, nativeBridge: typeof window.electronAPI, normalOrigin };
+	}, origin);
+	assert.doesNotMatch(attack.visible, /lh-normal-canary/);
+	assert.equal(attack.nativeBridge, "undefined");
+	assert.equal((await normal.evaluate(() => document.cookie)).split("; ").find(cookie => cookie.startsWith("lh-normal-canary=")), "lh-normal-canary=original");
+	const afterSessions = (await context.cookies(origin)).filter(cookie => cookie.name === normalSession.name);
+	assert.equal(afterSessions.length, 1);
+	assert.equal(afterSessions[0].value, normalSession.value);
+	assert.equal(afterSessions[0].domain, "normal.boundary.test");
+	step("different-host-blocks-read-write-and-domain-session-forgery", { noNormalCookieRead: true, originalCanaryUnchanged: true, originalSessionUnchanged: true, nativeBridge: attack.nativeBridge });
+	const diagnostic = await context.newPage();
+	await diagnostic.setBypassCSP(true);
+	const nonExemptResponse = await diagnostic.goto(`${previewOrigins[0]}${diagnosticPath}?not-exempt`, { waitUntil: "networkidle0" });
+	assert.equal(nonExemptResponse.headers()["connection-allowlist"], primaryResponse.headers()["connection-allowlist"]);
+	const diagnosticResponse = await diagnostic.goto(`${previewOrigins[0]}${diagnosticPath}`, { waitUntil: "networkidle0" });
+	assert.equal(diagnosticResponse.status(), 200);
+	assert.equal(diagnosticResponse.headers()["connection-allowlist"], undefined);
+	assert.equal(diagnosticResponse.headers()["content-security-policy"], primaryResponse.headers()["content-security-policy"]);
+	assert.equal(record.negativeControlExceptions.length, 1);
+	assert.equal(record.negativeControlExceptions[0].removedValue, primaryResponse.headers()["connection-allowlist"]);
+	step("exact-path-ingress-negative-control-exception", { path: diagnosticPath, connectionAllowlistRemovedOnlyForExactDocument: true, queryVariantRetainsProductionHeader: true, productionCspRetained: true, cspBypassedOnlyOnSeparateDiagnosticPage: true });
+	const csrf = await probeIngress(diagnostic, origin, record.requests);
+	const normalDiagnostic = await context.newPage();
+	await normalDiagnostic.goto(`${origin}${diagnosticPath}`, { waitUntil: "networkidle0" });
+	const previewCsrf = await probeIngress(normalDiagnostic, previewOrigins[0], record.previewRequests);
+	assert.equal(writes, 0);
+	assert.equal(previewWrites, 0);
+	step("both-ingresses-deny-same-site-CSRF", { normal: csrf, preview: previewCsrf, writes, previewWrites, originlessAuthenticatedImageRequestsDeniedOnBoth: true, negativeControlOnly: true });
+	await diagnostic.close();
+	await normalDiagnostic.close();
+	const sibling = await context.newPage();
+	await sibling.goto(previewOrigins[1], { waitUntil: "networkidle0" });
+	const firstPrefix = previewCookiePrefix({ id: "isolation-0", origin: previewOrigins[0] });
+	await sibling.evaluate(prefix => { document.cookie = `${prefix}session=forged; Domain=boundary.test; Path=/; Secure; SameSite=Strict`; }, firstPrefix);
+	const firstCookies = (await context.cookies(previewOrigins[0])).filter(cookie => cookie.name === `${firstPrefix}session`);
+	assert.equal(firstCookies.length, 1);
+	assert.equal(firstCookies[0].value, "synthetic-preview");
+	assert.equal(firstCookies[0].domain, "preview-a.boundary.test");
+	step("sibling-preview-cannot-inject-host-bound-session", { firstSessionUnchanged: true, sameBrowserContext: true });
+	await normal.bringToFront();
+	await normal.reload({ waitUntil: "networkidle0" });
+	assert.match(await normal.$eval("body", element => element.textContent), /Admitted normal fixture/);
+	await normal.screenshot({ path: path.join(run, "normal-after-attacks.png") });
+	step("normal-remains-admitted-and-usable", { writes, screenshot: "normal-after-attacks.png" });
+	record.proofSourceAfter = fingerprint();
+	assert.deepEqual(record.proofSourceAfter, record.proofSource, "Proof harness and production boundary sources must remain unchanged during the run");
+	step("proof-source-integrity", { unchanged: true });
+	record.status = "passed-scoped-builder-checks";
+} catch (error) {
+	record.status = "failed";
+	record.error = error.stack;
+	process.exitCode = 1;
+	save();
+} finally {
+	await browser?.close();
+	for (const proxy of proxies) proxy.stopUpgrades();
+	for (const socket of connections) socket.destroy();
+	await Promise.all(servers.map(server => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); })));
+	record.cleanup = { ownedBrowserStopped: browser ? !browser.connected : true, listenersClosed: servers.every(server => !server.listening), syntheticTLSOnly: true, certificateDirectory: temporary, routesChanged: false };
+	record.finishedAt = new Date().toISOString();
+	save();
+	console.log(JSON.stringify({ run, status: record.status, steps: record.steps.length, cleanup: record.cleanup, error: record.error }));
+}

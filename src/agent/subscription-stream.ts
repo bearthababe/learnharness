@@ -5,6 +5,7 @@ import { NATIVE_SUBSCRIPTIONS, type NativeSubscriptionScope } from "../core/cont
 import { nativeSubscriptionId, nativeSubscriptionBackgroundAllowed, subscriptionScope, subscriptionScopeCurrent, subscriptionAdmissionScope, subscriptionLease, subscriptionAbortController, subscriptionDenial } from "./subscription-bridge.ts";
 import { markUnadmittedUsage, type SubscriptionDispatchLifecycle } from "./subscription-request-cycle.ts";
 import { capturePreparedBackgroundPayload } from "./background-capture.ts";
+import { previewSubscriptionsActive, previewSubscriptionFetch } from "./preview-subscription-runtime.ts";
 
 export function nativeSubscriptionError(provider: string, message: string): string {
 	const label = NATIVE_SUBSCRIPTIONS.find((p) => p.logicalId === provider)?.label ?? "Subscription";
@@ -56,7 +57,8 @@ export function nativeSubscriptionStream(provider: Provider, background: () => b
 					...options, apiKey: auth.apiKey, headers: { ...options?.headers, ...auth.headers }, signal, maxRetries: 0,
 					fetch: (input, init) => {
 						check(); if (committed) throw new Error("Subscription requests do not retry after dispatch");
-						lifecycle?.beforeDispatch(subscriptionAdmissionScope(scope!)); committed = true; return fetch(input, init);
+						lifecycle?.beforeDispatch(subscriptionAdmissionScope(scope!)); committed = true;
+						return previewSubscriptionsActive() ? previewSubscriptionFetch("lh:subscriptions", { scope, background: purpose }, input, init) : fetch(input, init);
 					},
 					onPayload: async (raw, model) => {
 						const replacement = await options?.onPayload?.(raw, model); check();

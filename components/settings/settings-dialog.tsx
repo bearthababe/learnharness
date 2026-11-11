@@ -44,6 +44,7 @@ import { useAppearance } from "./appearance.tsx";
 import { SettingsSection } from "./controls.tsx";
 import { UpdateSettings } from "./update-settings.tsx";
 import { DeviceToolsSettings } from "./device-tools.tsx";
+import { RuntimeSettings } from "./runtime-settings.tsx";
 import { AgentSection } from "./agent-section.tsx";
 import type { ModelsSettings } from "@/src/core";
 import { MENU_CLOSE_EVENT, MENU_OPEN_EVENT } from "@/components/menu-shell";
@@ -430,6 +431,8 @@ export function SettingsDialogBody({
 									testid="section-general"
 								>
 									<DeviceToolsSettings />
+									{/* main: the running service's status, beside its updates. */}
+									<RuntimeSettings />
 									<UpdateSettings
 										autoUpdate={record.general?.autoUpdate ?? true}
 										onAutoUpdateChange={(on) =>

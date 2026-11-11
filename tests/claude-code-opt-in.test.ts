@@ -35,6 +35,19 @@ function setup(t: TestContext) {
 	});
 	writeSettings({ version: 1 });
 }
+
+test("managed previews never resolve native CLI authentication even when opted in", (t) => {
+	setup(t);
+	const previous = process.env.LH_PREVIEW_PROFILE;
+	t.after(() => {
+		if (previous === undefined) delete process.env.LH_PREVIEW_PROFILE;
+		else process.env.LH_PREVIEW_PROFILE = previous;
+	});
+	writeSettings({ version: 1, claudeCode: { enabled: true } });
+	assert.equal(claudeCodeAvailable(), true);
+	process.env.LH_PREVIEW_PROFILE = "1";
+	assert.equal(claudeCodeAvailable(), false);
+});
 async function save(body: unknown) {
 	return PUT(new Request("http://test/api/settings/claudeCode", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
 		{ params: Promise.resolve({ section: "claudeCode" }) });

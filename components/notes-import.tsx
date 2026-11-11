@@ -1,5 +1,7 @@
 "use client";
 
+import { useDeploymentActivity } from "./deployment-activity";
+
 import { useEffect, useId, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import { FileTextIcon, FolderOpenIcon, ImportIcon, WaypointsIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
@@ -73,6 +75,7 @@ const pageImportQueue = createNotesImportQueue(postNotesImport);
 export function dismissNotesImportResults() { pageImportQueue.dismiss(); }
 export function useNotesImport(callbacks: { onStart?: () => void; onFinish?: () => void } = {}) {
 	const snapshot = useSyncExternalStore(pageImportQueue.subscribe, pageImportQueue.getSnapshot, () => EMPTY_IMPORT_QUEUE);
+	useDeploymentActivity("upload-or-extraction", () => pageImportQueue.getSnapshot().importing);
 	const latest = useRef(callbacks);
 	latest.current = callbacks;
 	const seenCompletion = useRef(snapshot.completion);

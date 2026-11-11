@@ -69,6 +69,7 @@ import type { TurnInput } from "../core/input-events.ts";
 import { hasUnresolvedQuestion, endsInDismissal, endsInQuestionRecovery, type LhMessage } from "../core/native-messages.ts";
 import { fireJobAbort, isJobLive } from "../agent/subagents/aborts.ts";
 import { stores, effectiveSettings } from "./stores.ts";
+import { deploymentWorkPaused } from "./deployment-barrier.ts";
 import { resolveConversationSpec } from "../core/settings-resolution.ts";
 import { connectionBackgroundAllowed, isSubscriptionProvider, onSubscriptionChange } from "../agent/subscription-connections.ts";
 import { isTurnRunning } from "./turn-liveness.ts";
@@ -134,6 +135,14 @@ interface LhWakeGlobal {
 function state(): WakeState {
 	const g = globalThis as typeof globalThis & LhWakeGlobal;
 	return (g.__lhWakePipeline ??= { queues: new Map(), liveAgents: new Map(), userSteers: new Map(), pumping: new Set(), lastSweepAt: 0, automaticDeferred: new WeakSet() });
+}
+
+export function deploymentJobsBusy() {
+	return state().pumping.size > 0 || state().liveAgents.size > 0;
+}
+
+export function resumeDeploymentJobs() {
+	for (const chatId of state().queues.keys()) void pump(chatId);
 }
 
 /** chat-handler wires this at module init: its adapter around handleChatRequest. */
@@ -534,7 +543,7 @@ function chatIdOf(steer: SteerMessage): string {
  * fires ONE turn carrying every pending marker as its input appends.
  */
 async function pump(chatId: string): Promise<void> {
-	if (!chatId) return;
+	if (!chatId || deploymentWorkPaused()) return;
 	const s = state();
 	if (s.pumping.has(chatId)) return;
 	s.pumping.add(chatId);
@@ -796,6 +805,7 @@ const SWEEP_THROTTLE_MS = 30_000;
 /** Re-run a job's sub-agent loop — exposed for the sweep's tests (the
  *  /api/jobs poll is its only production caller, disabled under NODE_ENV=test). */
 export function recoverStaleJobs(): void {
+	if (deploymentWorkPaused()) return;
 	const s = state();
 	const now = Date.now();
 	if (now - s.lastSweepAt < SWEEP_THROTTLE_MS) return;

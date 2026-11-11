@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { JetBrains_Mono, Source_Sans_3 } from "next/font/google";
+import { headers } from "next/headers";
+import { DeploymentActivity } from "@/components/deployment-activity";
+import localFont from "next/font/local";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import "@/components/compact-learning-input.css";
@@ -11,11 +13,10 @@ import { AppearanceProvider } from "@/components/settings/appearance";
 import UpdateBanner from "@/components/update-banner";
 import { NotebookPreviewTools } from "@/components/notebook-preview-tools";
 import { InlineScript, SIDEBAR_BOOT_SCRIPT } from "@/components/inline-script";
+import { previewCookieBootstrap } from "@/lib/preview-cookie-bootstrap";
 
-// Chrome = JetBrains Mono, teaching prose = Source Sans 3, titles = CMU
-// Serif (the bundled lh-cmu @font-face in globals.css — no CDN).
-const ui = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
-const prose = Source_Sans_3({ subsets: ["latin"], variable: "--font-sans3" });
+const ui = localFont({ src: "../public/fonts/jetbrains-mono/JetBrainsMono.ttf", weight: "100 800", display: "swap", variable: "--font-jetbrains" });
+const prose = localFont({ src: "../public/fonts/source-sans-3/SourceSans3.ttf", weight: "200 900", display: "swap", variable: "--font-sans3" });
 
 export const metadata: Metadata = {
 	title: "Learning Harness",
@@ -36,13 +37,20 @@ export const viewport: Viewport = {
 	viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+	const documentId = (await headers()).get("x-lh-document");
+	const previewCookies = previewCookieBootstrap(process.env.LH_PREVIEW_COOKIE_PREFIX);
 	return (
-		// suppressHydrationWarning: the boot script below marks <html> before React hydrates.
+		// suppressHydrationWarning: the sidebar boot script marks <html> before React hydrates.
 		<html lang="en" className={`dark ${ui.variable} ${prose.variable}`} suppressHydrationWarning>
+			<head>
+				{/* Preview cookie isolation first: it patches document.cookie before any other script. */}
+				{previewCookies && <script id="lh-preview-cookies" dangerouslySetInnerHTML={{ __html: previewCookies }} />}
+				{/* B13 (round 18): the sidebar's remembered state before the first paint. */}
+				<InlineScript html={SIDEBAR_BOOT_SCRIPT} />
+			</head>
 			<body className="min-h-dvh antialiased">
-			{/* B13 (round 18): the sidebar's remembered state before the first paint. */}
-			<InlineScript html={SIDEBAR_BOOT_SCRIPT} />
+			<DeploymentActivity documentId={documentId} />
 			{/* The notification channel rides OUTSIDE everything: sidebar, dock,
 				 and pages all subscribe as the polls retire (push S3, 2026-10-02). */}
 			<ServerEventsProvider>

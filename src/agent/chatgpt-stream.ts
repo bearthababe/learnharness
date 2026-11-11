@@ -5,6 +5,7 @@ import { transformMessages } from "@earendil-works/pi-ai/api/transform-messages"
 import { chatGPTAbortController, chatGPTScope, chatGPTScopeCurrent, chatGPTLease, chatGPTDenial } from "./chatgpt-bridge.ts";
 import type { AdmissionScope, ChatGPTDispatchLifecycle } from "./chatgpt-request-cycle.ts";
 import { capturePreparedBackgroundPayload } from "./background-capture.ts";
+import { previewSubscriptionsActive, previewSubscriptionFetch } from "./preview-subscription-runtime.ts";
 
 const USAGE = "https://chatgpt.com/settings/usage";
 export function chatGPTStreamError(message: string): string {
@@ -80,7 +81,7 @@ export function chatGPTStream(background: () => boolean, lifecycle?: ChatGPTDisp
 						if (committed) throw new Error("ChatGPT does not retry admitted requests");
 						lifecycle?.beforeDispatch(scope!);
 						committed = true;
-						return delegate(input, init);
+						return previewSubscriptionsActive() ? previewSubscriptionFetch("lh:chatgpt", { background: purpose, expectedAccountId: scope!.accountId, expectedAuthorityRevision: scope!.authorityRevision, selectedModelId: logicalModel.id }, input, init) : delegate(input, init);
 					},
 					onPayload: async (raw, model) => {
 						const replacement = await options?.onPayload?.(raw, model);

@@ -7,6 +7,7 @@ import { Hint } from "@/components/ui/hint";
 import { createDictationTimeline, deepgramListenUrl, type DictationAudioPacket, type DictationCaptureAdapter, type DictationCaptureRun, type DictationLanguage } from "@/src/core";
 import { useDictationLanguage } from "@/components/dictation-preference";
 import { setDictationActive } from "@/components/dictation-state";
+import { useDeploymentActivity } from "./deployment-activity";
 export { isDictationActive } from "@/components/dictation-state";
 
 /**
@@ -333,6 +334,7 @@ export function sampleDictationMeter(
 export function useDictation({ append, capture, retain }: { append: (text: string) => void; capture?: DictationCaptureAdapter; retain?: SpeechRetention }): Dictation {
 	const { getLanguage } = useDictationLanguage();
 	const [phase, setPhase] = useState<DictationPhase>("idle");
+	useDeploymentActivity("recording-or-finishing-speech", () => phase !== "idle");
 	const [error, setError] = useState<string | null>(null);
 	/** Latest RMS from the worklet — the meter samples this (dictate pattern). */
 	const levelRef = useRef(0);

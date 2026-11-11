@@ -99,6 +99,7 @@ function createChatGPT({ store, openExternal, fetch: request = globalThis.fetch,
 	let state;
 	let init;
 	let queue = Promise.resolve();
+	let queued = 0;
 	let epoch = 0;
 	let revision = 0;
 	let authorityRevision = 0;
@@ -117,7 +118,8 @@ function createChatGPT({ store, openExternal, fetch: request = globalThis.fetch,
 	let transportAbort = new AbortController();
 	let backgroundAbort = new AbortController();
 	const serial = (fn) => {
-		const next = queue.then(fn, fn);
+		queued++;
+		const next = queue.then(fn, fn).finally(() => { queued--; });
 		queue = next.catch(() => {});
 		return next;
 	};
@@ -536,7 +538,13 @@ function createChatGPT({ store, openExternal, fetch: request = globalThis.fetch,
 	function close() { closed = true; pending?.cancel(); stop(); }
 	function pause() { paused = true; pending?.cancel(); stop(); notify(); }
 	function resume() { paused = false; if (!storageDenied) suspended = false; notify(); }
-	return { status, login, cancelLogin, lease, models, select, consent, disconnect, logout, close, pause, resume, stamp };
+	async function quiesce() {
+		if (pending) throw fail("pending");
+		paused = true;
+		await ready();
+		await queue;
+	}
+	return { status, login, cancelLogin, lease, models, select, consent, disconnect, logout, close, pause, resume, stamp, quiesce, activity: () => !!pending || queued > 0 };
 }
 
 module.exports = { createChatGPT, fileStore, publicError, allowedAuthEndpoint, SCOPES, validateState };

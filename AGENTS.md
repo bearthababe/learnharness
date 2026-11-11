@@ -12,7 +12,21 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 In an authorized UI experiment, ordinary UI design and implementation choices are delegated to implementers, and independent reviewers decide promotion. Existing interface mechanics are baseline evidence, not settled design requirements. Approved product requirements, teaching policies and explicit technical constraints remain binding.
 
+## Ticket delivery
+
+Keep the shared root on `main`. Before ticket implementation or cleanup, read
+`docs/agents/git-workflow.md` and use `.agents/skills/ticket-to-main/SKILL.md`.
+After changes to ticket tooling, app launch/auth, or previews, run
+`.agents/skills/prove-learnharness/SKILL.md` before saying done.
+
 ## Browser verification
+
+For learning-story implementation, run `npm run verify:learning -- select STORY`
+before feature changes. For learning verification/harness changes use
+`.agents/skills/prove-learnharness/SKILL.md`; preserve V-1–V-7 in
+`docs/agents/learning-verification.md`. Report product gaps instead of building
+them as verification work. Subject accuracy requires approved independent keys;
+scripted workflow evidence is not live tutor or physical-device proof.
 
 Before running mobile browser checks or integrating UI changes, read
 `docs/verification/mobile-browser-checks.md` for the standard command and result receipt.

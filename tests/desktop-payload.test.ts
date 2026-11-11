@@ -23,6 +23,7 @@ function withPayload(test: (fixture: {
 	};
 	try {
 		write(path.join("scripts", "build-server.mjs"), source);
+		write(path.join("electron", "deployment-compatibility.cjs"), fs.readFileSync(new URL("../electron/deployment-compatibility.cjs", import.meta.url), "utf8"));
 		write(path.join(STANDALONE, "server.js"));
 		write(path.join(".next", "static", "runtime.js"));
 		write(path.join("public", "asset.txt"));

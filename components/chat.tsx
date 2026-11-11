@@ -15,7 +15,8 @@ import { useHandwritingSession } from "@/components/handwriting/session";
 import type { SharedWriting } from "@/src/core";
 
 import { createContext, Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { explanationHasContent, serializeLearnerExplanation, type LearnerExplanation as Explanation } from "@/src/core";
+import { explanationHasContent, questionDraftHasWork, serializeLearnerExplanation, type LearnerExplanation as Explanation } from "@/src/core";
+import { useDeploymentActivity } from "@/components/deployment-activity";
 import { LearnerExplanation } from "./learner-explanation";
 import { useChatSession } from "@/components/session";
 import { visibleQueuedSteers } from "@/components/session-core";
@@ -757,6 +758,15 @@ export function Chat({
 		readingThinkingRef.current = "";
 		setReadingThinkingSeed((previous) => ({ ...previous, value: "", revision: previous.revision + 1 }));
 	}, []);
+	// Busy signal (main's idle-gated updater may not restart while these hold
+	// work). They live here, for the whole session, so a folded question, a
+	// closed pane or Peek never unmounts them while they hold a draft:
+	// - the open question's answer draft, kept while it is folded, and a
+	//   failed send ("Not sent");
+	// - Thinking while reading — the phone's pane and the inline note — before
+	//   and after the question opens.
+	useDeploymentActivity("unsent-answer", () => !!pending && questionDraftHasWork(questionDraft(pending.key)));
+	useDeploymentActivity("reading-thinking", () => !!readingThinkingRef.current.trim());
 	const pendingQuestionId = pending?.key ?? null;
 	pendingKeyRef.current = pendingQuestionId;
 	// Device-kept question drafts (B1) join after hydration, never in the
