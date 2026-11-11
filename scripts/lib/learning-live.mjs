@@ -175,7 +175,7 @@ export function runCli(binary, args, { input, cwd, timeoutMs, env = process.env 
 		child.stdout.on("data", chunk => { stdout += chunk; });
 		child.stderr.on("data", chunk => { stderr += chunk; });
 		child.on("error", error => { clearTimeout(timer); reject(error); });
-		child.on("close", code => { clearTimeout(timer); code === 0 ? resolve(stdout) : reject(new Error(`${binary} exited ${code}: ${stderr.slice(-2000)}`)); });
+		child.on("close", code => { clearTimeout(timer); code === 0 ? resolve(stdout) : reject(new Error(`${binary} exited ${code}: ${(stderr || stdout).slice(-2000)}`)); });
 		child.stdin.end(input);
 	});
 }
@@ -194,10 +194,10 @@ const CLAUDE_LOCKDOWN = ["--tools", "", "--strict-mcp-config", "--setting-source
 
 /** One learner reply from Claude: no tools, an empty working directory, only the brief and the visible screen. */
 export async function simulateLearner({ brief, view, pending, replies, model, cwd, run = runCli }) {
-	const system = `${brief}\n\nYou are this learner. Reply ONLY with one JSON object and nothing else.`;
+	const system = `${brief}\n\nYou are this learner. You do NOT know everything you, the model, know: you know only what the brief lists under "What you know well", plus what the tutor has explained or shown earlier in this session. Before every answer, run a knowledge check: name the brief item or the earlier tutor explanation your answer relies on. If none covers it, you do not know it: choose "I don't know" (or say you're not sure), even if you could work it out from general knowledge. Follow the brief's numbered events exactly when they apply.\n\nReply ONLY with one JSON object and nothing else.`;
 	const task = pending
-		? `The tutor has an open question. You must answer it now (you may pick "I don't know" and put a question of your own in your thinking).\nQuestion: ${pending.question}\n${pending.options.length ? `Options, numbered as they appear on your screen:\n${displayOrder(pending.tool, pending.toolCallId ?? "", pending.options).map((label, index) => `${index + 1}. ${label}`).join("\n")}` : "(This question has no options: answer in free text.)"}\nReply as {"choice": [<option number${pending.multiSelect ? "s; several allowed" : "; exactly one"}>, or [] if none], "dontKnow": <true|false>, "text": "<free-text answer if there are no options, else empty>", "thinking": "<your reasoning in your own words>"}`
-		: `It is your turn to write a message to the tutor. Reply as {"message": "<what you type>"}. If the tutor has said your goal is reached, reply {"stop": true} instead.`;
+		? `The tutor has an open question. You must answer it now (you may pick "I don't know" and put a question of your own in your thinking).\nQuestion: ${pending.question}\n${pending.options.length ? `Options, numbered as they appear on your screen:\n${displayOrder(pending.tool, pending.toolCallId ?? "", pending.options).map((label, index) => `${index + 1}. ${label}`).join("\n")}` : "(This question has no options: answer in free text.)"}\nReply as {"choice": [<option number${pending.multiSelect ? "s; several allowed" : "; exactly one"}>, or [] if none], "dontKnow": <true|false>, "text": "<free-text answer if there are no options, else empty>", "thinking": "<your reasoning in your own words>", "knowledgeCheck": "<the brief item or earlier tutor explanation you relied on, or 'none: I don't know'>"}`
+		: `It is your turn to write a message to the tutor. Reply as {"message": "<what you type>", "knowledgeCheck": "<what your message relies on>"}. If the tutor has said your goal is reached, reply {"stop": true} instead.`;
 	const prompt = `This is message ${replies + 1} of yours (counting your first).\n\nThe session so far:\n\n${view || "(nothing yet: write your first message)"}\n\n${task}`;
 	const output = await run("claude", ["-p", "--output-format", "json", "--model", model, "--system-prompt", system, ...CLAUDE_LOCKDOWN], { input: prompt, cwd, timeoutMs: 10 * 60_000, env: { ...process.env, CLAUDE_CODE_DISABLE_CLAUDE_MDS: "1" } });
 	const envelope = JSON.parse(output);
