@@ -44,7 +44,7 @@ Cucumber scenario tagged with the ID only when it really executes, then run
 | V-2 | Partial journeys and missing/failed/blocked/not-run/incomplete/uncertain evidence never become a pass. | Separate catalog availability and evidence outcomes; conservative aggregation and controlled report probes. |
 | V-3 | Expectations are independently approved and never weakened to fit results. | Versioned approved spec fingerprint; subject key/calibration absent, so live execution refuses. Only the owner approves new keys. |
 | V-4 | Every required subject/teaching expectation passes; uncertainty is unverified. | Per-step Cucumber aggregation for workflow only; independent tutor evaluator is not implemented and no accuracy claim is made. |
-| V-5 | Permissions and shared run caps are enforced before live dispatch. | No live adapter is admitted. Controlled accounting tests exercise 30 requests, 12 turns and 20 minutes; they do not prove live enforcement. |
+| V-5 | Permissions and shared run caps are enforced before live dispatch. | No live adapter is admitted. Controlled accounting tests exercise the owner's limits (100 learner turns; 1,000-request and 4-hour runaway guards; calibration not counted); they do not prove live enforcement. |
 | V-6 | Evidence identifies candidate, configuration, expectations and actual environment without credentials/history. | Application/verification/spec fingerprints, isolated synthetic fixtures, local results/records/screenshots. No automatic publication or deletion. |
 | V-7 | Selective human acceptance is last, on the reviewed and verified candidate before owner-approved merge. | Handoff below; no auto-merge. A candidate change invalidates affected acceptance. |
 

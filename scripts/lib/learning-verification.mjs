@@ -54,6 +54,9 @@ export function assertResolved(features, ids) {
 	}
 }
 
+/** Owner decision 2026-11-10: 100 learner turns; 1,000 requests and 4 hours are runaway guards, not budgets. */
+export const runLimits = Object.freeze({ learnerTurns: 100, modelRequests: 1000, minutes: 240 });
+
 export class RunBudget {
 	constructor(now = () => Date.now()) {
 		this.now = now;
@@ -64,7 +67,7 @@ export class RunBudget {
 	}
 	admit(kind) {
 		assert.ok(["model", "learner"].includes(kind));
-		if (this.status !== "running" || this.now() - this.started >= 20 * 60_000 || this.requests >= 30 || this.learnerTurns >= 12) {
+		if (this.status !== "running" || this.now() - this.started >= runLimits.minutes * 60_000 || this.requests >= runLimits.modelRequests || this.learnerTurns >= runLimits.learnerTurns) {
 			this.status = "incomplete";
 			throw new Error("Run cap reached; retain partial evidence; no retries or fallback");
 		}
@@ -170,7 +173,7 @@ export function catalogReport(catalog, inventory, observed = {}) {
 		lines.push(`| ${story.parent ? "↳ " : ""}${story.id}: ${story.title} | ${story.availability} | ${story.automation} | ${observed[story.id] ?? "not-run"} | ${story.dependencies.join(", ")} | ${decisions} |`);
 	}
 	lines.push("", "## Owner decisions", "");
-	for (const decision of catalog.decisions ?? []) lines.push(`- **${decision.id}** (${decision.source}): ${decision.question}${decision.blocks?.length ? ` Blocks: ${decision.blocks.join(", ")}.` : ""}`);
+	for (const decision of catalog.decisions ?? []) lines.push(`- **${decision.id}** (${decision.source}): ${decision.question}${decision.blocks?.length ? ` Blocks: ${decision.blocks.join(", ")}.` : ""}${decision.resolved ? ` **Resolved:** ${decision.resolved}` : ""}`);
 	lines.push("", "## Excluded or deferred source behaviors", "");
 	for (const row of inventory.rows.filter(item => item.disposition !== "story")) lines.push(`- ${row.disposition}: ${row.source} ${row.locator}: ${row.behavior}. ${row.reason}`);
 	lines.push("", "Availability comes from source inspection; it is not a run result. Missing verification is not a product-gap finding. No subject-accuracy or learning-efficacy claim.");

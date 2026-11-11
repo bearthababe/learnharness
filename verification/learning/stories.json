@@ -18,14 +18,14 @@
     "supporting": "Lower-level tests that support but do not replace story-level verification."
   },
   "decisions": [
-    { "id": "D-1", "question": "Which reference subject, trusted sources and versioned answer key/rubric should the tutor evaluation use, including approved good, bad and acceptable-variant examples for evaluator calibration?", "source": "SPEC §3 Expectations and evaluator independence", "blocks": ["LJ-TUTOR"] },
-    { "id": "D-2", "question": "Which evaluator model/configuration and which credential-holding processes may the initial live exercise use? The spec authorizes the bounded exercise but requires owner approval for any new credential access and an enforceable process/tool boundary before dispatch.", "source": "SPEC §3 Actors, permissions and effects", "blocks": ["LJ-TUTOR"] },
+    { "id": "D-1", "question": "Which reference subject, trusted sources and versioned answer key/rubric should the tutor evaluation use, including approved good, bad and acceptable-variant examples for evaluator calibration?", "source": "SPEC §3 Expectations and evaluator independence", "blocks": [], "resolved": "2026-11-10: linear algebra key verification/learning/keys/la-eigen-2x2 version 1.0.0 approved, including its five policy readings." },
+    { "id": "D-2", "question": "Which evaluator model/configuration and which credential-holding processes may the initial live exercise use? The spec authorizes the bounded exercise but requires owner approval for any new credential access and an enforceable process/tool boundary before dispatch.", "source": "SPEC §3 Actors, permissions and effects", "blocks": [], "resolved": "2026-11-10: grader GPT Sol via the owner's Codex/ChatGPT login; simulated learner a Claude model via the owner's Claude login; no API billing." },
     { "id": "D-3", "question": "Which native Electron runtime and which physical iPhone/iPad Home Screen setups are available for target evidence? Issue #49 names laptop plus physical iPhone; the spec names Electron, iPhone and iPad. Confirm whether 'laptop' means native Electron.", "source": "SPEC §3 Devices; I49 Testing §5", "blocks": ["LJ-DEVICE-CONTINUITY"] },
     { "id": "D-4", "question": "How should learner and tutor move between teaching, practice, drills and review, how may the tutor prescribe a drill, and when should teaching revisit earlier capabilities? These are open in #15 and are not settled by this catalog.", "source": "I15; VISION §5 Drills", "blocks": ["LJ-MOVE-ACTIVITIES", "LJ-DRILL-PRESCRIBED"] },
     { "id": "D-5", "question": "What are on-demand check mechanics: scope selection, feedback timing and relationship to review scheduling? The vision leaves these to later decisions.", "source": "VISION §5 On-demand checks", "blocks": ["LJ-CHECK"] },
     { "id": "D-6", "question": "How do learner evidence and graph propositions relate for exploration? The vision requires domain alignment with upstream before design.", "source": "VISION §6 Explore and find earlier learning", "blocks": ["LJ-EXPLORE-EVIDENCE"] },
     { "id": "D-7", "question": "Is grouping #49's 86 user stories into the LJ-REVIEW, LJ-RECORDS, LJ-REPAIR and LJ-SCHEDULE families (each citing story numbers) the right granularity, or should each #49 story get its own ID before its implementation is planned?", "source": "I49 User Stories", "blocks": [] },
-    { "id": "D-8", "question": "The spec's initial live exercise allows only teaching, question and planning tools, while #49 acceptance requires a live run with normal functionality enabled (background reader, graph processing). Confirm these are separate authorizations and that #49's live harness needs its own approval.", "source": "SPEC §3 vs I49 Testing §1", "blocks": ["LJ-TUTOR"] },
+    { "id": "D-8", "question": "The spec's initial live exercise allows only teaching, question and planning tools, while #49 acceptance requires a live run with normal functionality enabled (background reader, graph processing). Confirm these are separate authorizations and that #49's live harness needs its own approval.", "source": "SPEC §3 vs I49 Testing §1", "blocks": [], "resolved": "2026-11-10: separate authorizations; this exercise keeps teaching, question and planning tools only." },
     { "id": "D-9", "question": "How are cross-device continuity and synchronization delivered (native/web, sync)? The vision leaves these open.", "source": "VISION §7", "blocks": ["LJ-DEVICE-CONTINUITY"] }
   ],
   "stories": [
@@ -429,8 +429,8 @@
         "failureOrReturn": ["One material subject error or required teaching violation fails the scenario; uncertain judgments stay unverified; a reached cap is incomplete."]
       },
       "dependencies": ["LJ-PROGRESS"], "tickets": [], "availability": "unknown", "availabilityBasis": "tutor exists; its quality is what this evaluates",
-      "automation": "blocked", "verification": { "scenarios": [], "supporting": [] },
-      "expectations": ["section 3, V-3 through V-5"], "claims": ["subject key, calibration and enforceable live adapter need approval", "blocked on D-1, D-2 and D-8"]
+      "automation": "missing-verification", "verification": { "scenarios": [], "supporting": ["tests/verification/la-eigen-key.test.mjs"] },
+      "expectations": ["section 3, V-3 through V-5"], "claims": ["approved linear-algebra key v1.0.5 (verification/learning/keys/la-eigen-2x2), 2026-11-10", "calibration and an enforceable live adapter still need approval", "needs the live adapter that enforces isolation and accounting"]
     }
   ]
 }

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { test } from "node:test";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { aggregate, coverage, selectStories, assertResolved, cucumberOutcomes, RunBudget, livePreflight, outcomes, validateCatalog, catalogReport } from "../../scripts/lib/learning-verification.mjs";
+import { aggregate, coverage, selectStories, assertResolved, cucumberOutcomes, RunBudget, runLimits, livePreflight, outcomes, validateCatalog, catalogReport } from "../../scripts/lib/learning-verification.mjs";
 
 const catalog = JSON.parse(fs.readFileSync(new URL("../../verification/learning/stories.json", import.meta.url), "utf8"));
 const inventory = JSON.parse(fs.readFileSync(new URL("../../verification/learning/inventory.json", import.meta.url), "utf8"));
@@ -37,7 +37,7 @@ test("V-1: selection includes dependencies and rejects missing verification, blo
 	for (const id of ["LJ-BACKUP", "LJ-RECORDS", "LJ-FIND-EARLIER"]) assert.throws(() => selectStories(catalog, id), /missing-verification/);
 	for (const id of ["LJ-DRILL-PRESCRIBED", "LJ-DEVICE-CONTINUITY"]) assert.throws(() => selectStories(catalog, id), /blocked/);
 	assert.throws(() => selectStories(catalog, "LJ-REVIEW"), /missing-verification/);
-	assert.throws(() => selectStories(catalog, "LJ-TUTOR"), /blocked/);
+	assert.throws(() => selectStories(catalog, "LJ-TUTOR"), /missing-verification/);
 	assert.throws(() => selectStories(catalog, "typo"), /Unknown story/);
 });
 
@@ -57,18 +57,21 @@ test("V-4: a failed required expectation wins; pending, skipped and absent steps
 });
 
 test("V-5: controlled accounting refuses dispatch past shared caps and after cancellation", () => {
+	assert.deepEqual({ ...runLimits }, { learnerTurns: 100, modelRequests: 1000, minutes: 240 }, "owner decision 2026-11-10");
 	const requests = new RunBudget();
-	for (let index = 0; index < 30; index++) requests.admit("model");
+	for (let index = 0; index < runLimits.modelRequests; index++) requests.admit("model");
 	assert.throws(() => requests.admit("model"), /cap reached/);
-	assert.equal(requests.requests, 30);
+	assert.equal(requests.requests, runLimits.modelRequests);
 	assert.equal(requests.status, "incomplete");
 	const turns = new RunBudget();
-	for (let index = 0; index < 12; index++) turns.admit("learner");
+	for (let index = 0; index < runLimits.learnerTurns; index++) turns.admit("learner");
 	assert.throws(() => turns.admit("model"), /cap reached/);
 	assert.equal(turns.requests, 0);
 	let clock = 0;
 	const timed = new RunBudget(() => clock);
-	clock = 20 * 60_000;
+	clock = runLimits.minutes * 60_000 - 1;
+	timed.admit("model");
+	clock = runLimits.minutes * 60_000;
 	assert.throws(() => timed.admit("model"), /cap reached/);
 	const cancelled = new RunBudget();
 	cancelled.stop();
@@ -120,7 +123,7 @@ test("catalog validation rejects untraceable, inconsistent and unapproved entrie
 	mutate((next, rows, tags) => tags.delete("@LJ-START"), /no feature scenario is tagged @LJ-START/);
 	mutate((next, rows, tags) => tags.add("@LJ-REVIEW"), /has a tagged scenario but is marked missing-verification/);
 	mutate((next, rows, tags) => tags.add("@LJ-GHOST"), /no catalog story/);
-	mutate(next => { next.decisions = next.decisions.filter(decision => decision.id !== "D-1" && decision.id !== "D-2" && decision.id !== "D-8"); }, /LJ-TUTOR: blocked without a named owner decision/);
+	mutate(next => { next.decisions = next.decisions.filter(decision => decision.id !== "D-4"); }, /LJ-DRILL-PRESCRIBED: blocked without a named owner decision/);
 	mutate(next => { next.stories.find(story => story.id === "LJ-BACKUP").availability = "probably"; }, /invalid availability/);
 	mutate((next, rows) => { rows.rows = rows.rows.filter(row => !row.stories?.includes("LJ-BACKUP")); }, /LJ-BACKUP: not traced/);
 	mutate((next, rows) => { rows.rows.find(row => row.disposition === "deferred").reason = ""; }, /deferred without a reason/);

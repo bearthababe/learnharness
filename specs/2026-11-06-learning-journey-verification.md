@@ -149,9 +149,12 @@ as a standing authorization for future PRs:
   actions beyond the approved model calls.
 - No credential exposure/copying, real sign-in flow, or API-billing fallback.
   Do not infer that the subscription connection has zero cost.
-- At most **30 total model requests**, including planning, grading and any retries;
-  at most **12 learner turns** and **20 minutes**; **no automatic retries**. These
-  are shared limits for the initial exercise, not per-device allowances.
+- At most **100 learner turns**. Model requests are not budgeted; a guard of
+  **1,000 model requests** only breaks runaway loops. Evaluator calibration is a
+  separate preflight and does not count. A **4-hour** wall-clock guard stops a hung
+  run. **No automatic retries.** These are shared limits for the initial exercise,
+  not per-device allowances. *(Owner decision, 2026-11-10, replacing the earlier
+  30 requests / 12 learner turns / 20 minutes.)*
 - Prevent dispatch beyond a cap, stop further work at a reached limit, and retain
   partial evidence as **incomplete**, never passed. An execution error is not
   permission to retry or switch providers.
