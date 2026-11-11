@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { constants } from "node:fs";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import puppeteer from "puppeteer-core";
@@ -19,7 +20,11 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
  */
 export async function liveApp({ root, run, tutorModel, gate }) {
 	const processes = processScope();
-	const fixture = path.join(run, "fixture");
+	// The app copy lives outside the repository: inside it, Next infers the repository as workspace root and
+	// Tailwind scans earlier runs' evidence (including binary browser caches) into the stylesheet. Data and
+	// evidence stay in the run folder.
+	const fixture = await fs.mkdtemp(path.join(os.tmpdir(), "lh-live-app-"));
+	const data = path.join(run, "data");
 	const save = (name, value) => fs.writeFile(path.join(run, name), JSON.stringify(value, null, 2) + "\n");
 	let browser, page, chatId, origin, server, sequence = 0;
 	const errors = [];
@@ -28,9 +33,9 @@ export async function liveApp({ root, run, tutorModel, gate }) {
 		for (const entry of [...sourceEntries, "node_modules"]) await fs.cp(path.join(root, entry), path.join(fixture, entry), { recursive: true, mode: constants.COPYFILE_FICLONE });
 		assert.equal(await sourceFingerprint(root), await sourceFingerprint(fixture), "Copied source identity differs");
 		await fs.access(path.join(fixture, "verification")).then(() => assert.fail("The answer key must not be in the tutor's app copy"), () => {});
-		await fs.mkdir(path.join(fixture, "data/chats"), { recursive: true });
-		await fs.writeFile(path.join(fixture, "auth.json"), "{}\n", { mode: 0o600 });
-		await fs.writeFile(path.join(fixture, "data/settings.json"), JSON.stringify(liveSettings(tutorModel)));
+		await fs.mkdir(path.join(data, "chats"), { recursive: true });
+		await fs.writeFile(path.join(run, "auth.json"), "{}\n", { mode: 0o600 });
+		await fs.writeFile(path.join(data, "settings.json"), JSON.stringify(liveSettings(tutorModel)));
 		await fs.copyFile(path.join(root, LIVE_ROUTE_FILE), path.join(fixture, "app/api/chat/route.ts"));
 		const listener = net.createServer();
 		await new Promise(resolve => listener.listen(0, "127.0.0.1", resolve));
@@ -41,7 +46,7 @@ export async function liveApp({ root, run, tutorModel, gate }) {
 		await fs.mkdir(config, { recursive: true });
 		server = processes.spawn(process.execPath, [path.join(fixture, "node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(port)], {
 			cwd: fixture,
-			env: { PATH: process.env.PATH, LANG: "C.UTF-8", HOME: process.env.HOME, XDG_CONFIG_HOME: config, LH_DATA_DIR: path.join(fixture, "data"), LH_AUTH_FILE: path.join(fixture, "auth.json"), LH_LIVE_GATE: gate, NEXT_TELEMETRY_DISABLED: "1" },
+			env: { PATH: process.env.PATH, LANG: "C.UTF-8", HOME: process.env.HOME, XDG_CONFIG_HOME: config, LH_DATA_DIR: data, LH_AUTH_FILE: path.join(run, "auth.json"), LH_LIVE_GATE: gate, NEXT_TELEMETRY_DISABLED: "1" },
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 		captureOutput(server, path.join(run, "server.log"), false);
