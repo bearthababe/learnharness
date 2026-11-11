@@ -176,7 +176,9 @@ test("the learner answers by on-screen number; positions follow the shuffled scr
 
 test("a reply that doesn't fit its question is a simulator deviation, not a guessed answer", () => {
 	const quiz = { tool: "ask_user_question", toolCallId: "x", options: ["a", "b"], multiSelect: false };
-	assert.deepEqual(answerFor(quiz, { choice: [2], thinking: "t" }), { indices: [1], dontKnow: false, thinking: "t" });
+	assert.deepEqual(answerFor(quiz, { choice: [2], choiceText: ["b"], thinking: "t" }), { indices: [1], dontKnow: false, thinking: "t" });
+	assert.throws(() => answerFor(quiz, { choice: [2], choiceText: ["a"], thinking: "it's a" }), /chose option number\(s\) \[2\] but described/, "a number pointing at another option is a simulator slip");
+	assert.throws(() => answerFor(quiz, { choice: [2], thinking: "t" }), /but described null/, "the choice must be restated");
 	assert.deepEqual(answerFor(quiz, { dontKnow: true, thinking: "?" }), { indices: [], dontKnow: true, thinking: "?" });
 	assert.throws(() => answerFor(quiz, { choice: [], text: "(0,0) works" }), /without choosing an option/);
 	const free = { tool: "recall", toolCallId: "y", options: [] };
@@ -251,4 +253,12 @@ test("a run in which compaction happened stops as incomplete: its model calls we
 	const result = await runLiveExercise({ root, run: tempRun(), result: {}, deps });
 	assert.match(result.live.endedBy, /compaction occurred/);
 	assert.equal(result.live.verdict, "incomplete (stopped)");
+});
+
+test("a typeset option restated with or without $ delimiters and spacing still matches its number", () => {
+	const pending = { tool: "quiz", toolCallId: "toolu_018FR8q3DfYrgUr2bKRwXvQm", options: ["$\\begin{pmatrix} 7 \\\\ 1 \\end{pmatrix}$", "$\\begin{pmatrix} 10 \\\\ -2 \\end{pmatrix}$", "$\\begin{pmatrix} 10 \\\\ -5 \\end{pmatrix}$", "$\\begin{pmatrix} 4 \\\\ -2 \\end{pmatrix}$"] };
+	const shown = displayOrder(pending.tool, pending.toolCallId, pending.options);
+	const first = shown.indexOf(pending.options[0]) + 1;
+	assert.deepEqual(answerFor(pending, { choice: [first], choiceText: ["\\begin{pmatrix}7\\\\1\\end{pmatrix}"] }).indices, [first - 1]);
+	assert.throws(() => answerFor(pending, { choice: [first === 1 ? 2 : 1], choiceText: [pending.options[0]] }), /Simulator deviation/, "the slip seen in the live run is caught");
 });
