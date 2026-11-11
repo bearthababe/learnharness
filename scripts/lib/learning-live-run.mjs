@@ -76,7 +76,9 @@ export async function runLiveExercise({ root, run, result, tutorModel = "opus", 
 			const used = readGate(gate);
 			live.counts.tutorRequests += used.used;
 			try { for (let call = 0; call < used.used; call++) budget.admit("model"); } catch (error) { stopped = error.message; }
+			const compacted = (await app.record()).messages.some(message => message.role === "custom" && message.customType === "compaction");
 			if (timedOut) { await app.abort(); stopped = "time guard reached: the running tutor turn was aborted"; }
+			else if (compacted) stopped = "compaction occurred: its model calls are outside the tutor gate";
 			else if (used.used >= used.allowed) stopped ??= "request guard reached: further tutor dispatch refused";
 			await app.snapshot(`turn-${live.counts.learnerTurns}`);
 			if (stopped) break;

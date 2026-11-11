@@ -81,7 +81,9 @@ The run keeps a fixed order (`scripts/lib/learning-live-run.mjs`):
      model call passes a shared gate (`scripts/lib/live-gate.mjs`) inside the tutor's route,
      so a tool loop cannot dispatch past the request guard or the deadline. A deadline aborts
      the running turn.
-   - Compaction calls outside the tutor's agent are not gated.
+   - Compaction calls models outside the tutor's gated route. The test profile pushes its
+     threshold out of reach, and a run in which compaction happens stops as
+     *incomplete (stopped)*.
    - A CLI's own transport reconnects after a failed connection (for example Codex's
      bounded "Reconnecting… n/5") produce no model work and are not harness retries; the
      harness never re-sends a request.

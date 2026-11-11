@@ -19,7 +19,9 @@ export const LIVE_ROUTE_FILE = "verification/learning/live/chat-route.ts";
 
 export function liveSettings(tutorModel) {
 	const model = { provider: "claude-code", id: tutorModel };
-	return { version: 1, claudeCode: { enabled: true }, models: { strong: { model }, cheap: { model } }, graph: { enabled: false } };
+	// Compaction calls models outside the tutor's gated route, so the profile pushes its threshold out of reach;
+	// the runner also stops any run in which a compaction marker appears (it would have been ungated).
+	return { version: 1, claudeCode: { enabled: true }, models: { strong: { model }, cheap: { model } }, graph: { enabled: false }, compaction: { thresholdTokens: 100_000_000 } };
 }
 
 /** Readiness before any dispatch. Returns blocked reasons; an empty list means ready. */
@@ -73,8 +75,10 @@ export function compareCalibration(rows, answers) {
 /** Run verdict from per-expectation outcomes, in key §5 order (first match wins). */
 const EXPECTATION_OUTCOMES = new Set(["complied", "violated", "pending", "not applicable", "unverified"]);
 const CLAIM_OUTCOMES = new Set(["true", "false", "unverified"]);
-/** Expectations every complete run must have judged (key §5 required coverage). */
-export const REQUIRED_EXPECTATIONS = Object.freeze(["E1", "E2", "E3", "E4", "E6", "E7", "E8", "E11"]);
+/** Expectations every complete run must have judged as applicable (key §5 required coverage, including E5 for new-idea steps). */
+export const REQUIRED_EXPECTATIONS = Object.freeze(["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E11"]);
+/** Every expectation needs an explicit disposition, "not applicable" included, so a silent omission can never pass. */
+export const ALL_EXPECTATIONS = Object.freeze(["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10", "E11"]);
 
 /** Completeness from the grader's detailed coverage evidence, never from its summary flag (key §5). */
 export function coverageComplete(coverage) {
@@ -91,7 +95,8 @@ export function aggregateRun({ expectations = [], subjectClaims = [], materialEr
 	if (materialErrors.length || expectations.some(item => item?.outcome === "violated") || subjectClaims.some(claim => claim?.outcome === "false")) return "fail";
 	if (stopped || deviated) return "incomplete (stopped)";
 	const malformed = expectations.some(item => !EXPECTATION_OUTCOMES.has(item?.outcome)) || subjectClaims.some(claim => !CLAIM_OUTCOMES.has(claim?.outcome));
-	const unjudged = REQUIRED_EXPECTATIONS.some(id => !expectations.some(item => item?.id === id && item.outcome !== "not applicable"));
+	const unjudged = REQUIRED_EXPECTATIONS.some(id => !expectations.some(item => item?.id === id && item.outcome !== "not applicable"))
+		|| ALL_EXPECTATIONS.some(id => !expectations.some(item => item?.id === id));
 	if (malformed || expectations.some(item => item.outcome === "unverified" || item.outcome === "pending") || subjectClaims.some(claim => claim.outcome === "unverified")) return "unverified";
 	if (!coverageComplete) return "incomplete (coverage)";
 	if (unjudged) return "unverified";

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson, choiceIndices, displayOrder, answerFor, coverageComplete, REQUIRED_EXPECTATIONS } from "../../scripts/lib/learning-live.mjs";
+import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson, choiceIndices, displayOrder, answerFor, coverageComplete, REQUIRED_EXPECTATIONS, ALL_EXPECTATIONS } from "../../scripts/lib/learning-live.mjs";
 import { openGate, admitTutorCall, readGate } from "../../scripts/lib/live-gate.mjs";
 import { runLiveExercise } from "../../scripts/lib/learning-live-run.mjs";
 import { runLimits } from "../../scripts/lib/learning-verification.mjs";
@@ -43,7 +43,7 @@ test("calibration needs exact agreement: one wrong label fails, notes in parenth
 });
 
 const fullCoverage = { goalIdeas: { av_eq_lambda_v: true, det_condition: true, null_space_eigenvectors: true, diagonalization_test: true }, events: { zero_vector: "repaired+rechecked", why_det: "answered", repeated_eigenvalue: "repaired+rechecked" }, learnerEigenpair: true, complete: true };
-const allComplied = REQUIRED_EXPECTATIONS.map(id => ({ id, outcome: "complied" }));
+const allComplied = ALL_EXPECTATIONS.map(id => ({ id, outcome: REQUIRED_EXPECTATIONS.includes(id) ? "complied" : "not applicable" }));
 
 test("the run verdict follows key §5's order", () => {
 	const ok = allComplied;
@@ -87,6 +87,7 @@ test("the fixture route and settings enforce D-8 and use the Claude Code route w
 	assert.equal(settings.models.strong.model.provider, "claude-code");
 	assert.equal(settings.claudeCode.enabled, true);
 	assert.equal(settings.graph.enabled, false);
+	assert.ok(settings.compaction.thresholdTokens >= 100_000_000, "compaction, which is outside the tutor gate, cannot trigger");
 	assert.deepEqual(extractJson('noise {"a":{"b":1}} trailing'), { a: { b: 1 } });
 });
 
@@ -187,6 +188,8 @@ test("missing or malformed grader findings never pass, and completeness comes fr
 	assert.equal(aggregateRun({ expectations: [], coverageComplete: true }), "unverified", "nothing judged");
 	assert.equal(aggregateRun({ expectations: [...allComplied, { id: "E5", outcome: "unknown" }], coverageComplete: true }), "unverified", "invalid outcome");
 	assert.equal(aggregateRun({ expectations: allComplied.filter(item => item.id !== "E3"), coverageComplete: true }), "unverified", "a required expectation was never judged");
+	assert.equal(aggregateRun({ expectations: allComplied.map(item => item.id === "E5" ? { ...item, outcome: "not applicable" } : item), coverageComplete: true }), "unverified", "a completed teaching journey needs an E5 judgment");
+	assert.equal(aggregateRun({ expectations: allComplied.filter(item => item.id !== "E10"), coverageComplete: true }), "unverified", "even a conditional expectation needs an explicit disposition");
 	assert.equal(aggregateRun({ expectations: "nonsense", coverageComplete: true }), "unverified");
 	assert.equal(coverageComplete({ complete: true }), false, "the grader's summary flag alone is not evidence");
 	assert.equal(coverageComplete(fullCoverage), true);
@@ -232,4 +235,20 @@ test("when the guard refuses grading, nothing more is dispatched and the run sta
 	assert.equal(result.status, "incomplete");
 	assert.ok(fs.existsSync(path.join(run, "transcript.md")));
 	assert.ok(!fs.existsSync(path.join(run, "grading.json")));
+});
+
+test("a run in which compaction happened stops as incomplete: its model calls were outside the tutor gate", async () => {
+	const { deps } = fakes({ grading: passing, stopAfter: 5 });
+	const makeApp = deps.app;
+	deps.app = async args => {
+		const app = await makeApp(args);
+		const record = app.record;
+		let turns = 0;
+		app.settle = async () => { turns++; return {}; };
+		app.record = async () => { const current = await record(); return turns >= 2 ? { ...current, messages: [...current.messages, { role: "custom", customType: "compaction", content: "summary" }] } : current; };
+		return app;
+	};
+	const result = await runLiveExercise({ root, run: tempRun(), result: {}, deps });
+	assert.match(result.live.endedBy, /compaction occurred/);
+	assert.equal(result.live.verdict, "incomplete (stopped)");
 });
