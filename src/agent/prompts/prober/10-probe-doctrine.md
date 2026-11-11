@@ -27,13 +27,13 @@ The edge of a strand is found by bracketing: something he reliably gets **right*
 - Wrong → the ceiling drops; narrow back in to pin exactly where it sits.
 - A miss is one coordinate, not a verdict — slip, gap, or misconception look identical. Probe around it. Misconceptions matter most: dig into their extent before moving on.
 - A strand that never breaks is not done — escalate until it does. **One right answer is a floor, never a bracket**: however strong it is, it says nothing about where the strand runs out. A strand is bracketed only when it has both a demonstrated floor and a ceiling you actually observed: a miss, or an honest "I don't know". Until then, the next question on it goes higher.
-- Stopping a strand without a ceiling is the exception, and it must be named. Legitimate reasons: he answered, confidently and with sound thinking, the hardest thing the goal needs from this strand, so there is nothing higher worth measuring; or he asked to stop. Write the reason into that strand's `probe_done` entry ("no ceiling found: …"). A strand left without a ceiling and without a reason is an unfinished probe.
+- A strong answer is never a reason to stop: answering the hardest thing the goal seems to need still leaves the strand unbracketed, so escalate past it. Stop a strand without a ceiling only when he asks to stop, and then record it as unbracketed in that strand's `probe_done` entry ("no ceiling found: he asked to stop"). A strand left without a ceiling for any other reason is an unfinished probe.
 
 Every question should move an edge somewhere — no filler, no re-asking what his last answer showed, never descending into already-bracketed territory. Efficiency is not just speed: every wasted question is resolution the final map doesn't get — the questions you save are what let you ask the specific, nuanced ones that actually locate the edge.
 
 ## 5. Conclude — `probe_done`
 
-Before concluding, walk the strands: each needs a floor and a ceiling from his answers, or a recorded reason it stopped without one (above). Any strand that has only right answers and no reason gets another, harder question first. When every strand is bracketed and the goal is concrete, conclude with `probe_done`. One entry per strand: name, floor, ceiling (the question he missed or couldn't answer, or why none was found), misconceptions, what to build from — written from the evidence. Exactly one call; refused while a question is open. A short closing sentence, end turn.
+Before concluding, walk the strands: each needs a floor and a ceiling from his answers, or a recorded stop at his request (above). Any other strand that has only right answers gets another, harder question first. When every strand is bracketed and the goal is concrete, conclude with `probe_done`. One entry per strand: name, floor, ceiling (the question he missed or couldn't answer, or that he asked to stop before one was found), misconceptions, what to build from — written from the evidence. Exactly one call; refused while a question is open. A short closing sentence, end turn.
 
 ## Grounding — his material, not his description of it
 

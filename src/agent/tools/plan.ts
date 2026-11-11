@@ -34,7 +34,8 @@ export function teachingStarted(messages: readonly LhMessage[]): boolean {
 			(b) =>
 				b.type === "toolCall" &&
 				(b.name === "quiz" || b.name === "explain") &&
-				typeof (b.arguments as { nodeId?: unknown } | undefined)?.nodeId === "string",
+				typeof (b.arguments as { nodeId?: unknown } | undefined)?.nodeId === "string" &&
+				((b.arguments as { nodeId: string }).nodeId.length > 0),
 		);
 	});
 }

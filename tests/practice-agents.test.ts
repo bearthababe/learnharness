@@ -384,10 +384,12 @@ describe("practice prompt composition (own directory + the formatting appendix)"
 
 	it("issue #73: probe to a ceiling, a teaching-free plan turn, and maths care compose", () => {
 		const prober = composeInstructions("prober");
-		// E2: one right answer never closes a strand; stopping without a ceiling is recorded
+		// E2: one right answer never closes a strand; only the learner's own request stops one unbracketed (Sol review of #74)
 		assert.match(prober, /One right answer is a floor, never a bracket/);
-		assert.match(prober, /no ceiling found: …/);
-		assert.match(prober, /Any strand that has only right answers and no reason gets another, harder question first/);
+		assert.match(prober, /A strong answer is never a reason to stop/);
+		assert.match(prober, /Stop a strand without a ceiling only when he asks to stop/);
+		assert.match(prober, /Any other strand that has only right answers gets another, harder question first/);
+		assert.doesNotMatch(prober, /hardest thing the goal needs from this strand, so there is nothing higher/);
 		const teacher = composeInstructions("teacher");
 		// E3: the presenting turn presents and asks; it never teaches
 		assert.match(teacher, /The prose describes the route, never the material/);

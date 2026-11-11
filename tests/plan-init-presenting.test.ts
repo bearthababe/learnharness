@@ -78,6 +78,16 @@ describe("plan_init: the presenting turn", () => {
 		assert.ok(parsed.reminder.includes(PLAN_PRESENTING_REMINDER));
 	});
 
+	it("a refused quiz with an empty nodeId does not end the presenting turn", async () => {
+		const chatId = newChat("Plan: empty node id");
+		chatStore.saveMessages(chatId, [
+			assistantWithCall("m1", "plan_init", { mermaid: MERMAID }),
+			assistantWithCall("m2", "quiz", { question: "q?", nodeId: "", type: "check" }),
+		]);
+		const parsed = JSON.parse((await planInit(chatId)).text) as { reminder: string };
+		assert.ok(parsed.reminder.includes(PLAN_PRESENTING_REMINDER));
+	});
+
 	it("a mid-lesson rewrite (a node-tagged check exists) carries on without the presenting reminder", async () => {
 		const chatId = newChat("Plan: mid-lesson rewrite");
 		chatStore.saveMessages(chatId, [
@@ -92,6 +102,7 @@ describe("plan_init: the presenting turn", () => {
 	it("teachingStarted counts node-tagged quiz and explain calls only", () => {
 		assert.equal(teachingStarted([]), false);
 		assert.equal(teachingStarted([assistantWithCall("a", "quiz", { question: "q?" })]), false);
+		assert.equal(teachingStarted([assistantWithCall("a", "quiz", { question: "q?", nodeId: "" })]), false, "an empty tag is untagged, as in phases.ts");
 		assert.equal(teachingStarted([assistantWithCall("a", "explain", { question: "q?", nodeId: "x" })]), true);
 	});
 });
