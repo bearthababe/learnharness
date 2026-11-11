@@ -893,6 +893,18 @@ function SessionsSidebar() {
 						<ChevronLeftIcon aria-hidden />Back
 					</button>
 					<h2 className="lh-sessions-title hidden">Sessions</h2>
+					{/* §0 (round 19): the laptop's 🐞 — at the top of the sidebar, beside
+					    its collapse toggle (phones and tablets have it in ⋯; CSS keeps it
+					    to laptops). In the page from the first paint, so nothing moves
+					    after loading; Helpers, its status and Settings keep their one
+					    line below (R10). Tap: report this screen; hold: with an open
+					    menu still showing. */}
+					<Hint label="Report a problem with this screen (hold to keep a menu open)" side="bottom">
+						<button type="button" data-testid="sidebar-report" className="lh-sidebar-report lh-no-drag" {...bugPress}>
+							<BugIcon aria-hidden />
+							<span>Report</span>
+						</button>
+					</Hint>
 					<Hint label="Close sidebar" action="toggle-sidebar" disabled={phone}>
 						<Button
 							variant="ghost"
@@ -1113,17 +1125,7 @@ function SessionsSidebar() {
 					    row (round 11): both are secondary, so the sessions get the
 					    room. Settings is also mod+, in the keyboard registry. */}
 					<ActivitySection
-						trailing={<span className="lh-footer-pair">
-							{/* §0 (round 19): the laptop's 🐞, beside Settings (phones and
-							    tablets have it in ⋯; CSS hides it there). Tap: report this
-							    screen; hold: with an open menu still showing. Rendered from
-							    the first paint, so the footer never grows after hydration. */}
-							<Hint label="Report a problem with this screen (hold to keep a menu open)" side="right">
-								<button type="button" data-testid="sidebar-report" className="lh-footer-row lh-report-entry" {...bugPress}>
-									<BugIcon className="size-4" />
-									<span>Report</span>
-								</button>
-							</Hint>
+						trailing={
 							<Hint label="Settings" action="open-settings" side="right" disabled={phone}>
 								<button
 									type="button"
@@ -1136,7 +1138,7 @@ function SessionsSidebar() {
 									<span>Settings</span>
 								</button>
 							</Hint>
-						</span>}
+						}
 					/>
 
 					{process.env.NODE_ENV === "development" && <div className="lh-sessions-footer">

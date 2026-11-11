@@ -5894,15 +5894,19 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 /* The thinking pane's own ⋯, at the corner every screen keeps for it. */
 .lh-reading-pane .lh-pane-menu { position: absolute; z-index: 3; top: calc(8px + env(safe-area-inset-top)); right: 16px; }
 .lh-reading-pane .lh-pane-head { padding-right: 56px; }
-.lh-footer-pair { display: inline-flex; align-items: center; gap: 2px; }
-.lh-footer-row.lh-report-entry { gap: 6px; }
-.lh-footer-row.lh-report-entry svg { color: #f59e0b; }
-/* Only laptops show it (phones and tablets: ⋯ → Report a problem) — the same
-   split as useDeviceClass, in CSS so the server's first paint is already right. */
-@media (max-width: 767px), (pointer: coarse) { .lh-footer-row.lh-report-entry { display: none; } }
-/* On laptops Report and Settings are their own row under Helpers, from the first
-   paint and whatever Helpers' count says, so the footer never re-wraps later. */
-@media (min-width: 768px) and (not (pointer: coarse)) { :root .lh-activity-bar > .lh-footer-pair { flex: 1 0 100%; } }
+/* The laptop's 🐞 at the top of the sidebar, beside the collapse toggle. Only
+   laptops show it (phones and tablets: ⋯ → Report a problem) — the same split
+   as useDeviceClass, in CSS so the server's first paint is already right. */
+.lh-sidebar-report { display: none; }
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	.lh-sidebar-report {
+		display: inline-flex; align-items: center; gap: 6px; height: 32px; margin-left: auto; padding: 0 10px; border-radius: 999px;
+		color: var(--muted-foreground); font-size: 13.5px; font-weight: 550; transition: background-color .15s, color .15s;
+	}
+	.lh-sidebar-report:hover, .lh-sidebar-report:focus-visible { background: var(--accent); color: var(--foreground); }
+	.lh-sidebar-report svg { width: 16px; height: 16px; color: #f59e0b; }
+	:root .lh-sessions-header .lh-sidebar-report ~ .lh-sessions-close { margin-left: 0; }
+}
 /* The report pages. */
 .lh-reports-page { min-height: 100dvh; overflow-y: auto; background: var(--background); color: var(--foreground); }
 .lh-reports-bar { position: sticky; top: 0; z-index: 5; background: var(--background); }
