@@ -6024,6 +6024,18 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 	:root:root .lh-topbar :is(.lh-nav-chip-label, .lh-header-chip-label, .lh-notebook-toggle-label, .lh-focus-corner-label) { font-size: 17px; }
 	:root:root .lh-topbar :is(.lh-nav-chip, .lh-header-chip, .lh-notebook-toggle, .lh-focus-corner) svg { width: 20px; height: 20px; }
 	:root:root .lh-session-title { font-size: 22px; }
+	/* Home's bar is the page bar's twin (owner: no button moves between
+	   screens): the same 48px chips and 17px labels, the same 12px spacing in
+	   px (T1's larger rem would widen only the page bar's), and the chips on
+	   the same 8px line (Home's bar centres them: 64px tall). Its Ideas and
+	   Search match their 48px neighbours. */
+	:root:root .lh-topbar { padding-inline: 12px; column-gap: 12px; }
+	:root:root .lh-home-navigation { height: 64px; }
+	:root:root .lh-home-navigation :is(.lh-nav-chip, .lh-page-menu-button) { height: 48px; min-height: 48px; }
+	:root:root .lh-home-navigation .lh-nav-chip-label { font-size: 17px; }
+	:root:root .lh-home-navigation .lh-nav-chip svg { width: 20px; height: 20px; }
+	:root:root .lh-home-toolbar :is(.lh-graph-chains, .lh-graph-import) button { height: 48px; font-size: 17px; }
+	:root:root .lh-home-toolbar .lh-graph-search input { height: 48px; font-size: 17px; }
 	/* With the larger chips the name keeps its full width: the phone's two
 	   rows (F1) — the toolbar first, the session's name on a row of its own. */
 	:root:root .lh-topbar { flex-wrap: wrap; height: auto; min-height: 0; padding-top: 8px; padding-bottom: 8px; row-gap: 4px; align-content: flex-start; }
