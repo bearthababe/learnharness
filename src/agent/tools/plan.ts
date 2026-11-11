@@ -4,6 +4,7 @@ import { serverExecute } from "../tool-execute.ts";
 import type { PlanToolResult, PlanTree } from "../../core/contracts.ts";
 import type { ChatStore } from "../../core/ports.ts";
 import { createTree, PlanTreeError } from "../../core/plan-tree.ts";
+import type { LhMessage } from "../../core/native-messages.ts";
 import { parseMermaidPlan } from "./mermaid-plan.ts";
 
 /** The binding-id reminder riding plan_init's slim content (owner,
@@ -13,6 +14,30 @@ import { parseMermaidPlan } from "./mermaid-plan.ts";
  *  discipline slips; the reminder lands right there. */
 const PLAN_NODE_IDS_REMINDER =
 	"These are the plan's node ids — the only valid nodeId values for every quiz and explain call from here on. Reference them exactly.";
+
+/** The presenting-turn reminder (issue #73, E3): while no node-tagged
+ *  quiz/explain call exists, this plan_init is a presentation, and the
+ *  live exercise showed the turn's tail is where teaching leaked in. Mid-
+ *  lesson rewrites carry on without it (planning doctrine). */
+export const PLAN_PRESENTING_REMINDER =
+	"This is the plan presentation: write the approach prose (the route, not the material), ask him to confirm the plan or say what to change, " +
+	"and end your turn. No teaching, prediction or quiz/explain call until he has agreed.";
+
+/** Has teaching begun? The plan→teach seam is the first node-tagged
+ *  quiz/explain call (docs/archive/probe-teach-split.md §4). */
+export function teachingStarted(messages: readonly LhMessage[]): boolean {
+	return messages.some((m) => {
+		if ((m as { role?: string }).role !== "assistant") return false;
+		const content = (m as { content?: unknown }).content;
+		if (!Array.isArray(content)) return false;
+		return (content as Array<{ type?: string; name?: string; arguments?: unknown }>).some(
+			(b) =>
+				b.type === "toolCall" &&
+				(b.name === "quiz" || b.name === "explain") &&
+				typeof (b.arguments as { nodeId?: unknown } | undefined)?.nodeId === "string",
+		);
+	});
+}
 
 /** What the plan tools close over (the plan-tree half of the tool context). */
 export interface PlanToolContext {
@@ -66,7 +91,8 @@ export function planTools(ctx: PlanToolContext): Record<string, AgentTool<any>> 
 			label: "plan_init",
 			description:
 				"Write or REWRITE this session's plan map — the dependency graph the learner follows live in the plan window. " +
-				"Call once right after the probe concludes, to present the map; re-call whenever the map is wrong (the new block replaces the old tree). " +
+				"Call once right after the probe concludes, to present the map: that turn presents the plan and asks him to confirm it, with no teaching. " +
+				"Re-call whenever the map is wrong (the new block replaces the old tree). " +
 				"A mermaid graph block (any direction): one node per line (`slug[Short Title]` — slugs are permanent lowercase ids: a-z, 0-9, hyphens/underscores), " +
 				"`-->` edges meaning 'from must be understood before to' (chains fine). 5–15 nodes: a map, not a syllabus — one reasoning step per node, compress. " +
 				"Every check you fire names the node it assesses via `nodeId`; where the lesson stands derives from those tags.",
@@ -96,7 +122,9 @@ export function planTools(ctx: PlanToolContext): Record<string, AgentTool<any>> 
 						text: JSON.stringify({
 							ok: true,
 							nodeIds: next.nodes.map((n) => n.id),
-							reminder: PLAN_NODE_IDS_REMINDER,
+							reminder: teachingStarted(record.messages)
+								? PLAN_NODE_IDS_REMINDER
+								: `${PLAN_NODE_IDS_REMINDER} ${PLAN_PRESENTING_REMINDER}`,
 						}),
 						details: { ok: true, tree: next },
 					};

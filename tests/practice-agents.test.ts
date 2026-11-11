@@ -382,6 +382,26 @@ describe("practice prompt composition (own directory + the formatting appendix)"
 		assert.match(prober, /the verdict, his confidence, and his thinking field together set where the next question should sit/);
 	});
 
+	it("issue #73: probe to a ceiling, a teaching-free plan turn, and maths care compose", () => {
+		const prober = composeInstructions("prober");
+		// E2: one right answer never closes a strand; stopping without a ceiling is recorded
+		assert.match(prober, /One right answer is a floor, never a bracket/);
+		assert.match(prober, /no ceiling found: …/);
+		assert.match(prober, /Any strand that has only right answers and no reason gets another, harder question first/);
+		const teacher = composeInstructions("teacher");
+		// E3: the presenting turn presents and asks; it never teaches
+		assert.match(teacher, /The prose describes the route, never the material/);
+		assert.match(teacher, /No `quiz` or `explain` call, no prediction, no first step/);
+		// maths care: general checks, shared by every agent that composes accuracy
+		for (const kind of ["prober", "teacher", "practice"] as const) {
+			const prompt = composeInstructions(kind);
+			assert.match(prompt, /Definitions keep their conditions/, kind);
+			assert.match(prompt, /Characterizations are the general condition, not a special case/, kind);
+			assert.match(prompt, /Paired structures stay paired/, kind);
+		}
+		assert.match(teacher, /Caveat-free never means condition-free/);
+	});
+
 	it("the SHARED formatting guide composes (owner, 2026-10-04 late): LaTeX delimiters in every setting", () => {
 		const prompt = composeInstructions("practice");
 		// The standard delimiter law is shared by all three authoring agents.

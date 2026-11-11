@@ -55,7 +55,7 @@ export const probeDoneInputSchema = Type.Object({
 					}),
 					assessment: Type.String({
 						description:
-							"Where his edge sits on this strand: the floor (what he reliably gets right), the ceiling (where it runs out), " +
+							"Where his edge sits on this strand: the floor (what he reliably gets right), the ceiling (the question he missed or couldn't answer; if the strand stopped without one, 'no ceiling found:' and why), " +
 							"misconceptions found, and what the lesson should build from.",
 					}),
 				}),
