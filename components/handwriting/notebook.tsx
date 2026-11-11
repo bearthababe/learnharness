@@ -255,11 +255,15 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		const working = recovery.current, transfer = submissionRef.current, uploader = transfer?.attachment();
 		if (!working?.getSnapshot().ready || decoding.current || !transfer?.ready || !uploader) { setAttachNote("The notebook is still opening. Try again in a moment."); return; }
 		if (active.current || transfer.isPreparing() || transfer.blocked()) { setAttachNote("Wait a moment: the last change is still being saved."); return; }
-		// L10 (round 19): attaching while the question is still folded opens it
-		// first, so the attachment lands in it with its tray and confirmation.
-		if (!transfer.activeField() && origin === "question") {
+		// L10 (round 19): "Attach to answer" while the question is still folded
+		// opens it first, so the page lands in the answer (with its tray and
+		// confirmation) — folded, the active field was the reading note, and
+		// the page went there without a word.
+		// (The question's reading note, `question:<id>:reading`, is not its answer.)
+		const inQuestion = () => { const key = transfer.activeField()?.targetKey ?? ""; return key.startsWith("question:") && !key.endsWith(":reading"); };
+		if (origin === "question" && !inQuestion()) {
 			window.dispatchEvent(new Event("lh:open-question"));
-			for (let i = 0; i < 40 && !transfer.activeField(); i++) await new Promise(resolve => setTimeout(resolve, 50));
+			for (let i = 0; i < 40 && !inQuestion(); i++) await new Promise(resolve => setTimeout(resolve, 50));
 		}
 		if (!transfer.activeField()) { setAttachNote("There is nothing to attach to right now. Open the question, or write a message to the tutor."); return; }
 		const content = replayHandwriting(working.getSnapshot().working);

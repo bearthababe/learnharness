@@ -6088,9 +6088,9 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 /* L8 (round 19): first run (no graph, so no Search) — Ideas takes the whole
    space between Home and ⋯, so no gap opens where Search would be. */
 @media (max-width: 767px) {
-	:root:root .lh-home-toolbar-minimal .lh-home-toolbar-actions { flex: 1 1 auto; }
-	:root:root .lh-home-toolbar-minimal .lh-graph-chains { flex: 1 1 auto; }
-	:root:root .lh-home-toolbar-minimal .lh-graph-chains button { width: 100%; }
+	:root:root .lh-home-toolbar:not(:has(.lh-graph-search)) .lh-home-toolbar-actions { flex: 1 1 auto; }
+	:root:root .lh-home-toolbar:not(:has(.lh-graph-search)) .lh-graph-chains { flex: 1 1 auto; }
+	:root:root .lh-home-toolbar:not(:has(.lh-graph-search)) .lh-graph-chains button { width: 100%; }
 }
 /* L11 (round 19): the tray — every Actions button alike (no hover that
    sticks after a tap), ✕ beside the thumbnail instead of over its corner,
@@ -6102,11 +6102,13 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 @media (pointer: coarse) { :root:root .lh-writing-remove { width: 44px; height: 44px; } }
 :root:root .lh-writing-img { object-fit: contain; object-position: center; background: var(--lh-writing-paper, #fff); }
 /* L14 (round 19, laptops): the lesson's Usage and model chips and the
-   helpers' count read at a glance — larger, and in readable contrast. */
+   helpers' count read at a glance — larger, and in readable contrast.
+   Above the broad laptop `:root :is([role=log], …) :is(.text-xs, …)`
+   rule (0,4,0), which otherwise holds the bar at 13px. */
 @media (min-width: 1024px) and (not (pointer: coarse)) {
-	:root:root .lh-stats-bar { font-size: 14px; color: color-mix(in oklab, var(--foreground) 76%, transparent); }
-	:root:root .lh-stats-bar :is(button, span) { font-size: 14px; }
-	:root:root .lh-stats-bar [data-testid="stats-model"], :root:root .lh-stats-bar [data-testid="stats-thinking"] { color: color-mix(in oklab, var(--foreground) 86%, transparent); }
-	:root:root .lh-activity-count { font-size: 13.5px; color: color-mix(in oklab, var(--foreground) 72%, transparent); }
-	:root:root .lh-activity-count[data-failed] { color: var(--destructive); font-weight: 600; }
+	html:root:root:root:root .lh-stats-bar { font-size: 14px; color: color-mix(in oklab, var(--foreground) 76%, transparent); }
+	html:root:root:root:root .lh-stats-bar :is(button, span) { font-size: 14px; }
+	html:root:root:root:root .lh-stats-bar [data-testid="stats-model"], html:root:root:root:root .lh-stats-bar [data-testid="stats-thinking"] { color: color-mix(in oklab, var(--foreground) 86%, transparent); }
+	html:root:root:root:root .lh-activity-count { font-size: 13.5px; color: color-mix(in oklab, var(--foreground) 72%, transparent); }
+	html:root:root:root:root .lh-activity-count[data-failed] { color: var(--destructive); font-weight: 600; }
 }

@@ -48,7 +48,14 @@ export function useNotebookDestination(rootRef: RefObject<HTMLElement | null>, s
 				if (session.getSnapshot().inputLocked) { event.preventDefault(); return; }
 				if (owner === "tutor") tutorField.current = event.target as HTMLElement;
 				if (owner !== root.dataset.sessionDestination && (session.speech.isActive() || session.getSnapshot().editing)) event.preventDefault();
-				void session.speech.choose(owner === "notebook" ? { kind: "notebook" } : notebookTutorInput(root, event.target as HTMLElement)).catch(() => {});
+				// L13 (round 19): focusing a CONTROL (an answer option, a button)
+				// changes where speech goes but keeps focus on that control — the
+				// handoff's restore would otherwise pull it into the question's
+				// first text field (Tab landed on "Type your own answer…").
+				const keepFocus = event.type === "focusin" && !target.matches('textarea, input, [data-file-path-input], [contenteditable="true"]');
+				if (keepFocus) preserveFocus = true;
+				const chosen = session.speech.choose(owner === "notebook" ? { kind: "notebook" } : notebookTutorInput(root, event.target as HTMLElement)).catch(() => {});
+				if (keepFocus) void chosen.finally(() => { preserveFocus = false; });
 			}
 		};
 		const key = (event: KeyboardEvent) => {
