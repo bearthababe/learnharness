@@ -56,7 +56,6 @@ const STORAGE_KEY = "lh:sidebar-open";
 import type { ChatGPTControlBridge, NativeSubscriptionControlBridge } from "@/src/core";
 import type { UpdateState } from "@/components/settings/update-settings.tsx";
 import { FilePathDropZone } from "@/components/file-path-drop-zone";
-import { useDeviceClass } from "@/components/device-features";
 import { useBugPress } from "@/components/bug-capture";
 import { PrototypeSwitch } from "@/components/prototype-switch";
 const SIDEBAR_AUTOCLOSE = 928;
@@ -477,7 +476,6 @@ export type SessionKindFilter = "teach" | "all" | "practice";
 const KIND_FILTER_KEY = "lh:session-kind-filter";
 
 function SessionsSidebar() {
-	const deviceClass = useDeviceClass();
 	const bugPress = useBugPress();
 	const { open, phone, drawer, toggle, closePhone } = useSidebar();
 	const sidebarRef = useRef<HTMLElement>(null);
@@ -1117,14 +1115,15 @@ function SessionsSidebar() {
 					<ActivitySection
 						trailing={<span className="lh-footer-pair">
 							{/* §0 (round 19): the laptop's 🐞, beside Settings (phones and
-							    tablets have it in ⋯). Tap: report this screen; hold:
-							    with an open menu still showing. */}
-							{deviceClass === "laptop" && <Hint label="Report a problem with this screen (hold to keep a menu open)" side="right">
+							    tablets have it in ⋯; CSS hides it there). Tap: report this
+							    screen; hold: with an open menu still showing. Rendered from
+							    the first paint, so the footer never grows after hydration. */}
+							<Hint label="Report a problem with this screen (hold to keep a menu open)" side="right">
 								<button type="button" data-testid="sidebar-report" className="lh-footer-row lh-report-entry" {...bugPress}>
 									<BugIcon className="size-4" />
 									<span>Report</span>
 								</button>
-							</Hint>}
+							</Hint>
 							<Hint label="Settings" action="open-settings" side="right" disabled={phone}>
 								<button
 									type="button"

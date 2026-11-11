@@ -5853,7 +5853,7 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 @media (min-width: 1024px) and (pointer: fine) { .lh-bug-sheet { left: auto; right: 20px; bottom: 20px; width: 420px; } }
 .lh-bug-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .lh-bug-head strong { font-size: 16px; font-weight: 650; }
-.lh-bug-status { font-size: 13px; color: var(--muted-foreground); }
+.lh-bug-status { flex-basis: 100%; font-size: 13px; color: var(--muted-foreground); } /* its own line: the text changes as it saves (never re-wraps the head) */
 .lh-bug-status[data-saving="offline"] { color: #f59e0b; }
 .lh-bug-kind { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border-radius: 12px; background: var(--muted); }
 .lh-bug-kind button { min-height: 40px; border-radius: 9px; font-size: 15px; font-weight: 550; color: var(--muted-foreground); }
@@ -5897,6 +5897,12 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 .lh-footer-pair { display: inline-flex; align-items: center; gap: 2px; }
 .lh-footer-row.lh-report-entry { gap: 6px; }
 .lh-footer-row.lh-report-entry svg { color: #f59e0b; }
+/* Only laptops show it (phones and tablets: ⋯ → Report a problem) — the same
+   split as useDeviceClass, in CSS so the server's first paint is already right. */
+@media (max-width: 767px), (pointer: coarse) { .lh-footer-row.lh-report-entry { display: none; } }
+/* On laptops Report and Settings are their own row under Helpers, from the first
+   paint and whatever Helpers' count says, so the footer never re-wraps later. */
+@media (min-width: 768px) and (not (pointer: coarse)) { :root .lh-activity-bar > .lh-footer-pair { flex: 1 0 100%; } }
 /* The report pages. */
 .lh-reports-page { min-height: 100dvh; overflow-y: auto; background: var(--background); color: var(--foreground); }
 .lh-reports-bar { position: sticky; top: 0; z-index: 5; background: var(--background); }
