@@ -6063,10 +6063,15 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 	:root:root:root:root .hw-notebookHeader .hw-headerAction { font-size: 16px; }
 	:root:root:root:root .hw-notebookHeader h2 { font-size: 17px; }
 	:root:root:root:root .hw-notebookHeader .hw-zoom :is(button, span) { font-size: 16px; }
-	/* Expanded on a portrait tablet the row also carries "Show question too":
-	   at this size the title steps aside (the notebook fills the screen, as on
-	   phones), so Close keeps the far right of one row (B5). */
-	@media (max-width: 1023px) { :root:root:root:root [data-expanded="true"] .hw-notebookHeader h2 { display: none; } }
+	/* Expanded on a portrait tablet the row also carries "Show question too"
+	   (E8): there the header keeps round 18's size (14px, title 15px), which
+	   is what fits title, order, label and Close on one row (B5, T5). The card
+	   view and landscape keep the larger size. */
+	@media (max-width: 1023px) {
+		:root:root:root:root [data-expanded="true"] .hw-notebookHeader .hw-headerAction { font-size: 14px; }
+		:root:root:root:root [data-expanded="true"] .hw-notebookHeader h2 { font-size: 15px; }
+		:root:root:root:root [data-expanded="true"] .hw-notebookHeader .hw-zoom :is(button, span) { font-size: 14px; }
+	}
 	/* Settings uses the tablet's height instead of floating small in it. */
 	:root:root .lh-settings.settings-dialog-pop { height: calc(100dvh - 48px); max-height: none; width: min(960px, calc(100vw - 32px)); max-width: none; }
 }
