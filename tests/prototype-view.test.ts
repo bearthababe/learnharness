@@ -25,6 +25,8 @@ it("B18 (round 18): every try-out is declared once, for the device it belongs to
 		assert.ok(def.variants.length >= 2, def.id);
 		assert.equal(new Set(def.variants.map((v) => v.value)).size, def.variants.length, def.id);
 		for (const v of def.variants) assert.ok(v.label && v.description, `${def.id} ${v.value}`);
+		// The switch must fit the small spots beside a design: compact names.
+		for (const v of def.variants) assert.ok((v.switchLabel ?? v.label).length <= 10, `${def.id} ${v.value}: "${v.switchLabel ?? v.label}"`);
 		assert.equal(tryoutDef(def.id), def);
 	}
 	assert.deepEqual(tryoutIdsFor("phone"), ["header-look", "reveal-style", "card-layout", "sessions-page"]);

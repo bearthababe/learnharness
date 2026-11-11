@@ -10,7 +10,9 @@ import { setWheelLook, setWritingPalette, useDeviceFeature, useWheelLook, useWri
  * entry here plus a <PrototypeSwitch tryout="…" anchor="…"> where it appears.
  * The first variant is the default.
  */
-export type TryoutVariant = { value: string; label: string; description: string };
+/** `switchLabel`: a shorter name for Prototype view's switch, where the
+ *  label is long (the switch must fit the small spots beside a design). */
+export type TryoutVariant = { value: string; label: string; description: string; switchLabel?: string };
 export type TryoutDef = {
 	id: TryoutId;
 	title: string;
@@ -65,8 +67,8 @@ export const TRYOUT_DEFS: readonly TryoutDef[] = [
 		id: "sessions-page", title: "Sessions", short: "Sessions", on: "phone",
 		description: "The list of your sessions, opened from Sessions in the bar.",
 		variants: [
-			{ value: "toolbar", label: "Page under the bar", description: "A page below the usual bar, with Sessions shown as the current page." },
-			{ value: "header", label: "Page with Back", description: "A page with its own header: ‹ Back where Sessions was, and the title." },
+			{ value: "toolbar", label: "Page under the bar", switchLabel: "Under bar", description: "A page below the usual bar, with Sessions shown as the current page." },
+			{ value: "header", label: "Page with Back", switchLabel: "With Back", description: "A page with its own header: ‹ Back where Sessions was, and the title." },
 		],
 		useValue: () => useTryout("sessionsPage"),
 		set: (value) => setTryout("sessionsPage", value as "toolbar" | "header"),

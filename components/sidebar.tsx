@@ -847,8 +847,12 @@ function SessionsSidebar() {
 		>
 			<div className="lh-sessions-content flex h-full w-72 flex-col border-r" data-searching={searchMode || undefined}>
 				{/* B18 (round 18): Prototype view's switch for the phone's Sessions page. */}
+				{/* B18: the header's empty end (with Back); the page's foot when the
+				    list is short; else the end of the Your turn note (text only). */}
 				{phone && open && <PrototypeSwitch tryout="sessions-page" anchors={[
-					{ selector: '.lh-sessions-panel[aria-hidden="false"]', places: ["inside-bottom-end", "inside-end"] },
+					{ selector: '.lh-sessions-panel[aria-hidden="false"] .lh-sessions-header', places: ["inside-end"] },
+					{ selector: '.lh-sessions-panel[aria-hidden="false"]', places: ["inside-bottom-end"] },
+					{ selector: '.lh-sessions-panel[aria-hidden="false"] [data-testid="your-turn-hint"]', places: ["inside-center-end"], text: true },
 				]} />}
 				{/* LH wordmark — the owner's header; close toggle sits at the edge.
 				    Merged chrome (2026-09-17): in Electron this band is the

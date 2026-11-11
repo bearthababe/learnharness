@@ -20,8 +20,10 @@ import { tryoutDef, type TryoutDef, type TryoutId } from "@/components/tryout-re
  *   <PrototypeSwitch tryout="its-id" anchors={[{ selector: "…" }]} />
  * anywhere in the tree (the first visible anchor wins).
  */
-export type ProtoPlace = "below-end" | "below-start" | "above-end" | "above-start" | "right" | "left" | "inside-end" | "inside-start" | "inside-bottom-end";
-export type ProtoAnchor = { selector: string; places?: ProtoPlace[] };
+export type ProtoPlace = "below-end" | "below-start" | "above-end" | "above-start" | "right" | "left" | "inside-end" | "inside-start" | "inside-bottom-end" | "inside-center-end";
+/** `text`: as a last resort, a spot inside this anchor may lie over plain
+ *  text (a note, say), never a control — for full pages with no bare spot. */
+export type ProtoAnchor = { selector: string; places?: ProtoPlace[]; text?: boolean };
 const DEFAULT_PLACES: ProtoPlace[] = ["below-end", "above-end", "right", "left", "below-start", "above-start"];
 
 export function PrototypeSwitch({ tryout, anchors }: { tryout: TryoutId; anchors: ProtoAnchor[] }) {
@@ -51,7 +53,7 @@ function freeAt(x: number, y: number, self: Element, strict: boolean): boolean {
 	return true;
 }
 
-type Spot = { left: number; top: number; inside?: boolean };
+type Spot = { left: number; top: number; inside?: boolean; text?: boolean };
 /** The anchors in view and on top (not under an open dialog or a pane). */
 function anchorsInView(anchors: ProtoAnchor[]): { anchor: ProtoAnchor; el: HTMLElement }[] {
 	const modal = [...document.querySelectorAll<HTMLElement>("[aria-modal='true']")].find((m) => { const r = m.getBoundingClientRect(); return m.checkVisibility?.({ visibilityProperty: true }) !== false && r.width > 0 && r.height > 0 && r.right > 1 && r.left < window.innerWidth - 1 && r.bottom > 1 && r.top < window.innerHeight - 1; });
@@ -70,7 +72,7 @@ function anchorsInView(anchors: ProtoAnchor[]): { anchor: ProtoAnchor; el: HTMLE
 	}
 	return out;
 }
-function spotsAround(el: HTMLElement, places: ProtoPlace[], w: number, h: number): Spot[] {
+function spotsAround(el: HTMLElement, places: ProtoPlace[], w: number, h: number, text = false): Spot[] {
 	const a = el.getBoundingClientRect(), gap = 6, m = 8;
 	const vw = window.innerWidth, vh = window.visualViewport?.height ?? window.innerHeight;
 	const at: Record<ProtoPlace, [number, number]> = {
@@ -79,6 +81,7 @@ function spotsAround(el: HTMLElement, places: ProtoPlace[], w: number, h: number
 		"right": [a.right + gap, a.top + (a.height - h) / 2], "left": [a.left - gap - w, a.top + (a.height - h) / 2],
 		"inside-end": [a.right - w - gap, a.top + gap], "inside-start": [a.left + gap, a.top + gap],
 		"inside-bottom-end": [a.right - w - gap, a.bottom - h - gap],
+		"inside-center-end": [a.right - w - gap, a.top + (a.height - h) / 2],
 	};
 	const spots: Spot[] = [];
 	for (const place of places) {
@@ -89,7 +92,7 @@ function spotsAround(el: HTMLElement, places: ProtoPlace[], w: number, h: number
 		if (left < m - 0.5 || top < m - 0.5 || left + w > vw - m + 0.5 || top + h > vh - m + 0.5) continue;
 		// Outside places never overlap the anchor itself.
 		if (!place.startsWith("inside") && left < a.right && left + w > a.left && top < a.bottom && top + h > a.top) continue;
-		spots.push({ left: Math.round(left), top: Math.round(top), inside: place.startsWith("inside") });
+		spots.push({ left: Math.round(left), top: Math.round(top), inside: place.startsWith("inside"), text });
 	}
 	return spots;
 }
@@ -104,11 +107,12 @@ function FloatingSwitch({ def, value, anchors }: { def: TryoutDef; value: string
 			frame = 0;
 			const self = ref.current; if (!self) return;
 			const w = self.offsetWidth, h = self.offsetHeight;
-			const candidates = anchorsInView(anchors).flatMap(({ anchor, el }) => spotsAround(el, anchor.places ?? DEFAULT_PLACES, w, h));
+			const candidates = anchorsInView(anchors).flatMap(({ anchor, el }) => spotsAround(el, anchor.places ?? DEFAULT_PLACES, w, h, anchor.text));
 			const clear = (s: Spot, strict: boolean) => [s.left + 2, s.left + w / 2, s.left + w - 2].every((x) => [s.top + 2, s.top + h / 2, s.top + h - 2].every((y) => freeAt(x, y, self, strict)));
 			// Bare background first; else, outside what it controls, over text but
-			// never a control; else hidden (it never covers what it controls).
-			const found = candidates.find((s) => clear(s, true)) ?? candidates.find((s) => !s.inside && clear(s, false)) ?? null;
+			// never a control; else, where an anchor allows it, over a note's text
+			// inside it; else hidden (it never covers a control).
+			const found = candidates.find((s) => clear(s, true)) ?? candidates.find((s) => !s.inside && clear(s, false)) ?? candidates.find((s) => s.text && clear(s, false)) ?? null;
 			const next = found && { left: found.left, top: found.top };
 			setSpot((prior) => (prior?.left === next?.left && prior?.top === next?.top ? prior : next));
 		};
@@ -127,7 +131,7 @@ function FloatingSwitch({ def, value, anchors }: { def: TryoutDef; value: string
 			aria-label={`Prototype: ${def.title} is ${current.label}. Switch to ${next.label}.`} title={`${def.title}: switch to ${next.label}`}
 			style={spot ? { left: spot.left, top: spot.top } : { left: 0, top: 0, visibility: "hidden" }}
 			onClick={() => def.set(next.value)}>
-			<ArrowLeftRightIcon aria-hidden /><span className="lh-proto-text"><span className="lh-proto-name">{def.short}</span><span className="lh-proto-value">{current.label}</span></span>
+			<ArrowLeftRightIcon aria-hidden /><span className="lh-proto-text"><span className="lh-proto-name">{def.short}</span><span className="lh-proto-value">{current.switchLabel ?? current.label}</span></span>
 		</button>
 	);
 }
