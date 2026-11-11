@@ -56,6 +56,7 @@ const STORAGE_KEY = "lh:sidebar-open";
 import type { ChatGPTControlBridge, NativeSubscriptionControlBridge } from "@/src/core";
 import type { UpdateState } from "@/components/settings/update-settings.tsx";
 import { FilePathDropZone } from "@/components/file-path-drop-zone";
+import { PrototypeSwitch } from "@/components/prototype-switch";
 const SIDEBAR_AUTOCLOSE = 928;
 
 // Module scope, guarded for SSR (the server has no navigator).
@@ -845,6 +846,10 @@ function SessionsSidebar() {
 			}}
 		>
 			<div className="lh-sessions-content flex h-full w-72 flex-col border-r" data-searching={searchMode || undefined}>
+				{/* B18 (round 18): Prototype view's switch for the phone's Sessions page. */}
+				{phone && open && <PrototypeSwitch tryout="sessions-page" anchors={[
+					{ selector: '.lh-sessions-panel[aria-hidden="false"]', places: ["inside-bottom-end", "inside-end"] },
+				]} />}
 				{/* LH wordmark — the owner's header; close toggle sits at the edge.
 				    Merged chrome (2026-09-17): in Electron this band is the
 				    window's drag surface and starts after the traffic lights

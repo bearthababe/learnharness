@@ -14,6 +14,7 @@ import { readPathSelection, restorePathSelection, type TextSelection } from "./p
 import { useRevealStyle, useTryout } from "@/components/device-prefs";
 import { useCoarsePointer } from "@/components/use-phone-viewport";
 import { BigMic, KeyboardToggle, PaneBar, PeekReturn, settleDocumentScroll, usePaneViewport } from "@/components/pane-kit";
+import { PrototypeSwitch } from "@/components/prototype-switch";
 
 /**
  * The reading-thinking field (owner design 2026-10-03, "two questions per
@@ -338,6 +339,8 @@ export function ReadingThinkingField({
 					<ChevronRightIcon aria-hidden />
 				</button>
 				{showQuestion}
+				{/* B18 (round 18): Prototype view's switch for the Show question style. */}
+				{showQuestion && <PrototypeSwitch tryout="reveal-style" anchors={[{ selector: ".lh-reading-entry .lh-phone-reveal", places: ["above-end", "above-start", "left"] }]} />}
 				{typeof document !== "undefined" && createPortal(pane, document.body)}
 				{peeking && <PeekReturn label="Return to writing" testid="reading-pane-return" dictation={dictation} onReturn={unpeek} />}
 			</div>

@@ -13,10 +13,10 @@ export type RevealStyle = "quiet" | "prominent";
 /** Round 15 (A6): the phone's page bar, solid (default) or glass over the
  *  lesson, which then scrolls beneath it. */
 export type HeaderLook = "solid" | "glass";
-type Prefs = { revealStyle: RevealStyle; keyboardOff: boolean; headerLook: HeaderLook };
+type Prefs = { revealStyle: RevealStyle; keyboardOff: boolean; headerLook: HeaderLook; prototypeView: boolean };
 
-const KEYS = { revealStyle: "lh:reveal-style", keyboardOff: "lh:keyboard-off", headerLook: "lh:header-look" } as const;
-const DEFAULTS: Prefs = { revealStyle: "quiet", keyboardOff: false, headerLook: "solid" };
+const KEYS = { revealStyle: "lh:reveal-style", keyboardOff: "lh:keyboard-off", headerLook: "lh:header-look", prototypeView: "lh:prototype-view" } as const;
+const DEFAULTS: Prefs = { revealStyle: "quiet", keyboardOff: false, headerLook: "solid", prototypeView: false };
 
 function read<K extends keyof Prefs>(key: K): Prefs[K] {
 	try {
@@ -33,7 +33,7 @@ const listeners = new Set<() => void>();
 function notify() { for (const listener of listeners) listener(); }
 function subscribe(listener: () => void) {
 	listeners.add(listener);
-	const onStorage = (event: StorageEvent) => { if (event.key === KEYS.revealStyle || event.key === KEYS.keyboardOff || event.key === KEYS.headerLook || event.key?.startsWith(TRYOUT_PREFIX)) notify(); };
+	const onStorage = (event: StorageEvent) => { if (event.key === KEYS.revealStyle || event.key === KEYS.keyboardOff || event.key === KEYS.headerLook || event.key === KEYS.prototypeView || event.key?.startsWith(TRYOUT_PREFIX)) notify(); };
 	window.addEventListener("storage", onStorage);
 	return () => { listeners.delete(listener); window.removeEventListener("storage", onStorage); };
 }
@@ -88,6 +88,17 @@ export function setTryout<T extends Tryout>(name: T, value: TryoutValue<T>) {
 }
 export function useTryout<T extends Tryout>(name: T): TryoutValue<T> {
 	return useSyncExternalStore(subscribe, () => readTryout(name), () => tryoutDefault(name));
+}
+
+/** B18 (round 18, owner): Prototype view — while on, each design with
+ *  alternatives shows a small switch where it appears (PrototypeSwitch).
+ *  Off by default; kept on this device. */
+export function setPrototypeView(on: boolean) {
+	try { if (on) window.localStorage.setItem(KEYS.prototypeView, "on"); else window.localStorage.removeItem(KEYS.prototypeView); } catch { /* this view only */ }
+	notify();
+}
+export function usePrototypeView(): boolean {
+	return useSyncExternalStore(subscribe, () => read("prototypeView"), () => DEFAULTS.prototypeView);
 }
 
 export function setHeaderLook(look: HeaderLook) {

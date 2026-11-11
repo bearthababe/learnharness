@@ -83,6 +83,7 @@ import { MermaidOverlay, SessionMermaidContext } from "@/components/session-over
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
 import { ArrowRightIcon, ChevronLeftIcon, DumbbellIcon, MessageCircleIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, TargetIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
+import { PrototypeSwitch } from "@/components/prototype-switch";
 import { focusFirstAnswerControl, QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
 import { SessionMessageNavigation } from "@/components/session-navigation";
@@ -1994,6 +1995,20 @@ export function Chat({
 						extraRows={phoneLayout ? [] : [{ id: "focus", label: "Focus on the lesson", value: "Hides this bar", open: () => setFocusMode(true) }]} />
 					<FocusModeButton />
 				</TopBar>
+				{/* B18 (round 18): Prototype view's in-place switches (nothing when it is off). */}
+				{/* The bar's switch sits just under the bar; with a question open that spot is the question's own (its Layout switch). */}
+				<PrototypeSwitch tryout="header-look" anchors={[{ selector: 'html:not(:has(.lh-sessions-panel[aria-hidden="false"])):not(:has(.lh-dock-overlay[data-question-open])) header.lh-topbar', places: ["below-end", "below-start"] }]} />
+				<PrototypeSwitch tryout="card-layout" anchors={[
+					{ selector: '[data-testid="reading-pane"][data-open] .lh-pane-nav', places: ["inside-end"] },
+					{ selector: '[data-testid="reading-pane"][data-open] .lh-pane-actions', places: ["inside-bottom-end"] },
+					{ selector: '[data-testid="reading-pane"][data-open] .lh-pane-head', places: ["inside-end"] },
+					{ selector: '[data-testid="notebook-pane-head"]', places: ["inside-end"] },
+					{ selector: '.notebook-panel[data-pane] .lh-pane-nav', places: ["inside-end"] },
+					{ selector: '.notebook-panel[data-pane] .notebook-card-actions', places: ["inside-bottom-end"] },
+					{ selector: '.lh-dock-overlay[data-question-open] .lh-question-back', places: ["inside-end"] },
+					{ selector: '.lh-dock-overlay[data-question-open] [data-attachment-composer]', places: ["above-end", "above-start", "below-end"] },
+					{ selector: '.lh-dock-overlay[data-dock-kind="practice"] [data-attachment-composer]', places: ["above-end", "above-start"] },
+				]} />
 				<FocusModeExit />
 				{!notebookVisible && notebook.error && (friendlyNetworkError(notebook.error)
 					? <p role="status" className="lh-quiet-status px-3 py-1">Offline — your notebook working is kept and syncs when you're back.</p>

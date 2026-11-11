@@ -21,6 +21,7 @@ import { useMenuEscape } from "../menu-escape";
 import { useOneMenu } from "../one-menu";
 import { paint, HIGHLIGHT_OPACITY, freezeHandwritingArea, freezeHandwritingRaster } from "./render";
 import { ConceptsSetup } from "../shared-writing";
+import { PrototypeSwitch } from "@/components/prototype-switch";
 
 const { width: WIDTH, height: HEIGHT } = HANDWRITING_PAGE;
 const PEN_COLOURS = ["Black", "Blue", "Red", "Green"].map((name, i) => ({ name, value: HANDWRITING_PEN_COLOURS[i]! }));
@@ -543,6 +544,11 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 			{shownNotice && <div className="hw-notice" role="status">{shownNotice.text}{shownNotice.refresh && <button type="button" className="min-h-11 px-3 underline" onClick={() => void review().catch(() => {})}>Refresh review</button>}</div>}
 			</div>
 			<HandwritingToolbar variant={palette} tool={tool} colour={colour} colours={PEN_COLOURS} sizes={sizes} size={currentSize} dimPaper={dimPaper} disabled={!saved.ready} handlers={handlers} selectTool={setTool} selectColour={value => setColour(value as Stroke["colour"])} selectSize={value => { if (tool === "pen") setPenScale(value as Stroke["penScale"]); else if (tool === "eraser") setEraserWidth(value as Stroke["width"]); else setHighlighterWidth(value as Stroke["width"]); }} undo={undoLast} redo={() => recovery.current?.redo()} canUndo={history.canUndo} canRedo={history.canRedo} /></div>
+			{/* B18 (round 18): Prototype view's switches for the writing tools. */}
+			{/* B18: the tools float over the paper, and a switch must never cover
+			    the paper; the page row under it has empty ends, in the same card. */}
+			<PrototypeSwitch tryout="writing-palette" anchors={[{ selector: '[data-testid="handwriting-notebook"] .hw-pageFooter:not(.hw-areaFooter)', places: ["inside-start", "inside-end"] }]} />
+			<PrototypeSwitch tryout="wheel-look" anchors={[{ selector: '[data-testid="handwriting-notebook"] .hw-pageFooter:not(.hw-areaFooter)', places: ["inside-end", "inside-start"] }]} />
 			{/* T3: the page controls are always in view, under the paper. */}
 				{(() => {
 				const at = Math.max(0, pages.findIndex(page => page.id === pageId)), count = Math.max(1, pages.length), busy = !saved.ready || !!submission?.preparing;

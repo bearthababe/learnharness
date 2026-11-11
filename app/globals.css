@@ -2846,42 +2846,43 @@ body:has(.lh-graph-results) [data-testid="map-open"] {
 }
 
 /* Switches: a visible track in both states, the accent when on. */
-button[role="switch"] {
+/* (B18: Prototype view's row is a switch too, with its own track: not this one.) */
+button[role="switch"]:where(:not(.lh-proto-toggle)) {
 	width: 40px;
 	height: 24px;
 	border-color: var(--input);
 	background: color-mix(in oklab, var(--accent) 80%, var(--muted-foreground) 20%);
 }
-button[role="switch"][aria-checked="true"] {
+button[role="switch"]:where(:not(.lh-proto-toggle))[aria-checked="true"] {
 	border-color: var(--primary);
 	background: var(--primary);
 }
-button[role="switch"] > span {
+button[role="switch"]:where(:not(.lh-proto-toggle)) > span {
 	top: 3px;
 	width: 16px;
 	height: 16px;
 	translate: 3px 0;
 }
-button[role="switch"][aria-checked="false"] > span {
+button[role="switch"]:where(:not(.lh-proto-toggle))[aria-checked="false"] > span {
 	background: var(--muted-foreground);
 }
-button[role="switch"][aria-checked="true"] > span {
+button[role="switch"]:where(:not(.lh-proto-toggle))[aria-checked="true"] > span {
 	translate: 19px 0;
 	background: #fff;
 	color: var(--primary);
 }
 @media (pointer: coarse) {
-	button[role="switch"] {
+	button[role="switch"]:where(:not(.lh-proto-toggle)) {
 		width: 48px;
 		height: 28px;
 	}
-	button[role="switch"] > span {
+	button[role="switch"]:where(:not(.lh-proto-toggle)) > span {
 		top: 4px;
 		width: 18px;
 		height: 18px;
 		translate: 4px 0;
 	}
-	button[role="switch"][aria-checked="true"] > span {
+	button[role="switch"]:where(:not(.lh-proto-toggle))[aria-checked="true"] > span {
 		translate: 24px 0;
 	}
 }
@@ -5804,3 +5805,35 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
    its three header icons sit at the row's end. */
 .notebook-panel[data-pane] .notebook-frame-header { justify-content: flex-end; }
 :root:root:root .hw-notebookHeader h2 { font-size: 15px; }
+/* B18 (round 18, owner): Prototype view — a developer tool. Each switch is a
+   dashed amber pill naming the design and its current variant; it floats
+   (fixed), so it never moves the page, and is placed clear of what it
+   controls. 44px tall on touch. */
+.lh-proto-switch {
+	position: fixed; z-index: 70; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px;
+	border: 1.5px dashed #f59e0b; border-radius: 999px; background: color-mix(in oklab, #f59e0b 16%, var(--background));
+	color: var(--foreground); font-family: var(--font-jetbrains, ui-monospace, monospace); font-size: 13px; font-weight: 600; line-height: 1; white-space: nowrap;
+	box-shadow: 0 2px 10px rgb(0 0 0 / .35); cursor: pointer;
+}
+.lh-proto-switch svg { width: 14px; height: 14px; flex: none; color: #f59e0b; }
+.lh-proto-switch .lh-proto-name { color: #f59e0b; text-transform: uppercase; letter-spacing: .04em; }
+.lh-proto-text { display: inline-flex; align-items: baseline; gap: 6px; }
+/* Touch: a compact two-line pill — the design above its current variant — so
+   it fits the small empty spots beside what it controls (still 44px tall). */
+@media (pointer: coarse) {
+	.lh-proto-switch { height: 44px; padding: 0 12px 0 10px; }
+	.lh-proto-text { flex-direction: column; align-items: flex-start; gap: 1px; }
+	.lh-proto-switch .lh-proto-name { font-size: 10.5px; line-height: 1; }
+	.lh-proto-switch .lh-proto-value { font-size: 13px; line-height: 1.15; }
+}
+.lh-proto-toggle {
+	display: flex; width: 100%; align-items: center; gap: 12px; min-height: 56px; margin: 4px 0 12px; padding: 10px 14px;
+	border: 1.5px dashed #f59e0b; border-radius: 14px; background: color-mix(in oklab, #f59e0b 8%, var(--card)); text-align: left;
+}
+.lh-proto-toggle-text { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 2px; }
+.lh-proto-toggle-title { font-size: 15px; font-weight: 650; color: var(--foreground); }
+.lh-proto-toggle-desc { font-size: 13px; color: var(--muted-foreground); }
+.lh-proto-toggle-track { position: relative; flex: none; width: 44px; height: 26px; border-radius: 999px; background: var(--muted); border: 1px solid var(--border); transition: background .15s; }
+.lh-proto-toggle-knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 999px; background: var(--foreground); transition: transform .15s; }
+.lh-proto-toggle[aria-checked="true"] .lh-proto-toggle-track { background: #f59e0b; }
+.lh-proto-toggle[aria-checked="true"] .lh-proto-toggle-knob { transform: translateX(18px); background: white; }
