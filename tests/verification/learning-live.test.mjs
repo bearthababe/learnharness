@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson, choiceIndices, displayOrder } from "../../scripts/lib/learning-live.mjs";
+import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson, choiceIndices, displayOrder, answerFor } from "../../scripts/lib/learning-live.mjs";
 import { runLiveExercise } from "../../scripts/lib/learning-live-run.mjs";
 import { runLimits } from "../../scripts/lib/learning-verification.mjs";
 
@@ -167,4 +167,14 @@ test("the learner answers by on-screen number; positions follow the shuffled scr
 	assert.deepEqual([...shown].sort(), ["A", "B", "C", "D"]);
 	const view = learnerView([{ role: "assistant", content: [{ type: "toolCall", id: quiz.toolCallId, name: "probe", arguments: { question: "Q?", options: quiz.options.map(label => ({ value: label, label })) } }] }]);
 	assert.match(view, new RegExp(shown.map((label, index) => `${index + 1}\\. ${label}`).join("  ")), "the learner sees the same numbered order as the screen");
+});
+
+test("a reply that doesn't fit its question is a simulator deviation, not a guessed answer", () => {
+	const quiz = { tool: "ask_user_question", toolCallId: "x", options: ["a", "b"], multiSelect: false };
+	assert.deepEqual(answerFor(quiz, { choice: [2], thinking: "t" }), { indices: [1], dontKnow: false, thinking: "t" });
+	assert.deepEqual(answerFor(quiz, { dontKnow: true, thinking: "?" }), { indices: [], dontKnow: true, thinking: "?" });
+	assert.throws(() => answerFor(quiz, { choice: [], text: "(0,0) works" }), /without choosing an option/);
+	const free = { tool: "recall", toolCallId: "y", options: [] };
+	assert.deepEqual(answerFor(free, { text: "Av = λv", thinking: "" }), { indices: [], dontKnow: false, text: "Av = λv", thinking: "" });
+	assert.throws(() => answerFor(free, { choice: [1] }), /no free-text answer/);
 });

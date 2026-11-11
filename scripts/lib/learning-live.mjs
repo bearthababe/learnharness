@@ -154,6 +154,18 @@ export function choiceIndices(pending, choice) {
 	return picks.map(pick => pick - 1);
 }
 
+/** Turn a learner reply into a question-dock answer, or refuse it as a simulator deviation when it doesn't fit the question. */
+export function answerFor(pending, reply) {
+	const dontKnow = reply.dontKnow === true;
+	if (pending.options.length) {
+		const indices = dontKnow ? [] : choiceIndices(pending, reply.choice);
+		if (!dontKnow && !indices.length) throw new Error("Simulator deviation: answered a multiple-choice question without choosing an option or \"I don't know\"");
+		return { indices, dontKnow, thinking: reply.thinking };
+	}
+	if (!String(reply.text ?? "").trim()) throw new Error("Simulator deviation: gave no free-text answer to a free-text question");
+	return { indices: [], dontKnow: false, text: reply.text, thinking: reply.thinking };
+}
+
 /** Run a CLI with stdin, bounded by a timeout; resolves stdout. */
 export function runCli(binary, args, { input, cwd, timeoutMs, env = process.env }) {
 	return new Promise((resolve, reject) => {
