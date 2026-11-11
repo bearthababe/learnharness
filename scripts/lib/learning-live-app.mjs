@@ -23,7 +23,10 @@ export async function liveApp({ root, run, tutorModel, gate }) {
 	// The app copy lives outside the repository: inside it, Next infers the repository as workspace root and
 	// Tailwind scans earlier runs' evidence (including binary browser caches) into the stylesheet. Data and
 	// evidence stay in the run folder.
-	const fixture = await fs.mkdtemp(path.join(os.tmpdir(), "lh-live-app-"));
+	// Same filesystem as the checkout (fast clone copies), but outside it; /tmp is often a small RAM disk.
+	const apps = path.join(process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), ".cache"), "learnharness-live");
+	await fs.mkdir(apps, { recursive: true });
+	const fixture = await fs.mkdtemp(path.join(apps, "app-"));
 	const data = path.join(run, "data");
 	const save = (name, value) => fs.writeFile(path.join(run, name), JSON.stringify(value, null, 2) + "\n");
 	let browser, page, chatId, origin, server, sequence = 0;
