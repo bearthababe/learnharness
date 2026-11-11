@@ -62,3 +62,6 @@ export { customProviderGet, customProviderMutation } from "./custom-provider-htt
 export { submitNotebookSteer } from "./notebook-steer.ts";
 export { handwritingResponse, handwritingPagesResponse } from "./handwriting.ts";
 export { runtimeStatus } from "./runtime-status.ts";
+// Round 19 (§0): 🐞 problem reports and their optional GitHub filing.
+export { createReport, updateReport, deleteReport, getReport, listReports, saveScreenshot, readScreenshot, serverContext, redactSecrets, safeReportId, bugsDir, type ReportKind, type StoredReport } from "./bug-reports.ts";
+export { fileReport, reportsRepo, closeFiledIssue, issueText } from "./report-issues.ts";

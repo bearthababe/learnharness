@@ -5837,3 +5837,93 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 .lh-proto-toggle-knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 999px; background: var(--foreground); transition: transform .15s; }
 .lh-proto-toggle[aria-checked="true"] .lh-proto-toggle-track { background: #f59e0b; }
 .lh-proto-toggle[aria-checked="true"] .lh-proto-toggle-knob { transform: translateX(18px); background: white; }
+
+/* ===================================================================
+   Round 19 — §0 🐞 Report a problem (ported from the owner's
+   lego-notebook): the dialog, the "Report saved" notice, its entries
+   (⋯ row, notebook options, the laptop's sidebar footer, Settings →
+   About) and the report pages.
+   =================================================================== */
+.lh-bug-sheet {
+	position: fixed; z-index: 120; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+	margin: 0 auto; max-width: 560px; display: flex; flex-direction: column; gap: 10px;
+	padding: 14px; border-radius: 18px; border: 1px solid var(--border); background: var(--card); color: var(--foreground);
+	box-shadow: 0 18px 48px rgb(0 0 0 / .45);
+}
+@media (min-width: 1024px) and (pointer: fine) { .lh-bug-sheet { left: auto; right: 20px; bottom: 20px; width: 420px; } }
+.lh-bug-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.lh-bug-head strong { font-size: 16px; font-weight: 650; }
+.lh-bug-status { font-size: 13px; color: var(--muted-foreground); }
+.lh-bug-status[data-saving="offline"] { color: #f59e0b; }
+.lh-bug-kind { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border-radius: 12px; background: var(--muted); }
+.lh-bug-kind button { min-height: 40px; border-radius: 9px; font-size: 15px; font-weight: 550; color: var(--muted-foreground); }
+.lh-bug-kind button[aria-checked="true"] { background: var(--card); color: var(--foreground); box-shadow: 0 1px 2px rgb(0 0 0 / .35); }
+.lh-bug-note { display: flex; align-items: flex-end; gap: 10px; }
+.lh-bug-note textarea {
+	flex: 1; min-width: 0; min-height: 88px; max-height: 40vh; resize: vertical; padding: 10px 12px; border-radius: 12px;
+	border: 1px solid var(--border); background: var(--background); color: var(--foreground); font-size: 16px; line-height: 1.4;
+}
+.lh-bug-note textarea:focus { outline: none; border-color: var(--primary); }
+.lh-bug-mic {
+	flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 999px;
+	border: 1px solid var(--border); background: var(--muted); color: var(--foreground);
+}
+.lh-bug-mic svg { width: 24px; height: 24px; }
+.lh-bug-mic[data-active] { background: #dc2626; border-color: #dc2626; color: #fff; }
+.lh-bug-hint { margin: 0; font-size: 13px; color: var(--muted-foreground); }
+.lh-bug-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lh-bug-primary, .lh-bug-secondary, .lh-bug-discard {
+	display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 14px; border-radius: 12px; font-size: 15px; font-weight: 550;
+}
+.lh-bug-primary { background: var(--primary); color: var(--primary-foreground); }
+.lh-bug-secondary { border: 1px solid var(--border); color: var(--foreground); }
+.lh-bug-secondary[aria-disabled="true"], .lh-bug-secondary:disabled { opacity: .5; }
+.lh-bug-discard { margin-left: auto; color: var(--destructive); }
+.lh-bug-all { align-self: flex-start; display: inline-flex; align-items: center; min-height: 32px; font-size: 14px; color: var(--primary); }
+@media (pointer: coarse) { .lh-bug-all { min-height: 44px; } }
+/* "Report saved": short and unmissable, over whatever the dialog left. */
+.lh-bug-toast {
+	position: fixed; z-index: 125; left: 50%; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%);
+	display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 0 8px 0 16px; border-radius: 999px;
+	background: #16a34a; color: #fff; font-size: 16px; font-weight: 650; box-shadow: 0 10px 30px rgb(0 0 0 / .4); white-space: nowrap;
+}
+.lh-bug-toast a { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border-radius: 999px; background: rgb(255 255 255 / .2); color: #fff; font-weight: 600; }
+.lh-page-menu-report .lh-page-menu-label { display: inline-flex; align-items: center; gap: 8px; }
+.lh-page-menu-bug { width: 18px; height: 18px; color: #f59e0b; }
+.notebook-options .notebook-report { color: var(--foreground); }
+/* The thinking pane's own ⋯, at the corner every screen keeps for it. */
+.lh-reading-pane .lh-pane-menu { position: absolute; z-index: 3; top: calc(8px + env(safe-area-inset-top)); right: 16px; }
+.lh-reading-pane .lh-pane-head { padding-right: 56px; }
+.lh-footer-pair { display: inline-flex; align-items: center; gap: 2px; }
+.lh-footer-row.lh-report-entry { gap: 6px; }
+.lh-footer-row.lh-report-entry svg { color: #f59e0b; }
+/* The report pages. */
+.lh-reports-page { min-height: 100dvh; overflow-y: auto; background: var(--background); color: var(--foreground); }
+.lh-reports-bar { position: sticky; top: 0; z-index: 5; background: var(--background); }
+.lh-reports-main { max-width: 46rem; margin: 0 auto; padding: 8px 16px 48px; display: flex; flex-direction: column; gap: 14px; }
+.lh-reports-main h1 { font-size: 22px; font-weight: 650; overflow-wrap: anywhere; }
+.lh-reports-main h1 code { font-size: 17px; }
+.lh-reports-intro, .lh-report-when, .lh-report-dir { margin: 0; font-size: 14px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.lh-reports-tabs { display: inline-flex; align-self: flex-start; gap: 4px; padding: 4px; border-radius: 12px; background: var(--muted); }
+.lh-reports-tabs a { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 9px; font-size: 15px; font-weight: 550; color: var(--muted-foreground); }
+.lh-reports-tabs a[aria-selected="true"] { background: var(--card); color: var(--foreground); }
+.lh-reports-list { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.lh-reports-list li + li { border-top: 1px solid var(--border); }
+.lh-reports-list a { display: flex; flex-direction: column; gap: 2px; min-height: 56px; padding: 10px 14px; }
+.lh-reports-list a:hover { background: var(--accent); }
+.lh-report-note { font-size: 15px; font-weight: 550; overflow-wrap: anywhere; }
+.lh-report-meta { font-size: 13px; color: var(--muted-foreground); }
+.lh-reports-empty { padding: 16px 14px; color: var(--muted-foreground); }
+.lh-report-actions { display: flex; align-items: center; gap: 8px; }
+.lh-report-button { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border); font-size: 15px; font-weight: 550; color: var(--foreground); }
+.lh-report-button[data-danger] { border-color: var(--destructive); color: var(--destructive); }
+.lh-report-text { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); font-size: 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.lh-report-none { color: var(--muted-foreground); }
+.lh-report-shot { display: block; max-width: 100%; max-height: 70vh; border-radius: 12px; border: 1px solid var(--border); }
+.lh-report-details { border: 1px solid var(--border); border-radius: 12px; padding: 0 14px; }
+.lh-report-details summary { min-height: 44px; display: flex; align-items: center; font-weight: 600; cursor: pointer; }
+.lh-report-details pre { max-height: 50vh; overflow: auto; padding-bottom: 12px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.lh-about-link { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border); font-size: 14px; font-weight: 550; }
+.lh-about-report { padding: 8px 0 4px; }
+.lh-about-report-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--border); font-size: 15px; font-weight: 550; }
+.lh-about-report-button svg { width: 18px; height: 18px; color: #f59e0b; }

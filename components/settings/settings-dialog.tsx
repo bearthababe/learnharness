@@ -45,6 +45,7 @@ import { SettingsSection } from "./controls.tsx";
 import { UpdateSettings } from "./update-settings.tsx";
 import { DeviceToolsSettings } from "./device-tools.tsx";
 import { RuntimeSettings } from "./runtime-settings.tsx";
+import { AboutSection } from "./about-section.tsx";
 import { AgentSection } from "./agent-section.tsx";
 import type { ModelsSettings } from "@/src/core";
 import { MENU_CLOSE_EVENT, MENU_OPEN_EVENT } from "@/components/menu-shell";
@@ -57,7 +58,7 @@ import { TryoutsSection } from "./tryouts-section.tsx";
 import { ChatGPTUIProvider } from "./chatgpt-connection.tsx";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { useDeviceClass } from "@/components/device-features";
-import { ActivityIcon, BrainIcon, ChevronLeftIcon, ChevronRightIcon, FlaskConicalIcon, KeyRoundIcon, KeyboardIcon, PaletteIcon, SlidersHorizontalIcon } from "lucide-react";
+import { ActivityIcon, BrainIcon, ChevronLeftIcon, ChevronRightIcon, FlaskConicalIcon, InfoIcon, KeyRoundIcon, KeyboardIcon, PaletteIcon, SlidersHorizontalIcon } from "lucide-react";
 import { NativeSubscriptionUIProvider } from "./subscription-connections.tsx";
 import { useOneMenu } from "@/components/one-menu";
 import { useDialogFocus } from "@/components/dialog-focus";
@@ -74,6 +75,8 @@ const SECTIONS = [
 	{ id: "general", label: "General", blurb: "Tools on this device, updates" },
 	// Round 16: alternatives to compare, after the everyday settings.
 	{ id: "tryouts", label: "Try-out designs", blurb: "Alternative designs to compare" },
+	// Round 19 (L15, §0): the build and the 🐞 problem reports, last.
+	{ id: "about", label: "About this app", blurb: "Build and problem reports" },
 ] as const;
 // Phones only: tablets keep the two-pane list beside the section, so
 // switching categories stays one tap.
@@ -95,6 +98,7 @@ const SECTION_ICON = {
 	keyboard: KeyboardIcon,
 	general: SlidersHorizontalIcon,
 	tryouts: FlaskConicalIcon,
+	about: InfoIcon,
 } as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -498,6 +502,11 @@ export function SettingsDialogBody({
 							{active === "tryouts" && (
 								<SettingsSection title="Try-out designs" testid="section-tryouts">
 									<TryoutsSection />
+								</SettingsSection>
+							)}
+							{active === "about" && (
+								<SettingsSection title="About this app" testid="section-about">
+									<AboutSection />
 								</SettingsSection>
 							)}
 							{active === "keyboard" && !noShortcuts && (

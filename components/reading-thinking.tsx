@@ -15,6 +15,7 @@ import { useRevealStyle, useTryout } from "@/components/device-prefs";
 import { useCoarsePointer } from "@/components/use-phone-viewport";
 import { BigMic, KeyboardToggle, PaneBar, PeekReturn, settleDocumentScroll, usePaneViewport } from "@/components/pane-kit";
 import { PrototypeSwitch } from "@/components/prototype-switch";
+import { PageMenuButton } from "@/components/page-menu";
 
 /**
  * The reading-thinking field (owner design 2026-10-03, "two questions per
@@ -293,6 +294,10 @@ export function ReadingThinkingField({
 					event.preventDefault(); event.stopPropagation(); closePane();
 				}}>
 				<div className="lh-pane-surface" data-testid="reading-pane-surface">
+					{/* §0 (round 19): the pane covers the page bar, so it has the page's
+					    ⋯ in its own top-right corner — the same menu (🐞 Report, Settings,
+					    the keyboard switch, Plan). */}
+					<div className="lh-pane-menu" data-testid="reading-pane-menu"><PageMenuButton secondary /></div>
 					<header className="lh-pane-head">
 						<p className="lh-pane-context">{questionOpen ? "For this question" : "While you read"}</p>
 						<h2 className="lh-pane-title">Thinking while reading</h2>

@@ -236,6 +236,12 @@ export function finishDictation(): Promise<void> {
 	return dictationFinisher ? dictationFinisher() : Promise.resolve();
 }
 
+/** A page owns the dictation hook (round 19: the 🐞 note borrows it — it
+ *  claims the target and toggles through lh:kbd-toggle-dictation). */
+export function dictationAvailable(): boolean {
+	return dictationFinisher !== null;
+}
+
 /** Join a dictated final onto the current text (shared separator rule). */
 export function joinDictation(current: string, final: string): string {
 	return current ? current.replace(/\s+$/, "") + " " + final : final;

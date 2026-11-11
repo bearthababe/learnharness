@@ -8,7 +8,7 @@ import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import { forgetHandwritingOnDevice } from "@/components/handwriting/device";
 import type { ChatDeleteMode } from "@/src/core";
-import { BookOpenIcon, ChevronLeftIcon, DumbbellIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PlusIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon, XIcon } from "lucide-react";
+import { BookOpenIcon, BugIcon, ChevronLeftIcon, DumbbellIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PlusIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon, XIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -56,6 +56,8 @@ const STORAGE_KEY = "lh:sidebar-open";
 import type { ChatGPTControlBridge, NativeSubscriptionControlBridge } from "@/src/core";
 import type { UpdateState } from "@/components/settings/update-settings.tsx";
 import { FilePathDropZone } from "@/components/file-path-drop-zone";
+import { useDeviceClass } from "@/components/device-features";
+import { useBugPress } from "@/components/bug-capture";
 import { PrototypeSwitch } from "@/components/prototype-switch";
 const SIDEBAR_AUTOCLOSE = 928;
 
@@ -475,6 +477,8 @@ export type SessionKindFilter = "teach" | "all" | "practice";
 const KIND_FILTER_KEY = "lh:session-kind-filter";
 
 function SessionsSidebar() {
+	const deviceClass = useDeviceClass();
+	const bugPress = useBugPress();
 	const { open, phone, drawer, toggle, closePhone } = useSidebar();
 	const sidebarRef = useRef<HTMLElement>(null);
 	// P4 (round 17, phones): the list as a page — under the page's own bar
@@ -1111,7 +1115,16 @@ function SessionsSidebar() {
 					    row (round 11): both are secondary, so the sessions get the
 					    room. Settings is also mod+, in the keyboard registry. */}
 					<ActivitySection
-						trailing={
+						trailing={<span className="lh-footer-pair">
+							{/* §0 (round 19): the laptop's 🐞, beside Settings (phones and
+							    tablets have it in ⋯). Tap: report this screen; hold:
+							    with an open menu still showing. */}
+							{deviceClass === "laptop" && <Hint label="Report a problem with this screen (hold to keep a menu open)" side="right">
+								<button type="button" data-testid="sidebar-report" className="lh-footer-row lh-report-entry" {...bugPress}>
+									<BugIcon className="size-4" />
+									<span>Report</span>
+								</button>
+							</Hint>}
 							<Hint label="Settings" action="open-settings" side="right" disabled={phone}>
 								<button
 									type="button"
@@ -1124,7 +1137,7 @@ function SessionsSidebar() {
 									<span>Settings</span>
 								</button>
 							</Hint>
-						}
+						</span>}
 					/>
 
 					{process.env.NODE_ENV === "development" && <div className="lh-sessions-footer">

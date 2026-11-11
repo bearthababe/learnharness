@@ -15,6 +15,7 @@ import { useOneMenu } from "./one-menu";
 import { BigMic, KeyboardToggle, PaneBar, PeekReturn, settleDocumentScroll } from "./pane-kit";
 import { NotebookPeekSheet } from "./notebook-peek-sheet";
 import { useTryout } from "./device-prefs";
+import { useBugPress } from "./bug-capture";
 
 export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId, pane, sessionTitle }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string;
 	/** P5 (round 17, phones): the notebook takes over the screen like the
@@ -30,6 +31,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 	const attached = notebookActivityDrafts(drafts.drafts, activity);
 	const hasWorking = attached.some(draft => draft.parts.some(part => part.kind === "working"));
 	const [menu, setMenu] = useState<"options" | "model" | "history" | "usage" | "review" | "help" | null>(null);
+	const bugPress = useBugPress(() => setMenu(null));
 	const [micSlot, setMicSlot] = useMicSlot();
 	const card = useTryout("cardLayout") === "card" && !!pane;
 	useOneMenu("notebook-options", menu !== null, () => setMenu(null));
@@ -149,6 +151,8 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 						<button type="button" role="menuitem" disabled={applyWaiting || !!view?.pending || !!view?.problem || !view?.contextId} onClick={() => command("start-fresh")}>Start fresh</button>
 						<button type="button" role="menuitem" onClick={() => setMenu("usage")}>Usage</button>
 						{viewControls && <button type="button" role="menuitem" onClick={() => { setMenu(null); viewControls.close(); }}>Close notebook</button>}
+						{/* §0 (round 19): the pane reaches 🐞 through its own ⋯ (tap: menu closed; hold: kept). */}
+						<button type="button" role="menuitem" className="notebook-report" data-testid="notebook-options-report" {...bugPress}>🐞 Report a problem</button>
 					</div>}
 					{menu === "review" && <div data-notebook-workspace={workspaceId} inert={inputLocked} className="notebook-menu-content">
 						{hasWorking ? attached.map(draft => <NotebookDraftReview key={draft.id} draft={draft} onTextChange={(id, text) => session.tutor.updateText(draft.owner, text, id)} />) : <p>No working attached yet.</p>}

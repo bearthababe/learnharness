@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { ChevronRightIcon, EllipsisIcon } from "lucide-react";
+import { BugIcon, ChevronRightIcon, EllipsisIcon } from "lucide-react";
+import { useBugPress } from "@/components/bug-capture";
 import { MenuShell } from "@/components/menu-shell";
 import { useOneMenu } from "@/components/one-menu";
 import { useCardDismiss } from "@/components/card-dismiss";
@@ -47,9 +48,14 @@ export const OPEN_GRAPH_DISPLAY_EVENT = "lh:open-graph-display";
 
 export type PageMenuRow = { id: string; label: string; value?: string; hint?: string; open: () => void };
 
-export function PageMenuButton({ extraRows = [], topRows = [] }: {
+/** The page's own rows (Plan), shared with a secondary copy (the pane's ⋯). */
+let primaryTopRows: PageMenuRow[] = [];
+export function PageMenuButton({ extraRows = [], topRows: ownTopRows, secondary = false }: {
 	/** Rows of this page placed after Usage (Home: import, graph display). */
 	extraRows?: PageMenuRow[];
+	/** Round 19: a second copy (the thinking pane's own ⋯) — the page's copy
+	 *  keeps the window-wide listeners (helpers, the keyboard hint). */
+	secondary?: boolean;
 	/** P3 (round 17): rows at the very top — a lesson's Plan. */
 	topRows?: PageMenuRow[];
 }) {
@@ -61,27 +67,34 @@ export function PageMenuButton({ extraRows = [], topRows = [] }: {
 	const touch = useCoarsePointer();
 	const keyboardOff = useKeyboardOff();
 	const { open: openSettings } = useSettingsDialog();
-	const triggerTestid = "page-menu-button";
+	const triggerTestid = secondary ? "pane-page-menu-button" : "page-menu-button";
 	useOneMenu("page-menu", open, () => setOpen(false));
 	useOneMenu("helpers-sheet", helpers, () => setHelpers(false));
 	useCardDismiss(open, () => setOpen(false), ['[data-testid="page-menu"]', `[data-testid="${triggerTestid}"]`]);
 	useCardDismiss(helpers, () => setHelpers(false), ['[data-testid="helpers-sheet"]', `[data-testid="${triggerTestid}"]`]);
 	const helpersPresence = usePhoneMenuPresence(helpers ? "helpers" : null, phone);
-	useEffect(() => { installKeyboardGuard(); }, []);
+	useEffect(() => { if (!secondary) installKeyboardGuard(); }, [secondary]);
+	// §0 (round 19, owner): 🐞 in the menu — a tap closes the menu, then
+	// captures; holding ~0.5 s captures with the menu still open.
+	const bugPress = useBugPress(() => setOpen(false));
+	useEffect(() => { if (!secondary) primaryTopRows = ownTopRows ?? []; }, [secondary, ownTopRows]);
+	const topRows = ownTopRows ?? (secondary ? primaryTopRows : []);
 	// F4 (round 15): once, when a field stays without a keyboard, say where
 	// the switch is. It passes on its own and never moves anything.
 	const [keyboardHint, setKeyboardHint] = useState(false);
 	useEffect(() => {
 		let timer = 0;
+		if (secondary) return;
 		const show = () => { setKeyboardHint(true); window.clearTimeout(timer); timer = window.setTimeout(() => setKeyboardHint(false), 4500); };
 		window.addEventListener(KEYBOARD_HINT_EVENT, show);
 		return () => { window.removeEventListener(KEYBOARD_HINT_EVENT, show); window.clearTimeout(timer); };
-	}, []);
+	}, [secondary]);
 	useEffect(() => {
+		if (secondary) return;
 		const onOpen = () => setHelpers(true);
 		window.addEventListener(OPEN_HELPERS_EVENT, onOpen);
 		return () => window.removeEventListener(OPEN_HELPERS_EVENT, onOpen);
-	}, []);
+	}, [secondary]);
 	const choose = (open: () => void) => {
 		setOpen(false);
 		// The chosen card opens as this menu leaves (one menu at a time).
@@ -155,6 +168,14 @@ export function PageMenuButton({ extraRows = [], topRows = [] }: {
 						{groups.map((group, index) => (
 							<Fragment key={index}>
 								{(index > 0 || keyboardSwitch) && <div role="separator" className="lh-page-menu-divider" />}
+								{index === groups.length - 1 && (
+									<button type="button" role="menuitem" className="lh-page-menu-row lh-page-menu-report" data-testid="page-menu-report"
+										title="Tap: report this screen · hold: report it with this menu showing" {...bugPress}>
+										<span className="lh-page-menu-label"><BugIcon aria-hidden className="lh-page-menu-bug" />Report a problem</span>
+										<span className="lh-page-menu-value" />
+										<ChevronRightIcon aria-hidden />
+									</button>
+								)}
 								{group.map(row)}
 							</Fragment>
 						))}

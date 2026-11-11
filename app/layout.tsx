@@ -12,6 +12,8 @@ import { ServerEventsProvider } from "@/components/server-events";
 import { AppearanceProvider } from "@/components/settings/appearance";
 import UpdateBanner from "@/components/update-banner";
 import { NotebookPreviewTools } from "@/components/notebook-preview-tools";
+import { BugCapture } from "@/components/bug-capture";
+import { BugRecorder } from "@/components/bug-recorder";
 import { InlineScript, SIDEBAR_BOOT_SCRIPT } from "@/components/inline-script";
 import { previewCookieBootstrap } from "@/lib/preview-cookie-bootstrap";
 
@@ -64,6 +66,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 			</ServerEventsProvider>
 			{/* Auto-update banner (Wave C): fixed card, Electron-only pushes. */}
 			<UpdateBanner />
+			{/* §0 (round 19): 🐞 Report a problem — the client log, and the dialog
+			    every 🐞 entry opens (the ⋯ menu, the notebook's options, the
+			    laptop's sidebar, Settings → About). */}
+			<BugRecorder />
+			<BugCapture />
 			{process.env.LH_NOTEBOOK_PREVIEW === "1" && <NotebookPreviewTools />}
 		</body>
 		</html>
