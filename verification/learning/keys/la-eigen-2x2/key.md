@@ -1,6 +1,6 @@
 # Answer key: eigenvalues and eigenvectors of 2×2 matrices
 
-Version 1.0.3. **Status: owner-approved, 2026-11-10 (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** A live run
+Version 1.0.4. **Status: owner-approved, 2026-11-10 (D-1). Decision labels D-1, D-2 and D-8 are defined in `verification/learning/stories.json` → `decisions`.** A live run
 additionally needs the live adapter in §10. Nothing here claims tutor accuracy. Story: LJ-TUTOR. Evaluator-only:
 never give this file, `facts.json` or the calibration set to the tutor or the simulated
 learner (§9).
@@ -134,7 +134,7 @@ Coverage is then assessed. Ending before every required idea is covered is
 Brief events fire only in the teaching phase, after the plan is confirmed, never during
 the probe. A planned event that never gets its chance is *unexercised*, and the run is
 then *incomplete (coverage)*, never failed. That happens, for example, if the tutor never
-asks the learner to find an eigenvector, or never asks whether a specific matrix with real eigenvalues can be
+asks the learner to give or type an eigenvector (multiple-choice questions do not count), or never asks whether a specific matrix with real eigenvalues can be
 diagonalized.
 
 ## 6. Simulated learner
@@ -253,6 +253,12 @@ D-2). The simulator sees only `learner-brief.md`.
   - Calibration does not count.
   - Subject, scope and Strang §6.1 approved as the sole textbook source.
   - **D-1:** the key as a whole (expectations and calibration set) approved, version 1.0.0.
+  - **v1.0.4 brief clarifications (owner-approved):**
+    - The learner knows that a singular matrix sends some nonzero vector to 0, but not how
+      to find it.
+    - Event 1, the zero-vector mistake, fires only when the learner is asked to give or
+      type an eigenvector, never on a multiple-choice question.
+    - Multiple-choice questions are always answered by choosing an option.
   - **v1.0.3 wording fix:** C13 now says the teaching goes beyond the question's own
     explanation, so it stays unambiguous under v1.0.2. Its expected outcome is unchanged.
   - **v1.0.2 clarification:** E2 does not treat the policy-required post-answer explanation
