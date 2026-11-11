@@ -131,13 +131,21 @@ export async function learningBrowser(root, run) {
 					await page.waitForFunction(value => document.body.innerText.includes(value), { timeout: 30_000 }, text);
 				}
 				// Phones open the plan from ⋯ (the redesign moved Plan there in round 17);
-				// wider screens keep the chip. The same plan popup and nodes are checked.
-				const chip = await page.$('[data-testid="plan-chip"]');
-				if (chip && await chip.isVisible()) await chip.click();
-				else {
-					await page.click('[data-testid="page-menu-button"]');
-					await page.waitForSelector('[data-testid="page-menu-plan"]', { visible: true });
-					await page.click('[data-testid="page-menu-plan"]');
+				// wider screens keep the chip. The server cannot know the device, so the
+				// chip is in the first HTML and leaves at hydration: wait for the app to
+				// hydrate, then use the opener it shows (again, should one tap land in
+				// that hand-over). The same plan popup and nodes are checked.
+				await page.waitForFunction(() => document.documentElement.dataset.sidebarSynced !== undefined, { timeout: 60_000 });
+				for (let attempt = 0; ; attempt++) {
+					const chip = await page.$('[data-testid="plan-chip"]');
+					if (chip && await chip.isVisible()) await chip.click();
+					else {
+						await page.click('[data-testid="page-menu-button"]');
+						await page.waitForSelector('[data-testid="page-menu-plan"]', { visible: true });
+						await page.click('[data-testid="page-menu-plan"]');
+					}
+					const opened = await page.waitForSelector('[data-testid="plan-popup"]', { visible: true, timeout: 5_000 }).then(() => true, () => false);
+					if (opened || attempt === 2) break;
 				}
 				for (const id of ["prerequisite", "goal"]) await page.waitForSelector(`[data-testid="plan-popup"] [data-testid="plan-node-${id}"]`, { visible: true });
 				await page.screenshot({ path: path.join(run, "reopened-plan.png"), fullPage: true });
