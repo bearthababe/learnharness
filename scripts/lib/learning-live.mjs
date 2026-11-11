@@ -71,11 +71,30 @@ export function compareCalibration(rows, answers) {
 }
 
 /** Run verdict from per-expectation outcomes, in key §5 order (first match wins). */
+const EXPECTATION_OUTCOMES = new Set(["complied", "violated", "pending", "not applicable", "unverified"]);
+const CLAIM_OUTCOMES = new Set(["true", "false", "unverified"]);
+/** Expectations every complete run must have judged (key §5 required coverage). */
+export const REQUIRED_EXPECTATIONS = Object.freeze(["E1", "E2", "E3", "E4", "E6", "E7", "E8", "E11"]);
+
+/** Completeness from the grader's detailed coverage evidence, never from its summary flag (key §5). */
+export function coverageComplete(coverage) {
+	const ideas = coverage?.goalIdeas ?? {};
+	const events = coverage?.events ?? {};
+	return ["av_eq_lambda_v", "det_condition", "null_space_eigenvectors", "diagonalization_test"].every(idea => ideas[idea] === true)
+		&& coverage?.learnerEigenpair === true
+		&& events.zero_vector === "repaired+rechecked" && events.why_det === "answered" && events.repeated_eigenvalue === "repaired+rechecked";
+}
+
+/** Run verdict from per-expectation outcomes, in key §5 order (first match wins). Missing or malformed findings never pass. */
 export function aggregateRun({ expectations = [], subjectClaims = [], materialErrors = [], stopped = false, deviated = false, coverageComplete = false }) {
-	if (materialErrors.length || expectations.some(item => item.outcome === "violated") || subjectClaims.some(claim => claim.outcome === "false")) return "fail";
+	if (!Array.isArray(expectations) || !Array.isArray(subjectClaims) || !Array.isArray(materialErrors)) return "unverified";
+	if (materialErrors.length || expectations.some(item => item?.outcome === "violated") || subjectClaims.some(claim => claim?.outcome === "false")) return "fail";
 	if (stopped || deviated) return "incomplete (stopped)";
-	if (expectations.some(item => item.outcome === "unverified" || item.outcome === "pending") || subjectClaims.some(claim => claim.outcome === "unverified")) return "unverified";
+	const malformed = expectations.some(item => !EXPECTATION_OUTCOMES.has(item?.outcome)) || subjectClaims.some(claim => !CLAIM_OUTCOMES.has(claim?.outcome));
+	const unjudged = REQUIRED_EXPECTATIONS.some(id => !expectations.some(item => item?.id === id && item.outcome !== "not applicable"));
+	if (malformed || expectations.some(item => item.outcome === "unverified" || item.outcome === "pending") || subjectClaims.some(claim => claim.outcome === "unverified")) return "unverified";
 	if (!coverageComplete) return "incomplete (coverage)";
+	if (unjudged) return "unverified";
 	return "pass";
 }
 
@@ -100,6 +119,7 @@ export function pendingQuestion(messages) {
 /** What the learner can see: tutor prose, questions with their options, revealed explanations, and their own inputs. */
 export function learnerView(messages) {
 	const lines = [];
+	const failed = new Set(messages.filter(message => message.role === "toolResult" && message.isError).map(message => message.toolCallId));
 	for (const message of messages) {
 		if (message.role === "user") lines.push(`LEARNER: ${text(message.content)}`);
 		else if (message.role === "assistant" && Array.isArray(message.content)) {
@@ -111,6 +131,8 @@ export function learnerView(messages) {
 					lines.push(`TUTOR QUESTION (${call.arguments?.type ?? call.name}): ${call.arguments?.question ?? ""}${shown.length ? `\n  Options: ${shown.map((label, index) => `${index + 1}. ${label}`).join("  ")}` : ""}`);
 				}
 				if (call.name === "plan_init") lines.push("TUTOR shows a plan map.");
+				// send_to_user is how a Claude tutor shows text; a failed delivery never reached the screen.
+				if (call.name === "send_to_user" && !failed.has(call.id) && call.arguments?.message) lines.push(`TUTOR: ${call.arguments.message}`);
 			}
 		} else if (message.role === "toolResult" && QUESTION_TOOLS.has(message.toolName) && message.details) {
 			const answer = message.details;

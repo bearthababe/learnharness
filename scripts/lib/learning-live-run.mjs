@@ -4,7 +4,8 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { RunBudget, runLimits } from "./learning-verification.mjs";
 import { liveApp } from "./learning-live-app.mjs";
-import { answerFor, calibrationRows, keyWithoutExpected, compareCalibration, codexJson, calibrationPrompt, gradingPrompt, simulateLearner, pendingQuestion, learnerView, graderTranscript, aggregateRun } from "./learning-live.mjs";
+import { openGate, readGate } from "./live-gate.mjs";
+import { answerFor, coverageComplete, calibrationRows, keyWithoutExpected, compareCalibration, codexJson, calibrationPrompt, gradingPrompt, simulateLearner, pendingQuestion, learnerView, graderTranscript, aggregateRun } from "./learning-live.mjs";
 
 const KEY_DIR = "verification/learning/keys/la-eigen-2x2";
 const OUTCOME = { pass: "verified", fail: "failed", unverified: "uncertain", "incomplete (stopped)": "incomplete", "incomplete (coverage)": "incomplete" };
@@ -45,14 +46,17 @@ export async function runLiveExercise({ root, run, result, tutorModel = "opus", 
 		return result;
 	}
 
-	// 2. The tutor session, driven through the real learner UI.
-	const app = await makeApp({ root, run, tutorModel });
+	// 2. The tutor session, driven through the real learner UI. Tutor calls pass the shared gate at dispatch.
+	const gate = path.join(run, "tutor-gate.json");
+	const deadline = budget.started + runLimits.minutes * 60_000;
+	const reopen = () => openGate(gate, { allowed: runLimits.modelRequests - budget.requests, deadline });
+	reopen();
+	const app = await makeApp({ root, run, tutorModel, gate });
 	const learnerCwd = path.join(run, "learner-cwd");
 	await fs.mkdir(learnerCwd, { recursive: true });
 	let stopped = null, finalRecord = null, endedBy = null;
 	try {
 		await app.start("zz-prove-it live eigenvalues");
-		let seen = 0;
 		while (true) {
 			const current = await app.record();
 			const pending = pendingQuestion(current.messages);
@@ -61,13 +65,21 @@ export async function runLiveExercise({ root, run, result, tutorModel = "opus", 
 			const { reply } = await simulate({ brief, view: learnerView(current.messages), pending, replies: live.counts.learnerTurns, model: learnerModel, cwd: learnerCwd });
 			await write(`learner-${String(live.counts.learnerTurns + 1).padStart(3, "0")}.json`, { pending, reply });
 			if (reply.stop) { endedBy = "learner brief: the tutor said the goal is reached"; break; }
+			reopen();
 			if (pending) await app.answer(answerFor(pending, reply));
 			else await app.sendMessage(reply.message ?? "");
 			live.counts.learnerTurns++;
-			const settled = await app.settle();
-			const tutorCalls = settled.messages.filter(message => message.role === "assistant").length;
-			try { for (; seen < tutorCalls; seen++) { live.counts.tutorRequests++; budget.admit("model"); } } catch (error) { stopped = error.message; break; }
+			const remaining = deadline - now();
+			let timedOut = false;
+			try { await app.settle(Math.max(1, Math.min(15 * 60_000, remaining))); }
+			catch (error) { if (now() >= deadline) timedOut = true; else throw error; }
+			const used = readGate(gate);
+			live.counts.tutorRequests += used.used;
+			try { for (let call = 0; call < used.used; call++) budget.admit("model"); } catch (error) { stopped = error.message; }
+			if (timedOut) { await app.abort(); stopped = "time guard reached: the running tutor turn was aborted"; }
+			else if (used.used >= used.allowed) stopped ??= "request guard reached: further tutor dispatch refused";
 			await app.snapshot(`turn-${live.counts.learnerTurns}`);
+			if (stopped) break;
 			if (app.errors.length) throw new Error(`Client errors: ${app.errors.join("; ")}`);
 		}
 		finalRecord = await app.record();
@@ -83,18 +95,26 @@ export async function runLiveExercise({ root, run, result, tutorModel = "opus", 
 	await write("final-record.json", finalRecord);
 
 	// 3. Independent grading, then the verdict recomputed from the grader's per-expectation findings.
+	// A guard that refuses grading leaves the run incomplete, with its evidence; nothing more is dispatched.
+	try { budget.admit("model"); } catch (error) {
+		stopped ??= error.message;
+		live.grading = "skipped: the guard refused the grading request";
+		live.verdict = "incomplete (stopped)";
+		result.liveOutcome = OUTCOME[live.verdict];
+		result.status = "incomplete";
+		return result;
+	}
 	const gradeDir = path.join(run, "grader");
 	await fs.mkdir(gradeDir, { recursive: true });
 	await fs.writeFile(path.join(gradeDir, "key.md"), keyText);
 	await fs.writeFile(path.join(gradeDir, "learner-brief.md"), brief);
 	await fs.writeFile(path.join(gradeDir, "transcript.md"), graderTranscript(finalRecord.messages));
-	try { budget.admit("model"); } catch (error) { stopped ??= error.message; }
 	live.counts.graderRequests++;
 	const grading = await grade({ dir: gradeDir, prompt: gradingPrompt, model: graderModel, effort: graderEffort });
 	await write("grading.json", grading);
 	const verdict = aggregateRun({
 		expectations: grading.expectations, subjectClaims: grading.subjectClaims, materialErrors: grading.materialErrors,
-		stopped: Boolean(stopped) || Boolean(result.error), deviated: grading.simulatorDeviation?.deviated === true, coverageComplete: grading.coverage?.complete === true,
+		stopped: Boolean(stopped) || Boolean(result.error), deviated: grading.simulatorDeviation?.deviated === true, coverageComplete: coverageComplete(grading.coverage),
 	});
 	live.verdict = verdict;
 	live.graderVerdict = grading.runVerdict;

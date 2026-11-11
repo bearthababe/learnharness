@@ -17,7 +17,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
  * use its own login (nothing is copied). No API key reaches the server: its environment is built
  * from an explicit allowlist, so there is no API-billing route.
  */
-export async function liveApp({ root, run, tutorModel }) {
+export async function liveApp({ root, run, tutorModel, gate }) {
 	const processes = processScope();
 	const fixture = path.join(run, "fixture");
 	const save = (name, value) => fs.writeFile(path.join(run, name), JSON.stringify(value, null, 2) + "\n");
@@ -41,7 +41,7 @@ export async function liveApp({ root, run, tutorModel }) {
 		await fs.mkdir(config, { recursive: true });
 		server = processes.spawn(process.execPath, [path.join(fixture, "node_modules/next/dist/bin/next"), "dev", "--hostname", "127.0.0.1", "--port", String(port)], {
 			cwd: fixture,
-			env: { PATH: process.env.PATH, LANG: "C.UTF-8", HOME: process.env.HOME, XDG_CONFIG_HOME: config, LH_DATA_DIR: path.join(fixture, "data"), LH_AUTH_FILE: path.join(fixture, "auth.json"), NEXT_TELEMETRY_DISABLED: "1" },
+			env: { PATH: process.env.PATH, LANG: "C.UTF-8", HOME: process.env.HOME, XDG_CONFIG_HOME: config, LH_DATA_DIR: path.join(fixture, "data"), LH_AUTH_FILE: path.join(fixture, "auth.json"), LH_LIVE_GATE: gate, NEXT_TELEMETRY_DISABLED: "1" },
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 		captureOutput(server, path.join(run, "server.log"), false);
@@ -94,6 +94,10 @@ export async function liveApp({ root, run, tutorModel }) {
 		}
 		throw new Error("Tutor turn did not settle in time");
 	};
+	/** Stop owned tutor work now (deadline or guard): abort the running turn through the app's own endpoint. */
+	const abort = async () => {
+		await fetch(`${origin}/api/activity/abort`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "turn", id: chatId }) }).catch(() => {});
+	};
 	const type = async (selector, value) => {
 		await page.waitForSelector(selector, { visible: true, timeout: 60_000 });
 		await page.click(selector);
@@ -101,7 +105,7 @@ export async function liveApp({ root, run, tutorModel }) {
 	};
 
 	return {
-		origin, record, snapshot, settle, errors,
+		origin, record, snapshot, settle, abort, errors,
 		async start(title) {
 			const creation = await fetch(`${origin}/api/chats`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) });
 			assert.equal(creation.status, 200);

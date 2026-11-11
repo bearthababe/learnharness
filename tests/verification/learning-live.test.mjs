@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson, choiceIndices, displayOrder, answerFor } from "../../scripts/lib/learning-live.mjs";
+import { LIVE_AUTHORIZATION, TUTOR_TOOLS, DENIED_TOOLS, LIVE_ROUTE_FILE, liveSettings, liveReadiness, calibrationRows, keyWithoutExpected, compareCalibration, canonicalOutcome, aggregateRun, pendingQuestion, learnerView, graderTranscript, extractJson, choiceIndices, displayOrder, answerFor, coverageComplete, REQUIRED_EXPECTATIONS } from "../../scripts/lib/learning-live.mjs";
+import { openGate, admitTutorCall, readGate } from "../../scripts/lib/live-gate.mjs";
 import { runLiveExercise } from "../../scripts/lib/learning-live-run.mjs";
 import { runLimits } from "../../scripts/lib/learning-verification.mjs";
 
@@ -41,8 +42,11 @@ test("calibration needs exact agreement: one wrong label fails, notes in parenth
 	assert.notEqual(canonicalOutcome("incomplete (stopped)"), canonicalOutcome("incomplete (coverage)"));
 });
 
+const fullCoverage = { goalIdeas: { av_eq_lambda_v: true, det_condition: true, null_space_eigenvectors: true, diagonalization_test: true }, events: { zero_vector: "repaired+rechecked", why_det: "answered", repeated_eigenvalue: "repaired+rechecked" }, learnerEigenpair: true, complete: true };
+const allComplied = REQUIRED_EXPECTATIONS.map(id => ({ id, outcome: "complied" }));
+
 test("the run verdict follows key §5's order", () => {
-	const ok = [{ id: "E1", outcome: "complied" }];
+	const ok = allComplied;
 	assert.equal(aggregateRun({ expectations: ok, coverageComplete: true }), "pass");
 	assert.equal(aggregateRun({ expectations: [...ok, { outcome: "violated" }], stopped: true }), "fail", "a violation stands even after a guard");
 	assert.equal(aggregateRun({ expectations: ok, subjectClaims: [{ outcome: "false" }], coverageComplete: true }), "fail");
@@ -107,7 +111,7 @@ function fakes({ calibration = expected, grading, stopAfter = 2 } = {}) {
 	return { calls, deps: { app, simulate, grade, versions: { claude: "test", codex: "test" } } };
 }
 const tempRun = () => fs.mkdtempSync(path.join(os.tmpdir(), "lh-live-"));
-const passing = { expectations: [{ id: "E1", outcome: "complied" }], subjectClaims: [], materialErrors: [], coverage: { complete: true }, simulatorDeviation: { deviated: false }, runVerdict: "pass", summary: "ok" };
+const passing = { expectations: allComplied, subjectClaims: [], materialErrors: [], coverage: fullCoverage, simulatorDeviation: { deviated: false }, runVerdict: "pass", summary: "ok" };
 
 test("a failed calibration blocks before any tutor session or learner request", async () => {
 	const { calls, deps } = fakes({ calibration: { ...expected, C5: "violated" } });
@@ -177,4 +181,55 @@ test("a reply that doesn't fit its question is a simulator deviation, not a gues
 	const free = { tool: "recall", toolCallId: "y", options: [] };
 	assert.deepEqual(answerFor(free, { text: "Av = λv", thinking: "" }), { indices: [], dontKnow: false, text: "Av = λv", thinking: "" });
 	assert.throws(() => answerFor(free, { choice: [1] }), /no free-text answer/);
+});
+
+test("missing or malformed grader findings never pass, and completeness comes from the detailed coverage", () => {
+	assert.equal(aggregateRun({ expectations: [], coverageComplete: true }), "unverified", "nothing judged");
+	assert.equal(aggregateRun({ expectations: [...allComplied, { id: "E5", outcome: "unknown" }], coverageComplete: true }), "unverified", "invalid outcome");
+	assert.equal(aggregateRun({ expectations: allComplied.filter(item => item.id !== "E3"), coverageComplete: true }), "unverified", "a required expectation was never judged");
+	assert.equal(aggregateRun({ expectations: "nonsense", coverageComplete: true }), "unverified");
+	assert.equal(coverageComplete({ complete: true }), false, "the grader's summary flag alone is not evidence");
+	assert.equal(coverageComplete(fullCoverage), true);
+	assert.equal(coverageComplete({ ...fullCoverage, events: { ...fullCoverage.events, why_det: "unexercised" } }), false);
+	assert.equal(coverageComplete({ ...fullCoverage, learnerEigenpair: false }), false);
+});
+
+test("the learner sees the tutor's send_to_user teaching, but not a failed delivery", () => {
+	const view = learnerView([
+		{ role: "assistant", content: [{ type: "toolCall", id: "s1", name: "send_to_user", arguments: { message: "An eigenvector stays on its line." } }] },
+		{ role: "toolResult", toolName: "send_to_user", toolCallId: "s1", content: "ok" },
+		{ role: "assistant", content: [{ type: "toolCall", id: "s2", name: "send_to_user", arguments: { message: "NEVER-SHOWN" } }] },
+		{ role: "toolResult", toolName: "send_to_user", toolCallId: "s2", isError: true, content: "failed" },
+	]);
+	assert.match(view, /TUTOR: An eigenvector stays on its line\./);
+	assert.ok(!view.includes("NEVER-SHOWN"));
+});
+
+test("the tutor gate refuses a dispatch past its allowance or its deadline, before the call is sent", () => {
+	const file = path.join(tempRun(), "gate.json");
+	openGate(file, { allowed: 2, deadline: 1_000 });
+	admitTutorCall(file, 10);
+	admitTutorCall(file, 20);
+	assert.throws(() => admitTutorCall(file, 30), /tutor dispatch refused/);
+	assert.equal(readGate(file).used, 2, "the refused call was never counted as sent");
+	openGate(file, { allowed: 5, deadline: 1_000 });
+	assert.throws(() => admitTutorCall(file, 1_000), /tutor dispatch refused/);
+	assert.throws(() => admitTutorCall("", 0), /gate missing/);
+	openGate(file, { allowed: -3, deadline: 1_000 });
+	assert.equal(readGate(file).allowed, 0);
+});
+
+test("when the guard refuses grading, nothing more is dispatched and the run stays incomplete with its evidence", async () => {
+	let clock = 0;
+	const { calls, deps } = fakes({ grading: passing, stopAfter: 1 });
+	const simulate = deps.simulate;
+	deps.simulate = async args => { const out = await simulate(args); if (out.reply.stop) clock = runLimits.minutes * 60_000; return out; };
+	deps.now = () => clock;
+	const run = tempRun();
+	const result = await runLiveExercise({ root, run, result: {}, deps });
+	assert.equal(calls.grade, 1, "only the calibration request; grading was not dispatched");
+	assert.equal(result.live.verdict, "incomplete (stopped)");
+	assert.equal(result.status, "incomplete");
+	assert.ok(fs.existsSync(path.join(run, "transcript.md")));
+	assert.ok(!fs.existsSync(path.join(run, "grading.json")));
 });

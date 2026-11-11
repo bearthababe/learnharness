@@ -77,8 +77,16 @@ The run keeps a fixed order (`scripts/lib/learning-live-run.mjs`):
      and the visible screen. It drives the real learner UI.
    - No credential is copied. The app gets an allowlisted environment with no API keys;
      the CLIs use their own logins.
-   - Turns and requests are admitted against `runLimits` before each dispatch.
-3. **Grading.** GPT Sol grades the full transcript. The run verdict is recomputed from
+   - Turns and requests are admitted against `runLimits` before each dispatch. Every tutor
+     model call passes a shared gate (`scripts/lib/live-gate.mjs`) inside the tutor's route,
+     so a tool loop cannot dispatch past the request guard or the deadline. A deadline aborts
+     the running turn.
+   - Compaction calls outside the tutor's agent are not gated.
+   - A CLI's own transport reconnects after a failed connection (for example Codex's
+     bounded "Reconnecting… n/5") produce no model work and are not harness retries; the
+     harness never re-sends a request.
+3. **Grading.** If the guard refuses the grading request, the run stays
+   *incomplete (stopped)* with its evidence, and nothing more is dispatched. Otherwise GPT Sol grades the full transcript. The run verdict is recomputed from
    the grader's per-expectation findings in key §5 order, and a disagreement with the
    grader's own verdict is recorded.
 
