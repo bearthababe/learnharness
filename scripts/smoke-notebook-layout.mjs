@@ -44,7 +44,11 @@ export async function verifyNotebookLayout(browser, origin, artifacts) {
 	assert.equal(await page.$('[data-testid="notebook-options"]'), null);
 	assert.equal(await page.$eval('#notebook-instruction', e => getComputedStyle(e).fontSize), '16px', 'Instruction uses the shared readable input type rung');
 	assert.ok(await page.$eval('[data-notebook-scroll]', e => e.clientHeight > e.closest('.notebook-frame').clientHeight * .5), "Working occupies most of the pane");
-	assert.deepEqual(await page.$$eval('.notebook-frame-header button', buttons => buttons.map(e => e.getAttribute('aria-label'))), ['How the notebook works', 'Undo', 'Notebook options']);
+	assert.deepEqual(await page.$$eval('.notebook-frame-header button', buttons => buttons.map(e => e.getAttribute('aria-label'))), ['How the notebook works', 'Notebook options']);
+	// P6 (round 20): the correction loop under the hand — Undo right before
+	// Apply on the command row (not at the header's far edge), a 44px target.
+	const loop = await page.evaluate(() => { const r = selector => { const e = document.querySelector(`.notebook-panel ${selector}`)?.getBoundingClientRect(); return e && { x: e.x, right: e.right, cy: e.y + e.height / 2, w: e.width, h: e.height }; }; return { undo: r('[data-testid="notebook-undo"]'), apply: r(".notebook-apply") }; });
+	assert.ok(loop.undo && loop.apply && loop.undo.w >= 44 && loop.undo.h >= 44 && Math.abs(loop.undo.cy - loop.apply.cy) <= 4 && loop.apply.x - loop.undo.right <= 16, `Undo beside Apply: ${JSON.stringify(loop)}`);
 	// The help is behind ⓘ (never over the working).
 	assert.equal(await page.$('[data-testid="notebook-help-card"]'), null);
 	await page.click('[data-testid="notebook-help"]');
