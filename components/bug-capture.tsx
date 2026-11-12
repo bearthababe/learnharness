@@ -157,6 +157,7 @@ export function BugCapture() {
 	// taken (a held menu stays open for its shot), Tab stays inside, Escape
 	// saves and closes, and focus returns where it was (pointer devices; a
 	// touch screen never gets its keyboard raised by it).
+	const backdropPress = useRef(false);
 	const sheetRef = useRef<HTMLDivElement>(null);
 	const returnFocus = useRef<HTMLElement | null>(null);
 	const restoreFocus = () => {
@@ -290,8 +291,12 @@ export function BugCapture() {
 		<>
 			{open && (
 				// P2 (round 20): a dimmed backdrop (a tap on it saves and closes, like ✕);
-				// the screenshot never includes it (see the capture's filter).
-				<div className="lh-bug-backdrop" data-testid="bug-backdrop" aria-hidden="true" onClick={() => void leave()} />
+				// the screenshot never includes it (see the capture's filter). Only a
+				// tap that began on it counts: lifting the finger off a held Report
+				// (the report opened under it) must not close what just opened.
+				<div className="lh-bug-backdrop" data-testid="bug-backdrop" aria-hidden="true"
+					onPointerDown={() => { backdropPress.current = true; }}
+					onClick={() => { if (!backdropPress.current) return; backdropPress.current = false; void leave(); }} />
 			)}
 			{open && (
 				<div ref={sheetRef} className="lh-bug-sheet" role="dialog" aria-modal="true" aria-labelledby="lh-bug-title" data-testid="bug-dialog" data-kind={kind} tabIndex={-1} onKeyDown={trapKeys}>
