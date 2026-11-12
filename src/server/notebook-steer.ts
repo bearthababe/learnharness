@@ -4,6 +4,7 @@ import { stores } from "./stores.ts";
 import { steerLiveChat } from "./jobs.ts";
 import { commitNotebookInput, notebookSubmissionAccepted, validateNotebookSubmission } from "./notebook-submissions.ts";
 import { NotebookDraftConflict } from "../core/notebook-drafts.ts";
+import { noteLearnerActivity } from "./learner-activity.ts";
 
 export function submitNotebookSteer(chatId: string, input: UserSteerInput): Response {
 	try {
@@ -14,6 +15,7 @@ export function submitNotebookSteer(chatId: string, input: UserSteerInput): Resp
 		validateNotebookSubmission(record, input);
 		const message = newUserSteer(input.text, input.id, input.explanation);
 		if (!steerLiveChat(chatId, message, () => commitNotebookInput(stores.chatStore, chatId, input, [message], true))) return Response.json({ error: "no live turn to steer" }, { status: 409 });
+		noteLearnerActivity(chatId);
 		return Response.json({ ok: true });
 	} catch (error) {
 		return Response.json({ error: error instanceof Error ? error.message : "Notebook steer could not be saved" }, { status: error instanceof NotebookDraftConflict ? 400 : 503 });

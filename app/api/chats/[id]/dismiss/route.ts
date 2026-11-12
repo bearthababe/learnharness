@@ -20,7 +20,7 @@
  * fires both).
  */
 import { ChatInputError, dismissAppends, emit, parseDismissInput } from "@/src/core";
-import { getChat, isTurnRunning, parkDismissal, stores, commitNotebookInput, notebookSubmissionAccepted, validateNotebookSubmission, NotebookDraftConflict } from "@/src/server";
+import { getChat, isTurnRunning, noteLearnerActivity, parkDismissal, stores, commitNotebookInput, notebookSubmissionAccepted, validateNotebookSubmission, NotebookDraftConflict } from "@/src/server";
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
 	const { id } = await ctx.params;
@@ -58,6 +58,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 	// "noted, will land" contract.
 	if (isTurnRunning(id)) {
 		parkDismissal(id, input);
+		// The learner dismissed it now (P15): the sessions list moves now,
+		// though the record is written when the turn settles.
+		noteLearnerActivity(id);
 		return Response.json({ ok: true, parked: true }, { status: 202 });
 	}
 
@@ -73,6 +76,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 	const merged = [...chat.messages, ...appends];
 	if (input.type === "dismiss" && input.submission) commitNotebookInput(stores.chatStore, id, input, appends);
 	else stores.chatStore.saveMessages(id, merged);
+	// The learner's own Esc (P15): the sessions list moves, as any learner write does.
+	noteLearnerActivity(id);
 	emit("record-changed", { chatId: id });
 	return Response.json({ ok: true });
 }

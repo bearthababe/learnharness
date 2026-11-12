@@ -10,7 +10,7 @@
  * { input: { messageId, inverted } } or targets no demo/visual steer.
  */
 import { setSteerUiInverted, type SteerDetails } from "@/src/core";
-import { getChat, stores } from "@/src/server";
+import { getChat, noteLearnerActivity, stores } from "@/src/server";
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }): Promise<Response> {
 	const { id } = await ctx.params;
@@ -37,5 +37,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
 	const messages = setSteerUiInverted(chat.messages, input.messageId, input.inverted);
 	stores.chatStore.saveMessages(id, messages);
+	// The learner flipped it (P15): the sessions list moves, as on any learner write.
+	noteLearnerActivity(id);
 	return Response.json({ ok: true });
 }

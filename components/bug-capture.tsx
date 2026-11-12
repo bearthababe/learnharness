@@ -253,6 +253,10 @@ export function BugCapture() {
 					style: { margin: "0" },
 					filter: node => !(node instanceof Element) || !node.closest(".lh-bug-sheet, .lh-bug-toast, .lh-bug-backdrop"),
 					onCloneEachNode: maskClone,
+					// The current screen as the learner sees it: a scrolled area (a
+					// Settings pane, the lesson, a list) keeps its scroll position in the
+					// shot, instead of showing from its top (merge proof N1).
+					features: { restoreScrollPosition: true },
 				});
 				await draft.flush();
 				if (draft.value.discardPending) return;

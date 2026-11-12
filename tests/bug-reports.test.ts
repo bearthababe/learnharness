@@ -108,3 +108,31 @@ it("§0: Discard pressed before the report was saved deletes it once it exists",
 	assert.equal(exists, false);
 	assert.equal(removed, 1);
 });
+
+it("§0 (merge proof): every string a report brings is cut of keys before it is stored, whatever the client did", () => {
+	const { redactSecrets } = store;
+	// Test-only fake key shapes, built at run time.
+	const github = "ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2", google = "AIza" + "Sy0123456789abcdefghijklmnopq", openai = "sk-" + "proj0123456789abcdef";
+	const report = store.createReport("r-redact-client-1", {
+		path: "/chat/c?api_key=zz-path-secret",
+		note: `token ${github}`,
+		url: `http://x/chat/c?key=${google}&ok=1`,
+		title: `Bearer ${openai}`,
+		log: [
+			{ at: "t", kind: "error", text: `fetch failed with ${github} and ${google}` },
+			{ at: "t", kind: "warn", text: `OPENROUTER_API_KEY=${openai} in env` },
+			{ at: "t", kind: "fetch", text: '{"apiKey": "zz-json-secret"}' },
+		],
+		device: { settings: { note: `nested ${github}` } },
+	});
+	assert.ok(report && report !== "discarded");
+	const stored = fs.readFileSync(path.join(store.bugsDir(), "r-redact-client-1", "report.json"), "utf-8");
+	for (const secret of [github, google, openai, "zz-json-secret", "zz-path-secret"]) assert.ok(!stored.includes(secret), `stored report holds ${secret.slice(0, 6)}…`);
+	assert.match(stored, /\[redacted key\]/);
+	assert.ok(stored.includes("ok=1"), "the rest of the text stays");
+	// One definition for the client's recorder and the server.
+	assert.equal(redactSecrets(`x ${github} y`), "x [redacted key] y");
+	assert.equal(redactSecrets("http://a/b?token=zz123&q=2"), "http://a/b?token=[redacted]&q=2");
+	const recorder = fs.readFileSync("components/bug-recorder.tsx", "utf-8");
+	assert.ok(/import \{ redactSecrets \} from "@\/src\/core";/.test(recorder) && recorder.includes("const redact = redactSecrets"), "the client recorder uses the shared redaction");
+});

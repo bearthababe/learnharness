@@ -60,6 +60,8 @@ export { claudeCodeInstallationResponse } from "./claude-code.ts";
 export * from "./custom-provider.ts";
 export { customProviderGet, customProviderMutation } from "./custom-provider-http.ts";
 export { submitNotebookSteer } from "./notebook-steer.ts";
+// The sessions list follows the learner (P15): every learner write stamps it.
+export { noteLearnerActivity } from "./learner-activity.ts";
 export { handwritingResponse, handwritingPagesResponse } from "./handwriting.ts";
 export { runtimeStatus } from "./runtime-status.ts";
 // Round 19 (§0): 🐞 problem reports and their optional GitHub filing.

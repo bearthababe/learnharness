@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { redactSecrets } from "@/src/core";
 
 /**
  * Round 19 (§0): the rolling client log a 🐞 report carries — the last
@@ -11,10 +12,8 @@ import { useEffect } from "react";
 export type BugLogEntry = { at: string; kind: "error" | "warn" | "fetch" | "nav"; text: string };
 declare global { interface Window { __lhBugLog?: BugLogEntry[] } }
 
-const redact = (text: string) => text
-	.replace(/\b(sk|pk|rk)-[A-Za-z0-9_-]{8,}/g, "[redacted key]")
-	.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, "$1 [redacted]")
-	.replace(/([?&](?:key|token|api_key|apikey|access_token)=)[^&\s]+/gi, "$1[redacted]");
+// The same definition the server applies to everything it stores (src/core/redact.ts).
+const redact = redactSecrets;
 
 export function BugRecorder() {
 	useEffect(() => {

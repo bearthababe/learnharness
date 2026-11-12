@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { PATHS } from "../../config.ts";
 import { pendingQuestionOf } from "../core/native-messages.ts";
+import { redactDeep, redactSecrets } from "../core/redact.ts";
 import { stores } from "./stores.ts";
 
 export type ReportKind = "bug" | "change";
@@ -23,15 +24,9 @@ const tombstones = () => path.join(bugsDir(), ".discarded");
 /** A client-made id: `r-<time>-<random>` (letters, digits, dashes). */
 export const safeReportId = (id: string) => /^[A-Za-z0-9][A-Za-z0-9-]{5,80}$/.test(id);
 
-/** Strip anything that looks like a credential from free text (log lines, notes). */
-export function redactSecrets(text: string): string {
-	return text
-		.replace(/\b(sk|pk|rk)-[A-Za-z0-9_-]{8,}/g, "[redacted key]")
-		.replace(/\b(gh[pousr]_[A-Za-z0-9]{12,}|xox[abpr]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{20,})/g, "[redacted key]")
-		.replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, "$1 [redacted]")
-		.replace(/\b([A-Z0-9_]*(?:API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*)\s*[:=]\s*\S+/gi, "$1=[redacted]")
-		.replace(/("?(?:api_?key|token|secret|password|authorization)"?\s*:\s*)"[^"]*"/gi, "$1\"[redacted]\"");
-}
+/** Strip anything that looks like a credential from free text (log lines,
+ *  notes): one definition, shared with the client's recorder (src/core). */
+export { redactSecrets };
 
 function tailLines(file: string, lines: number): string[] {
 	try {
@@ -103,9 +98,13 @@ export function createReport(id: string, page: Record<string, unknown>): StoredR
 	const existing = readReport(id);
 	if (existing) return existing;
 	const kind: ReportKind = page.kind === "change" ? "change" : "bug";
-	const pagePath = String(page.path ?? "/").slice(0, 500);
-	const { kind: _k, note: _n, ...rest } = page;
+	const pagePath = redactSecrets(String(page.path ?? "/")).slice(0, 500);
+	const { kind: _k, note: _n, ...given } = page;
 	void _k; void _n;
+	// Everything the page sent — its error log, URL, title, device details —
+	// is cut of credentials before it is stored, whatever the client did
+	// (round 19 §0: never put keys in a report; merge proof N1).
+	const rest = redactDeep(given);
 	const report = shaped({ ...rest, id, kind, at: String(page.at ?? new Date().toISOString()), path: pagePath, note: typeof page.note === "string" ? redactSecrets(page.note).slice(0, 4000) : "", noteSeq: 0, server: serverContext(pagePath) } as StoredReport);
 	writeReport(report);
 	return report;
