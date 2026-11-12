@@ -206,7 +206,8 @@ export const HANDOFF_TEXT =
 	"Apply the teaching methodology in your system prompt, and find the optimal way to teach me this. " +
 	"Find the unconditional truths, plan the motivated derivations/discoveries, so every reasoning step has to land as obviously true. " +
 	"Take your time here and really think this through. " +
-	"When it's genuinely reasoned out, call plan_init and present the plan; I'll accept it or ask for changes.";
+	"When it's genuinely reasoned out, call plan_init and present the plan, then end your turn: no teaching until I've confirmed it. " +
+	"I'll accept it or ask for changes.";
 
 // ─── Practice sessions (owner, 2026-10-04) — marker + ack texts ──────────────
 // Single-sourced here per the marker law: the model-facing text of every
