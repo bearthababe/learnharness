@@ -37,8 +37,9 @@ it("source inventory includes unextracted chats and zero-graph imported books; o
 	assert.match(html, /data-testid="folder-thread-f2"[^>]*style="left:73px"/);
 	assert.match(html, /data-testid="source-separator-notes"[^>]*style="left:1px"/);
 	assert.match(html, /data-testid="folder-separator-f2"[^>]*style="left:37px"/);
-	assert.match(html, /data-testid="folder-icon-f2"[^>]*aria-expanded="true"/);
-	assert.match(html, /data-testid="source-icon-notes"[^>]*aria-expanded="false"/);
+	// E3 (round 16): the title button opens the row and carries its state.
+	assert.match(html, /data-testid="folder-toggle-f2"[^>]*aria-expanded="true"/);
+	assert.match(html, /data-testid="cluster-toggle-notes"[^>]*aria-expanded="false"/);
 	assert.match(html, /data-testid="cluster-group-notes"[^>]*style="margin-left:72px"/);
 	assert.doesNotMatch(html, /No matching chains/);
 });
@@ -112,26 +113,27 @@ it("empty names and book icons use stronger matching dimming in both trees and e
 		const { document } = parseHTML(render({ selectMode, nodes, expandedClusters: new Set(["f1", "f2", ...(open ? ["chat", "notes"] : [])]) }));
 		const empty = document.querySelector('[data-testid="cluster-checkbox-chat"]')!.closest('[data-chain-nav-row]')!;
 		const populated = document.querySelector('[data-testid="cluster-checkbox-notes"]')!.closest('[data-chain-nav-row]')!;
-		assert.match(empty.querySelector('[title="Rename"]')!.className, /text-muted-foreground\/60/);
+		// E3 (round 16): the name is the title button's text; Rename is an action of the opened row.
+		assert.match(empty.querySelector('.lh-row-name')!.className, /text-muted-foreground\/60/);
 		const emptyIcon = empty.querySelector('[data-source-icon]')!;
 		assert.equal(emptyIcon.classList.contains("text-muted-foreground/60"), true);
-		assert.equal(emptyIcon.getAttribute("aria-expanded"), String(open));
+		assert.equal(empty.querySelector('.lh-row-open')!.getAttribute("aria-expanded"), String(open));
 		assert.equal(emptyIcon.querySelector("svg")!.classList.contains("lucide-book-open"), open);
 		assert.equal(populated.querySelector('[data-source-icon]')!.classList.contains("text-muted-foreground/60"), false);
-		assert.doesNotMatch(populated.querySelector('[title="Rename"]')!.className, /text-muted-foreground/);
+		assert.doesNotMatch(populated.querySelector('.lh-row-name')!.className, /text-muted-foreground/);
 		assert.doesNotMatch(empty.className, /opacity-|text-muted-foreground/);
 		assert.equal(empty.getAttribute("draggable"), "true");
 		if (!selectMode) assert.equal(empty.querySelector("input")!.hasAttribute("disabled"), false);
-		const folderName = document.querySelector('[data-testid="folder-row-f1"] [title="Rename"]')!;
+		const folderName = document.querySelector('[data-testid="folder-row-f1"] .lh-row-name')!;
 		assert.doesNotMatch(folderName.className, /text-muted-foreground/);
 		assert.equal(document.querySelector('[data-testid="folder-icon-f1"]')!.classList.contains("text-muted-foreground/60"), false);
 		const filtered = parseHTML(render({ selectMode, nodes, query: "Named book" })).document;
-		const name = filtered.querySelector('[data-testid="cluster-checkbox-notes"]')!.closest('[data-chain-nav-row]')!.querySelector('[title="Rename"]')!;
+		const name = filtered.querySelector('[data-testid="cluster-checkbox-notes"]')!.closest('[data-chain-nav-row]')!.querySelector('.lh-row-name')!;
 		assert.doesNotMatch(name.className, /text-muted-foreground/);
 	}
 	const readOnly = parseHTML(render({ onOrganizationChange: undefined })).document;
 	assert.match(readOnly.querySelector('[data-testid="cluster-checkbox-chat"]')!.closest('[data-chain-nav-row]')!.textContent!, /Not yet extracted/);
-	assert.match(readOnly.querySelector('[data-testid="cluster-checkbox-chat"]')!.closest('[data-chain-nav-row]')!.innerHTML, /text-sm font-medium text-muted-foreground\/60/);
+	assert.match(readOnly.querySelector('[data-testid="cluster-checkbox-chat"]')!.closest('[data-chain-nav-row]')!.innerHTML, /lh-row-name text-muted-foreground\/60/);
 });
 
 it("source confirmation explains shared-node survival and makes conversation deletion an unchecked opt-in", () => {

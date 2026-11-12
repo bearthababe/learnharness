@@ -3,12 +3,21 @@ import { SharedWritingImages, SharedWritingPanel, useSharedWriting } from "@/com
 import { useMobileChatFocus } from "@/components/use-mobile-chat-focus";
 import { HandwritingNotebook } from "@/components/handwriting/notebook";
 import { HandwritingPagesContext } from "@/components/handwriting/pages-context";
+import { OPEN_HELPERS_EVENT, PageMenuButton } from "@/components/page-menu";
+import { SessionHelperFailures } from "@/components/activity-dock";
+import { NotebookOpener } from "@/components/notebook-opener";
+import { useMarkSessionSeen } from "@/components/session-seen";
+import { FocusCornerButton, FocusDockButton, FocusEdgeTabs, FocusModeButton, FocusModeExit, FocusPlaceSync, setFocusMode, useFocusPlace } from "@/components/focus-mode";
+import { KeyboardToggle } from "@/components/pane-kit";
+import { useHeaderLook, useTryout } from "@/components/device-prefs";
+import { usePhoneLayout, useStackedNotebook, useTouchLayout } from "@/components/use-phone-viewport";
 import { HandwritingSubmissionContext, HandwritingDeliveryNotice, useHandwritingEditor, useHandwritingSubmission } from "@/components/handwriting/submission";
-import { HandwritingSplit, useHandwritingSession } from "@/components/handwriting/session";
+import { useHandwritingSession } from "@/components/handwriting/session";
 import type { SharedWriting } from "@/src/core";
 
 import { createContext, Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { explanationHasContent, serializeLearnerExplanation, type LearnerExplanation as Explanation } from "@/src/core";
+import { explanationHasContent, questionDraftHasWork, serializeLearnerExplanation, type LearnerExplanation as Explanation } from "@/src/core";
+import { useDeploymentActivity } from "@/components/deployment-activity";
 import { LearnerExplanation } from "./learner-explanation";
 import { useChatSession } from "@/components/session";
 import { visibleQueuedSteers } from "@/components/session-core";
@@ -25,6 +34,8 @@ import {
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import { PathText } from "@/components/file-path-chip";
 import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
+import { groupTraceParts } from "@/components/steps-group";
+import { answeredCardCount, followAnsweredCard } from "@/components/answer-follow";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { BrailleSpinner } from "@/components/braille-spinner";
 import { LiveToolCard } from "@/components/artifacts/live-tool-card";
@@ -42,6 +53,7 @@ import type { NotebookInputFields, TutorDraftOwner } from "@/src/core";
 import { NotebookPanel } from "@/components/notebook-panel";
 import { NotebookFrame, NotebookSplit, useNotebookLayout } from "@/components/notebook-layout";
 import { NotebookSavedDrafts } from "@/components/notebook-saved-drafts";
+import { WorkingChip } from "@/components/working-chip";
 import { useNotebookDestination } from "@/components/notebook-destination";
 import { notebookTutorInput } from "@/components/notebook-speech-input";
 import { NotebookSpeechDestination, NotebookSpeechRecovery } from "@/components/notebook-speech-status";
@@ -72,18 +84,22 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, NotebookPenIcon, PaperclipIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronLeftIcon, DumbbellIcon, MessageCircleIcon, NotebookPenIcon, PaperclipIcon, PenLineIcon, TargetIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
-import { QuestionDock } from "@/components/question-dock";
+import { PrototypeSwitch } from "@/components/prototype-switch";
+import { focusFirstAnswerControl, QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
 import { SessionMessageNavigation } from "@/components/session-navigation";
+import { friendlyProviderError } from "@/components/friendly-error";
+import { deliveredEntries, friendlyNetworkError, learnerTextCount, listUnsent, newUnsentId, putUnsent, removeUnsent, type UnsentEntry } from "@/components/unsent-message";
+import { useDeviceFeature } from "@/components/device-features";
 import { PracticeDock } from "@/components/practice-dock";
-import { ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
+import { ActiveProblemContext, ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
 import { TopBar } from "@/components/top-bar";
 import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
 import type { LhViewMessage } from "@/src/core";
-import { PhaseChip, PhaseDivider } from "@/components/phase-divider";
+import { PhaseChip, phaseLabel, PhaseDivider, tutorProgressLabel } from "@/components/phase-divider";
 import {
 	CompactionCutDivider,
 	CompactionMomentDivider,
@@ -114,8 +130,8 @@ import { currentUserThinkingOpen, setAllUserThinkingOpen } from "@/components/th
  * deliberately narrower (~46rem centered) per the reference. Same ELEMENT,
  * same place — width polish only.
  */
-const COLUMN = "mx-auto w-full max-w-none px-6";
-const DOCK = "mx-auto w-full max-w-[46rem] px-4";
+const COLUMN = "lh-column mx-auto w-full max-w-[46rem] px-4";
+const DOCK = "lh-dock-column mx-auto w-full max-w-[46rem] px-4";
 // The DOCK container's fixed width (46rem) and the plan marginalia's
 // geometry (owner, plan-placement round): the bare diagram sits in the
 // dock band's RIGHT flank — MARGIN_GAP from the DOCK container's edge and
@@ -159,6 +175,21 @@ export const ChatActionsContext = createContext<{
  *  so the machine-readable {code, missing} shape survives to here. Real
  *  errors (any other text) read as null and keep the honest banner.
  *  Exported pure for tests. */
+
+/** iOS raises the keyboard only for a focus made inside the tap itself, and
+ *  the rename field mounts a moment later. A stand-in field takes the focus
+ *  during the tap; the real field takes it over when it mounts (round 11:
+ *  tapping the session title on a phone renames it). */
+function holdKeyboardForRename() {
+	if (typeof window === "undefined" || !window.matchMedia?.("(pointer: coarse)").matches) return;
+	const stand = document.createElement("input");
+	stand.setAttribute("aria-hidden", "true");
+	stand.tabIndex = -1;
+	stand.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;font-size:16px;pointer-events:none";
+	document.body.appendChild(stand);
+	stand.focus({ preventScroll: true });
+	setTimeout(() => stand.remove(), 1000);
+}
 export function parseModelsRefusal(message: string | undefined): ModelSlotName[] | null {
 	if (!message) return null;
 	try {
@@ -192,6 +223,22 @@ export function parseProviderKeyRefusal(message: string | undefined): boolean {
  * from an earlier, already-durable text send over today's unsent composer.
  * Retire that fallback synchronously, never when the async Retry settles:
  * a later ordinary send may own a new recovery draft by then. */
+/** Why a message was not sent, in plain words. */
+function unsentReason(error: string | null): string {
+	if (error && (parseModelsRefusal(error) || parseProviderKeyRefusal(error))) return "a model needs setting up first";
+	if (typeof navigator !== "undefined" && navigator.onLine === false) return "you're offline";
+	if (!error || friendlyNetworkError(error)) return "LearnHarness couldn't be reached";
+	return friendlyProviderError(error) ?? "something went wrong";
+}
+/** The not-sent note: "back in the box" only when the box really holds
+ *  that message; otherwise the message itself is quoted beneath. */
+export function unsentNoticeText(kind: "failed" | "restored", error: string | null, inBox: boolean): string {
+	// K2 (round 16): one wording, live and after a reload — "Not sent", the
+	// reason when it is known (after a reload it is not), then where it is.
+	const head = kind === "restored" ? "Not sent" : `Not sent — ${unsentReason(error)}`;
+	return inBox ? `${head}. Your message is back in the box.` : `${head}:`;
+}
+
 export function retryFailedResponse(
 	send: (input: ChatInput) => void,
 	submittedDraft: { current: string | null },
@@ -280,17 +327,45 @@ export function Chat({
 	// (core/view.ts projectView); sends are ONE explicit input event each
 	// ({chatId, input} — the stash indirection died with the SDK), and the
 	// turn stream is the VERBATIM AgentEvent passthrough the server emits.
-	const { messages, nativeMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, resumeStream, setReattachSettled } =
+	const { messages, nativeMessages, recordMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, restoreStoredQuestionDrafts, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, discardUnsentText, discardUnsentThinking, resumeStream, setReattachSettled } =
 		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight });
 	const sharedWriting = useSharedWriting(chatId, nativeMessages);
 	const hasSharedWriting = sharedWriting.pending.length > 0;
 	const handwritingSubmission = useHandwritingSubmission(chatId, sharedWriting.refresh, send, sharedWriting.pending);
+	// Removing the last attached page clears its "attached · not sent" notice.
+	useEffect(() => { handwritingSubmission.attachment()?.reconcile(sharedWriting.pending); }, [handwritingSubmission, sharedWriting.pending]);
 
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
+	// A6 (round 15): the head's height, for the Glass bar (the lesson starts
+	// below it and scrolls beneath it; an open question starts below it).
+	const sessionTutorRef = useRef<HTMLDivElement | null>(null);
+	const sessionHeadRef = useRef<HTMLDivElement | null>(null);
+	const headerLook = useHeaderLook();
+	useLayoutEffect(() => {
+		const head = sessionHeadRef.current, tutor = sessionTutorRef.current;
+		if (!head || !tutor) return;
+		const measure = () => tutor.style.setProperty("--lh-session-head", `${Math.round(head.getBoundingClientRect().height)}px`);
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(head);
+		return () => observer.disconnect();
+	}, []);
+	useEffect(() => {
+		document.documentElement.dataset.headerLook = headerLook;
+		return () => { delete document.documentElement.dataset.headerLook; };
+	}, [headerLook]);
 	const workspaceRef = useRef<HTMLDivElement | null>(null);
 	const workspaceId = useId();
 	const notebook = useNotebookSession(chatId);
-	const notebookVisible = notebook.view?.visible ?? false;
+	// Working tools follow the device (Settings → General): a switched-off
+	// tool only hides; its saved state stays in the session.
+	const notebookOn = useDeviceFeature("notebook");
+	const writingOn = useDeviceFeature("writing");
+	const notebookVisible = notebookOn && (notebook.view?.visible ?? false);
+	// Switching the canvas off closes it (its pages stay saved).
+	useEffect(() => {
+		if (!writingOn && handwriting.open) handwriting.show(false);
+	}, [writingOn, handwriting]);
 	const notebookLayout = useNotebookLayout(notebookVisible);
 	const notebookSpeech = useSyncExternalStore(notebook.session.speech.subscribe, notebook.session.speech.getSnapshot, notebook.session.speech.getSnapshot);
 	const tutorDraftState = useSyncExternalStore(notebook.session.tutor.subscribe, notebook.session.tutor.getSnapshot, notebook.session.tutor.getSnapshot);
@@ -298,6 +373,51 @@ export function Chat({
 	useSessionInputViewport(workspaceRef, notebookVisible);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
 	useMobileChatFocus(workspaceRef, scrollContextRef, !notebookVisible);
+	// After answering, keep the result in view: the answered card comes to
+	// the top and the tutor's reply streams in beneath it (see answer-follow).
+	const answerFollowRef = useRef<(() => void) | null>(null);
+	useEffect(() => () => answerFollowRef.current?.(), []);
+	const followAnswer = useCallback((toolCallId: string) => {
+		answerFollowRef.current?.();
+		const scroller = () => scrollContextRef.current?.scrollRef.current ?? null;
+		answerFollowRef.current = followAnsweredCard({
+			scroller,
+			holdAutoFollow: () => scrollContextRef.current?.stopScroll(),
+			before: answeredCardCount(scroller()),
+			pending: () => pendingRef.current?.toolCallId === toolCallId,
+			// Instantly, so the returned question's dock is never left folded
+			// behind a slow animation.
+			release: () => {
+				const view = scroller();
+				if (view) view.scrollTop = view.scrollHeight;
+				void scrollContextRef.current?.scrollToBottom("instant");
+			},
+		});
+	}, []);
+	// The stick-to-bottom scroller re-pins when its CONTENT resizes, not when
+	// the viewport itself shrinks (the notebook or writing pane opening, a
+	// split loading). Keep a reader who was at the end at the end.
+	useEffect(() => {
+		let observer: ResizeObserver | null = null;
+		let frame = 0;
+		let lastHeight = 0;
+		const attach = () => {
+			const ctx = scrollContextRef.current;
+			const el = ctx?.scrollRef.current;
+			if (!ctx || !el) { frame = requestAnimationFrame(attach); return; }
+			lastHeight = el.clientHeight;
+			observer = new ResizeObserver(() => {
+				const height = el.clientHeight;
+				const shrank = height < lastHeight - 1;
+				lastHeight = height;
+				const state = scrollContextRef.current?.state;
+				if (shrank && state && state.isAtBottom && !state.escapedFromLock) void scrollContextRef.current?.scrollToBottom("instant");
+			});
+			observer.observe(el);
+		};
+		attach();
+		return () => { cancelAnimationFrame(frame); observer?.disconnect(); };
+	}, []);
 	const sourceTextParts = useMemo(() => firstSourceTextParts(messages), [messages]);
 
 	// The reattach settled terminal → the sync-and-continue seam (below).
@@ -489,6 +609,39 @@ export function Chat({
 		// mount-only by design (turnInFlight read at initial value)
 	}, []);
 
+	// Back/forward navigation can replay a page payload rendered before this
+	// session's later turns (the router cache restores it), which made a
+	// just-used session look empty until reload. Check the record once on
+	// mount and adopt it when it holds MORE than the page was given —
+	// append-only, and only while nothing has happened locally yet.
+	const nativeCountRef = useRef(nativeMessages.length);
+	nativeCountRef.current = nativeMessages.length;
+	// The conversation as this view holds it (accepted-but-not-yet-adopted
+	// bubbles included): a kept attempt's `seen` count is taken from it.
+	const touchLayout = useTouchLayout();
+	const nativeMessagesRef = useRef(nativeMessages);
+	nativeMessagesRef.current = nativeMessages;
+	// P15 (round 14): being in the session sees what lands in it.
+	useMarkSessionSeen(chatId, recordMessages.length);
+	const mountFreshness = useRef(false);
+	useEffect(() => {
+		if (mountFreshness.current) return;
+		mountFreshness.current = true;
+		if (initialPrompt || initiallyInFlight) return;
+		const given = initialMessages.length;
+		let cancelled = false;
+		void fetch(`/api/chats/${chatId}`)
+			.then((res) => (res.ok ? res.json() : null))
+			.then((record: { messages?: unknown[] } | null) => {
+				if (cancelled || !record || !Array.isArray(record.messages)) return;
+				if (record.messages.length <= given || nativeCountRef.current !== given) return;
+				void syncFromServer();
+			})
+			.catch(() => {});
+		return () => { cancelled = true; };
+		// mount-only by design
+	}, []);
+
 	const pending = findPendingToolCall(messages, pendingQuestionOf(nativeMessages));
 	const malformedQuestions = malformedQuestionsOf(nativeMessages);
 	// The abort handler reads the pending question from a ref (the window
@@ -538,16 +691,26 @@ export function Chat({
 	// read from the text by the agent, not declared here. Starts a turn;
 	// the dock stays mounted (the problem is still active until the agent
 	// concludes).
+	/** A practice/drill working that was not sent (it stays in its box). */
+	const [practiceUnsent, setPracticeUnsent] = useState(false);
 	const submitThinking = useCallback(
 		(text: string, problemCallId: string, fields?: NotebookInputFields, reviewed?: SharedWriting[]) => {
 			const problem = activeProblemRef.current;
 			if (!problem || problem.toolCallId !== problemCallId) return Promise.resolve(false);
 			const images = reviewed ?? sharedWriting.pending;
 			if (images.length || handwritingSubmission.hasAttempt()) return handwritingSubmission.submit({ type: "thinking", problemCallId, text, ...fields, writingIds: images.map(image => image.id) }, images, `problem:${problemCallId}`);
-			if (!handwritingSubmission.blocked()) return send({ type: "thinking", problemCallId, text, ...fields });
+			if (!handwritingSubmission.blocked()) {
+				setPracticeUnsent(false);
+				return send({ type: "thinking", problemCallId, text, ...fields }).then((accepted) => {
+					// Not acknowledged: the working stays in its box (the dock keeps
+					// it), its "sent" card leaves, and the note says so plainly.
+					if (!accepted) { discardUnsentThinking(problemCallId, text); setPracticeUnsent(true); }
+					return accepted;
+				});
+			}
 			return Promise.resolve(false);
 		},
-		[send, handwritingSubmission, sharedWriting],
+		[send, handwritingSubmission, sharedWriting, discardUnsentThinking],
 	);
 
 	// Teach-phase check (W5, vision §2): a pending QUIZ that lands once a
@@ -567,6 +730,20 @@ export function Chat({
 	 * separate `readingThinking` field. Reset per pending question. */
 	const [readingThinkingSeed, setReadingThinkingSeed] = useState({ questionId: null as string | null, value: "", revision: 0 });
 	const readingThinkingRef = useRef("");
+	const readingNow = useCallback(() => readingThinkingRef.current, []);
+	const phoneLayout = usePhoneLayout();
+	// P4 (round 20): on phones the mode marker ("Practice", "Drill") sits beside
+	// the name, so a leading "Practice:" / "Drill:" isn't repeated in it.
+	const modeLead = phoneLayout && kind === "practice" ? titleText.match(/^(practice|drill)\s*[:\-–—]\s*(\S.*)$/i) : null;
+	const shownTitle = modeLead && modeLead[1]!.toLowerCase() === (practiceMode === "drill" ? "drill" : "practice") ? modeLead[2]!.charAt(0).toUpperCase() + modeLead[2]!.slice(1) : titleText;
+	const stackedNotebook = useStackedNotebook();
+	// P5 (round 17, phones): the equation notebook takes over the screen like
+	// the thinking pane — the big mic bar, the keyboard button and Peek; the
+	// lesson's chat box is the tutor's again (the one-box switch is gone).
+	// Peek shows the lesson with a pull-up sheet of the working.
+	const notebookPane = phoneLayout && notebookVisible;
+	const [notebookPeek, setNotebookPeek] = useState(false);
+	useEffect(() => { if (!notebookPane) setNotebookPeek(false); }, [notebookPane]);
 
 	// ⌘T (toggle-user-thinking, owner round 2026-10-07): set EVERY user
 	// thinking row to one state — transcript rows default open, so the
@@ -576,14 +753,54 @@ export function Chat({
 		window.addEventListener(kbdEventForChat("toggle-user-thinking"), onToggle);
 		return () => window.removeEventListener(kbdEventForChat("toggle-user-thinking"), onToggle);
 	}, []);
+	// Reading notes are kept as they are typed (device copy via the session
+	// model), so leaving the session or a reload never loses them.
+	const pendingKeyRef = useRef<string | null>(null);
 	const applyReadingThinking = useCallback((v: string) => {
 		readingThinkingRef.current = v;
-	}, []);
+		if (pendingKeyRef.current) saveQuestionDraft(pendingKeyRef.current, { readingThinking: v });
+	}, [saveQuestionDraft]);
 	const clearReadingThinking = useCallback(() => {
 		readingThinkingRef.current = "";
 		setReadingThinkingSeed((previous) => ({ ...previous, value: "", revision: previous.revision + 1 }));
 	}, []);
+	// Busy signal (main's idle-gated updater may not restart while these hold
+	// work). They live here, for the whole session, so a folded question, a
+	// closed pane or Peek never unmounts them while they hold a draft:
+	// - the open question's answer draft, kept while it is folded, and a
+	//   failed send ("Not sent");
+	// - Thinking while reading — the phone's pane and the inline note — before
+	//   and after the question opens.
+	useDeploymentActivity("unsent-answer", () => !!pending && questionDraftHasWork(questionDraft(pending.key)));
+	useDeploymentActivity("reading-thinking", () => !!readingThinkingRef.current.trim());
 	const pendingQuestionId = pending?.key ?? null;
+	pendingKeyRef.current = pendingQuestionId;
+	// Device-kept question drafts (B1) join after hydration, never in the
+	// server-matching first render; the epoch remounts the question form
+	// once so it picks the restored answer up.
+	const [storedDraftEpoch, setStoredDraftEpoch] = useState(0);
+	// R8 (round 12): a question whose answer was not sent comes back OPEN,
+	// with its answer and a "Not sent / Send again" note — never folded to
+	// its bar as if it had just arrived. The ids whose answer is on its way
+	// (or failed) are remembered here for the dock's arrival decision; the
+	// request number opens it when the failure is learned after arrival
+	// (or found in the device copy after a reload).
+	const returningQuestionIds = useRef(new Set<string>());
+	const [questionOpenRequest, setQuestionOpenRequest] = useState(0);
+	// L10 (round 19): the notebook's Attach opens a folded question first.
+	useEffect(() => {
+		const open = () => { if (pendingKeyRef.current) setQuestionOpenRequest((n) => n + 1); };
+		window.addEventListener("lh:open-question", open);
+		return () => window.removeEventListener("lh:open-question", open);
+	}, []);
+	useLayoutEffect(() => {
+		if (restoreStoredQuestionDrafts()) setStoredDraftEpoch((epoch) => epoch + 1);
+		const key = pendingKeyRef.current;
+		if (key && questionDraft(key)?.unsent) {
+			returningQuestionIds.current.add(key);
+			setQuestionOpenRequest((n) => n + 1);
+		}
+	}, [restoreStoredQuestionDrafts, questionDraft]);
 	useLayoutEffect(() => {
 		// Different calls never share a draft; a failed submission of THIS
 		// call restores the reading channel alongside the form's snapshot.
@@ -594,7 +811,7 @@ export function Chat({
 				? previous
 				: { questionId: pendingQuestionId, value, revision: previous.revision + 1 },
 		);
-	}, [pendingQuestionId, questionDraft]);
+	}, [pendingQuestionId, questionDraft, storedDraftEpoch]);
 
 	// The phase at every message (one linear fold): the transcript draws a
 	// color-coded dotted divider at each boundary; the header chip reads the
@@ -602,23 +819,152 @@ export function Chat({
 	const phases = useMemo(() => phaseTimeline(messages), [messages]);
 
 	const [composerDraftRevision, setComposerDraftRevision] = useState(0);
+	/** Messages that were not sent ("failed" now, or "restored" after a
+	 *  reload), each kept separately; `boxEntryId` is the one that is back
+	 *  in the composer, if any. A newer draft is never mistaken for one. */
+	const [unsentShown, setUnsentShown] = useState<(UnsentEntry & { kind: "failed" | "restored" })[]>([]);
+	const [boxEntryId, setBoxEntryId] = useState<string | null>(null);
+	const quotedUnsent = unsentShown.filter((entry) => entry.id !== boxEntryId).length;
+	const boxEntryRef = useRef(boxEntryId);
+	boxEntryRef.current = boxEntryId;
 	/* The composer draft ref is synchronous, so sends and dictation flushes
 	 * read the latest text without a parent render per input event. Explicit
 	 * resets still bump a revision so the local field can sync. */
 	const textRef = useRef("");
+	// Sessions that never opened the notebook have no server-side draft
+	// store (no notebook context), so their unsent composer text is kept per
+	// session on this device instead; the notebook store stays authoritative
+	// wherever a context exists.
+	const localDraftKey = `lh:composer-draft:${chatId}`;
+	const rememberLocalDraft = useCallback((v: string) => {
+		// D1 (round 13): kept from the first keystroke, even while the
+		// notebook view is still loading (it may turn out to own the draft;
+		// the restore below then hands this copy over, never losing it).
+		const view = notebook.session.getSnapshot().view;
+		if (view?.contextId) return;
+		try {
+			if (v.trim()) localStorage.setItem(localDraftKey, v);
+			else localStorage.removeItem(localDraftKey);
+		} catch { /* storage blocked: the draft lives only in this view */ }
+	}, [notebook.session, localDraftKey]);
 	const applyText = useCallback((v: string) => {
 		textRef.current = v;
 		setComposerDraftRevision((revision) => revision + 1);
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
-	}, [notebook.session]);
+		else rememberLocalDraft(v);
+	}, [notebook.session, rememberLocalDraft]);
 	const recordComposerText = useCallback((v: string) => {
 		textRef.current = v;
+		// Emptying a message that came back to the box lets it go; the
+		// composer's own reset during a send never does (the entry is
+		// released from the box before that reset).
+		const inBox = boxEntryRef.current;
+		if (!v.trim() && inBox) {
+			removeUnsent(chatId, inBox);
+			boxEntryRef.current = null;
+			setBoxEntryId(null);
+			setUnsentShown((shown) => shown.filter((entry) => entry.id !== inBox));
+		}
 		if (notebook.session.getSnapshot().view?.contextId) notebook.session.tutor.updateText({ kind: "ordinary" }, v);
-	}, [notebook.session]);
+		else rememberLocalDraft(v);
+	}, [chatId, notebook.session, rememberLocalDraft]);
+	const unsentRestored = useRef(false);
+	useEffect(() => {
+		if (unsentRestored.current) return;
+		const restore = () => {
+			if (unsentRestored.current) return;
+			unsentRestored.current = true;
+			const kept = listUnsent(chatId);
+			const landed = deliveredEntries(initialMessages, kept);
+			const entries = kept.filter((entry) => {
+				if (!landed.has(entry.id)) return true;
+				removeUnsent(chatId, entry.id); // a lost acknowledgement that did land
+				return false;
+			});
+			if (!entries.length) return;
+			// The draft store may already have put one back; otherwise an empty
+			// box takes the latest. Any others are shown quoted, never lost. A
+			// saved draft from any source (composer, notebook store, local copy)
+			// is never overwritten.
+			const ordinary = notebook.session.tutor.getSnapshot().drafts.find((draft) => draft.owner.kind === "ordinary");
+			const stored = ordinary?.parts.at(-1)?.kind === "text" ? (ordinary.parts.at(-1) as { text: string }).text : "";
+			let local = "";
+			try { local = localStorage.getItem(localDraftKey) ?? ""; } catch { /* storage blocked */ }
+			const box = (textRef.current.trim() || stored.trim() || local.trim());
+			let inBox = entries.find((entry) => entry.text.trim() === box)?.id ?? null;
+			if (!inBox && !box) {
+				const latest = entries[entries.length - 1]!;
+				applyText(latest.text);
+				inBox = latest.id;
+			}
+			boxEntryRef.current = inBox;
+			setBoxEntryId(inBox);
+			setUnsentShown(entries.map((entry) => ({ ...entry, kind: "restored" as const })));
+		};
+		// A beat after the view, so its saved drafts have reached the composer.
+		const timer = window.setTimeout(restore, notebook.view ? 400 : 1500);
+		return () => window.clearTimeout(timer);
+	}, [notebook.view]);
+	const localDraftRestored = useRef(false);
+	useEffect(() => {
+		const view = notebook.view;
+		if (localDraftRestored.current || !view) return;
+		localDraftRestored.current = true;
+		let saved: string | null = null;
+		try { saved = localStorage.getItem(localDraftKey); } catch { /* storage blocked */ }
+		if (view.contextId) {
+			// The notebook store owns this session's draft. Words typed before it
+			// loaded (or kept from a reload in that moment) join it — the newer
+			// text is never dropped for an older stored copy.
+			const typed = textRef.current.trim() ? textRef.current : saved ?? "";
+			const ordinary = notebook.session.tutor.getSnapshot().drafts.find((draft) => draft.owner.kind === "ordinary");
+			const last = ordinary?.parts.at(-1);
+			const stored = last?.kind === "text" ? last.text : "";
+			if (typed.trim() && typed !== stored && (textRef.current.trim() || !stored.trim())) notebook.session.tutor.updateText({ kind: "ordinary" }, typed);
+			try { localStorage.removeItem(localDraftKey); } catch { /* storage blocked */ }
+			return;
+		}
+		if (textRef.current || !saved) return;
+		applyText(saved);
+		// Continue a restored draft where it ends: the first focus moves a
+		// caret left at the very start to the end of the text.
+		const editor = composerInputRef.current;
+		if (!editor) return;
+		const onFocus = () => {
+			editor.removeEventListener("focus", onFocus);
+			requestAnimationFrame(() => {
+				const selection = window.getSelection();
+				if (!selection || !editor.textContent) return;
+				const inside = selection.anchorNode && editor.contains(selection.anchorNode);
+				if (inside && selection.rangeCount) {
+					const before = document.createRange();
+					before.selectNodeContents(editor);
+					before.setEnd(selection.getRangeAt(0).startContainer, selection.getRangeAt(0).startOffset);
+					if (before.toString().length > 0) return;
+				}
+				const end = document.createRange();
+				end.selectNodeContents(editor);
+				end.collapse(false);
+				selection.removeAllRanges();
+				selection.addRange(end);
+			});
+		};
+		editor.addEventListener("focus", onFocus);
+	}, [notebook.view, localDraftKey, applyText]);
+	const ordinaryAdopted = useRef(false);
 	useLayoutEffect(() => {
 		if (!notebook.view?.contextId) return;
 		const part = ordinaryDraft?.parts.at(-1);
 		const value = part?.kind === "text" ? part.text : "";
+		// D1: the first time the store's draft arrives, text typed while it was
+		// loading is newer — it goes into the store instead of being replaced.
+		if (!ordinaryAdopted.current) {
+			ordinaryAdopted.current = true;
+			if (textRef.current.trim() && textRef.current !== value) {
+				notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
+				return;
+			}
+		}
 		if (textRef.current !== value) {
 			textRef.current = value;
 			setComposerDraftRevision((revision) => revision + 1);
@@ -810,6 +1156,18 @@ export function Chat({
 	// recovers from it. Later compaction requires new input instead.
 	const retryable = (status === "ready" || status === "error") && !busy && !compacting && endsInFailedTurn(nativeMessages);
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
+	const lastErrorRef = useRef<string | null>(null);
+	if (error) lastErrorRef.current = error.message;
+	// R8: the open question's answer was not sent — the reason its own note gives.
+	const questionUnsentReason = pending && questionDraft(pending.key)?.unsent ? unsentReason(error?.message ?? lastErrorRef.current) : undefined;
+	// A connection error clears itself when the connection is back (not-sent
+	// messages keep their own note and Send again).
+	useEffect(() => {
+		if (!error || !friendlyNetworkError(error.message)) return;
+		const onOnline = () => clearError();
+		window.addEventListener("online", onOnline);
+		return () => window.removeEventListener("online", onOnline);
+	}, [error, clearError]);
 	const sendAllowed = !notebook.sendBlocked && !pending && !activeProblem && !compacting && !((hasSharedWriting || handwritingSubmission.hasAttempt()) && busy);
 
 	/* THE PRACTICE PAUSE (owner round 16): between problems — practice
@@ -1259,6 +1617,24 @@ export function Chat({
 	});
 
 	const finishingSend = useRef(false);
+	// A lost acknowledgement that did land: once the record shows the
+	// message, the copy (and an unchanged restored draft) is retired.
+	useEffect(() => {
+		const kept = listUnsent(chatId);
+		const landed = deliveredEntries(recordMessages, kept);
+		const delivered = kept.filter((entry) => landed.has(entry.id));
+		if (!delivered.length) return;
+		const ids = new Set(delivered.map((entry) => entry.id));
+		for (const entry of delivered) removeUnsent(chatId, entry.id);
+		setUnsentShown((shown) => shown.filter((entry) => !ids.has(entry.id)));
+		const inBox = boxEntryRef.current;
+		if (inBox && ids.has(inBox)) {
+			const entry = delivered.find((item) => item.id === inBox)!;
+			boxEntryRef.current = null;
+			setBoxEntryId(null);
+			if (textRef.current.trim() === entry.text.trim()) applyText("");
+		}
+	}, [chatId, recordMessages, applyText]);
 	const onSend = () => {
 		if (finishingSend.current || pending || compacting || !notebook.view || notebook.session.getSnapshot().sendBlocked || handwritingSubmission.blocked()) return;
 		const reviewed = handwritingSubmission.reviewed(), recovery = handwritingSubmission.recoveryAction();
@@ -1296,9 +1672,55 @@ export function Chat({
 			void handwritingSubmission.submit({ type: "text", text: t, writingIds: reviewed.map(image => image.id) }, reviewed, "composer");
 			return;
 		}
+		sendText(t, true, boxEntryRef.current);
+	};
+	/** One text send with its own device copy: acknowledged → the copy goes;
+	 *  not acknowledged (offline, aborted, refused) → the bubble leaves the
+	 *  transcript and the words come back: into the box if it is empty,
+	 *  otherwise as a quoted "not sent" message beside the newer draft. */
+	const sendText = (t: string, fromBox: boolean, entryId?: string | null) => {
+		const id = entryId ?? newUnsentId();
 		draftRef.current = t; // the refusal flow's preserve-and-replay seam
-		applyText("");
-		void send({ type: "text", text: t });
+		putUnsent(chatId, { id, text: t, at: Date.now(), seen: learnerTextCount(nativeMessagesRef.current, t) });
+		setUnsentShown((shown) => shown.filter((entry) => entry.id !== id));
+		if (fromBox) {
+			boxEntryRef.current = null;
+			setBoxEntryId(null);
+			applyText("");
+		}
+		void send({ type: "text", text: t }).then((accepted) => {
+			if (accepted) { removeUnsent(chatId, id); return; }
+			if (draftRef.current !== t) return; // a refusal flow already took it back
+			draftRef.current = null;
+			discardUnsentText(t);
+			const box = textRef.current.trim();
+			if (!box) applyText(t);
+			if (!box || box === t.trim()) { boxEntryRef.current = id; setBoxEntryId(id); }
+			setUnsentShown((shown) => [...shown.filter((entry) => entry.id !== id), { id, text: t, at: Date.now(), kind: "failed" }]);
+		});
+	};
+	/** A quoted not-sent message: sent as itself, never the newer draft. */
+	const sendUnsentAgain = (entry: UnsentEntry) => {
+		clearError();
+		if (busy || pending || compacting || handwritingSubmission.blocked()) return;
+		if (zeroKeys) { setSetupOpen(true); return; }
+		if (selectedModelUnavailable(catalog, selectedModel)) { openModelPicker(); return; }
+		sendText(entry.text, false, entry.id);
+	};
+	/** Back into the box, ahead of whatever is there (nothing is replaced). */
+	const editUnsent = (entry: UnsentEntry) => {
+		const box = textRef.current.trim();
+		const next = box ? `${entry.text}\n\n${box}` : entry.text;
+		applyText(next);
+		putUnsent(chatId, { ...entry, text: next, seen: learnerTextCount(nativeMessagesRef.current, next) });
+		boxEntryRef.current = entry.id;
+		setBoxEntryId(entry.id);
+		setUnsentShown((shown) => shown.map((item) => (item.id === entry.id ? { ...item, text: next } : item)));
+	};
+	const discardUnsent = (entry: UnsentEntry) => {
+		removeUnsent(chatId, entry.id);
+		if (boxEntryRef.current === entry.id) { boxEntryRef.current = null; setBoxEntryId(null); }
+		setUnsentShown((shown) => shown.filter((item) => item.id !== entry.id));
 	};
 
 	/* STEER VS SEND (owner arc 2026-10-03): a send while a turn runs steers
@@ -1317,15 +1739,43 @@ export function Chat({
 		if (notebook.session.getSnapshot().view?.contextId && (!hasSharedWriting || explanationHasContent(notebook.session.tutor.draft({ kind: "ordinary" })?.parts ?? []))) {
 			if (zeroKeys) { setSetupOpen(true); return; }
 			if (selectedModelUnavailable(catalog, selectedModel)) { openModelPicker(); return; }
+			let recorded = false;
 			return notebook.session.tutor.prepareSubmission({ kind: "ordinary" }).then(async (input) => {
 				// Explicit Send is the only authority; switching and autosaves never enter here.
 				try {
 					if (reviewed.length) await handwritingSubmission.submit({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission, writingIds: reviewed.map(image => image.id) }, reviewed, "composer");
 					else if (busy) await steer(input.text, input);
-					else await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission });
+					else {
+						// The same honest recovery as plain sends: a device copy until
+						// acknowledged; not acknowledged → "Not sent", still in the box.
+						// The words already back in the box keep their own copy (one note, never two).
+						const id = boxEntryRef.current ?? newUnsentId(), words = input.text.trim();
+						if (words) { putUnsent(chatId, { id, text: words, at: Date.now(), seen: learnerTextCount(nativeMessagesRef.current, words) }); recorded = true; }
+						const accepted = await send({ type: "text", text: input.text, explanation: input.explanation, submission: input.submission });
+						if (accepted) {
+							if (words) removeUnsent(chatId, id);
+							if (boxEntryRef.current === id) { boxEntryRef.current = null; setBoxEntryId(null); }
+							setUnsentShown((shown) => shown.filter((entry) => entry.id !== id));
+						}
+						else if (words) {
+							boxEntryRef.current = id;
+							setBoxEntryId(id);
+							setUnsentShown((shown) => [...shown.filter((entry) => entry.id !== id), { id, text: words, at: Date.now(), kind: "failed" }]);
+						}
+					}
 				}
 				finally { await notebook.session.tutor.reconcile(input.submission.id); }
-			}).catch(() => {});
+			}).catch(() => {
+				// Preparing the message failed before it could be sent (offline):
+				// the same honest "Not sent" note, the words still in the box.
+				const words = textRef.current.trim();
+				if (recorded || !words || boxEntryRef.current) return;
+				const id = newUnsentId();
+				putUnsent(chatId, { id, text: words, at: Date.now(), seen: learnerTextCount(nativeMessagesRef.current, words) });
+				boxEntryRef.current = id;
+				setBoxEntryId(id);
+				setUnsentShown((shown) => [...shown.filter((entry) => entry.id !== id), { id, text: words, at: Date.now(), kind: "failed" }]);
+			});
 		}
 		if (recovery || reviewed.length || handwritingSubmission.hasAttempt()) { if (!busy) doSend(reviewed, recovery); return; }
 		const t = textRef.current.trim();
@@ -1338,6 +1788,60 @@ export function Chat({
 		doSend(reviewed, recovery);
 	};
 	useHandwritingEditor("composer", () => ({ text: textRef.current }), draft => applyText(draft.text ?? ""), !pending && !activeProblemRef.current, handwritingSubmission);
+	// The one "Notebook" button (round 14, T1): in the page bar on every
+	// device, after Plan (P1: [Sessions Home] · [Plan Notebook ⋯]). The
+	// equation notebook and the handwriting canvas share it.
+	const toggleEquations = () => {
+		if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
+		if (notebookVisible && workspaceRef.current) {
+			void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
+		} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
+	};
+	// P1 (round 19): where Focus lives on this phone or tablet (null on laptops).
+	const focusPlace = useFocusPlace();
+	const notebookOpenerEl = <NotebookOpener
+		equations={notebookOn ? { open: notebookVisible, toggle: toggleEquations } : undefined}
+		handwriting={writingOn ? { open: handwriting.open, toggle: () => handwriting.show(!handwriting.open) } : undefined}
+		workingAttached={notebookOn && workingAttached}
+	/>;
+
+	// The tutor composer, also placed by the phone's one chat box (R6/P3).
+	const tutorComposer = (
+						<div>
+						{tutorDraftState.error && (friendlyNetworkError(tutorDraftState.error)
+							? <p role="status" className="lh-quiet-status px-3">Draft kept on this device — it syncs when you're back online.</p>
+							: <p role="alert" className="px-3 text-xs text-destructive">Your draft couldn't be saved yet: {tutorDraftState.error}</p>)}
+						{tutorDraftState.saving && !tutorDraftState.error && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
+						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}
+						{/* P1 (round 20): working waiting to go with the next message, removable. */}
+						<WorkingChip session={notebook.session} owner={{ kind: "ordinary" }} />
+						<ChatSessionComposer
+							dictation={tutorDictation}
+							hasContent={hasSharedWriting || handwritingSubmission.hasAttempt() || !!ordinaryDraft && explanationHasContent(ordinaryDraft.parts)}
+							// Stop aborts ANY in-flight turn (stream-reattach wave): the
+							// square renders while a reattached/wake turn runs too — the
+							// abort channel kills it server-side; stop() alone would
+							// only detach our view.
+							busy={busy}
+							value={textRef.current}
+							revision={composerDraftRevision}
+							onChange={recordComposerText}
+							inputRef={composerInputRef}
+							onSend={onSend}
+							onStop={abortInFlightTurn}
+							sendAllowed={sendAllowed}
+							dictationActive={dictation.active}
+							onEscape={dictation.active ? dictation.cancel : undefined}
+							// The pause affordance (owner round 16): the placeholder
+							// IS the hint — empty state, exactly where Enter-on-empty
+							// applies.
+							nextProblem={nextReady}
+							onNext={sendNext}
+							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : undefined}
+							shortPlaceholder={nextReady ? "Ask anything…" : undefined}
+						/>
+						</div>
+	);
 
 	return (
 		<HandwritingSubmissionContext.Provider value={handwritingSubmission}>
@@ -1359,17 +1863,24 @@ export function Chat({
 			}}
 		>
 		<JobsContext.Provider value={jobs}>
+		<ActiveProblemContext.Provider value={activeProblem?.toolCallId ?? null}>
 		{/* The session surface: the transcript column (header + scroller) and
 		    the plan-tree panel as full-height SIBLINGS — the panel spans top to
 		    bottom exactly like the left sidebar, and the header (name + phase
 		    chip) spans from the left sidebar's edge to the panel's edge. The
 		    dock overlays the column bottom (outside the scroller); a spacer in
 		    the transcript reserves its height. */}
-		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" className={`session-workspace flex h-dvh overflow-hidden ${handwriting.open ? "hw-workspace" : ""}`}>
+		<div ref={workspaceRef} id={workspaceId} inert={notebook.inputLocked} data-session-workspace="" data-writing-off={writingOn ? undefined : ""} className={`session-workspace flex h-dvh overflow-hidden ${handwriting.open ? "hw-workspace" : ""}`}>
 		<div className={handwriting.open ? `hw-splitLayout ${handwriting.expanded ? "hw-fullNotebook" : ""}` : "contents"}>
 			<div inert={handwriting.open && handwriting.expanded} className={handwriting.open ? "hw-chat hw-mobileHidden flex min-h-0 min-w-0 flex-1 flex-col" : "contents"}>
-			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}>
-			<div className="session-tutor" inert={notebookLayout.expanded}>
+			<div className="session-panes" data-notebook-open={notebookVisible} data-notebook-expanded={notebookLayout.expanded}
+				data-notebook-pane={notebookPane || undefined} data-notebook-peek={(notebookPane && notebookPeek) || undefined}>
+			<div ref={sessionTutorRef} className="session-tutor" inert={notebookLayout.expanded}>
+				{/* Round 15 (A6): the bar and the strips under it are one head; with
+				    the phone's Glass bar it floats over the lesson, which scrolls
+				    beneath it (its measured height offsets the lesson's start and
+				    the open question). */}
+				<div ref={sessionHeadRef} className="lh-session-head">
 				{/* The top bar is its own block (owner, top-fade round 4): in flow
 				    above the scroller on the plain page background — no gradient. Its
 				    bottom outline (border-b border-border) matches the one that
@@ -1413,7 +1924,7 @@ export function Chat({
 								spellCheck={false}
 								aria-label="Session title"
 								title="Rename this session"
-								className="lh-no-drag min-w-[8ch] max-w-[70%] shrink-0 bg-transparent font-title text-3xl tracking-tight caret-current outline-none [field-sizing:content]"
+								className="lh-session-title lh-no-drag min-w-[8ch] max-w-[70%] shrink-0 bg-transparent font-title caret-current outline-none [field-sizing:content]"
 							/>
 							{/* flex-1 spacer during rename too, so the chips stay at
 							    the right edge; clicks here commit via the header
@@ -1422,6 +1933,7 @@ export function Chat({
 						</>
 					) : (
 					<>
+						<span className="lh-title-block">
 						<Hint
 							// F2 renames (registry) — surfaced on the hover.
 							label="Rename session"
@@ -1430,15 +1942,25 @@ export function Chat({
 						>
 <button
 							type="button"
-														onClick={() => {
+							data-testid="session-title"
+							onClick={() => {
+								holdKeyboardForRename();
 								setTitleDraft(titleText);
 								setRenaming(true);
 							}}
-							className="lh-no-drag -mx-1.5 min-w-4 shrink cursor-text truncate rounded-md px-1.5 text-left font-title text-3xl tracking-tight transition-colors hover:bg-accent"
+							className="lh-session-title lh-no-drag -mx-1.5 min-w-4 shrink cursor-text truncate rounded-md px-1.5 text-left font-title transition-colors hover:bg-accent"
+							aria-label={shownTitle !== titleText ? titleText : undefined}
 						>
-							{titleText}
+							{shownTitle}
 							</button>
 						</Hint>
+						{/* Phones fold the phase/mode chip into a quiet subtitle. P4 (round 20):
+						    practice and drill keep a compact mode marker, like "Teaching"; a
+						    name that starts with it ("Drill: …") shows the rest beside it. */}
+						{<span className="lh-session-subtitle" aria-hidden="true" data-kind={kind === "practice" ? (practiceMode === "drill" ? "drill" : "practice") : "teach"}>
+							{kind === "practice" ? (practiceMode === "drill" ? (phoneLayout ? "Drill" : "Drill session") : (phoneLayout ? "Practice" : "Practice session")) : phaseLabel(phases.at(-1) ?? "probe")}
+						</span>}
+						</span>
 							{/* flex-1 spacer: keeps the chips at the right edge AND stays a
 							    drag surface (no carve-out) — the freed bar is grippable. */}
 							<div className="min-w-4 flex-1" aria-hidden="true" />
@@ -1448,19 +1970,23 @@ export function Chat({
 					    structure beside the phase chip — access to the full-DAG popup
 					    at every width; the marginalia is the wide-screen glance view. */}
 					<NotebookSpeechDestination session={notebook.session} />
-					{planTree && (
+					{/* P3 (round 17): on phones Plan heads the ⋯ menu in lessons (the
+					    toolbar slot goes to Focus); practice and drill have no plan on
+					    any device. Wider screens show the chip once there is a plan. */}
+					{planTree && !phoneLayout && kind !== "practice" && (
 						<Hint label="Open the full plan" side="bottom">
 <button
 							type="button"
 							data-testid="plan-chip"
+							data-empty={!planTree || undefined}
 							onClick={(e) => {
 								blurAfterPointerClick(e);
 								setPlanOpen(true);
 							}}
-							className="lh-no-drag flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border/80 px-2 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+							className="lh-header-chip lh-no-drag"
 						>
-							<WaypointsIcon className="size-3.5 text-primary" aria-hidden />
-							Plan
+							<WaypointsIcon aria-hidden />
+							<span className="lh-header-chip-label">Plan</span>
 						</button>
 </Hint>
 					)}
@@ -1479,19 +2005,51 @@ export function Chat({
 							data-testid="phase-chip"
 							data-phase="practice"
 							aria-hidden="true"
-							className="pointer-events-none flex shrink-0 select-none items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+							data-kind={practiceMode === "drill" ? "drill" : "practice"}
+							className="lh-phase-tag pointer-events-none flex shrink-0 select-none items-center gap-1.5"
 						>
-							<DumbbellIcon className="size-3" />
-							{practiceMode === "drill" ? "Drill" : "Practice"}
+							{practiceMode === "drill" ? <TargetIcon className="size-3.5" /> : <DumbbellIcon className="size-3.5" />}
+							<span>{practiceMode === "drill" ? "Drill" : "Practice"}</span>
 						</span>
 					) : (
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
 					)}
-					<Button variant="outline" size="sm" className="shrink-0" onClick={() => handwriting.show(true)} data-testid="open-notebook">Write</Button>
+					{notebookOpenerEl}
+					{/* B16 (round 18, owner): on phones Focus sits directly left of ⋯, and
+					    ⋯ keeps the top-right corner on every screen (P2's look kept). */}
+					<FocusCornerButton />
+					{/* Phones: model, reasoning and Usage live here (owner O1). */}
+					<PageMenuButton
+						topRows={phoneLayout && kind !== "practice" ? [{ id: "plan", label: "Plan", value: planTree ? undefined : "Not made yet", open: () => setPlanOpen(true) }] : []}
+						extraRows={phoneLayout || focusPlace ? [] : [{ id: "focus", label: "Focus on the lesson", value: "Hides this bar", open: () => setFocusMode(true) }]} />
+					<FocusModeButton />
 				</TopBar>
-				{!notebookVisible && notebook.error && <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>}
+				{/* Round 19: where Focus lives (phone, tablet) and Ask tutor (phone notebook pane). */}
+				<PrototypeSwitch tryout="focus-place" anchors={[{ selector: "[data-focus-control]", places: ["left", "below-start", "above-start", "below-end"] }]} />
+				<PrototypeSwitch tryout="focus-place-tablet" anchors={[{ selector: "[data-focus-control]", places: ["left", "below-start", "above-start", "below-end"] }]} />
+				<PrototypeSwitch tryout="ask-tutor" anchors={[{ selector: '.notebook-panel[data-pane] .lh-pane-nav', places: ["inside-end", "above-end"] }, { selector: '[data-testid="notebook-pane-actions"]', places: ["above-end", "inside-bottom-end"] }]} />
+				{/* B18 (round 18): Prototype view's in-place switches (nothing when it is off). */}
+				{/* The bar's switch sits just under the bar; with a question open that spot is the question's own (its Layout switch). */}
+				<PrototypeSwitch tryout="header-look" anchors={[{ selector: 'html:not(:has(.lh-sessions-panel[aria-hidden="false"])):not(:has(.lh-dock-overlay[data-question-open])) header.lh-topbar', places: ["below-end", "below-start"] }]} />
+				<PrototypeSwitch tryout="card-layout" anchors={[
+					{ selector: '[data-testid="reading-pane"][data-open] .lh-pane-nav', places: ["inside-end"] },
+					{ selector: '[data-testid="reading-pane"][data-open] .lh-pane-actions', places: ["inside-bottom-end"] },
+					{ selector: '[data-testid="reading-pane"][data-open] .lh-pane-head', places: ["inside-end"] },
+					{ selector: '[data-testid="notebook-pane-head"]', places: ["inside-end"] },
+					{ selector: '.notebook-panel[data-pane] .lh-pane-nav', places: ["inside-end"] },
+					{ selector: '.notebook-panel[data-pane] .notebook-card-actions', places: ["inside-bottom-end"] },
+					{ selector: '.lh-dock-overlay[data-question-open] .lh-question-back', places: ["inside-end"] },
+					{ selector: '.lh-dock-overlay[data-question-open] [data-attachment-composer]', places: ["above-end", "above-start", "below-end"] },
+					{ selector: '.lh-dock-overlay[data-dock-kind="practice"] [data-attachment-composer]', places: ["above-end", "above-start"] },
+				]} />
+				<FocusModeExit />
+				<FocusPlaceSync />
+				{!notebookVisible && notebook.error && (friendlyNetworkError(notebook.error)
+					? <p role="status" className="lh-quiet-status px-3 py-1">Offline — your notebook working is kept and syncs when you're back.</p>
+					: <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>)}
 
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
+				</div>
 				<div ref={sessionFindScopeRef} data-input-owner="tutor" className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden">
 				<Conversation className="h-full min-w-0 flex-1" initial="instant" contextRef={scrollContextRef}>
 					<SessionMessageNavigation />
@@ -1624,7 +2182,7 @@ export function Chat({
 									) : (
 									<Message from="assistant" className="max-w-full">
 									<MessageContent className="w-full">
-											{m.parts.map((part, pi) => {
+											{groupTraceParts(m.parts as never, m.parts.map((part, pi) => {
 												const isLastPart = mi === messages.length - 1 && pi === m.parts.length - 1;
 												// The step boundary where teaching begins (round 8): when
 												// the teach flip happens in a LATER step, its PhaseDivider
@@ -1667,7 +2225,7 @@ export function Chat({
 													}
 													case "reasoning":
 														return (
-															<Reasoning key={pi} isStreaming={status === "streaming" && isLastPart} className="mb-2">
+															<Reasoning key={pi} isStreaming={status === "streaming" && isLastPart} open className="lh-reasoning mb-2">
 																<ReasoningTrigger />
 																<ReasoningContent>{part.text ?? ""}</ReasoningContent>
 															</Reasoning>
@@ -1675,7 +2233,7 @@ export function Chat({
 													case "step-start":
 														if (teachBoundary)
 															return <PhaseDivider key={`teach-step-${pi}`} phase="teach" />;
-														return pi > 0 ? <Separator key={pi} className="my-3" /> : null;
+														return pi > 0 ? <Separator key={pi} className="my-3" data-lh-separator /> : null;
 													case "data-plan-block":
 														// The plan in the chat (wave 4): a frozen snapshot
 														// block — rendered as carried, never re-derived.
@@ -1726,7 +2284,7 @@ export function Chat({
 														return null;
 													}
 												}
-											})}
+											}), (status === "streaming" || turnInFlight) && mi === messages.length - 1 ? m.parts.length - 1 : null)}
 										</MessageContent>
 									</Message>
 									)}
@@ -1760,17 +2318,55 @@ export function Chat({
 								</span>
 							)}
 							{(status === "submitted" || turnInFlight) && (
-								<span className="flex items-center gap-2 font-ui text-xs font-medium uppercase tracking-wide text-muted-foreground">
-									<BrailleSpinner label="Thinking" />
+								<span data-testid="tutor-progress" className="lh-tutor-progress flex items-center gap-2 font-ui text-sm font-medium text-muted-foreground">
+									<BrailleSpinner label={tutorProgressLabel(phases.at(-1) ?? "probe", kind === "practice")} />
 									<Shimmer duration={1}>
-										THINKING…
+										{tutorProgressLabel(phases.at(-1) ?? "probe", kind === "practice")}
 									</Shimmer>
 								</span>
 							)}
 							{openingError && <p role="alert" className="text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
-							{error && (
+							{/* P14 (round 14): a helper that failed for this session says so here. */}
+							<SessionHelperFailures chatId={chatId} onOpenHelpers={touchLayout ? () => window.dispatchEvent(new CustomEvent(OPEN_HELPERS_EVENT)) : undefined} />
+							{unsentShown.length > 0 && (
+								<div role="status" data-testid="unsent-notice" className="lh-unsent-notice" data-several={quotedUnsent > 1 || undefined}>
+									{/* Several failed messages: one header, one compact line each
+									    (tap a line to read it all); none is ever dropped. */}
+									{quotedUnsent > 1 && <span className="lh-unsent-head">{`${quotedUnsent} messages not sent — ${unsentReason(lastErrorRef.current)}.`}</span>}
+									{unsentShown.map((entry) => entry.id === boxEntryId ? (
+										<div key={entry.id} className="lh-unsent-row" data-unsent-in-box="">
+											<span>{unsentNoticeText(entry.kind, lastErrorRef.current, true)}</span>
+											<span className="lh-unsent-actions">
+												<Button variant="outline" size="xs" data-testid="unsent-send-again" onClick={() => { clearError(); void doSteerOrSend(); }}>Send again</Button>
+												<Button variant="ghost" size="xs" data-testid="unsent-dismiss" onClick={() => setUnsentShown((shown) => shown.filter((item) => item.id !== entry.id))}>Dismiss</Button>
+											</span>
+										</div>
+									) : (
+										<div key={entry.id} className="lh-unsent-row" data-unsent-quoted="">
+											{quotedUnsent === 1 && <span>{unsentNoticeText(entry.kind, lastErrorRef.current, false)}</span>}
+											<blockquote className="lh-unsent-quote" data-testid="unsent-quote" tabIndex={0} title={entry.text} onClick={(event) => event.currentTarget.toggleAttribute("data-expanded")}>{entry.text}</blockquote>
+											<span className="lh-unsent-actions">
+												<Button variant="outline" size="xs" data-testid="unsent-send-again" onClick={() => sendUnsentAgain(entry)}>Send again</Button>
+												<Button variant="ghost" size="xs" data-testid="unsent-edit" onClick={() => editUnsent(entry)}>Edit</Button>
+												<Button variant="ghost" size="xs" data-testid="unsent-discard" onClick={() => discardUnsent(entry)}>Discard</Button>
+											</span>
+										</div>
+									))}
+								</div>
+							)}
+							{practiceUnsent && activeProblem && (
+								<div role="status" data-testid="practice-unsent-notice" className="lh-unsent-notice">
+									<div className="lh-unsent-row">
+										<span>{`Not sent — ${unsentReason(lastErrorRef.current)}. Your working is still in the box — submit it again when you're ready.`}</span>
+										<span className="lh-unsent-actions">
+											<Button variant="ghost" size="xs" data-testid="practice-unsent-dismiss" onClick={() => { setPracticeUnsent(false); clearError(); }}>Dismiss</Button>
+										</span>
+									</div>
+								</div>
+							)}
+							{error && !unsentShown.length && !(practiceUnsent && activeProblem) && !(questionUnsentReason && pending) && (
 								<div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
-									<span>Something went wrong: {error.message}</span>
+									<span>{friendlyProviderError(error.message) ?? friendlyNetworkError(error.message) ?? `Something went wrong: ${error.message}`}</span>
 									{retryable && (
 										<Button variant="outline" size="xs" data-testid="retry-failed-turn" onClick={retryFailedTurn}>
 											Retry
@@ -1798,10 +2394,14 @@ export function Chat({
 				<DockOverlay
 					notebook={notebook.session}
 					fullQuestionWidth={handwriting.open}
-					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} /></>}
+					sharedWritingSlot={<><SharedWritingPanel chatId={chatId} writing={sharedWriting} busy={busy} foldedAtFirst={!!pending} hideIds={handwritingSubmission.model?.attempt?.imageVersions.map((image) => image.writingId)} /><HandwritingDeliveryNotice bridge={handwritingSubmission} activeTarget={handwritingSubmission.activeField()?.targetKey} /></>}
 					hasSharedWriting={hasSharedWriting || handwritingSubmission.hasAttempt()}
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.key)?.form : undefined}
+					questionDraftEpoch={storedDraftEpoch}
+					returningQuestionIds={returningQuestionIds}
+					questionOpenRequest={questionOpenRequest}
+					questionUnsentReason={questionUnsentReason}
 					onSaveQuestionDraft={(form) => { if (pending) saveQuestionDraft(pending.key, { form }); }}
 					practice={activeProblem}
 					compactionRunning={compacting || (hasSharedWriting && busy)}
@@ -1812,6 +2412,7 @@ export function Chat({
 					onOpenPlan={() => setPlanOpen(true)}
 					requiresReveal={requiresReveal}
 					readingThinking={readingThinkingSeed.value}
+					readingThinkingNow={readingNow}
 					readingThinkingRevision={readingThinkingSeed.revision}
 					onReadingThinking={applyReadingThinking}
 					phase={phases.at(-1) ?? "probe"}
@@ -1819,18 +2420,9 @@ export function Chat({
 					contextTokens={contextTokens}
 					cliContextWindow={cliContextWindowOf(nativeMessages)}
 					pricing={pricing}
-					notebookToggle={<span className="inline-flex shrink-0 items-center"><button type="button" data-input-owner="notebook" data-notebook-view-control="" aria-expanded={notebookVisible}
-						aria-label={notebookVisible ? "Close notebook" : "Open notebook"} title={notebookVisible ? "Close notebook" : "Open notebook"}
-						className="pointer-events-auto inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
-						onClick={() => {
-							if (!notebook.view?.contextId && !pending && !activeProblem) notebook.session.tutor.updateText({ kind: "ordinary" }, textRef.current);
-							if (notebookVisible && workspaceRef.current) {
-								void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).catch(() => {});
-							} else void notebook.session.dispatch({ type: "visibility", visible: true }).then(() => notebook.session.speech.choose({ kind: "notebook" })).catch(() => {});
-						}}><NotebookPenIcon className="size-4" /></button>
-						{workingAttached && <span role="img" aria-label="Working attached" title="Working attached" className="text-muted-foreground"><PaperclipIcon className="size-3" aria-hidden="true" /></span>}
-					</span>}
+					notebookToggle={notebookOpenerEl}
 					onReserve={setDockReserve}
+					flow={handwriting.open && !handwriting.expanded && stackedNotebook}
 					dictationSlot={<DictationBar dictation={dictation} />}
 					dictation={tutorDictation}
 					dictationCancel={dictation.cancel}
@@ -1848,7 +2440,7 @@ export function Chat({
 										type="button"
 										data-testid="setup-cta"
 										onClick={() => setSetupOpen(true)}
-										className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
+										className="lh-setup-cta cursor-pointer"
 									>
 										Set up your models
 									</button>
@@ -1856,40 +2448,11 @@ export function Chat({
 							)
 						)
 					}
-					composer={
-						<div>
-						{tutorDraftState.error && <p role="alert" className="px-3 text-xs text-destructive">Unsent draft: {tutorDraftState.error}</p>}
-						{tutorDraftState.saving && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
-						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}
-						<ChatSessionComposer
-							dictation={tutorDictation}
-							hasContent={hasSharedWriting || handwritingSubmission.hasAttempt() || !!ordinaryDraft && explanationHasContent(ordinaryDraft.parts)}
-							// Stop aborts ANY in-flight turn (stream-reattach wave): the
-							// square renders while a reattached/wake turn runs too — the
-							// abort channel kills it server-side; stop() alone would
-							// only detach our view.
-							busy={busy}
-							value={textRef.current}
-							revision={composerDraftRevision}
-							onChange={recordComposerText}
-							inputRef={composerInputRef}
-							onSend={onSend}
-							onStop={abortInFlightTurn}
-							sendAllowed={sendAllowed}
-							dictationActive={dictation.active}
-							onEscape={dictation.active ? dictation.cancel : undefined}
-							// The pause affordance (owner round 16): the placeholder
-							// IS the hint — empty state, exactly where Enter-on-empty
-							// applies.
-							nextProblem={nextReady}
-							onNext={sendNext}
-							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : undefined}
-						/>
-						</div>
-					}
-					onSubmitAnswer={async (output, toolCallId, fields, reviewed) => {
+					composer={tutorComposer}
+									onSubmitAnswer={async (output, toolCallId, fields, reviewed) => {
 						const pending = pendingRef.current;
 						if (!pending || pending.toolCallId !== toolCallId) return false;
+						followAnswer(toolCallId);
 						// THE ANSWER IS THE QUESTION CALL'S TOOL RESULT (fork 1, owner
 						// 2026-09-26): one input event, one turn — the hook appends
 						// the optimistic graded result (the AnsweredCard shows at
@@ -1904,7 +2467,28 @@ export function Chat({
 						// actually leaves. An offline preflight keeps the draft visible.
 						const images = reviewed ?? sharedWriting.pending, answer = reading && !fields?.submission ? { ...output, readingThinking: reading } : output;
 						if ((images.length || handwritingSubmission.hasAttempt()) && !output.dismissed) return handwritingSubmission.submit({ type: "answer", toolCallId, answer, ...fields, writingIds: images.map(image => image.id) }, images, `question:${toolCallId}`, { readingThinking: readingThinkingRef.current });
-						if (!handwritingSubmission.blocked()) return submitAnswer(pending.tool, toolCallId, answer, pending.key, fields);
+						if (!handwritingSubmission.blocked()) {
+							returningQuestionIds.current.add(pending.key);
+							const result = await submitAnswer(pending.tool, toolCallId, answer, pending.key, fields);
+							if (!result) {
+								// Not sent (R8): kept with the draft, so the note and Send
+								// again survive a reload; the question reopens with it.
+								saveQuestionDraft(pending.key, { unsent: { at: Date.now() } });
+								setQuestionOpenRequest((n) => n + 1);
+							}
+							// Keyboard users carry on typing: focus returns to the composer
+							// once it is back (never on touch, where it would raise a keyboard).
+							if (pendingRef.current?.toolCallId !== toolCallId && !window.matchMedia?.("(pointer: coarse)").matches) {
+								let tries = 0;
+								const focus = () => {
+									const editor = composerInputRef.current;
+									if (editor?.isConnected && editor.getClientRects().length) editor.focus({ preventScroll: true });
+									else if (++tries < 12) setTimeout(focus, 150);
+								};
+								setTimeout(focus, 200);
+							}
+							return result;
+						}
 					}}
 				/>
 				</Conversation>
@@ -1923,15 +2507,24 @@ export function Chat({
 						onClose={() => setFigureFocus(null)}
 					/>
 				)}
-				{planOpen && <PlanPopup messages={messages} onClose={() => setPlanOpen(false)} />}
+				{planOpen && <PlanPopup messages={messages} onClose={() => setPlanOpen(false)}
+					emptyNote={kind === "practice" ? "Practice sessions have no plan: the tutor picks each problem from how you are doing." : "No plan yet. The tutor makes one once it has found out what you already know."} />}
 				<AbortTurnDialog mode={abortAsk} onClose={() => setAbortAsk(null)} onConfirm={confirmAbort} busy={busy} />
 				</div>
 				</div>
 				{notebookLayout.mounted && <>
 					<NotebookSplit hidden={!notebookVisible} />
-					<NotebookFrame hidden={!notebookVisible} expanded={notebookLayout.expanded}
+					<NotebookFrame hidden={!notebookVisible} expanded={notebookLayout.expanded} pane={notebookPane}
 						onExpand={() => { void notebook.session.speech.choose({ kind: "notebook" }).then(notebookLayout.expand).catch(() => {}); }}
 						onBack={notebookLayout.back}
+						onAskTutor={() => {
+							// P2 (round 19): the same return as Back (the working is snapshot into
+							// the tutor's draft), then the lesson's chat box, said in so many words.
+							if (!workspaceRef.current) return;
+							void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).then(() => {
+								requestAnimationFrame(focusDictationDestination);
+							}).catch(() => {});
+						}}
 						onClose={() => {
 							if (!workspaceRef.current) return;
 							void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).then(() => {
@@ -1939,15 +2532,17 @@ export function Chat({
 							}).catch(() => {});
 						}}>
 						{controls => <NotebookPanel session={notebook.session} dictation={dictation} viewControls={controls} workspaceId={workspaceId}
-							activity={notebookActivity} />}
+							activity={notebookActivity}
+							pane={notebookPane ? { peeking: notebookPeek, peek: () => setNotebookPeek(true), unpeek: () => setNotebookPeek(false) } : undefined} sessionTitle={titleText} />}
 					</NotebookFrame>
 				</>}
 			</div>
 			</div>
-			{handwriting.mounted && <HandwritingSplit hidden={!handwriting.open} canResize={() => handwriting.ref.current?.canResize() ?? false} />}
-			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
+			{handwriting.mounted && <HandwritingNotebook ref={handwriting.ref} register={handwriting.register} chatId={chatId} hidden={!handwriting.open} expanded={handwriting.expanded}
+				origin={pending ? "question" : activeProblem ? (practiceMode === "drill" ? "drill" : "practice") : "lesson"} onToggleExpanded={handwriting.toggleExpanded} onClose={() => handwriting.show(false)} review={sharedWriting.refresh} onReview={() => { if (matchMedia("(max-width: 767px)").matches) handwriting.show(false); else if (handwriting.expanded) handwriting.toggleExpanded(); }} />}
 		</div>
 		</div>
+		</ActiveProblemContext.Provider>
 		</JobsContext.Provider>
 		</SessionMermaidContext.Provider>
 		{/* The BYOK setup flow (owner, 2026-09-22): one mount serves the
@@ -2080,6 +2675,7 @@ export function shouldStampGeometryMute(nextH: number, prevH: number, pending: b
 }
 
 function DockOverlay({
+	flow = false,
 	notebook,
 	notebookToggle,
 	fullQuestionWidth = false,
@@ -2087,12 +2683,17 @@ function DockOverlay({
 	hasSharedWriting,
 	pending,
 	initialQuestionDraft,
+	questionDraftEpoch,
+	returningQuestionIds,
+	questionOpenRequest = 0,
+	questionUnsentReason,
 	onSaveQuestionDraft,
 	practice,
 	compactionRunning,
 	onSubmitThinking,
 	requiresReveal,
 	readingThinking,
+	readingThinkingNow,
 	readingThinkingRevision,
 	onReadingThinking,
 	phase,
@@ -2121,6 +2722,15 @@ function DockOverlay({
 	hasSharedWriting?: boolean;
 	pending: ReturnType<typeof pendingQuestionOf>;
 	initialQuestionDraft?: QuestionFormDraft;
+	/** Bumps when device-kept drafts are restored after mount (B1). */
+	questionDraftEpoch?: number;
+	/** Questions coming back after their answer was sent (R8): they arrive
+	 *  open and revealed, never as a fresh, folded arrival. */
+	returningQuestionIds?: React.RefObject<Set<string>>;
+	/** Bumps to open the pending question (its answer was not sent). */
+	questionOpenRequest?: number;
+	/** Set while the pending question's answer was not sent: the reason. */
+	questionUnsentReason?: string;
 	onSaveQuestionDraft: (draft: QuestionFormDraft) => void;
 	/** Compaction running for this chat (round 14) — the docks' submit
 	 *  affordance gate (the server's registry is the real one). */
@@ -2136,6 +2746,8 @@ function DockOverlay({
 	/** The reading-thinking draft (owner 2026-10-03) — owned by ChatView so
 	 *  the submit + dismissal seams (outside this overlay) can merge it. */
 	readingThinking: string;
+	/** The live reading note (D2): snapshots carry it, never a stale copy. */
+	readingThinkingNow?: () => string;
 	readingThinkingRevision: number;
 	onReadingThinking: (v: string) => void;
 	/** Session phase at the pending question — scales the thinking field. */
@@ -2153,6 +2765,9 @@ function DockOverlay({
 	/** Reports the dock's settled height (block + gradient) — ChatView's
 	 *  dockReserve state feeds the transcript's spacer from it. */
 	onReserve: (h: number) => void;
+	/** T4 (round 17): the writing card sits under the lesson — what is not
+	 *  being answered belongs to the lesson and scrolls with it. */
+	flow?: boolean;
 	/** The plan marginalia's content (the bare diagram) — rendered only
 	 *  while a question owns the band. Null until a plan exists. */
 	plan?: React.ReactNode;
@@ -2172,7 +2787,9 @@ function DockOverlay({
 	 *  home and /chat/new carry, above the composer while slots are unset. */
 	setupCta?: React.ReactNode;
 }) {
-	const { isAtBottom, scrollToBottom, scrollRef } = useStickToBottomContext();
+	const focusPlace = useFocusPlace();
+	const dockPhone = usePhoneLayout();
+	const { isAtBottom, scrollToBottom, scrollRef, stopScroll } = useStickToBottomContext();
 	const wideQuestion = fullQuestionWidth && (!!pending || !!practice);
 	// Render-fresh bottom state (flicker round): the arrival block below reads
 	// it DURING RENDER — the same value the after-paint effect used to read a
@@ -2187,7 +2804,17 @@ function DockOverlay({
 	// learner reads the teaching first and opens the check when ready. Once
 	// revealed, the normal collapse machine rules apply untouched.
 	const [revealed, setRevealed] = useState(false);
+	// A not-sent answer reopens its question (R8), revealed and expanded.
+	useEffect(() => {
+		if (!questionOpenRequest || !pending) return;
+		setRevealed(true);
+		setExpanded(true);
+	}, [questionOpenRequest]); // the request number is the trigger; pending is read as it is now
 	const revealPending = requiresReveal && !revealed;
+	// C2 (round 14): where the learner was reading when the question opened.
+	// On phones the question then owns the screen, and "Back to lesson"
+	// returns to exactly this place (the reveal scroll behind it is undone).
+	const readingTopRef = useRef<number | null>(null);
 
 	const pendingId = pending?.key ?? null;
 	const initialPendingRef = useRef(pendingId);
@@ -2205,14 +2832,16 @@ function DockOverlay({
 	if (pendingId !== prevPendingIdRef.current) {
 		const wasQuestion = prevPendingIdRef.current !== null;
 		prevPendingIdRef.current = pendingId;
+		readingTopRef.current = null; // a new question: no reading place of its own yet
+		const returning = !!pendingId && !!returningQuestionIds?.current.has(pendingId);
 		if (pendingId && requiresReveal) {
-			const arrival = revealArrival(wasQuestion);
+			const arrival = returning ? { expanded: true, revealed: true } : revealArrival(wasQuestion);
 			setExpanded(arrival.expanded);
 			setRevealed(arrival.revealed);
 		} else if (pendingId) {
 			// Probe arrival (flicker round): open iff following at the bottom.
 			// Painted in THIS render — no stale-open frame, no after-paint flip.
-			setExpanded(probeArrivalExpanded(atBottomRef.current));
+			setExpanded(returning || probeArrivalExpanded(atBottomRef.current));
 		}
 	}
 
@@ -2241,21 +2870,101 @@ function DockOverlay({
 	// replaces the composer and owns the band.
 	const pendingRef = useRef(!!pending || !!practice);
 	pendingRef.current = !!pending || !!practice;
+	const questionDockRef = useRef(!!pending);
+	questionDockRef.current = !!pending;
 	const requiresRevealRef = useRef(requiresReveal);
 	requiresRevealRef.current = requiresReveal;
 	const revealedRef = useRef(revealed);
 	revealedRef.current = revealed;
 
 	const blockRef = useRef<HTMLDivElement>(null);
+	const overlayRef = useRef<HTMLDivElement>(null);
+	// Phones (P7): the open question is one scrolling page. A focused field
+	// is brought fully into view there, below the sticky "Back to lesson" and
+	// above the keyboard — focusing an editor scrolls only its caret, which can
+	// leave the field's lower edge cut off. Wider screens never scroll here.
+	const questionScreen = !!pending && expanded && !revealPending;
+	useEffect(() => {
+		const overlay = overlayRef.current;
+		if (!questionScreen || !overlay) return;
+		let frame = 0;
+		const fit = () => {
+			const active = document.activeElement;
+			if (!(active instanceof HTMLElement) || !overlay.contains(active) || getComputedStyle(overlay).overflowY !== "auto") return;
+			const field = active.closest<HTMLElement>(".lh-compact-field") ?? active;
+			const box = field.getBoundingClientRect(), view = overlay.getBoundingClientRect();
+			const top = view.top + (overlay.querySelector<HTMLElement>(".lh-question-back")?.offsetHeight ?? 0) + 8;
+			const bottom = view.bottom - 8;
+			if (box.bottom > bottom) overlay.scrollTop += Math.min(box.bottom - bottom, box.top - top);
+			else if (box.top < top) overlay.scrollTop -= top - box.top;
+		};
+		// Now (focus, typing that grows the field) and once more after layout
+		// settles (the keyboard resizing the visible area).
+		const reveal = () => { fit(); cancelAnimationFrame(frame); frame = requestAnimationFrame(fit); };
+		overlay.addEventListener("focusin", reveal);
+		overlay.addEventListener("input", reveal);
+		window.visualViewport?.addEventListener("resize", reveal);
+		const sized = new ResizeObserver(reveal);
+		sized.observe(overlay);
+		return () => {
+			cancelAnimationFrame(frame);
+			sized.disconnect();
+			overlay.removeEventListener("focusin", reveal);
+			overlay.removeEventListener("input", reveal);
+			window.visualViewport?.removeEventListener("resize", reveal);
+		};
+	}, [questionScreen]);
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const bodyRef = useRef<HTMLDivElement>(null);
 	const shellRef = useRef<HTMLDivElement>(null);
+	// "Hide" on an open question (round 11): fold it to its bar and bring
+	// the lesson down to sit just above it, so re-reading needs no scroll.
+	// The learner's picks and words stay; scrolling back to the end, or the
+	// bar, opens it again.
+	const collapseQuestion = () => {
+		expandIntentRef.current = false;
+		setExpanded(false);
+		const settle = () => {
+			const view = scrollRef.current, block = blockRef.current;
+			if (!view || !block) return;
+			// C2: back to exactly where the learner was reading when the
+			// question opened (a question that arrived open has no such
+			// place: the lesson's end then sits just above the bar).
+			const reading = readingTopRef.current;
+			if (reading !== null) {
+				stopScroll();
+				view.scrollTop = Math.min(reading, view.scrollHeight - view.clientHeight);
+				return;
+			}
+			const spacer = view.querySelector<HTMLElement>('[data-testid="dock-spacer"]');
+			if (!spacer) return;
+			const gap = block.getBoundingClientRect().top - 12 - spacer.getBoundingClientRect().top;
+			if (gap <= 0) return;
+			stopScroll();
+			view.scrollTop = Math.max(0, view.scrollTop - gap);
+		};
+		window.setTimeout(() => {
+			const morph = shellRef.current?.getAnimations() ?? [];
+			void Promise.all(morph.map((a) => a.finished.catch(() => undefined))).then(() => requestAnimationFrame(settle));
+		}, 0);
+	};
 	const contentRef = useRef<HTMLDivElement>(null);
 	const mode = pending
 		? `question:${pending.key}`
 		: practice
 			? `practice:${practice.toolCallId}`
 			: "chat";
+	// L8 (round 19): an empty shell (a check waiting behind its reveal) draws
+	// no outline — it was a stray thin rule at the bottom of the lesson.
+	useEffect(() => {
+		const content = contentRef.current, shell = shellRef.current;
+		if (!content || !shell || typeof ResizeObserver === "undefined") return;
+		const mark = () => { if (content.getBoundingClientRect().height < 1) shell.dataset.empty = ""; else delete shell.dataset.empty; };
+		mark();
+		const observer = new ResizeObserver(mark);
+		observer.observe(content);
+		return () => observer.disconnect();
+	}, [mode]);
 
 	// The plan marginalia's flank width (owner, plan-placement round): from
 	// the DOCK container's right edge to the block's right edge — the bare
@@ -2266,6 +2975,9 @@ function DockOverlay({
 	// render-time measurement went stale during drag-resizes and the mount
 	// decision popped late).
 	const [flankW, setFlankW] = useState(0);
+	// E1 (round 16): the card shows the reading note as attached — live.
+	const [readingAttached, setReadingAttached] = useState(() => !!(readingThinkingNow?.() ?? readingThinking).trim());
+	useEffect(() => { setReadingAttached(!!(readingThinkingNow?.() ?? readingThinking).trim()); }, [pending?.toolCallId, readingThinking, readingThinkingNow]);
 	const flankWRef = useRef(0);
 	// Part A of the same round (the resize mute): any block size change
 	// stamps this — the fold machine ignores scroll events for a beat after,
@@ -2295,13 +3007,25 @@ function DockOverlay({
 		return () => ro.disconnect();
 	}, []);
 
-	// The reserve grows immediately, but never shrinks while a question or
-	// practice problem owns the dock: shrinking flow space could pin a nearby
-	// learner back to the bottom. Composer mode may give space back.
+	// The reserve grows immediately, but never shrinks while an open question
+	// or practice problem owns the dock: shrinking flow space could pin a
+	// nearby learner back to the bottom. A closed question and composer mode
+	// give space back.
 	const reserveRef = useRef(0);
+	const fadeRef = useRef<HTMLDivElement>(null);
 	const offer = useCallback((blockH: number) => {
-		const next = blockH + GRADIENT_H;
-		if (next <= reserveRef.current + 0.5 && pendingRef.current) return;
+		// The fade's drawn height (phones draw a shorter one), so the tail
+		// reserves exactly what covers the content and no blank band more.
+		// A hidden fade (the tablet writing split hides it) covers nothing,
+		// so it reserves nothing — no blank band above the composer.
+		const fade = fadeRef.current;
+		const fadeH = !fade ? GRADIENT_H : typeof fade.getClientRects !== "function" ? fade.offsetHeight || GRADIENT_H : fade.getClientRects().length > 0 ? fade.offsetHeight : 0;
+		const next = blockH + fadeH;
+		// Round 15 (F5): scrolling no longer folds or opens a question
+		// (round 14, C2/C3), so the clamp this guarded against cannot happen;
+		// once the learner closes the question the tail gives its height
+		// back, and the lesson ends at its last divider, not in a blank band.
+		if (next <= reserveRef.current + 0.5 && pendingRef.current && expandedRef.current) return;
 		// Stamp growth at the source, including child-only field resizes, so
 		// stick-to-bottom's catch-up is not mistaken for the learner leaving.
 		if (shouldStampGeometryMute(next, reserveRef.current, pendingRef.current)) geometryAtRef.current = Date.now();
@@ -2384,7 +3108,19 @@ function DockOverlay({
 			expandIntentRef.current = false;
 		});
 	};
+	// B12 (round 18): a question the learner opens takes focus to its first
+	// answer control once it has expanded (see focusFirstAnswerControl).
+	const focusAnswerOnOpen = useRef(false);
+	useEffect(() => {
+		if (!expanded || !focusAnswerOnOpen.current) return;
+		focusAnswerOnOpen.current = false;
+		const frame = requestAnimationFrame(() => focusFirstAnswerControl(shellRef.current));
+		return () => cancelAnimationFrame(frame);
+	}, [expanded]);
 	const expandAndReveal = () => {
+		focusAnswerOnOpen.current = true;
+		const view = scrollRef.current;
+		if (view && !expandedRef.current) readingTopRef.current = view.scrollTop;
 		setRevealed(true); // the teach-check invitation was accepted (W5)
 		setExpanded(true);
 		void suppressFoldDuringReveal();
@@ -2430,6 +3166,11 @@ function DockOverlay({
 		const onScroll = () => {
 			if (el.closest('[data-input-focused="tutor"]')) return;
 			if (!pendingRef.current) return;
+			// C2/C3 (round 14): a question is opened and closed only by the
+			// learner (its bar, Show question, Back to lesson) — scrolling the
+			// lesson never opens or folds it, on any device. Practice problems
+			// keep their fold.
+			if (questionDockRef.current) return;
 			// Resize mute (owner, resize round): a geometry change re-clamps
 			// scrollTop and the browser emits the clamp as a scroll event —
 			// reading the transient position folded the box to the bar for a
@@ -2519,14 +3260,60 @@ function DockOverlay({
 		prevRef.current = { key: stateKey, height: h };
 	});
 
+	const questionOpen = !!pending && expanded && !revealPending;
+	// S4 (round 17, try-out on phones): the open question, or the practice
+	// problem, as one inset card with a filled main action.
+	const cardLayout = useTryout("cardLayout") === "card" && dockPhone;
+	// T4: an open question (or an opened problem) is the task and rides with
+	// the writing card; otherwise the dock belongs to the lesson: it sits on
+	// the lesson's end (the spacer reserved for it) and scrolls with it.
+	const inFlow = flow && !questionOpen && !(practice && expanded);
+	useLayoutEffect(() => {
+		const overlay = overlayRef.current, scroller = scrollRef.current;
+		if (!overlay) return;
+		if (!inFlow || !scroller) { delete overlay.dataset.flow; overlay.style.removeProperty("top"); overlay.style.removeProperty("bottom"); return; }
+		overlay.dataset.flow = "";
+		const spacer = scroller.querySelector<HTMLElement>('[data-testid="dock-spacer"]');
+		const place = () => {
+			const host = overlay.offsetParent as HTMLElement | null;
+			if (!spacer || !host) return;
+			overlay.style.top = `${Math.round(spacer.getBoundingClientRect().top - host.getBoundingClientRect().top)}px`;
+			overlay.style.bottom = "auto";
+		};
+		place();
+		scroller.addEventListener("scroll", place, { passive: true });
+		const observer = new ResizeObserver(place);
+		observer.observe(scroller); if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
+		return () => { scroller.removeEventListener("scroll", place); observer.disconnect(); delete overlay.dataset.flow; overlay.style.removeProperty("top"); overlay.style.removeProperty("bottom"); };
+	}, [inFlow, scrollRef]);
 	return (
-		<div className="pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }}>
-			<div className="h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
-			<div ref={blockRef} className="relative bg-background pb-5">
+		<div ref={overlayRef} className="lh-dock-overlay pointer-events-none absolute inset-x-0 bottom-0" style={{ right: sbInset }} data-question-open={questionOpen || undefined}
+			data-layout={cardLayout ? "card" : undefined}
+			data-dock-kind={pending ? "question" : practice ? "practice" : "composer"}>
+			{/* Phones (owner P7): an open question owns the lesson area below the
+			    page bar — the CSS keys on data-question-open; "Back to lesson", first there,
+			    folds it to its bar with every pick and word kept. Hidden on wider
+			    screens, where the lesson and the question share the view. */}
+			{questionOpen && <div className="lh-question-back">
+				<button type="button" data-testid="question-back" onClick={collapseQuestion}><ChevronLeftIcon aria-hidden />Back to lesson</button>
+			</div>}
+			<div ref={fadeRef} className="lh-dock-fade h-24 bg-gradient-to-t from-background via-background/85 to-transparent" />
+			<div ref={blockRef} className="lh-dock-block relative bg-background pb-5">
+				{/* P1 (round 19): Focus by the chat box, or the right-edge tabs (Notebook
+				    and Keys at the bottom, by the chat box; Focus near the top). */}
+				{focusPlace === "bottom" && <FocusDockButton />}
+				{focusPlace === "tabs" && <FocusEdgeTabs bottom={<>{notebookToggle}<KeyboardToggle testid="edge-tab-keys" /></>} />}
+				{/* The short wait for saved drafts is said without moving anything (round
+				    20 audit): over the fade above the chat box, out of the layout, so the
+				    lesson never jumps when it ends. A failure, which stays and has Retry,
+				    keeps its own line in the dock. */}
+				{!notebook.getSnapshot().view && !notebook.getSnapshot().error && <div className={`${wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK} lh-draft-loading-row`}>
+					<div data-tutor-draft-loading="" role="status" className="lh-draft-loading">Loading saved drafts…</div>
+				</div>}
 				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
-					{!notebook.getSnapshot().view && <div data-tutor-draft-loading="" role={notebook.getSnapshot().error ? "alert" : "status"} className="px-3 py-2 text-xs text-muted-foreground">
-						{notebook.getSnapshot().error ? <>Saved drafts could not load. <button type="button" className="min-h-11 underline" onClick={() => { void notebook.refresh(); }}>Retry</button></> : "Loading saved drafts…"}
+					{!notebook.getSnapshot().view && notebook.getSnapshot().error && <div data-tutor-draft-loading="" role="alert" className="px-3 py-2 text-xs text-muted-foreground">
+						Saved drafts could not load. <button type="button" className="min-h-11 underline" onClick={() => { void notebook.refresh(); }}>Retry</button>
 					</div>}
 					<div ref={bodyRef} data-tutor-draft-inputs="" inert={!notebook.getSnapshot().view}>
 					{setupCta}
@@ -2549,7 +3336,7 @@ function DockOverlay({
 							dictation={dictation}
 							value={readingThinking}
 							revision={readingThinkingRevision}
-							onChange={onReadingThinking}
+							onChange={(value: string) => { onReadingThinking(value); setReadingAttached(!!value.trim()); }}
 							onEscape={dictationCancel}
 							onOpen={
 								!expanded
@@ -2561,6 +3348,7 @@ function DockOverlay({
 									: undefined
 							}
 							claim={revealPending}
+							questionOpen={questionOpen}
 						/>
 					)}
 					<div ref={shellRef} data-attachment-composer="" className="pointer-events-auto overflow-hidden rounded-2xl border bg-card shadow-lg">
@@ -2575,6 +3363,8 @@ function DockOverlay({
 								<QuestionDock
 									notebook={notebook}
 									readingThinking={readingThinking}
+									readingThinkingNow={readingThinkingNow}
+									readingAttached={readingAttached}
 									onRestoreReadingThinking={onReadingThinking}
 									dictation={dictation}
 									hasSharedWriting={hasSharedWriting}
@@ -2593,6 +3383,8 @@ function DockOverlay({
 									} : expandAndReveal}
 									onSubmit={onSubmitAnswer}
 									initialDraft={initialQuestionDraft}
+									draftEpoch={questionDraftEpoch}
+									unsentReason={questionUnsentReason}
 									onSaveDraft={onSaveQuestionDraft}
 									onEscape={dictationCancel}
 									dictationClaim={!revealPending}
@@ -2600,6 +3392,7 @@ function DockOverlay({
 								/>
 							) : practice ? (
 								<PracticeDock
+									chatId={chatId}
 									notebook={notebook}
 									dictation={dictation}
 									hasSharedWriting={hasSharedWriting}
@@ -2607,6 +3400,7 @@ function DockOverlay({
 									input={practice.input as { statement: string }}
 									expanded={expanded}
 									onExpand={() => {
+										focusAnswerOnOpen.current = true;
 										setExpanded(true);
 										void suppressFoldDuringReveal();
 									}}
@@ -2624,8 +3418,10 @@ function DockOverlay({
 					{/* The stats row: beneath the composer/question shell, not
 					    flush to the screen bottom — static height, outside the
 					    morphing shell so it never joins a height animation. */}
+					{/* No leading slot: the Notebook opener lives in the page bar (or the
+					    right-edge tabs, P1) — in the stats row it only showed until the
+					    device was known, and then left a 324px shift on laptops. */}
 					<StatsBar
-						leadingSlot={notebookToggle}
 						turns={turns}
 						contextTokens={contextTokens}
 						cliContextWindow={cliContextWindow}
@@ -2647,7 +3443,7 @@ function DockOverlay({
 					    overlay is none by default. The isAtBottom/scrollToBottom
 					    context still reaches it — DockOverlay is a Conversation
 					    child. */}
-					<ConversationScrollButton className="pointer-events-auto bottom-full mb-2" />
+					<ConversationScrollButton className="lh-jump-down pointer-events-auto bottom-full mb-2" />
 				</div>
 				{/* The plan marginalia (owner, plan-placement round): the bare
 				    diagram in the band's right flank — boundaless, meet-fitted, part
@@ -2659,7 +3455,7 @@ function DockOverlay({
 				    the flank; below MARGIN_MIN_W it FADES (never pops away — no
 				    mid-question unmount), and widening past the floor fades it
 				    back in. */}
-				{pending && plan && !wideQuestion && (
+				{pending && plan && !wideQuestion && flankW >= 44 && (
 					<Hint label="Open the full plan" side="bottom">
 <button
 						type="button"

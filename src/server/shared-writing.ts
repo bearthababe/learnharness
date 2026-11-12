@@ -1,7 +1,7 @@
 import { ChatInputError, type TurnInput } from "../core/input-events.ts";
 import { emit } from "../core/events.ts";
 import type { LhMessage } from "../core/native-messages.ts";
-import { CaptureConflict, pendingSharedWriting, pageAttachments, type SharedWritingReference } from "../core/shared-writing.ts";
+import { CaptureConflict, pendingSharedWriting, pageAttachments, notebookSlotIdSchema, slotPage, type SharedWritingReference } from "../core/shared-writing.ts";
 import { notebookSourceSchema, handwritingSha256, isFullPageHandwritingPng } from "../core/handwriting.ts";
 import { stores } from "./stores.ts";
 
@@ -35,6 +35,17 @@ export async function sharedWritingResponse(request: Request, chatId: string, im
 			const snapshot = stores.sharedWritingStore.readSnapshot(chatId);
 			return Response.json({ pending: pendingSharedWriting(snapshot, chat.messages), pageAttachments: pageAttachments(snapshot) }, { headers: { "Cache-Control": "no-store" } });
 		} catch { return captureError(503, "capture_unavailable", "Couldn’t read saved snapshots."); }
+	}
+	if (request.method === "DELETE" && imageId) {
+		// Remove from the next message only: the image and the editable page
+		// stay saved; a sent snapshot is history and cannot be removed.
+		try {
+			const pending = pendingSharedWriting(stores.sharedWritingStore.readSnapshot(chatId), chat.messages).some(writing => writing.id === imageId);
+			if (!pending) return captureError(409, "not_pending", "This snapshot was already sent or removed.");
+			stores.sharedWritingStore.dismiss(chatId, imageId);
+			emit("writing-changed", { chatId });
+			return new Response(null, { status: 204 });
+		} catch { return captureError(503, "capture_unavailable", "Couldn’t update attachments. Try again."); }
 	}
 	if (request.method !== "POST" || imageId) return new Response(null, { status: 405 });
 	const multipart = request.headers.get("Content-Type")?.startsWith("multipart/form-data;") ?? false;
@@ -81,7 +92,7 @@ async function uploadNotebook(request: Request, chatId: string, bytes: Uint8Arra
 	let source;
 	try {
 		source = notebookSourceSchema.parse(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await sourceFile.arrayBuffer())));
-		if (source.journal.pageId !== pageId) throw new Error("Page mismatch");
+		if (!notebookSlotIdSchema.safeParse(pageId).success || source.journal.pageId !== slotPage(pageId)) throw new Error("Page mismatch");
 		for (const [id, background] of Object.entries(source.journal.backgrounds)) {
 			const backgroundBytes = Buffer.from(background.data, "base64");
 			if (backgroundBytes.toString("base64") !== background.data || !isFullPageHandwritingPng(backgroundBytes) || await handwritingSha256(backgroundBytes) !== id) throw new Error("Invalid background");

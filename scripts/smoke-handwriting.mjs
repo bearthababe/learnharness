@@ -43,7 +43,7 @@ try {
 	const errors = [], turns = [];
 	page.on("pageerror", error => { errors.push(error.message); console.error("Browser error:", error.message); });
 	page.on("request", request => { if (new URL(request.url()).pathname === "/api/chat" && request.method() === "POST") turns.push(request.url()); });
-	await page.evaluateOnNewDocument(() => { try { localStorage.setItem("lh:sidebar-open", "0"); } catch { /* sandboxed generated-artifact frames have no storage */ } });
+	await page.evaluateOnNewDocument(() => { try { localStorage.setItem("lh:sidebar-open", "0"); localStorage.setItem("lh:device-tool:writing", "on"); localStorage.setItem("lh:device-tool:notebook", "on"); } catch { /* sandboxed generated-artifact frames have no storage */ } });
 	let failWrites = false, failReads = false, holdNextWrite = false, heldWrite, holdNextRead = false, heldRead, failDelete = false;
 	const handwritingWrites = [];
 	const workingUrl = url => new URL(url).pathname.endsWith("/handwriting/pages/page_initial");
@@ -157,7 +157,7 @@ try {
 	await page.reload({ waitUntil: "networkidle2" });
 	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]')?.getAttribute("data-ready") === "true");
 	assert.equal(await bitmap(), ink, "Completed editable ink is restored on reload");
-	await page.click('[aria-label="Page options"]'); await page.click('[aria-label="Clear"]');
+	await page.click('[aria-label="Notebook options"]'); await page.click('[data-testid="notebook-clear"]');
 	const cleared = await bitmap(); assert.notEqual(cleared, ink);
 	await page.reload({ waitUntil: "networkidle2" });
 	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]')?.getAttribute("data-ready") === "true");
@@ -239,7 +239,7 @@ try {
 	const pendingInk = await bitmap();
 	await page.reload({ waitUntil: "networkidle2" }); await ready();
 	assert.equal(await bitmap(), pendingInk, "Failed server save recovers the completed local working");
-	await action("Page options"); await action("Clear");
+	await action("Notebook options"); await page.click('[data-testid="notebook-clear"]');
 	await page.reload({ waitUntil: "networkidle2" }); await ready();
 	assert.equal(await bitmap(), cleared, "Immediate reload after Clear uses the device journal");
 	await pencilTap("Undo"); assert.equal(await bitmap(), pendingInk);
@@ -298,7 +298,7 @@ try {
 	const beforeExpand = await page.$eval('[data-testid="notebook-paper-scroll"]', e => e.scrollTop);
 	await action("Expand notebook");
 	await page.waitForFunction(() => document.querySelector('[data-testid="handwriting-notebook"]').dataset.expanded === "true");
-	await action("Back to question");
+	await action("Show question too");
 	await page.waitForFunction(expected => Math.abs(document.querySelector('[data-testid="notebook-paper-scroll"]').scrollTop - expected) <= 1, {}, beforeExpand);
 	assert.equal(await page.$eval(field, e => e.textContent), "My unsent explanation");
 	await page.click('[aria-label="Close notebook"]');
@@ -366,7 +366,7 @@ try {
 	assert.deepEqual((await (await fetch(`${origin}/api/chats/handwriting_teach/writing/${receipt.writing.id}/source`)).json()).journal, frozen);
 	console.log("PASS real IndexedDB Attach explanation reload, exact full source and same-page supersession without tutor input");
 	await page.setViewport({ width: 1400, height: 900, isMobile: true, hasTouch: true });
-	await page.locator('[aria-label="Open sidebar"]').click();
+	await page.locator('[data-testid="open-sidebar"]').click();
 	await page.locator('[data-testid="kind-filter-all"]').click();
 	const kept = await page.evaluate(() => ({ ink: localStorage.getItem("lh:handwriting:pages:v1:handwriting_teach:page_initial"), visibility: localStorage.getItem("lh:handwriting:open:handwriting_teach") }));
 	for (const id of ["handwriting_practice", "handwriting_drill"]) {

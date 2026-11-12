@@ -1,14 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ArrowDownIcon, ChevronRightIcon, PaperclipIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { keyboardOff, useRevealStyle } from "@/components/device-prefs";
 import { PathInput } from "@/components/path-input";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { dictationCheckpoint, finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
-import { CompactLearningInput } from "@/components/compact-learning-input";
-import { CornerDownLeftIcon } from "lucide-react";
+import { CompactLearningInput, useMicSlot } from "@/components/compact-learning-input";
+import { WorkingChip } from "@/components/working-chip";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
 import { useHandwritingEditor } from "./handwriting/submission";
@@ -73,6 +74,8 @@ export interface QuestionDockProps {
 	dictation?: Dictation;
 	hasSharedWriting?: boolean;
 	readingThinking?: string;
+	/** The reading note as it is right now (D2): what a snapshot carries. */
+	readingThinkingNow?: () => string;
 	onRestoreReadingThinking?: (text: string) => void;
 	toolName: "quiz" | "probe" | "ask_user_question" | "explain" | "recall";
 	toolCallId: string;
@@ -90,6 +93,11 @@ export interface QuestionDockProps {
 	onSubmit: (output: QuestionAnswerData, toolCallId: string, fields?: Pick<NotebookInputFields, "submission">, reviewed?: SharedWriting[]) => unknown;
 	/** Restore only this call's unconfirmed submission after recovery. */
 	initialDraft?: QuestionFormDraft;
+	/** Changes once when a device-kept draft is restored after mount: the
+	 *  form remounts to take it (round 11, B1). */
+	draftEpoch?: number;
+	/** The last answer was not sent (R8): why, in plain words. */
+	unsentReason?: string;
 	onSaveDraft?: (draft: QuestionFormDraft) => void;
 	/** Escape in a question field stops dictation (STT wave) — threaded
 	 *  from the page that owns the dictation hook. */
@@ -110,12 +118,15 @@ export interface QuestionDockProps {
 	 *  and say so in the hint row. The server registry is the real gate;
 	 *  this is the affordance. */
 	compactionRunning?: boolean;
+	/** E1 (round 16): the reading note has words (it goes with the answer). */
+	readingAttached?: boolean;
 }
 
 export function QuestionDock({
 	notebook,
 	dictation,
 	readingThinking,
+	readingThinkingNow,
 	onRestoreReadingThinking,
 	hasSharedWriting = false,
 	toolName,
@@ -126,11 +137,14 @@ export function QuestionDock({
 	onExpand,
 	onSubmit,
 	initialDraft,
+	draftEpoch = 0,
+	unsentReason,
 	onSaveDraft,
 	onEscape,
 	phase = "probe",
 	dictationClaim = true,
 	compactionRunning = false,
+	readingAttached,
 }: QuestionDockProps) {
 	// The probe-phase names (owner, 2026-10-09) canonicalize onto their
 	// teach twins for every dock concern — parse dispatch, labels, kinds:
@@ -142,6 +156,8 @@ export function QuestionDock({
 	// 2026-10-09): probe-phase questions label Probe/Recall in the
 	// composer; teach tools keep the standing labels.
 	const toolLabel = toolName === "probe" ? "Probe" : toolName === "recall" ? "Recall" : undefined;
+	// R2 (round 16): the folded bar says what was chosen — reported by the form.
+	const [summary, setSummary] = useState<string | null>(null);
 	// Parse, don't cast (src/core/tool-parts.ts): the model authored this
 	// input, and only the schema the tool declared vouches for its shape.
 	// The dock mounts on input-available parts (already validated at the
@@ -159,6 +175,7 @@ export function QuestionDock({
 				<QuestionDockBar
 					toolName={canonical}
 					question={parsed.question}
+					summary={reveal ? null : summary}
 					onExpand={onExpand}
 					variant={reveal ? "reveal" : "collapsed"}
 					toolLabel={toolLabel}
@@ -172,9 +189,10 @@ export function QuestionDock({
 			)}
 			<div className={expanded ? "dock-variant" : `${reveal ? "" : "lh-question-collapsed "}invisible h-0 overflow-hidden`}>
 				<QuestionDockForm
-					key={toolCallId}
+					key={`${toolCallId}:${draftEpoch}`}
 					notebook={notebook}
 					readingThinking={readingThinking}
+					readingThinkingNow={readingThinkingNow}
 					onRestoreReadingThinking={onRestoreReadingThinking}
 					dictation={dictation}
 					hasSharedWriting={hasSharedWriting}
@@ -183,12 +201,15 @@ export function QuestionDock({
 					input={parsed}
 					phase={phase}
 					active={expanded}
+					unsentReason={unsentReason}
 					onSubmit={onSubmit}
 					initialDraft={initialDraft}
 					onSaveDraft={onSaveDraft}
 					onEscape={onEscape}
 					dictationClaim={dictationClaim}
 					compactionRunning={compactionRunning}
+					onSummary={setSummary}
+					readingAttached={readingAttached}
 				/>
 			</div>
 		</>
@@ -215,6 +236,7 @@ function teaserText(q: string): string {
 export function QuestionDockBar({
 	toolName,
 	question,
+	summary = null,
 	onExpand,
 	variant = "collapsed",
 	label,
@@ -222,6 +244,9 @@ export function QuestionDockBar({
 }: {
 	toolName: "quiz" | "ask_user_question" | "explain";
 	question: string;
+	/** R2 (round 16): what the learner has chosen so far ("Selected: …"),
+	 *  shown in place of the question's first line; null before a choice. */
+	summary?: string | null;
 	onExpand: () => void;
 	variant?: "collapsed" | "reveal";
 	/** The kind chip's text (owner 2026-10-03): "Prediction" when a
@@ -232,45 +257,31 @@ export function QuestionDockBar({
 	 *  label Probe/Recall — the phase boundary visible in the composer. */
 	toolLabel?: string;
 }) {
-	if (variant === "reveal") {
-		return (
-			<button
-				type="button"
-				data-testid="teach-check-reveal"
-				onClick={onExpand}
-				className="lh-question-reveal dock-variant flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-accent/40"
-			>
-				<span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
-					<PlayIcon className="size-3.5" />
-				</span>
-				<span className="min-w-0 flex-1">
-					<span className="block text-sm font-medium">Check your understanding</span>
-					<span className="block truncate text-xs text-muted-foreground">{teaserText(question)}</span>
-				</span>
-				<span className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary">
-					Open <ChevronRightIcon className="size-3.5" />
-				</span>
-			</button>
-		);
-	}
+	// P9 (round 14): one look and one label for opening a question, on every
+	// device and in every state — the waiting invitation, the folded bar and
+	// the phone's reading line all end in the same "Show question ›".
+	const kind = label ?? toolLabel ?? (toolName === "quiz" ? "Check" : toolName === "explain" ? "Explain" : "Question");
 	return (
 		<button
 			type="button"
-			data-testid="question-dock-bar"
+			data-testid={variant === "reveal" ? "teach-check-reveal" : "question-dock-bar"}
 			onClick={onExpand}
-			className="dock-variant flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent/40"
+			className={`${variant === "reveal" ? "lh-question-reveal " : ""}lh-question-opener dock-variant flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm transition-colors hover:bg-accent/40`}
 		>
-			<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-				{label ??
-							toolLabel ??
-							(toolName === "quiz" ? "Check" : toolName === "explain" ? "Explain" : "Question")}
-			</span>
-			<span className="min-w-0 flex-1 truncate text-muted-foreground">{teaserText(question)}</span>
-			<span className="flex shrink-0 items-center gap-1 text-xs font-medium">
-				Answer <ArrowDownIcon className="size-3.5" />
-			</span>
+			<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">{kind}</span>
+			{summary
+				? <span className="lh-question-summary min-w-0 flex-1 text-foreground" data-testid="question-summary">{summary}</span>
+				: <span className="min-w-0 flex-1 truncate text-muted-foreground">{teaserText(question)}</span>}
+			{summary ? <span className="lh-show-question lh-change-answer" data-style="quiet">Change<ChevronRightIcon aria-hidden /></span> : <ShowQuestionLabel />}
 		</button>
 	);
+}
+
+/** "Show question ›" — the one opener label (P9), quiet by default with the
+ *  Prominent option from Settings (round 12, O5). */
+export function ShowQuestionLabel() {
+	const style = useRevealStyle();
+	return <span className="lh-show-question" data-style={style}>Show question<ChevronRightIcon aria-hidden /></span>;
 }
 
 /** The expanded question: label, question, options, and the unified bottom row. */
@@ -278,6 +289,7 @@ function QuestionDockForm({
 	notebook,
 	dictation,
 	readingThinking = "",
+	readingThinkingNow,
 	onRestoreReadingThinking,
 	hasSharedWriting = false,
 	toolName,
@@ -285,19 +297,23 @@ function QuestionDockForm({
 	input,
 	phase = "probe",
 	active,
+	unsentReason,
 	onSubmit,
 	initialDraft,
 	onSaveDraft,
 	onEscape,
 	dictationClaim = true,
 	compactionRunning = false,
-}: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal">) {
+	onSummary,
+	readingAttached,
+}: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal"> & { onSummary?: (summary: string | null) => void }) {
 	const kind = toolQuestionKind(toolName);
 
 	// Canonical QuestionData, built once per question. Quiz options are
 	// deterministically shuffled (seeded by toolCallId) so position never leaks
 	// correctness AND server/client render the same order (hydration-safe);
 	// the display order is snapshotted into the answer record at submit time.
+	const [micSlot, setMicSlot] = useMicSlot();
 	const qd = useMemo<QuestionData>(() => {
 		const quizInput = kind === "quiz" ? (input as QuizToolInput) : null;
 		const askInput = kind === "ask" ? (input as AskToolInput) : null;
@@ -376,12 +392,14 @@ function QuestionDockForm({
 	const latest = useRef({ sel, other, confIdx, compactionRunning, dictationClaim }); latest.current = { sel, other, confIdx, compactionRunning, dictationClaim };
 	const alive = useRef(true);
 	useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-	const transfer = useHandwritingEditor(`question:${toolCallId}`, () => ({ selection: { ...latest.current.sel, selected: [...latest.current.sel.selected].sort((a, b) => a - b) }, thinking: thinkingTextRef.current, other: latest.current.other, text: answerTextRef.current, confidenceIndex: latest.current.confIdx, readingThinking }), draft => {
+	const transfer = useHandwritingEditor(`question:${toolCallId}`, () => ({ selection: { ...latest.current.sel, selected: [...latest.current.sel.selected].sort((a, b) => a - b) }, thinking: thinkingTextRef.current, other: latest.current.other, text: answerTextRef.current, confidenceIndex: latest.current.confIdx, readingThinking: readingThinkingNow?.() ?? readingThinking }), draft => {
 		const selection = draft.selection ? { ...draft.selection, selected: new Set(draft.selection.selected) } : emptyDockSelection();
 		thinkingTextRef.current = draft.thinking ?? ""; answerTextRef.current = draft.text ?? "";
 		latest.current = { ...latest.current, sel: selection, other: draft.other ?? "", confIdx: draft.confidenceIndex ?? DEFAULT_CONFIDENCE_INDEX };
 		setSel(selection); setThinking(thinkingTextRef.current); setText(answerTextRef.current); setOther(draft.other ?? ""); setConfIdx(draft.confidenceIndex ?? DEFAULT_CONFIDENCE_INDEX);
-		if (draft.readingThinking !== undefined) onRestoreReadingThinking?.(draft.readingThinking);
+		// D2 (round 13): a snapshot never empties a reading note that has words.
+		const nowReading = readingThinkingNow?.() ?? readingThinking;
+		if (draft.readingThinking !== undefined && (draft.readingThinking.trim() || !nowReading.trim())) onRestoreReadingThinking?.(draft.readingThinking);
 	}, dictationClaim);
 
 	// The PRIMARY dictation input (owner, STT round 1): while a question
@@ -414,11 +432,43 @@ function QuestionDockForm({
 	);
 
 	const toggle = (idx: number) => setSel(toggleOption(selectMode, sel, idx));
+	// R2 (round 16): one line for the folded bar — what was chosen, and how sure.
+	const summaryText = (() => {
+		if (qd.mode === "text") return text.trim() ? `Your answer: ${teaserText(text.trim())}` : null;
+		const picked = [...sel.selected].sort((a, b) => a - b).map((i) => teaserText(qd.options[i]?.label ?? ""));
+		if (sel.otherSelected) picked.push(other.trim() ? `Other: ${other.trim()}` : "Other");
+		if (sel.dontKnow) return "Selected: I don't know";
+		if (picked.length === 0) return null;
+		const sure = kind === "quiz" ? ` · ${CONFIDENCE_STOPS[confIdx]}%` : "";
+		return picked.length === 1 ? `Selected: ${picked[0]}${sure}` : `${picked.length} chosen: ${picked.join(" · ")}${sure}`;
+	})();
+	useEffect(() => { onSummary?.(summaryText); }, [summaryText, onSummary]);
 
 	const canSubmit = transfer?.hasAttempt() || (
 		qd.mode === "text"
 			? text.trim().length > 0 || explanationHasContent(owned.draft?.parts ?? []) || hasSharedWriting
 			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0);
+
+	// Phones take the check in two steps (owner ruling 3): pick an answer,
+	// then confidence and "why" appear beneath it. Anything already given
+	// (a draft, attached writing) keeps them open.
+	// Keep the answer as it is typed (not only at submit): leaving the
+	// session or a reload brings it back (the session model persists it).
+	const saveDraftRef = useRef(onSaveDraft); saveDraftRef.current = onSaveDraft;
+	// D1 (round 13): saved in the same commit as the keystroke (no delay), so
+	// a reload straight after typing keeps the newest words. Only a real
+	// change is saved: the form's first state (the restored draft) and any
+	// re-run of this effect with the same content — React re-runs layout
+	// effects when a hidden subtree reappears — never write over the copy.
+	const draftContent = JSON.stringify([[...sel.selected].sort((a, b) => a - b), sel.otherSelected, sel.dontKnow, thinking, other, text, confIdx]);
+	const savedContent = useRef(draftContent);
+	useLayoutEffect(() => {
+		if (draftContent === savedContent.current) return;
+		savedContent.current = draftContent;
+		saveDraftRef.current?.({ selection: { ...sel, selected: new Set(sel.selected) }, thinking, other, text, confidenceIndex: confIdx });
+	}, [draftContent, sel, thinking, other, text, confIdx]);
+	// Phones show a short "why" prompt so it never truncates.
+	const followUpOpen = qd.mode === "text" || sel.dontKnow || sel.otherSelected || sel.selected.size > 0 || thinking.trim().length > 0 || hasSharedWriting || !!transfer?.hasAttempt();
 
 	const submit = () => {
 		if (sending.current || compactionRunning || notebook?.getSnapshot().sendBlocked || transfer?.blocked() || (!canSubmit && !isDictationActive())) return;
@@ -558,15 +608,51 @@ function QuestionDockForm({
 			// global ←/→ own its keyboard, so it never joins the chain.
 			// Shift+Tab falls through (the global thinking-level cycle owns
 			// it), so the shift check matters.
+			// L1 (round 17): Tab walks the card's stops in order — every option
+			// of a multi-select (one stop, the walked row, for a single pick),
+			// Other's field, Your reasoning, the mic, Submit — then leaves the
+			// card for the page's usual walk. Nothing is unreachable by Tab.
 			if (e.key === "Tab" && !e.shiftKey && !modded) {
+				const root = rootRef.current;
+				const shown = (el: Element | null | undefined): el is HTMLElement => !!el && el instanceof HTMLElement && el.getClientRects().length > 0 && !(el as HTMLButtonElement).disabled;
+				const rows = [...(root?.querySelectorAll<HTMLElement>("[data-kbdrow]") ?? [])];
+				const rowStops = qd.mode === "multi-select" ? rows : rows.filter((row) => Number(row.dataset.kbdrow) === (kbdIdx ?? 0));
+				const rowTarget = (row: HTMLElement) => row.querySelector<HTMLElement>("input, [data-file-path-input]") ?? row;
+				const form = root?.querySelector("form.lh-question-form");
+				const stops = [
+					...rowStops.map(rowTarget),
+					thinkingRef.current,
+					form?.querySelector(".lh-mic-slot button"),
+					form?.querySelector('[data-testid="question-send"]'),
+				].filter(shown);
+				const at = stops.findIndex((stop) => stop === t || stop.contains(t));
+				if (at === stops.length - 1) return; // the end: the page's walk takes over
 				e.preventDefault();
 				e.stopPropagation();
-				if (t?.closest?.("[data-kbdrow]")) thinkingRef.current?.focus();
-				else {
-					const idx = kbdIdx ?? 0;
-					setKbdIdx(idx);
-					focusRow(idx);
+				const next = stops[at + 1] ?? stops[0];
+				if (!next) return;
+				const row = next.closest<HTMLElement>("[data-kbdrow]");
+				setKbdIdx(row ? Number(row.dataset.kbdrow) : null);
+				next.focus();
+				return;
+			}
+			// Typing never picks an answer (R9, round 12): a letter or digit
+			// pressed while focus sits on an answer row (or nowhere in
+			// particular) starts the reasoning instead. Focus moves into the
+			// thinking field during keydown, so the character lands there, and
+			// the spaces that follow type rather than toggle a row.
+			if (!typing && !modded && /^[\p{L}\p{N}]$/u.test(e.key) && thinkingRef.current && thinkingRef.current.getClientRects().length > 0 && (!t || t === document.body || t.closest?.("[data-kbdrow]") || rootRef.current?.contains(t))) {
+				const field = thinkingRef.current;
+				field.focus({ preventScroll: true });
+				const selection = window.getSelection();
+				if (selection && field.isContentEditable) {
+					const range = document.createRange();
+					range.selectNodeContents(field);
+					range.collapse(false);
+					selection.removeAllRanges();
+					selection.addRange(range);
 				}
+				setKbdIdx(null);
 				return;
 			}
 			// Keys from a typing surface keep their meaning (arrows move
@@ -620,12 +706,23 @@ function QuestionDockForm({
 	}, [kbdIdx]);
 
 	return (
-		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-notebook-question={toolCallId} data-notebook-channel={owner.channel}>
+		<div ref={rootRef} data-testid="question-dock" data-input-owner="tutor" data-notebook-question={toolCallId} data-notebook-channel={owner.channel} data-follow-up={followUpOpen ? "open" : "waiting"}>
+			{/* R8: the same honest note as every other send path — the answer
+			    is still here, one tap sends it again. */}
+			{unsentReason && <div role="status" data-testid="question-unsent" className="lh-unsent-notice lh-question-unsent">
+				<div className="lh-unsent-row" data-unsent-in-box="">
+					<span>{`Not sent — ${unsentReason}. Your answer is still here.`}</span>
+					<span className="lh-unsent-actions">
+						<Button variant="outline" size="xs" data-testid="question-send-again" disabled={!canSubmit} onClick={submit}>Send again</Button>
+					</span>
+				</div>
+			</div>}
 			{/* Question area — scrolls internally if very tall; the bottom row stays put.
 			    Capped by the measured column (--dock-max-h; the old fixed 55dvh cut
 			    long questions short — owner round, 2026-10-05). */}
 			<div data-dock-scroll-area="" data-session-find-root="" className="max-h-[var(--dock-max-h,55dvh)] overflow-y-auto px-4 pt-3">
-				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+				<div className="lh-eyebrow mb-1 flex items-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+					<span className="min-w-0 flex-1">
 					{toolName === "probe"
 						? "Probe"
 						: toolName === "recall"
@@ -638,8 +735,9 @@ function QuestionDockForm({
 										? "Explain"
 											: "Question"}
 					{qd.mode === "multi-select" && " · select all that apply"}
+					</span>
 				</div>
-				<div className="mb-3 font-medium">
+				<div className="lh-question-text mb-3 font-medium">
 					<ToolContentResponse>{qd.question}</ToolContentResponse>
 				</div>
 				{qd.context && (
@@ -661,14 +759,14 @@ function QuestionDockForm({
 									data-kbdrow={i}
 									onClick={() => toggle(i)}
 									className={cn(
-										"flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
+										"lh-option flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
 										isSel ? "border-primary bg-accent" : "hover:bg-accent/50",
 										i === kbdIdx && !isSel && "ring-1 ring-border bg-accent/40",
 									)}
 								>
 									<span
 										className={cn(
-											"mt-0.5 flex size-4 shrink-0 items-center justify-center border",
+											"lh-option-mark mt-0.5 flex size-4 shrink-0 items-center justify-center border",
 											qd.mode === "multi-select" ? "rounded-sm" : "rounded-full",
 											isSel ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40",
 										)}
@@ -709,14 +807,14 @@ function QuestionDockForm({
 								className={cn(
 									// Option-row layout + radio circle (owner); the dashed
 									// outline stays — this is the deliberate non-answer.
-									"flex items-start gap-3 rounded-lg border border-dashed px-3 py-2 text-left text-sm outline-none transition-colors",
+									"lh-option lh-option-dontknow flex items-start gap-3 rounded-lg border border-dashed px-3 py-2 text-left text-sm outline-none transition-colors",
 									sel.dontKnow ? "border-primary text-foreground" : "text-muted-foreground",
 									kbdIdx === optionCount && !sel.dontKnow && "ring-1 ring-border bg-accent/40",
 								)}
 							>
 								<span
 									className={cn(
-										"mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
+										"lh-option-mark mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border",
 										sel.dontKnow
 											? "border-primary bg-primary text-primary-foreground"
 											: "border-muted-foreground/40",
@@ -736,14 +834,14 @@ function QuestionDockForm({
 								data-kbdrow={optionCount}
 								onClick={selectOther}
 								className={cn(
-									"flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
+									"lh-option flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
 									sel.otherSelected ? "border-primary bg-accent" : "border-dashed hover:bg-accent/50",
 									kbdIdx === optionCount && !sel.otherSelected && "ring-1 ring-border bg-accent/40",
 								)}
 							>
 								<span
 									className={cn(
-										"mt-0.5 flex size-4 shrink-0 items-center justify-center border",
+										"lh-option-mark mt-0.5 flex size-4 shrink-0 items-center justify-center border",
 										qd.mode === "multi-select" ? "rounded-sm" : "rounded-full",
 										sel.otherSelected
 											? "border-primary bg-primary text-primary-foreground"
@@ -814,17 +912,21 @@ function QuestionDockForm({
 				app-wide). Clicking and dragging are native. "I don't know"
 				GRAYS it out — the layout holds, no value is sent, the IDK
 				signal stands alone. */}
+			{/* Keyboard users see the model at a glance (laptops only). */}
+			{qd.mode !== "text" && <p className="lh-kbd-hint" aria-hidden="true" data-testid="question-kbd-hint">
+				<kbd>↑</kbd><kbd>↓</kbd> choose · <kbd>Space</kbd> pick{kind === "quiz" ? <> · <kbd>←</kbd><kbd>→</kbd> confidence</> : null} · <kbd>Tab</kbd> next · <kbd>Enter</kbd> submit
+			</p>}
 			{kind === "quiz" && (
 				<div className="lh-question-confidence border-t border-border/60 px-4 py-2.5">
-					<div className="flex items-center gap-3">
-						<span
-							className={cn(
-								"shrink-0 text-xs font-medium uppercase tracking-wide",
-								sel.dontKnow ? "text-muted-foreground/50" : "text-muted-foreground",
-							)}
-						>
-							Confidence
-						</span>
+					{/* E7 (round 16): what the slider means, beside it — no hover —
+					    with its ends labelled at the track's ends: one row on wider
+					    screens, so the card is no taller than before. */}
+					<div className="lh-confidence-row flex items-center gap-3">
+						<p className={cn("lh-confidence-explain", sel.dontKnow && "opacity-50")} data-testid="confidence-explain">
+							<span className="lh-confidence-name">Confidence</span> — the chance your answer is correct <span className="whitespace-nowrap">(50% = a coin flip)</span>
+						</p>
+						<span className={cn("lh-confidence-end", sel.dontKnow && "opacity-50")} aria-hidden="true" data-testid="confidence-end-low">0%</span>
+						<div className="lh-confidence-track flex-1">
 						<div
 							className={cn("relative h-4 min-w-0 flex-1", sel.dontKnow && "opacity-40")}
 							data-testid="confidence-track"
@@ -879,6 +981,8 @@ function QuestionDockForm({
 								)}
 							/>
 						</div>
+						</div>
+						<span className={cn("lh-confidence-end", sel.dontKnow && "opacity-50")} aria-hidden="true" data-testid="confidence-end-high">100%</span>
 						<span
 							data-testid="confidence-value"
 							className={cn(
@@ -899,21 +1003,30 @@ function QuestionDockForm({
 			    send. Select modes get "Your thinking" (Enter makes a newline — it
 			    is for dumping, soon dictated; the button submits); text mode
 			    keeps "Your answer" with Enter-to-submit. */}
+			{!followUpOpen && <p className="lh-question-pick-hint" data-testid="question-pick-hint" data-confidence={kind === "quiz" || undefined}>{kind === "quiz" ? "Pick an answer — then say how sure you are, and why." : selectMode === "multi-select" ? "Pick your answers — then say why." : "Pick an answer — then say why."}</p>}
 			<form
-				className="border-t border-border/60 p-1.5"
+				className="lh-question-form border-t border-border/60 p-1.5"
 				onSubmit={(e) => {
 					e.preventDefault();
 					submit();
 				}}
 			>
+				{/* P1 (round 20): notebook working waiting to go with this answer. */}
+				<WorkingChip session={notebook} owner={owner} goesWith="your answer" />
 				<div
 					data-testid={qd.mode === "text" ? "answer-field" : "thinking-field"}
 					className="lh-question-input rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
 				>
-					<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-						{qd.mode === "text" ? "Your answer" : "YOUR THINKING"}
+					{/* E1 (round 16): the answer's reasoning has one name everywhere —
+					    "Your reasoning"; a reading note, when there is one, shows as
+					    attached (it goes with the answer, as before). */}
+					<div className="lh-input-label lh-reasoning-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+						<span>{qd.mode === "text" ? "Your answer" : "YOUR REASONING"}</span>
+						{(readingAttached ?? !!(readingThinkingNow?.() ?? readingThinking).trim()) && <span className="lh-reading-attached" data-testid="reading-attached">
+							<PaperclipIcon aria-hidden /><span className="lh-reading-attached-label">Thinking while reading is attached</span><span className="sr-only"> — it goes with this answer.</span>
+						</span>}
 					</div>
-					<CompactLearningInput dictation={dictationClaim ? dictation : undefined}>{qd.mode === "text" ? (
+					<CompactLearningInput dictation={dictationClaim ? dictation : undefined} micSlot={micSlot}>{qd.mode === "text" ? (
 						<PathInput
 							aria-label="Your answer"
 							value={text}
@@ -939,12 +1052,17 @@ function QuestionDockForm({
 								}
 							}}
 							placeholder="Type your answer…"
-							className="field-sizing-content lh-input max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
+							className={cn(
+								"field-sizing-content lh-input max-h-48 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground",
+								// T8 (round 17): the same answer area as a check's reasoning, so
+								// an explain card is never smaller than the check before it.
+								phase === "teach" ? "min-h-[4.5rem]" : "min-h-10",
+							)}
 						/>
 					) : (
 						<PathInput
 							ref={thinkingRef}
-							aria-label="Your thinking"
+							aria-label="Your reasoning"
 							value={thinking}
 							onValueChange={(value) => {
 								thinkingTextRef.current = value;
@@ -981,6 +1099,8 @@ function QuestionDockForm({
 						<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
 								{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 						</span>
+						{/* S1 (round 17): the mic, right before Submit. */}
+						<span ref={setMicSlot} className="lh-mic-slot" />
 						<Button
 							type="submit"
 							data-testid="question-send"
@@ -988,11 +1108,29 @@ function QuestionDockForm({
 							aria-label="Submit answer"
 							className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 						>
-							<span className="lh-wide-submit-label">Submit answer</span><CornerDownLeftIcon className="lh-phone-submit-icon" size={20} />
+							{/* P10 (round 14): one labelled Submit, the screen's one filled primary, on every device. */}<span className="lh-submit-label">Submit</span>
 						</Button>
 					</div>
 				</div>
 			</form>
 		</div>
 	);
+}
+
+/** B12 (round 18): opening a question puts the learner in it — focus goes to
+ *  its first answer control (the first option, or the answer field). On a
+ *  touch screen a text field is focused only when the keyboard is kept
+ *  closed (S3), so opening a question never raises the keyboard unasked;
+ *  the first option is always safe to focus. */
+export function focusFirstAnswerControl(root: HTMLElement | null) {
+	if (!root || typeof window === "undefined") return;
+	const usable = (el: HTMLElement | null) => !!el && el.getClientRects().length > 0 && !el.closest("[inert]") && (typeof el.checkVisibility !== "function" || el.checkVisibility({ visibilityProperty: true } as CheckVisibilityOptions));
+	const row = root.querySelector<HTMLElement>('[data-kbdrow="0"]');
+	const rowTarget = row ? (row.querySelector<HTMLElement>("input, [data-file-path-input]") ?? row) : null;
+	const field = root.querySelector<HTMLElement>('[data-testid="answer-field"] [data-file-path-input], [data-testid="practice-thinking-field"] [data-file-path-input], [data-testid="thinking-field"] [data-file-path-input]');
+	const target = usable(rowTarget) ? rowTarget! : usable(field) ? field! : null;
+	if (!target) return;
+	const text = target.matches("[data-file-path-input], input[type=text], textarea");
+	if (text && window.matchMedia?.("(pointer: coarse)").matches && !keyboardOff()) return;
+	target.focus({ preventScroll: true });
 }

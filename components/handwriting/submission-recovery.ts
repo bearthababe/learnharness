@@ -2,7 +2,10 @@ import { canonicalHandwriting, canonicalWritingInput, handwritingSha256, matchWr
 import type { AttachmentReview } from "./attachment.ts";
 import type { DurableDraft, EditorSnapshot, SubmissionAttempt, TransferDevice } from "./transfer-device.ts";
 
-type Dependencies = { device: TransferDevice; fetch: typeof fetch; review: () => Promise<AttachmentReview>; changed: () => void };
+/** D1 (round 20): a synchronous write-ahead copy of each durable draft. */
+export type DraftJournal = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+type Dependencies = { device: TransferDevice; fetch: typeof fetch; review: () => Promise<AttachmentReview>; changed: () => void; journal?: () => DraftJournal | null };
+type JournalRecord = { version: 1; generation: number; drafts: Record<string, DurableDraft> };
 export type ImageSend = (input: ChatInput, outcome: (value: WritingInputOutcome) => void) => Promise<unknown>;
 class ReviewedImagesChanged extends Error {
 	constructor() { super("Reviewed snapshots changed. Review them before submitting."); }
@@ -33,6 +36,17 @@ export class HandwritingSubmission {
 				if (!live || live.revision < draft.revision) this.drafts.set(draft.targetKey, draft);
 				this.durable.add(draft.targetKey);
 			}
+			// D1 (round 20): an edit whose device write had not landed when the
+			// page went away (a reload right after typing) is in the journal.
+			// It is newer than the device's copy of the same draft, so it wins
+			// and is written again; the restore then never brings back older text.
+			for (const draft of this.journaled()) {
+				const live = this.drafts.get(draft.targetKey);
+				if (live && (live.draftId !== draft.draftId || live.revision >= draft.revision)) continue;
+				this.drafts.set(draft.targetKey, draft);
+				this.durable.add(draft.targetKey);
+				this.queueDraft(draft);
+			}
 			if (saved.submissions.length > 1) throw new Error("Conflicting saved attempts");
 			this.attempt = saved.submissions[0];
 			if (this.attempt?.state === "prepared") {
@@ -51,18 +65,60 @@ export class HandwritingSubmission {
 		if (old && canonicalHandwriting(old.editor) === canonicalHandwriting(editor)) return old;
 		const draft: DurableDraft = { version: 1, chatId: this.chatId, targetKey, draftId: old?.draftId ?? crypto.randomUUID(), revision: (old?.revision ?? 0) + 1, editor: structuredClone(editor) };
 		this.drafts.set(targetKey, draft);
-		if (this.durable.has(targetKey)) this.queueDraft(draft);
+		if (this.durable.has(targetKey)) { this.journal(draft); this.queueDraft(draft); }
 		return draft;
+	}
+	// D1 (round 20): the journal (synchronous storage) holds each durable
+	// draft until its device write lands. The device stays the record; the
+	// journal only covers the moment between an edit and that write.
+	private journalStore(): DraftJournal | null { try { return this.deps.journal?.() ?? null; } catch { return null; } }
+	private journalKey() { return `lh:handwriting-draft-journal:${this.chatId}`; }
+	private journalRead(): JournalRecord | null {
+		try {
+			const raw = this.journalStore()?.getItem(this.journalKey());
+			const record = raw ? JSON.parse(raw) as JournalRecord : null;
+			return record?.version === 1 && typeof record.generation === "number" && record.drafts && typeof record.drafts === "object" ? record : null;
+		} catch { return null; }
+	}
+	private journalWrite(record: JournalRecord | null) {
+		try {
+			const store = this.journalStore();
+			if (!record || !Object.keys(record.drafts).length) store?.removeItem(this.journalKey());
+			else store?.setItem(this.journalKey(), JSON.stringify(record));
+		} catch { /* storage blocked or full: the device write alone carries the draft */ }
+	}
+	private journaled(): DurableDraft[] {
+		const record = this.journalRead();
+		if (!record) return [];
+		// A journal from an earlier generation belongs to a deleted session.
+		if (record.generation !== this.generation) { this.journalWrite(null); return []; }
+		return Object.values(record.drafts).filter(draft => draft?.chatId === this.chatId && typeof draft.targetKey === "string" && typeof draft.revision === "number");
+	}
+	private journal(draft: DurableDraft) {
+		if (this.generation === null || this.deleted) return;
+		const record = this.journalRead();
+		const drafts = record?.generation === this.generation ? record.drafts : {};
+		const old = drafts[draft.targetKey];
+		if (old && old.draftId === draft.draftId && old.revision > draft.revision) return;
+		this.journalWrite({ version: 1, generation: this.generation, drafts: { ...drafts, [draft.targetKey]: structuredClone(draft) } });
+	}
+	private unjournal(targetKey: string, draftId: string, throughRevision: number) {
+		const record = this.journalRead();
+		const old = record?.drafts[targetKey];
+		if (!record || !old || old.draftId !== draftId || old.revision > throughRevision) return;
+		const { [targetKey]: _gone, ...drafts } = record.drafts; void _gone;
+		this.journalWrite({ ...record, drafts });
 	}
 	private queueDraft(draft: DurableDraft) {
 		this.writes = this.writes.catch(() => {}).then(async () => {
 			if (this.deleted || this.generation === null) throw new Error("Recovery unavailable");
 			await this.deps.device.saveDraft(this.chatId, this.generation, draft);
+			this.unjournal(draft.targetKey, draft.draftId, draft.revision);
 		}).catch(() => { this.update("Couldn’t save your latest edits on this device. Keep this page open."); throw new Error("Draft not saved"); });
 		void this.writes.catch(() => {});
 	}
 	/** Enable durability before Attach's async work so newer edits get revisions. */
-	checkpoint(targetKey: string, editor: EditorSnapshot) { const draft = this.edit(targetKey, editor); this.durable.add(targetKey); return draft; }
+	checkpoint(targetKey: string, editor: EditorSnapshot) { const draft = this.edit(targetKey, editor); this.durable.add(targetKey); this.journal(draft); return draft; }
 	retainSpeech(targetKey: string, editor: EditorSnapshot, field: "text" | "thinking" | "readingThinking", text: string) {
 		const current = this.drafts.get(targetKey)?.editor ?? editor;
 		const previous = current[field] ?? "";
@@ -154,6 +210,9 @@ export class HandwritingSubmission {
 		if (!attempt || this.generation === null) return;
 		// Flush newer edits before terminal cleanup checks the stored revision.
 		await this.flush();
+		// D1: an accepted draft leaves the journal before the device drops it,
+		// so a reload in between can never bring the sent text back.
+		if (accepted) this.unjournal(attempt.targetKey, attempt.draftId, attempt.draftRevision);
 		await this.deps.device.finishSubmission(this.chatId, this.generation, attempt, accepted);
 		const draft = this.drafts.get(attempt.targetKey);
 		if (accepted && draft?.draftId === attempt.draftId && draft.revision <= attempt.draftRevision) { this.drafts.delete(attempt.targetKey); this.durable.delete(attempt.targetKey); }
@@ -191,5 +250,5 @@ export class HandwritingSubmission {
 		return "unknown";
 	}
 	dispose() { this.disposed = true; }
-	sessionDeleted() { this.deleted = true; this.disposed = true; }
+	sessionDeleted() { this.deleted = true; this.disposed = true; this.journalWrite(null); }
 }

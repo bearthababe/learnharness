@@ -21,3 +21,11 @@ export function useNotebookActivityDraft(session: NotebookSession | undefined, o
 	const part = draft?.parts.at(-1);
 	return { draft, text: part?.kind === "text" ? part.text : "", enabled: !!notebook?.view?.contextId, blocked: !!notebook?.sendBlocked, state };
 }
+
+/** D1 (round 20): whether the notebook already holds a plain-text copy of this
+ *  owner's draft (one text part, no working). While the notebook is closed,
+ *  edits keep such a copy current, so reopening it never shows older text. */
+export function plainNotebookCopy(session: NotebookSession | undefined, owner: TutorDraftOwner): boolean {
+	const draft = session?.tutor.getSnapshot().drafts.find((item) => sameDraftOwner(item.owner, owner));
+	return !!draft && draft.parts.length === 1 && draft.parts[0]!.kind === "text";
+}

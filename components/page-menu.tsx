@@ -1,0 +1,233 @@
+"use client";
+
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { BugIcon, ChevronRightIcon, EllipsisIcon } from "lucide-react";
+import { useBugPress } from "@/components/bug-capture";
+import { useFocusPlace } from "@/components/focus-mode";
+import { useMountedPrototypeSwitches } from "@/components/prototype-switch";
+import { usePrototypeView } from "@/components/device-prefs";
+import { tryoutDef, type TryoutId } from "@/components/tryout-registry";
+import { ArrowLeftRightIcon } from "lucide-react";
+
+/** L9 (round 19): one Prototype view switch in ⋯ — flips in place, the menu stays open. */
+function PrototypeMenuRow({ id }: { id: TryoutId }) {
+	const def = tryoutDef(id);
+	const value = def.useValue();
+	const index = Math.max(0, def.variants.findIndex(v => v.value === value));
+	const current = def.variants[index]!, next = def.variants[(index + 1) % def.variants.length]!;
+	return (
+		<button type="button" role="menuitem" className="lh-page-menu-row lh-page-menu-proto" data-testid={`page-menu-proto-${id}`} data-variant={current.value}
+			aria-label={`Prototype: ${def.title} is ${current.label}. Switch to ${next.label}.`} onClick={() => def.set(next.value)}>
+			<span className="lh-page-menu-label"><ArrowLeftRightIcon aria-hidden className="lh-page-menu-proto-icon" />{def.title}</span>
+			<span className="lh-page-menu-value">{current.label}</span>
+			<span aria-hidden className="lh-page-menu-proto-next">⇆</span>
+		</button>
+	);
+}
+import { MenuShell } from "@/components/menu-shell";
+import { useOneMenu } from "@/components/one-menu";
+import { useCardDismiss } from "@/components/card-dismiss";
+import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
+import { installKeyboardGuard, KEYBOARD_HINT_EVENT, setKeyboardOff, useKeyboardOff } from "@/components/device-prefs";
+import { useCoarsePointer, usePhoneLayout } from "@/components/use-phone-viewport";
+import { useSettingsDialog } from "@/components/settings/settings-dialog";
+import { ActivitySection, HELPERS_DESCRIPTION } from "@/components/activity-dock";
+
+/**
+ * The app menu (round 14, owner M1): one icon-only ⋯ at the right of the
+ * page bar on phones and tablets — on sessions and on Home. In order:
+ * - Keep keyboard closed (touch screens): one remembered switch for every
+ *   dictation field (M2); the fields show "type instead" while it is on;
+ * - Model, Reasoning, Usage: their values in full, each opening the same
+ *   card as before (the controls stay mounted but hidden, because the send
+ *   guard and the shortcuts read them);
+ * - Helpers (P14; one name everywhere, round 15 A5), opening its own sheet, and Settings (M5).
+ * Laptops keep the model row under the composer and the sidebar footer;
+ * the button is touch-only (CSS).
+ */
+type PageMenuState = { model: string | null; level: string | null; usage: string | null; importing: boolean; graphDisplay: boolean };
+let state: PageMenuState = { model: null, level: null, usage: null, importing: false, graphDisplay: false };
+const listeners = new Set<() => void>();
+function subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; }
+
+/** The model control and the stats bar publish what the menu shows. */
+export function publishPageMenu(next: Partial<PageMenuState>) {
+	const merged = { ...state, ...next };
+	if ((Object.keys(merged) as (keyof PageMenuState)[]).every((key) => merged[key] === state[key])) return;
+	state = merged;
+	for (const listener of listeners) listener();
+}
+
+export const OPEN_THINKING_EVENT = "lh:open-thinking-picker";
+export const OPEN_USAGE_EVENT = "lh:open-usage";
+/** Opens the Helpers sheet (the ⋯ row, or a session's failure note). */
+export const OPEN_HELPERS_EVENT = "lh:open-helpers";
+/** Home's rows (round 14, P5/P16): the import menu and Graph display open
+ *  from ⋯ on phones and tablets. */
+export const OPEN_IMPORT_EVENT = "lh:open-import";
+export const OPEN_GRAPH_DISPLAY_EVENT = "lh:open-graph-display";
+
+export type PageMenuRow = { id: string; label: string; value?: string; hint?: string; open: () => void };
+
+/** The page's own rows (Plan), shared with a secondary copy (the pane's ⋯). */
+let primaryTopRows: PageMenuRow[] = [];
+export function PageMenuButton({ extraRows = [], topRows: ownTopRows, secondary = false, testid }: {
+	/** Rows of this page placed after Usage (Home: import, graph display). */
+	extraRows?: PageMenuRow[];
+	/** Round 19: a second copy (the thinking pane's own ⋯) — the page's copy
+	 *  keeps the window-wide listeners (helpers, the keyboard hint). */
+	secondary?: boolean;
+	/** The trigger's own test id (a secondary copy: the pane's, Ideas'). */
+	testid?: string;
+	/** P3 (round 17): rows at the very top — a lesson's Plan. */
+	topRows?: PageMenuRow[];
+}) {
+	const values = useSyncExternalStore(subscribe, () => state, () => state);
+	const [open, setOpen] = useState(false);
+	const [helpers, setHelpers] = useState(false);
+	const trigger = useRef<HTMLButtonElement>(null);
+	const phone = usePhoneLayout();
+	const touch = useCoarsePointer();
+	const keyboardOff = useKeyboardOff();
+	const { open: openSettings } = useSettingsDialog();
+	const triggerTestid = testid ?? (secondary ? "pane-page-menu-button" : "page-menu-button");
+	useOneMenu("page-menu", open, () => setOpen(false));
+	useOneMenu("helpers-sheet", helpers, () => setHelpers(false));
+	useCardDismiss(open, () => setOpen(false), ['[data-testid="page-menu"]', `[data-testid="${triggerTestid}"]`]);
+	useCardDismiss(helpers, () => setHelpers(false), ['[data-testid="helpers-sheet"]', `[data-testid="${triggerTestid}"]`]);
+	const helpersPresence = usePhoneMenuPresence(helpers ? "helpers" : null, phone);
+	useEffect(() => { if (!secondary) installKeyboardGuard(); }, [secondary]);
+	// §0 (round 19, owner): 🐞 in the menu — a tap closes the menu, then
+	// captures; holding ~0.5 s captures with the menu still open.
+	const bugPress = useBugPress(() => setOpen(false));
+	const focusPlace = useFocusPlace();
+	const prototypeView = usePrototypeView();
+	const protoSwitches = useMountedPrototypeSwitches();
+	useEffect(() => { if (!secondary) primaryTopRows = ownTopRows ?? []; }, [secondary, ownTopRows]);
+	const topRows = ownTopRows ?? (secondary ? primaryTopRows : []);
+	// F4 (round 15): once, when a field stays without a keyboard, say where
+	// the switch is. It passes on its own and never moves anything.
+	const [keyboardHint, setKeyboardHint] = useState(false);
+	useEffect(() => {
+		let timer = 0;
+		if (secondary) return;
+		const show = () => { setKeyboardHint(true); window.clearTimeout(timer); timer = window.setTimeout(() => setKeyboardHint(false), 4500); };
+		window.addEventListener(KEYBOARD_HINT_EVENT, show);
+		return () => { window.removeEventListener(KEYBOARD_HINT_EVENT, show); window.clearTimeout(timer); };
+	}, [secondary]);
+	useEffect(() => {
+		if (secondary) return;
+		const onOpen = () => setHelpers(true);
+		window.addEventListener(OPEN_HELPERS_EVENT, onOpen);
+		return () => window.removeEventListener(OPEN_HELPERS_EVENT, onOpen);
+	}, [secondary]);
+	const choose = (open: () => void) => {
+		setOpen(false);
+		// The chosen card opens as this menu leaves (one menu at a time).
+		requestAnimationFrame(open);
+	};
+	const groups: PageMenuRow[][] = [
+		[
+			{ id: "model", label: "Model", value: values.model ?? "—", open: () => window.dispatchEvent(new CustomEvent("lh:kbd-open-model-picker")) },
+			{ id: "reasoning", label: "Reasoning", value: values.level ?? "—", open: () => window.dispatchEvent(new CustomEvent(OPEN_THINKING_EVENT)) },
+			...(values.usage ? [{ id: "usage", label: "Usage", value: values.usage, open: () => window.dispatchEvent(new CustomEvent(OPEN_USAGE_EVENT)) }] : []),
+			// Home (P5): the knowledge map's own actions, off the crowded bar.
+			...(values.importing ? [{ id: "import", label: "Import to knowledge map", open: () => window.dispatchEvent(new CustomEvent(OPEN_IMPORT_EVENT)) }] : []),
+			...(values.graphDisplay ? [{ id: "graph-display", label: "Graph display", open: () => window.dispatchEvent(new CustomEvent(OPEN_GRAPH_DISPLAY_EVENT)) }] : []),
+			...extraRows,
+		],
+		[
+			{ id: "helpers", label: "Helpers", hint: HELPERS_DESCRIPTION, open: () => setHelpers(true) },
+			{ id: "settings", label: "Settings", open: () => openSettings() },
+			// B17 (round 18, owner): the try-out options, one tap away for the
+			// owner — a developer tool, so it sits last, after Settings.
+			{ id: "tryouts", label: "Try-out designs", open: () => openSettings("tryouts") },
+		],
+	];
+	const row = (item: PageMenuRow) => (
+		<button key={item.id} type="button" role="menuitem" className="lh-page-menu-row" data-testid={`page-menu-${item.id}`} onClick={() => choose(item.open)}>
+			{item.hint ? <span className="lh-page-menu-switch-text">
+				<span className="lh-page-menu-label">{item.label}</span>
+				<span className="lh-page-menu-switch-hint">{item.hint}</span>
+			</span> : <span className="lh-page-menu-label">{item.label}</span>}
+			{/* Every row's arrow sits at its right end (P3), value or not. */}
+			<span className="lh-page-menu-value">{item.value ?? ""}</span>
+			<ChevronRightIcon aria-hidden />
+		</button>
+	);
+	let keyboardSwitch: ReactNode = null;
+	// P1 (round 19): with the right-edge tabs, Keys lives in its own tab instead.
+	if (touch && focusPlace !== "tabs") keyboardSwitch = (
+		// Round 15 (F2): the row is the same size on and off (a fixed subtitle,
+		// a fixed-width state word), so the menu never moves or resizes.
+		<button type="button" role="menuitemcheckbox" aria-checked={keyboardOff} className="lh-page-menu-row lh-page-menu-switch" data-testid="page-menu-keyboard"
+			onClick={() => setKeyboardOff(!keyboardOff)}>
+			<span className="lh-page-menu-switch-text">
+				<span className="lh-page-menu-label">Keep keyboard closed</span>
+				<span className="lh-page-menu-switch-hint">In lessons, practice and drill</span>
+			</span>
+			<span className="lh-page-menu-switch-state" aria-hidden>{keyboardOff ? "On" : "Off"}</span>
+			<span className="lh-switch" data-on={keyboardOff || undefined} aria-hidden><span /></span>
+		</button>
+	);
+	return (
+		<>
+			<button
+				ref={trigger}
+				type="button"
+				className="lh-nav-chip lh-page-menu-button lh-no-drag"
+				data-testid={triggerTestid}
+				aria-label="More options"
+				aria-haspopup="menu"
+				aria-expanded={open}
+				onClick={() => setOpen((v) => !v)}
+			>
+				<EllipsisIcon aria-hidden />
+			</button>
+			{open && (
+				<MenuShell anchorRef={trigger} testid="page-menu" preferredSide="down" align="right" fitVisualViewport={phone} cap={1}
+					phoneTriggerTestid={triggerTestid} onClose={() => setOpen(false)}
+					menuClass="lh-page-menu lh-glass rounded-xl border bg-card p-1.5 shadow-xl">
+					<div role="menu" aria-label="More options">
+						{/* L9 (round 19): Prototype view's switches for this screen, always reachable here. */}
+						{prototypeView && protoSwitches.length > 0 && <div role="group" aria-label="Prototype view" className="lh-page-menu-proto-group" data-testid="page-menu-proto">
+							<p className="lh-page-menu-proto-heading">Prototype view</p>
+							{protoSwitches.map(id => <PrototypeMenuRow key={id} id={id} />)}
+							<div role="separator" className="lh-page-menu-divider" />
+						</div>}
+						{/* P3 (round 17): a lesson's Plan heads the menu. */}
+						{topRows.length > 0 && <>{topRows.map(row)}<div role="separator" className="lh-page-menu-divider" /></>}
+						{keyboardSwitch}
+						{groups.map((group, index) => (
+							<Fragment key={index}>
+								{(index > 0 || keyboardSwitch) && <div role="separator" className="lh-page-menu-divider" />}
+								{index === groups.length - 1 && (
+									<button type="button" role="menuitem" className="lh-page-menu-row lh-page-menu-report" data-testid="page-menu-report"
+										title="Tap: report this screen · hold: report it with this menu showing" {...bugPress}>
+										<span className="lh-page-menu-label"><BugIcon aria-hidden className="lh-page-menu-bug" />Report a problem</span>
+										<span className="lh-page-menu-value" />
+										<ChevronRightIcon aria-hidden />
+									</button>
+								)}
+								{group.map(row)}
+							</Fragment>
+						))}
+					</div>
+				</MenuShell>
+			)}
+			{keyboardHint && touch && (
+				<div role="status" className="lh-keyboard-hint lh-glass" data-testid="keyboard-off-hint">
+					The keyboard is kept closed. Dictate with the mic, or switch it back on in ⋯.
+				</div>
+			)}
+			{helpersPresence.value && (
+				<MenuShell anchorTestid={triggerTestid} testid="helpers-sheet" preferredSide="down" align="right" fitVisualViewport={phone}
+					closing={helpersPresence.closing} onClosed={helpersPresence.onClosed}
+					phoneTriggerTestid={triggerTestid} onClose={() => setHelpers(false)}
+					menuClass="lh-helpers-sheet lh-glass w-[24rem] max-w-[calc(100vw-24px)] rounded-xl border bg-card p-1 shadow-xl">
+					<ActivitySection sheet />
+				</MenuShell>
+			)}
+		</>
+	);
+}

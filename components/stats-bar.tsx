@@ -6,20 +6,37 @@ import { formatTokens, formatUsd, planCostLabel, prettyModel } from "@/component
 import { ModelControl, catalogLimits, useModelCatalog } from "@/components/model-picker";
 import { MenuShell } from "@/components/menu-shell";
 import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
-import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
+import { useOneMenu } from "@/components/one-menu";
+import { OPEN_USAGE_EVENT, publishPageMenu } from "@/components/page-menu";
 
 function UsagePanel({ children, anchorRef, onClose, closing, onClosed }: { children: ReactNode; anchorRef: RefObject<HTMLDivElement | null>; onClose: () => void; closing: boolean; onClosed: () => void }) {
 	const phone = usePhoneLayout();
-	if (phone) return <MenuShell anchorRef={anchorRef} testid="stats-detail" preferredSide="up" align="left"
+	// Phones and tablets (R2; round 14, M4): Usage opens from the ⋯ app menu.
+	const touch = useTouchLayout();
+	if (touch) return <MenuShell anchorTestid="page-menu-button" testid="stats-detail" preferredSide="down" align="right"
 		closing={closing} onClosed={onClosed}
-		fitVisualViewport matchAnchorWidth onClose={onClose} phoneTriggerTestid="stats-summary"
-		menuClass="rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</MenuShell>;
+		fitVisualViewport={phone} onClose={onClose} phoneTriggerTestid="page-menu-button"
+		menuClass="w-[22rem] max-w-[calc(100vw-24px)] rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</MenuShell>;
 	return <div data-testid="stats-detail" className="absolute bottom-full left-1/2 z-40 mb-1.5 w-72 -translate-x-1/2 rounded-xl border bg-card p-3 text-xs shadow-xl">{children}</div>;
 }
 
 export function formatContextMeasurement(tokens: number | null, limit: number | null): string {
-	const numerator = tokens === null ? "?" : formatTokens(tokens);
+	// Round 14 (C6): nothing measured yet reads "—", never "? / 1M".
+	if (tokens === null) return "—";
+	const numerator = formatTokens(tokens);
 	return limit === null ? numerator : `${numerator} / ${formatTokens(limit)}`;
+}
+
+/** L2 (round 20): the composer's figure in plain words — how full the tutor's
+ *  memory of this conversation is (the exact tokens stay in the panel). With
+ *  replies but no figure yet (after a compaction) it says when it returns
+ *  (round 15, A7); never "? / …" (round 14, C6). */
+export function plainContextLabel(tokens: number | null, limit: number | null, replies: number): string {
+	if (tokens === null) return replies > 0 ? "Memory shown after the next reply" : "Not measured yet";
+	if (limit === null || limit <= 0) return `Memory ${formatTokens(tokens)} used`;
+	const percent = (tokens / limit) * 100;
+	return percent > 0 && percent < 1 ? "Memory under 1% full" : `Memory ${Math.min(100, Math.round(percent))}% full`;
 }
 
 /** CLI aliases have no global catalog limit: only this session's matching
@@ -85,6 +102,7 @@ export function StatsBar({
 	phonePlan?: ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
+	useOneMenu("usage", open, () => setOpen(false));
 	const phone = usePhoneLayout();
 	const presence = usePhoneMenuPresence(open ? "usage" : null, phone);
 	const [selectedModel, setSelectedModel] = useState<string | undefined>();
@@ -132,6 +150,24 @@ export function StatsBar({
 	const providers = pricing?.subscriptionProviders ?? subscriptionLabels(turns.map((turn) => turn.model));
 	const cliBilled = turns.some((turn) => turn.model.startsWith(`${CLAUDE_CODE_PROVIDER}:`));
 	const costLabel = planCostLabel(pricedCount > 0 ? cost : null, cliBilled ? [...providers, "CLI"] : providers);
+	// The phone page menu (owner O1) shows Usage and opens this card.
+	const hasUsage = !!chatId || turns.length > 0;
+	const contextKnown = contextTokens !== null;
+	// A7 (round 15): after a compaction (replies so far, no figure) the meter
+	// says when it comes back instead of disappearing; before any reply it is
+	// simply not measured yet. Never a "?" placeholder (C6).
+	const contextPending = turns.length > 0 ? "Updates after the next reply" : "Not measured yet";
+	const contextPlain = plainContextLabel(contextTokens, limit, turns.length);
+	const usageLabel = !hasUsage ? null
+		: contextKnown ? `${contextPlain} · ${costLabel === "—" ? "cost not reported" : costLabel}`
+		: costLabel === "—" ? "Not measured yet" : costLabel;
+	useEffect(() => { publishPageMenu({ usage: usageLabel }); }, [usageLabel]);
+	useEffect(() => () => publishPageMenu({ usage: null }), []);
+	useEffect(() => {
+		const onOpen = () => setOpen(true);
+		window.addEventListener(OPEN_USAGE_EVENT, onOpen);
+		return () => window.removeEventListener(OPEN_USAGE_EVENT, onOpen);
+	}, []);
 
 	return (
 		<div
@@ -164,12 +200,15 @@ export function StatsBar({
 				onClick={() => setOpen((o) => !o)}
 				aria-expanded={open}
 				data-testid="stats-summary"
+				// Figures at a glance (laptops) only when both are real: no "?"
+				// or "—" placeholders; otherwise the plain "Usage" label.
+				data-known={(turns.length > 0 && (pricedCount > 0 || subscription > 0 || cliBilled)) || undefined}
 				aria-label="Usage"
 				className="flex items-center gap-1.5 tabular-nums transition-colors hover:text-foreground"
 			>
 				<span className="lh-phone-usage-label">Usage</span>
-				<span className="lh-usage-numbers contents"><span data-testid="stats-context">
-					{contextLabel}
+				<span className="lh-usage-numbers contents"><span data-testid="stats-context" data-pending={!contextKnown || undefined}>
+					{contextPlain}
 				</span>
 				<span aria-hidden>·</span>
 				<span data-testid="stats-cost">{costLabel}</span>
@@ -182,9 +221,9 @@ export function StatsBar({
 						</div>
 						<div className="flex flex-col gap-1 text-muted-foreground">
 							<div className="flex justify-between gap-2">
-								<span>Context (last call)</span>
+								<span>Tutor&apos;s memory (last reply)</span>
 								<span className="tabular-nums text-card-foreground">
-									{contextLabel}
+									{contextKnown ? contextLabel : contextPending}
 								</span>
 							</div>
 							{selectedModel?.startsWith(`${CLAUDE_CODE_PROVIDER}:`) && (
@@ -192,7 +231,7 @@ export function StatsBar({
 							)}
 							<div className="flex justify-between gap-2">
 								<span>{subscription ? "Usage" : "Total cost"}</span>
-								<span className="tabular-nums text-card-foreground">{costLabel}</span>
+								<span className="tabular-nums text-card-foreground">{costLabel === "—" ? "Not reported by this provider" : costLabel}</span>
 							</div>
 							{cacheHitRate !== null && (
 								<div data-testid="stats-cache-hit-rate" className="flex justify-between gap-2">
@@ -241,6 +280,7 @@ export function StatsBar({
 			{dictationSlot && (
 				<div className="lh-dictation-slot flex min-w-0 flex-1 items-center justify-center">{dictationSlot}</div>
 			)}
+
 			{/* The model + thinking control — one controller for the conversation
 			    agents (prober/teacher); the record's `turns` above still folds
 			    the ACTUAL models billed, regardless of what the picker says. */}

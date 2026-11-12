@@ -19,19 +19,39 @@ import { useEffect } from "react";
  */
 export function useFieldCycle(fields: () => readonly HTMLElement[]) {
 	useEffect(() => {
-		const onCycle = () => {
+		const onCycle = (event: Event) => {
 			if (document.querySelector('[data-session-destination="notebook"]')) return;
-			const list = fields().filter((el) => el.isConnected);
+			// B11 (round 18): only fields that can take focus join the cycle. A field
+			// inside a question that is not open yet is in the DOM but hidden, and
+			// "moving" to it left focus where it was (Tab was stuck in the reading note).
+			const list = fields().filter(canTakeFocus);
 			if (list.length === 0) return;
 			const active = document.activeElement;
 			const idx = active ? list.findIndex((el) => el === active || el.contains(active)) : -1;
 			if (idx < 0) {
-				list[0]!.focus();
+				// Navigate in only from nowhere; a focused control keeps the
+				// browser's own Tab order.
+				if (active && active !== document.body && active !== document.documentElement) return;
+				event.preventDefault();
+				// L13 (round 19): in a question, the first stop is its first option,
+				// never "Type your own answer…" (a text field placed after them).
+				const first = list[0]!, question = first.closest('[data-testid="question-dock"]');
+				const option = question?.querySelector<HTMLElement>('[data-kbdrow="0"]');
+				if (option && canTakeFocus(option) && option.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING) { option.focus(); return; }
+				first.focus();
 				return;
 			}
+			// A lone field has nowhere to cycle: Tab moves on to its controls.
+			if (list.length < 2) return;
+			event.preventDefault();
 			list[(idx + 1) % list.length]!.focus();
 		};
 		window.addEventListener("lh:kbd-cycle-fields", onCycle);
 		return () => window.removeEventListener("lh:kbd-cycle-fields", onCycle);
 	}, [fields]);
+}
+
+function canTakeFocus(el: HTMLElement): boolean {
+	return el.isConnected && !el.closest("[inert], [aria-hidden='true']") && el.getClientRects().length > 0
+		&& (typeof el.checkVisibility !== "function" || el.checkVisibility({ visibilityProperty: true, contentVisibilityAuto: true } as CheckVisibilityOptions));
 }

@@ -40,22 +40,28 @@
 
 import type { ReactNode } from "react";
 import { SidebarToggle } from "@/components/sidebar";
+import { HomeButton } from "@/components/app-nav";
 
 export function TopBar({
 	drag = true,
 	onMouseDown,
+	onHome,
 	children,
 }: {
 	drag?: boolean;
 	onMouseDown?: React.MouseEventHandler<HTMLElement>;
+	/** On an overlay over Home (Ideas): Home closes the overlay. */
+	onHome?: () => void;
 	children?: ReactNode;
 }) {
 	return (
 		<header
 			onMouseDown={onMouseDown}
-			className={`${drag ? "lh-drag " : ""}lh-wco-gutter flex h-15 select-none items-center gap-3 border-b border-border px-3`}
+			className={`${drag ? "lh-drag " : ""}lh-topbar lh-wco-gutter flex h-15 select-none items-center gap-3 border-b border-border px-3`}
 		>
 			<SidebarToggle />
+			{/* Every bar: Sessions, then Home (owner O4). */}
+			<HomeButton onReturn={onHome} />
 			{children}
 		</header>
 	);

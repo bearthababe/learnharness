@@ -42,6 +42,26 @@ export interface ActivityJob extends JobRecord {
 	contextLimit: number | null;
 }
 
+/** One SETTLED background job (finished, failed or aborted), newest first —
+ *  the sidebar's short history, so outcomes stay findable after the live
+ *  blob disappears. Links back to its session; no result payload. */
+export interface ActivityRecentJob {
+	id: string;
+	kind: JobRecord["kind"];
+	status: JobRecord["status"];
+	chatId: string;
+	title: string;
+	updatedAt: string;
+	error?: string;
+	/** Retry (owner O2): a failed job that can run again from the panel. */
+	canRetry?: boolean;
+	/** Set once retried: the re-run's id. */
+	retriedBy?: string;
+}
+
+/** How many settled jobs the history keeps. */
+const RECENT_JOBS = 8;
+
 /** One extraction-pipeline JOB (title joined), oldest first. Per-chunk
  *  jobs (owner, 2026-09-28): a multi-chunk source owns SEVERAL rows — id
  *  is the unique job key (source id, or "src#i"), chatId stays the SOURCE
@@ -66,16 +86,35 @@ export interface ActivityExtraction {
  *  graph changed underneath me" (a merge landed, a deletion purged) and
  *  refetch clusters/layout. Reads never move it; the DELETE response
  *  returns the same stamp. */
+/** Follows a failed job's retry chain (bounded, cycle-safe): true once any
+ *  retry in it has completed. */
+function retrySucceeded(job: { retriedBy?: string }, byId: Map<string, { status: string; retriedBy?: string }>): boolean {
+	const seen = new Set<string>();
+	let next = job.retriedBy;
+	while (next && !seen.has(next)) {
+		seen.add(next);
+		const retry = byId.get(next);
+		if (!retry) return false;
+		if (retry.status === "done") return true;
+		next = retry.retriedBy;
+	}
+	return false;
+}
+
 export function activityFeed(): {
 	jobs: ActivityJob[];
 	extractions: ActivityExtraction[];
+	recent: ActivityRecentJob[];
 	graphRevision: number;
 } {
 	const chats = chatStore.listChats();
 	const limits = catalogContextLimits();
 	const jobs: ActivityJob[] = [];
+	const recent: ActivityRecentJob[] = [];
 	for (const chat of chats) {
-		for (const job of listJobs(chat.id)) {
+		const chatJobs = listJobs(chat.id);
+		const byId = new Map(chatJobs.map((item) => [item.id, item]));
+		for (const job of chatJobs) {
 			if (job.status === "running") {
 				jobs.push({
 					...job,
@@ -83,9 +122,26 @@ export function activityFeed(): {
 					title: chat.title ?? chat.id,
 					contextLimit: job.usage ? (limits.get(job.usage.model) ?? null) : null,
 				});
+			} else {
+				// Owner P8 (round 13): a failure whose retry finished — directly
+				// or after further retries — is resolved; only the successful
+				// retry's own row remains.
+				if (retrySucceeded(job, byId)) continue;
+				recent.push({
+					id: job.id,
+					kind: job.kind,
+					status: job.status,
+					chatId: chat.id,
+					title: chat.title ?? chat.id,
+					updatedAt: job.updatedAt ?? job.createdAt,
+					...(job.error ? { error: job.error } : {}),
+					...(job.status === "error" && !job.retriedBy && job.delivery?.status !== "pending" ? { canRetry: true } : {}),
+					...(job.retriedBy ? { retriedBy: job.retriedBy } : {}),
+				});
 			}
 		}
 	}
+	recent.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 	const extractions: ActivityExtraction[] = extractionStatuses().map((run) => ({
 		id: run.part ? `${run.chatId}#${run.part.i}` : run.chatId,
 		chatId: run.chatId,
@@ -104,6 +160,7 @@ export function activityFeed(): {
 	return {
 		jobs,
 		extractions: extractions.sort((a, b) => a.startedAt - b.startedAt),
+		recent: recent.slice(0, RECENT_JOBS),
 		graphRevision: graphRevision(),
 	};
 }

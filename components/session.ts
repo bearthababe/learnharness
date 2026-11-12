@@ -119,16 +119,20 @@ export function useChatSession({ chatId, initialMessages, initialError, initiall
 		[model],
 	);
 	const questionDraft = useCallback((questionKey: string) => model.questionDraft(questionKey), [model]);
+	const restoreStoredQuestionDrafts = useCallback(() => model.restoreStoredQuestionDrafts(), [model]);
 	const saveQuestionDraft = useCallback((questionKey: string, draft: Parameters<SessionModel["saveQuestionDraft"]>[1]) => model.saveQuestionDraft(questionKey, draft), [model]);
 	const setMessages = useCallback((record: LhMessage[], turnError?: string) => model.setMessages(record, turnError), [model]);
 	const adoptRecord = useCallback((record: LhMessage[]) => model.adoptRecord(record), [model]);
 	const stop = useCallback(() => model.stop(), [model]);
 	const clearError = useCallback(() => model.clearError(), [model]);
+	const discardUnsentText = useCallback((text: string) => model.discardUnsentText(text), [model]);
+	const discardUnsentThinking = useCallback((problemCallId: string, text: string) => model.discardUnsentThinking(problemCallId, text), [model]);
 	const resumeStream = useCallback(() => void model.resumeStream(), [model]);
 
 	return {
 		messages: state.messages,
 		nativeMessages: state.nativeMessages,
+		recordMessages: state.recordMessages,
 		hasConfirmedConversation: state.hasConfirmedConversation,
 		contextTokens: state.contextTokens,
 		status: state.status,
@@ -141,11 +145,14 @@ export function useChatSession({ chatId, initialMessages, initialError, initiall
 		dismissQuestion,
 		dismissProblem,
 		questionDraft,
+		restoreStoredQuestionDrafts,
 		saveQuestionDraft,
 		setMessages,
 		adoptRecord,
 		stop,
 		clearError,
+		discardUnsentText,
+		discardUnsentThinking,
 		resumeStream,
 		setReattachSettled,
 	};

@@ -8,12 +8,14 @@ import { ModelMenuList, ThinkingMenuList } from "@/components/settings/model-men
 import { composeSlotModel } from "@/components/settings/agent-section";
 import { MenuShell } from "@/components/menu-shell";
 import { usePhoneMenuPresence } from "@/components/phone-menu-presence";
-import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
 import { Hint } from "@/components/ui/hint";
 import { notifySettingsSaved, useSettingsSaved } from "@/components/settings-signal";
 import { useModelCatalog } from "@/components/model-catalog";
 export { useModelCatalog } from "@/components/model-catalog";
 import { defaultOrderLevel, populateLevel, THINKING_LABEL } from "@/components/thinking-default";
+import { useOneMenu } from "@/components/one-menu";
+import { OPEN_THINKING_EVENT, publishPageMenu } from "@/components/page-menu";
 
 /** provider:id → known contextWindow over the cached catalog, mirroring
  * the server's catalogContextLimits join. CLI aliases have no global
@@ -41,12 +43,19 @@ export function catalogLimits(catalog: Pick<ModelCatalogResponse, "models">): Ma
  */
 export function ModelControl({ chatId, onModelChange }: { chatId?: string; onModelChange?: (model: string | undefined) => void }) {
 	const phone = usePhoneLayout();
+	// Phones and tablets (round 14, M1/M4): the cards open from the ⋯ app
+	// menu they were chosen in; laptops keep them on the row's controls.
+	const touch = useTouchLayout();
 	const { catalog, refresh } = useModelCatalog();
 	const [models, setModels] = useState<ModelsSettings | undefined>();
+	// The settings record has been read (a first run has no models key at
+	// all, so `models` alone cannot say "read, and nothing chosen").
+	const [settingsRead, setSettingsRead] = useState(false);
 	// A successful read with no settings is a legacy session; undefined
 	// means no session record is known yet, not permission to inherit Strong.
 	const [session, setSession] = useState<{ settings?: ChatSettings }>();
 	const [open, setOpen] = useState<"model" | "thinking" | null>(null);
+	useOneMenu(`model-control:${open ?? ""}`, open !== null, () => setOpen(null));
 	const presence = usePhoneMenuPresence(open, phone);
 	const [error, setError] = useState<string | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -69,7 +78,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 		}
 		fetch("/api/settings")
 			.then((r) => r.json() as Promise<{ settings: { models?: ModelsSettings } | null }>)
-			.then((body) => setModels(body.settings?.models ?? undefined))
+			.then((body) => { setModels(body.settings?.models ?? undefined); setSettingsRead(true); })
 			.catch(() => {
 				/* the record fetch failing leaves the control read-only
 				   ("—" triggers, closed menus) — same posture as a
@@ -99,6 +108,9 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			} : undefined
 		: strong;
 	const effectiveId = override?.model?.id;
+	// First run (A16): settings are read and no model is set anywhere — say
+	// so in words. While a session record is still loading it stays "—".
+	const nothingChosen = settingsRead && !strong?.model && (!chatId || (session !== undefined && !session.settings?.model));
 	const effectiveProvider = override?.model?.provider;
 	useEffect(() => {
 		onModelChange?.(effectiveProvider && effectiveId ? `${effectiveProvider}:${effectiveId}` : undefined);
@@ -236,8 +248,19 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			refresh(); // mid-session key changes widen the menu (cache fix)
 		};
 		window.addEventListener("lh:kbd-open-model-picker", onOpenPicker);
-		return () => window.removeEventListener("lh:kbd-open-model-picker", onOpenPicker);
+		// The phone page menu's Reasoning row (owner O1).
+		const onOpenThinking = () => { setOpen("thinking"); setError(null); };
+		window.addEventListener(OPEN_THINKING_EVENT, onOpenThinking);
+		return () => {
+			window.removeEventListener("lh:kbd-open-model-picker", onOpenPicker);
+			window.removeEventListener(OPEN_THINKING_EVENT, onOpenThinking);
+		};
 	}, [refresh]);
+	// What the phone page menu shows: the model in full, never cut short.
+	const modelLabel = effectiveId ? prettyModel(effectiveId) : nothingChosen ? "Choose a model" : null;
+	const levelLabel = effectiveLevel === undefined ? (nothingChosen ? "Choose a model first" : null) : (THINKING_LABEL[effectiveLevel] ?? effectiveLevel);
+	useEffect(() => { publishPageMenu({ model: modelLabel, level: levelLabel }); }, [modelLabel, levelLabel]);
+	useEffect(() => () => publishPageMenu({ model: null, level: null }), []);
 
 	useEffect(() => {
 		const onCycleThinking = () => {
@@ -278,7 +301,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 
 	const modelMenu = <>
 		{error && <div className="mb-1.5 text-destructive">{error}</div>}
-		<ModelMenuList models={catalog?.models} effectiveId={effectiveId} effectiveProvider={effectiveProvider} onPick={pickModel} focusSearch={!phone}
+		<ModelMenuList models={catalog?.models} effectiveId={effectiveId} effectiveProvider={effectiveProvider} onPick={pickModel} focusSearch={!touch}
 			footer={catalog && catalog.models.length === 0 ? "No models — add a provider key in Keys" : chatId ? "This session's model" : "Strong tier — the default for new sessions"} />
 	</>;
 	return (
@@ -299,7 +322,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				// graph no longer bleeds through these pills.
 				className="flex items-center gap-1.5 rounded-full border bg-card/85 px-2.5 py-1 shadow-lg backdrop-blur transition-colors hover:border-border hover:bg-muted"
 			>
-				<span className="text-card-foreground">{effectiveId ? prettyModel(effectiveId) : "—"}</span>
+				<span className="text-card-foreground">{effectiveId ? prettyModel(effectiveId) : nothingChosen ? "Choose a model" : "—"}</span>
 				<span aria-hidden className="text-xs text-muted-foreground">▾</span>
 			</button>
 			</Hint>
@@ -330,7 +353,8 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				{/* Just the level — the button reads like the model button reads
 				   the model name (owner, stats-control round 1). */}
 				<span className="text-card-foreground">
-					{effectiveLevel === undefined ? "—" : (THINKING_LABEL[effectiveLevel] ?? effectiveLevel)}
+					{/* L2 (round 20): the chip names itself ("Reasoning low"), quietly. */}
+					{effectiveLevel === undefined ? (nothingChosen ? "Reasoning" : "—") : <><span className="lh-chip-key">Reasoning </span>{THINKING_LABEL[effectiveLevel] ?? effectiveLevel}</>}
 				</span>
 				<span aria-hidden className="text-xs text-muted-foreground">▾</span>
 			</button>
@@ -342,14 +366,16 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			{presence.value === "model" && (
 				<MenuShell
 					closing={presence.closing} onClosed={presence.onClosed}
-					anchorRef={containerRef}
+					// Phones (R2, round 13): the card opens from the page menu's
+					// More button it was chosen in, not from the hidden row.
+					{...(touch ? { anchorTestid: "page-menu-button" } : { anchorRef: containerRef })}
 					testid="model-menu"
-					phoneTriggerTestid="stats-model"
-					focusSearch={!phone}
+					phoneTriggerTestid={touch ? "page-menu-button" : "stats-model"}
+					focusSearch={!touch}
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
-					preferredSide="up"
-					menuClass="flex w-[22rem] flex-col rounded-xl border bg-card p-2 text-xs shadow-xl"
+					preferredSide={touch ? "down" : "up"}
+					menuClass="lh-model-menu flex w-[24rem] flex-col rounded-xl border bg-card p-2 text-[13.5px] shadow-xl"
 				>
 					{modelMenu}
 				</MenuShell>
@@ -358,12 +384,12 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 			{presence.value === "thinking" && (
 				<MenuShell
 					closing={presence.closing} onClosed={presence.onClosed}
-					anchorRef={containerRef}
+					{...(touch ? { anchorTestid: "page-menu-button" } : { anchorRef: containerRef })}
 					testid="thinking-menu"
-					phoneTriggerTestid="stats-thinking"
+					phoneTriggerTestid={touch ? "page-menu-button" : "stats-thinking"}
 					fitVisualViewport={phone}
 					onClose={() => setOpen(null)}
-					preferredSide="up"
+					preferredSide={touch ? "down" : "up"}
 					menuClass="flex w-44 flex-col gap-0.5 rounded-xl border bg-card p-2 text-xs shadow-xl"
 				>
 					<ThinkingMenuList

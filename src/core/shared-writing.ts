@@ -1,6 +1,15 @@
 import type { LhMessage } from "./native-messages.ts";
 import { z } from "zod";
-import { notebookPageIdSchema, type NotebookSource } from "./handwriting.ts";
+import { type NotebookSource } from "./handwriting.ts";
+
+/** B2 (round 18): an attachment's slot is the whole page (its page id) or one
+ * area of it (the page id + "~area_" + 8 hex). Each slot has its own pending
+ * head, so areas add up beside the page; the page's own slot keeps versioning
+ * (a newer snapshot of the whole page replaces the older one, and says so). */
+export const notebookSlotIdSchema = z.string().regex(/^page_(?:initial|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:~area_[0-9a-f]{8})?$/);
+/** The page an attachment slot belongs to. */
+export const slotPage = (slot: string): string => slot.split("~")[0]!;
+export const isAreaSlot = (slot: string): boolean => slot.includes("~area_");
 
 /** Original PNGs shared into a session. Submission is derived from the
  * session record, so a failed send cannot consume pending work. */
@@ -15,8 +24,8 @@ const writingId = z.string().regex(/^writing_[A-Za-z0-9_-]+$/);
 const revision = z.number().int().positive();
 export const writingIndexSchema = z.object({
 	version: z.literal(1),
-	pages: z.record(notebookPageIdSchema, z.object({ revision, writingId }).strict()),
-	committed: z.record(writingId, z.object({ pageId: notebookPageIdSchema, pageRevision: revision }).strict()),
+	pages: z.record(notebookSlotIdSchema, z.object({ revision, writingId }).strict()),
+	committed: z.record(writingId, z.object({ pageId: notebookSlotIdSchema, pageRevision: revision }).strict()),
 }).strict().superRefine((index, context) => {
 	for (const [pageId, head] of Object.entries(index.pages)) {
 		const receipt = index.committed[head.writingId];
@@ -32,7 +41,9 @@ export const writingIndexSchema = z.object({
 export type WritingIndex = z.infer<typeof writingIndexSchema>;
 export const emptyWritingIndex = (): WritingIndex => ({ version: 1, pages: {}, committed: {} });
 export type NotebookCapture = { writingId: string; pageId: string; expectedPageRevision: number; image: Uint8Array; source: NotebookSource };
-export type WritingSnapshot = { writing: SharedWriting[]; index: WritingIndex };
+/** `dismissed`: snapshots the learner removed from their next message. The
+ *  image and the editable page stay; they are only no longer pending. */
+export type WritingSnapshot = { writing: SharedWriting[]; index: WritingIndex; dismissed?: readonly string[] };
 export type NotebookCaptureReceipt = { writing: SharedWriting; committed: boolean; currentPageRevision: number };
 export type PageAttachments = Record<string, { revision: number; writingId: string; contentFingerprint: string }>;
 export class CaptureConflict extends Error {
@@ -49,14 +60,18 @@ export function commitNotebookCapture(index: WritingIndex, capture: Pick<Noteboo
 }
 export function pendingSharedWriting(snapshot: WritingSnapshot, messages: readonly LhMessage[]): SharedWriting[] {
 	const sent = submittedWritingIds(messages);
-	return snapshot.writing.filter(writing => !sent.has(writing.id) && (!writing.notebook || snapshot.index.pages[writing.notebook.pageId]?.writingId === writing.id));
+	const dismissed = new Set(snapshot.dismissed ?? []);
+	return snapshot.writing.filter(writing => !sent.has(writing.id) && !dismissed.has(writing.id) && (!writing.notebook || snapshot.index.pages[writing.notebook.pageId]?.writingId === writing.id));
 }
 export function pageAttachments(snapshot: WritingSnapshot): PageAttachments {
 	const byId = new Map(snapshot.writing.map(writing => [writing.id, writing]));
+	const dismissed = new Set(snapshot.dismissed ?? []);
 	return Object.fromEntries(Object.entries(snapshot.index.pages).map(([pageId, head]) => {
 		const writing = byId.get(head.writingId);
 		if (!writing?.notebook) throw new Error("Missing committed snapshot");
-		return [pageId, { ...head, contentFingerprint: writing.notebook.contentFingerprint }];
+		// A removed attachment never reads as "already attached": attaching the
+		// same page again makes a fresh snapshot at the next revision.
+		return [pageId, { ...head, contentFingerprint: dismissed.has(head.writingId) ? "dismissed" : writing.notebook.contentFingerprint }];
 	}));
 }
 

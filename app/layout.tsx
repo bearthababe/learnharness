@@ -12,6 +12,9 @@ import { ServerEventsProvider } from "@/components/server-events";
 import { AppearanceProvider } from "@/components/settings/appearance";
 import UpdateBanner from "@/components/update-banner";
 import { NotebookPreviewTools } from "@/components/notebook-preview-tools";
+import { BugCapture } from "@/components/bug-capture";
+import { BugRecorder } from "@/components/bug-recorder";
+import { InlineScript, SIDEBAR_BOOT_SCRIPT } from "@/components/inline-script";
 import { previewCookieBootstrap } from "@/lib/preview-cookie-bootstrap";
 
 const ui = localFont({ src: "../public/fonts/jetbrains-mono/JetBrainsMono.ttf", weight: "100 800", display: "swap", variable: "--font-jetbrains" });
@@ -40,8 +43,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 	const documentId = (await headers()).get("x-lh-document");
 	const previewCookies = previewCookieBootstrap(process.env.LH_PREVIEW_COOKIE_PREFIX);
 	return (
-		<html lang="en" className={`dark ${ui.variable} ${prose.variable}`}>
-			{previewCookies && <head><script id="lh-preview-cookies" dangerouslySetInnerHTML={{ __html: previewCookies }} /></head>}
+		// suppressHydrationWarning: the sidebar boot script marks <html> before React hydrates.
+		<html lang="en" className={`dark ${ui.variable} ${prose.variable}`} suppressHydrationWarning>
+			<head>
+				{/* Preview cookie isolation first: it patches document.cookie before any other script. */}
+				{previewCookies && <script id="lh-preview-cookies" dangerouslySetInnerHTML={{ __html: previewCookies }} />}
+				{/* B13 (round 18): the sidebar's remembered state before the first paint. */}
+				<InlineScript html={SIDEBAR_BOOT_SCRIPT} />
+			</head>
 			<body className="min-h-dvh antialiased">
 			<DeploymentActivity documentId={documentId} />
 			{/* The notification channel rides OUTSIDE everything: sidebar, dock,
@@ -57,6 +66,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 			</ServerEventsProvider>
 			{/* Auto-update banner (Wave C): fixed card, Electron-only pushes. */}
 			<UpdateBanner />
+			{/* §0 (round 19): 🐞 Report a problem — the client log, and the dialog
+			    every 🐞 entry opens (the ⋯ menu, the notebook's options, the
+			    laptop's sidebar, Settings → About). */}
+			<BugRecorder />
+			{/* Filing is on when LH_REPORTS_REPO is set (src/server/report-issues.ts reportsRepo). */}
+			<BugCapture filing={Boolean((process.env.LH_REPORTS_REPO || "").trim())} />
 			{process.env.LH_NOTEBOOK_PREVIEW === "1" && <NotebookPreviewTools />}
 		</body>
 		</html>

@@ -6,6 +6,8 @@ import { createRoot } from "react-dom/client";
 import { parseHTML } from "linkedom";
 import { ChainTableOverlay } from "../components/chain-table.tsx";
 import { ServerEventsProvider } from "../components/server-events.tsx";
+// Browsers have `self`; Next's Link schedules prefetch through it (round 12: every bar has a Home link).
+(globalThis as unknown as { self?: unknown }).self ??= globalThis;
 const dom = parseHTML("<html><head></head><body></body></html>");
 // linkedom omits selection; native browser behavior is covered by the UI check.
 dom.window.HTMLInputElement.prototype.select = function () {};
@@ -40,6 +42,8 @@ it("one Escape cancels inline source/folder editing without closing the overlay 
 			assert.equal(document.querySelector('[data-testid="source-name-input"]'), null);
 			assert.equal(closed, 0); assert.equal(writes, 0); assert.equal(windowEscapes, 0);
 		};
+		// E3 (round 16): open the row from its title, then its Rename action.
+		await act(async () => { (document.querySelector('[data-testid="cluster-toggle-chat"]') as HTMLElement).click(); });
 		await act(async () => { (document.querySelector('button[title="Rename"]') as HTMLElement).click(); });
 		await escape();
 		await act(async () => { (document.querySelector('[data-testid="add-source-folder"]') as HTMLElement).click(); });

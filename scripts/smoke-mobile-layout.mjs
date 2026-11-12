@@ -6,6 +6,13 @@ import assert from "node:assert/strict";
 import puppeteer from "puppeteer-core";
 import { checkSidebarSwipes } from "./sidebar-swipe-checks.mjs";
 
+/** P4 (round 17): Sessions closes where it opened — the Sessions chip for the
+ *  page under the bar, the sheet's own control otherwise. */
+async function closeSessions(page) {
+	if (await page.$eval('button[aria-label="Close sidebar"]', e => e.checkVisibility()).catch(() => false)) await page.click('button[aria-label="Close sidebar"]');
+	else await page.click('button[data-testid="open-sidebar"][aria-current="page"]');
+}
+
 const chatId = process.env.LH_SMOKE_CHAT_ID;
 assert.ok(chatId && /^[A-Za-z0-9_-]+$/.test(chatId), "Set LH_SMOKE_CHAT_ID to an existing teaching session.");
 const origin = process.env.LH_SMOKE_URL ?? "http://127.0.0.1:3000";
@@ -57,10 +64,12 @@ try {
 		if (window === window.top) localStorage.setItem("lh:sidebar-open", "1");
 	});
 	await page.goto(origin, { waitUntil: "networkidle2" });
-	await page.waitForSelector('[data-testid="import-notes"]');
+	await page.waitForSelector('[data-testid="page-menu-button"]');
 	for (const width of [320, 375, 430]) {
 		await page.setViewport({ width, height: 667, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-		const controls = await page.evaluate(() => [...document.querySelectorAll('.lh-home-toolbar-actions button, .lh-graph-search input, .lh-home-navigation button[aria-label="Open sidebar"]')].map(e => {
+		// Round 14 (P5): Import and Graph display live in ⋯ on touch screens;
+		// only the controls actually on the bar are measured.
+		const controls = await page.evaluate(() => [...document.querySelectorAll('.lh-home-toolbar-actions button, .lh-graph-search input, .lh-home-navigation button[data-testid="open-sidebar"], [data-testid="page-menu-button"]')].filter(e => e.checkVisibility()).map(e => {
 			const r = e.getBoundingClientRect();
 			const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
 			return { label: e.getAttribute("aria-label") ?? e.textContent.trim(), x: r.x, right: r.right, y: r.y, bottom: r.bottom, width: r.width, height: r.height, reachable: hit === e || e.contains(hit) };
@@ -69,18 +78,25 @@ try {
 	}
 	await page.setViewport({ width: 375, height: 667, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
 	await checkSidebarSwipes(page, check, origin, chatId);
-	await page.click('.lh-home-navigation button[aria-label="Open sidebar"]');
+	await page.click('.lh-home-navigation button[data-testid="open-sidebar"]');
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
-	await page.click('button[aria-label="Close sidebar"]');
+	await closeSessions(page);
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "true");
 	check(true, "Home toolbar leaves session navigation reachable");
-	if (await page.$('button[aria-label="Graph display settings"]')) {
-		await page.click('button[aria-label="Graph display settings"]');
-		check(await page.$eval('button[aria-label="Graph display settings"]', e => e.getAttribute("aria-expanded") === "true"), "Graph settings opens from the mobile action row");
-		await page.click('button[aria-label="Graph display settings"]');
+	const fromMore = async (row, menu) => {
+		await page.click('[data-testid="page-menu-button"]');
+		await page.waitForSelector(`[data-testid="page-menu-${row}"]`, { visible: true });
+		await page.click(`[data-testid="page-menu-${row}"]`);
+		await page.waitForSelector(`[data-testid="${menu}"]`, { visible: true });
+	};
+	if (await page.$('[data-testid="graph-settings"], button[aria-label="Graph display settings"]')) {
+		await fromMore("graph-display", "graph-display");
+		check(true, "Graph display opens from ⋯ on the phone");
+		await page.keyboard.press("Escape");
+		await page.waitForFunction(() => !document.querySelector('[data-testid="graph-display"]'));
 	}
-	await page.click('[data-testid="import-notes"]');
-	const [chooser] = await Promise.all([page.waitForFileChooser(), page.locator('[role="menuitem"]').filter(button => button.textContent === "Files").click()]);
+	await fromMore("import", "import-menu");
+	const [chooser] = await Promise.all([page.waitForFileChooser(), page.locator('[role="menuitem"]').filter(button => button.textContent === "Files…").click()]);
 	await chooser.cancel();
 	check(true, "Import notes opens the native file chooser (cancelled without an upload)");
 	await page.goto(`${origin}/chat/${chatId}`, { waitUntil: "networkidle2" });
@@ -92,15 +108,15 @@ try {
 	const sidebar = "aside[aria-hidden]";
 	const initiallyClosed = await page.$eval(sidebar, e => e.getAttribute("aria-hidden") === "true");
 	check(initiallyClosed, "Phone sessions panel starts closed despite desktop preference");
-	if (!initiallyClosed) await page.click('button[aria-label="Close sidebar"]');
+	if (!initiallyClosed) await closeSessions(page);
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getBoundingClientRect().width === 0);
 	const micSelector = await page.$('[data-testid="compact-dictation-toggle"]') ? '[data-testid="compact-dictation-toggle"]' : '[data-testid="dictation-toggle"]';
 	const mic = await rect(micSelector);
 	check(mic.width >= 44 && mic.height >= 44 && mic.x >= 0 && mic.right <= 375 && mic.y >= 0 && mic.bottom <= 667, "Dictation has a visible 44px touch target inside phone viewport");
-	check(await page.evaluate(() => [...document.querySelectorAll("summary")].filter(e => e.textContent.includes("Share from Concepts")).every(e => e.getBoundingClientRect().height === 0)), "Concepts setup is absent from phone composer");
+	check(await page.evaluate(() => [...document.querySelectorAll("summary")].filter(e => e.textContent.includes("Concepts app")).every(e => e.getBoundingClientRect().height === 0)), "Concepts setup is absent from phone composer");
 	check(await page.evaluate(() => [...document.querySelectorAll("nextjs-portal")].every(e => !e.shadowRoot?.querySelector('[data-nextjs-dev-tools-button]'))), "Next development indicator is disabled");
 	const before = await rect("[data-file-path-input]");
-	await page.click('button[aria-label="Open sidebar"]');
+	await page.click('button[data-testid="open-sidebar"]');
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
 	// Wait for the inherited desktop width transition if the regression is present.
 	await page.evaluate(async () => { await Promise.all(document.querySelector('aside[aria-hidden]').getAnimations().map(a => a.finished.catch(() => {}))); });
@@ -108,7 +124,9 @@ try {
 	const behind = await rect("[data-file-path-input]");
 	check(Math.abs(panel.width - 375) < 1 && panel.x === 0, "Open phone sessions panel covers full width");
 	check(Math.abs(before.width - behind.width) < 1, "Opening sessions does not squeeze chat");
-	check(await page.$eval("main", e => e.inert), "Chat is inert beneath mobile navigation");
+	// P4 (round 17): the sessions page under the bar keeps the bar live; the
+	// lesson beneath it is inert.
+	check(await page.evaluate(() => !!document.querySelector("[data-file-path-input]")?.closest("[inert]")), "Chat is inert beneath mobile navigation");
 	check(await page.$eval(sidebar, e => e.contains(document.activeElement)), "Focus enters mobile navigation");
 	check(await page.evaluate(() => {
 		const list = document.querySelector('[data-testid="session-list"]');
@@ -139,16 +157,16 @@ try {
 	// A stable opener box can still be covered by the moving session title
 	// during the closing animation. Wait until its centre actually receives taps.
 	await page.waitForFunction(() => {
-		const opener = document.querySelector('button[aria-label="Open sidebar"]');
+		const opener = document.querySelector('button[data-testid="open-sidebar"]');
 		const r = opener.getBoundingClientRect();
 		const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
 		return hit === opener || opener.contains(hit);
 	});
-	await page.locator('button[aria-label="Open sidebar"]').click();
+	await page.locator('button[data-testid="open-sidebar"]').click();
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getAttribute("aria-hidden") === "false");
-	await page.click('button[aria-label="Close sidebar"]');
+	await closeSessions(page);
 	await page.waitForFunction(() => document.querySelector('aside[aria-hidden]')?.getBoundingClientRect().width === 0);
-	await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Open sidebar");
+	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "open-sidebar");
 	check(true, "Dismissing navigation restores focus to its opener");
 	await page.type("[data-file-path-input]", "Mobile layout draft check");
 	await page.waitForFunction(() => getComputedStyle(document.body).position === "fixed");
@@ -164,7 +182,7 @@ try {
 	check(await gesture('[data-smoke-history]', "top", 30), "Focused history top edge cannot move the page");
 	check(await gesture('[data-smoke-history]', "bottom", -30), "Focused history bottom edge cannot move the page");
 	check(!await gesture('[data-smoke-history]', "middle", -30), "Focused history keeps native scrolling within its content");
-	check(await gesture('button[aria-label="Open sidebar"]', "top", 30), "Header gesture is contained while composing");
+	check(await gesture('button[data-testid="open-sidebar"]', "top", 30), "Header gesture is contained while composing");
 	await page.locator("[data-file-path-input]").fill("Mobile layout draft check\n" + "A line of working\n".repeat(25));
 	check(await gesture("[data-file-path-input]", "top", 30), "Composer top-edge gesture cannot move the page");
 	check(await gesture("[data-file-path-input]", "bottom", -30), "Composer bottom-edge gesture cannot move the page");

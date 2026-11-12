@@ -119,7 +119,7 @@ describe("AgentSection (thin SSR)", () => {
 			assert.ok(html.includes(`data-testid="slot-model-${slot}"`), `${slot} model trigger`);
 			assert.ok(html.includes(`data-testid="slot-thinking-${slot}"`), `${slot} thinking trigger`);
 			// the roster hint rides every row
-			assert.ok(html.includes("The main model for your sessions") || slot !== "strong", "strong roster");
+			assert.ok(html.includes("Teaches you and checks what you already know") || slot !== "strong", "strong roster (plain-language role)");
 		}
 		// Fix wave: no Default anywhere — an unpicked slot reads "—"
 		// (the owner's no-factory-fallback language), and no menu
@@ -287,17 +287,20 @@ describe("KeysSection (thin SSR)", () => {
 });
 
 describe("AppearanceSection (thin SSR)", () => {
-	it("mode is rendered DISABLED — dark-only this wave, no lying control", () => {
+	it("R11 (round 16): everyday choices first, no not-yet-available controls, exact values under Advanced", () => {
 		const html = renderToStaticMarkup(<AppearanceSection appearance={undefined} onSectionChange={() => {}} />);
-		assert.ok(tagOf(html, "select-mode").includes("disabled"), "mode select disabled");
-		assert.ok(html.includes("Coming soon"));
-		// The whole row dims, graph-view style (the control never adds its own).
-		assert.ok(tagOf(html, "row-mode").includes("opacity-40"), "mode row dims whole");
+		assert.ok(!html.includes("Coming soon"), "no control that does not work yet");
+		assert.ok(!html.includes('data-testid="row-mode"'));
+		const at = (id: string) => html.indexOf(`data-testid="${id}"`);
+		assert.ok(at("row-prose-size") < at("row-font") && at("row-font") < at("row-background") && at("row-background") < at("appearance-advanced"));
+		assert.ok(html.includes('data-testid="prose-size-preview"'), "the size shows on a sample");
+		assert.ok(html.includes('aria-label="Ink (default)"'), "swatches name the default");
+		assert.ok(at("appearance-advanced") < at("input-background"), "the hex field sits under Advanced");
 	});
 
 	it("hex inputs carry the factory placeholders; prose size resolves against the factory", () => {
 		const html = renderToStaticMarkup(<AppearanceSection appearance={undefined} onSectionChange={() => {}} />);
-		assert.ok(html.includes(`placeholder="#141414"`));
+		assert.ok(html.includes(`placeholder="#131218"`));
 		// The reading font is the searchable dropdown now (font-menu
 		// wave): its trigger shows the factory family; the emphasis
 		// inks' empty state is "same as text" (the old hexes died with

@@ -1,16 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRightIcon, CornerDownLeftIcon } from "lucide-react";
+import { ChevronRightIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
 import { finishDictation, dictationCheckpoint, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { explanationHasContent, type NotebookInputFields } from "@/src/core";
 import type { NotebookSession } from "./notebook-session";
-import { useNotebookActivityDraft } from "./notebook-activity-draft";
+import { plainNotebookCopy, useNotebookActivityDraft } from "./notebook-activity-draft";
+import { WorkingChip } from "./working-chip";
+import { useDeploymentActivity } from "./deployment-activity";
 import { useHandwritingEditor } from "./handwriting/submission";
 import type { SharedWriting } from "@/src/core";
-import { CompactLearningInput } from "@/components/compact-learning-input";
+import { CompactLearningInput, useMicSlot } from "@/components/compact-learning-input";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { PathInput } from "@/components/path-input";
 import { cn } from "@/lib/utils";
@@ -36,6 +38,8 @@ import { cn } from "@/lib/utils";
  */
 
 export interface PracticeDockProps {
+	/** The session: its unsent working is kept on this device per problem. */
+	chatId?: string;
 	dictation?: Dictation;
 	hasSharedWriting?: boolean;
 	/** The active problem's tool-call id (submissions target it). */
@@ -58,14 +62,32 @@ export interface PracticeDockProps {
 	compactionRunning?: boolean;
 }
 
-export function PracticeDock({ dictation, problemCallId, input, expanded, onExpand, onSubmit, onEscape, notebook, compactionRunning = false, hasSharedWriting = false }: PracticeDockProps) {
+/** "Your thinking" per problem, kept on this device until it is sent (the
+ *  notebook store owns it instead wherever a notebook context exists). */
+const practiceDraftKey = (chatId: string, problemCallId: string) => `lh:practice-draft:${chatId}:${problemCallId}`;
+function readPracticeDraft(chatId: string, problemCallId: string): string {
+	try { return localStorage.getItem(practiceDraftKey(chatId, problemCallId)) ?? ""; } catch { return ""; }
+}
+function writePracticeDraft(chatId: string, problemCallId: string, text: string): void {
+	try {
+		if (text.trim()) localStorage.setItem(practiceDraftKey(chatId, problemCallId), text);
+		else localStorage.removeItem(practiceDraftKey(chatId, problemCallId));
+	} catch { /* storage blocked: this view keeps it */ }
+}
+
+export function PracticeDock({ chatId, dictation, problemCallId, input, expanded, onExpand, onSubmit, onEscape, notebook, compactionRunning = false, hasSharedWriting = false }: PracticeDockProps) {
 	const owner = { kind: "practice" as const, problemCallId };
 	const owned = useNotebookActivityDraft(notebook, owner);
+	const [micSlot, setMicSlot] = useMicSlot();
 	const [thinking, setThinking] = useState("");
 	// Ref MIRRORS the field ("nothing gets lost", the question-dock
 	// discipline): a submit resuming after `await finishDictation()` reads
 	// the tail, never a stale closure.
 	const thinkingRef = useRef("");
+	// Busy signal (main's updater): "Your thinking" for this problem, whether
+	// the card is open or folded to its bar — the notebook's copy where one
+	// owns it, else this field's.
+	useDeploymentActivity("unsent-practice", () => owned.enabled ? explanationHasContent(owned.draft?.parts ?? []) : !!thinkingRef.current.trim());
 	const sending = useRef(false);
 	const activated = useRef<string | null>(null);
 	useEffect(() => {
@@ -76,7 +98,22 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 	const update = (text: string) => {
 		thinkingRef.current = text; setThinking(text);
 		if (owned.enabled) notebook!.tutor.updateText(owner, text);
+		else {
+			if (chatId) writePracticeDraft(chatId, problemCallId, text);
+			// D1 (round 20): a plain notebook copy stays current while the notebook is closed.
+			if (plainNotebookCopy(notebook, owner)) notebook!.tutor.updateText(owner, text);
+		}
 	};
+	// Back from another session or a reload: the kept working returns, into
+	// an empty box only (a saved notebook draft or newer typing wins).
+	const restoredFor = useRef<string | null>(null);
+	useEffect(() => {
+		if (!chatId || restoredFor.current === problemCallId) return;
+		restoredFor.current = problemCallId;
+		if (owned.enabled || thinkingRef.current.trim()) return;
+		const kept = readPracticeDraft(chatId, problemCallId);
+		if (kept.trim()) { thinkingRef.current = kept; setThinking(kept); }
+	}, [chatId, problemCallId, owned.enabled]);
 	const alive = useRef(true), current = useRef({ problemCallId, compactionRunning, hasSharedWriting }); current.current = { problemCallId, compactionRunning, hasSharedWriting };
 	useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 	if (owned.enabled && owned.draft) thinkingRef.current = owned.text;
@@ -150,6 +187,8 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 
 			{/* The learner's half: Enter SENDS (owner round 2, 2026-10-05);
 			    Shift+Enter makes a newline — less to decide about. */}
+			{/* P1 (round 20): notebook working waiting to go with this answer. */}
+			<WorkingChip session={notebook} owner={owner} goesWith="your answer" />
 			<div
 				data-testid="practice-thinking-field"
 				className={cn("lh-question-input m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50", !expanded && "lh-practice-collapsed")}
@@ -157,7 +196,7 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 				<div className="lh-input-label px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					YOUR THINKING
 				</div>
-				<CompactLearningInput dictation={dictation}><PathInput
+				<CompactLearningInput dictation={dictation} micSlot={micSlot}><PathInput
 					aria-label="Your thinking"
 					value={owned.enabled ? owned.text : thinking}
 					onValueChange={(value) => {
@@ -192,6 +231,8 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 					<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
 						{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
 					</span>
+					{/* S1 (round 17): the mic, right before Submit. */}
+					<span ref={setMicSlot} className="lh-mic-slot" />
 					<Button
 						type="button"
 						data-testid="practice-send"
@@ -200,7 +241,7 @@ export function PracticeDock({ dictation, problemCallId, input, expanded, onExpa
 						onClick={() => submit()}
 						className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
 					>
-						<span className="lh-wide-submit-label">Submit thinking</span><CornerDownLeftIcon className="lh-phone-submit-icon" size={20} />
+						{/* P10 (round 14): one labelled Submit, the screen's one filled primary, on every device. */}<span className="lh-submit-label">Submit</span>
 					</Button>
 				</div>
 			</div>

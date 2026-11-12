@@ -2,9 +2,45 @@
 
 // Corner arc selectively carried forward from c663dcecd22a. Drawing values and
 // the shared Pencil release-inside activation path belong to the notebook.
-import { useState, type ButtonHTMLAttributes, type CSSProperties } from "react";
-import { EllipsisIcon, Undo2Icon, Redo2Icon, XIcon } from "lucide-react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { GripHorizontalIcon, Minimize2Icon, Undo2Icon, Redo2Icon, XIcon } from "lucide-react";
 import { HANDWRITING_HIGHLIGHT_COLOUR } from "@/src/core";
+import { useWheelLook } from "@/components/device-features";
+
+/**
+ * Where the wheel sits on the page (round 14, T2): any corner or the middle
+ * of either side, chosen by dragging its grip (it snaps to the nearest
+ * spot) or with the arrow keys on the grip. Remembered on this device;
+ * "Reset wheel position" (notebook ⋯) puts it back. A wheel moved to the
+ * left replaces the old left-handed option; an older left-handed choice
+ * starts it top-left.
+ */
+export type WheelSpot = `${"top" | "middle" | "bottom"}-${"left" | "right"}`;
+const SPOT_KEY = "lh:writing-wheel-spot";
+const spotListeners = new Set<() => void>();
+function readWheelSpot(): WheelSpot {
+	try {
+		const raw = window.localStorage.getItem(SPOT_KEY);
+		if (raw && /^(top|middle|bottom)-(left|right)$/.test(raw)) return raw as WheelSpot;
+		return window.localStorage.getItem("lh:writing-tools-side") === "left" ? "top-left" : "top-right";
+	} catch { return "top-right"; }
+}
+export function setWheelSpot(spot: WheelSpot | null) {
+	try {
+		if (spot) window.localStorage.setItem(SPOT_KEY, spot);
+		else { window.localStorage.removeItem(SPOT_KEY); window.localStorage.removeItem("lh:writing-tools-side"); }
+	} catch { /* this view only */ }
+	for (const listener of spotListeners) listener();
+}
+export function useWheelSpot(): WheelSpot {
+	return useSyncExternalStore((listener) => { spotListeners.add(listener); return () => { spotListeners.delete(listener); }; }, readWheelSpot, () => "top-right");
+}
+const ROWS = ["top", "middle", "bottom"] as const;
+/** The spot nearest a wheel centred at (x, y) on a page of this size. */
+export function nearestWheelSpot(x: number, y: number, width: number, height: number): WheelSpot {
+	const row = y < height / 3 ? "top" : y > (height * 2) / 3 ? "bottom" : "middle";
+	return `${row}-${x < width / 2 ? "left" : "right"}`;
+}
 
 type Tool = "pen" | "highlighter" | "eraser";
 export type ToolHandlers = (name: string, action: () => void) => Pick<ButtonHTMLAttributes<HTMLButtonElement>, "onPointerDown" | "onPointerUp" | "onPointerCancel" | "onLostPointerCapture" | "onClick">;
@@ -13,9 +49,11 @@ type Props = {
 	sizes: readonly { name: string; value: number }[]; size: number; dimPaper: boolean;
 	disabled: boolean; handlers: ToolHandlers;
 	selectTool: (tool: Tool) => void; selectColour: (colour: string) => void; selectSize: (size: number) => void;
-	undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean; clear: () => void; togglePaper: () => void;
+	undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean;
+	/** Palette layout: the compact wheel (default) or the vertical arc. */
+	variant?: "wheel" | "arc";
 };
-const TOOLS = [{ id: "pen", label: "Pen" }, { id: "highlighter", label: "Highlighter" }, { id: "eraser", label: "Eraser" }] as const;
+const TOOLS = [{ id: "pen", label: "Pen", short: "Pen" }, { id: "highlighter", label: "Highlighter", short: "Highlight" }, { id: "eraser", label: "Eraser", short: "Eraser" }] as const;
 function ToolGlyph({ tool, colour, dim }: { tool: Tool; colour: string; dim: boolean }) {
 	const tip: CSSProperties = { fill: colour, filter: dim ? "var(--lh-dim-paper-filter)" : undefined };
 	return <svg viewBox="0 0 36 44" className="hw-toolGlyph" aria-hidden="true">
@@ -31,33 +69,158 @@ function ToolGlyph({ tool, colour, dim }: { tool: Tool; colour: string; dim: boo
 		</>}
 	</svg>;
 }
+const FOLD_KEY = "lh:writing-wheel-folded";
+const isFoldedTitle = (variant: string, folded: boolean) => variant === "wheel" && folded;
 export function HandwritingToolbar(p: Props) {
-	const [expanded, setExpanded] = useState(false), [pageOpen, setPageOpen] = useState(false);
+	const [expanded, setExpanded] = useState(false);
 	const label = TOOLS.find(t => t.id === p.tool)!.label;
-	return <div className="hw-overlay" role="toolbar" aria-label="Writing tools" data-testid="notebook-toolbar" data-variant="arc">
-		<div className="hw-pageActions">
-			<button type="button" className="hw-pageTrigger" aria-label="Page options" aria-expanded={pageOpen} disabled={p.disabled} {...p.handlers("Page options", () => setPageOpen(v => !v))}><EllipsisIcon size={20} /><span>Page</span></button>
-			{pageOpen && <div className="hw-pageMenu" role="group" aria-label="Page actions">
-				<button type="button" aria-pressed={p.dimPaper} data-testid="notebook-paper-mode" {...p.handlers("Dim paper", () => { p.togglePaper(); setPageOpen(false); })}>{p.dimPaper ? "Dim paper" : "White paper"}<span>{p.dimPaper ? "On" : "Off"}</span></button>
-				<button type="button" aria-label="Clear" {...p.handlers("Clear", () => { p.clear(); setPageOpen(false); })}>Clear page<span>Undoable</span></button>
-			</div>}
-		</div>
-		<div className="hw-arc">
+	const variant = p.variant ?? "wheel";
+	// The wheel can fold down to a small bar (remembered on this device), so
+	// the paper is all page; its button shows the current tool and unfolds it.
+	// R8 (round 16): the wheel starts as a compact puck showing the current
+	// tool; a tap opens it, and the choice is remembered on this device.
+	const [folded, setFolded] = useState(true);
+	useEffect(() => { try { setFolded(window.localStorage.getItem(FOLD_KEY) !== "0"); } catch { /* default: the puck */ } }, []);
+	const spot = useWheelSpot(), look = useWheelLook();
+	const arcRef = useRef<HTMLDivElement>(null), overlayRef = useRef<HTMLDivElement>(null);
+	const drag = useRef<{ id: number; x: number; y: number } | null>(null);
+	const [dragging, setDragging] = useState(false);
+	// R10 (round 15): the grip introduces itself once, on this device, and the
+	// note goes as soon as the wheel is moved or a few seconds pass.
+	const [gripHint, setGripHint] = useState(false);
+	useEffect(() => {
+		if (variant !== "wheel") return;
+		let timer = 0;
+		try {
+			if (window.localStorage.getItem("lh:wheel-grip-introduced")) return;
+			window.localStorage.setItem("lh:wheel-grip-introduced", "1");
+		} catch { return; }
+		setGripHint(true);
+		timer = window.setTimeout(() => setGripHint(false), 7000);
+		return () => window.clearTimeout(timer);
+	}, [variant]);
+	// Escape closes the tool settings (one layer at a time).
+	useEffect(() => {
+		if (!expanded) return;
+		const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setExpanded(false); } };
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [expanded]);
+	const fold = (value: boolean) => {
+		setFolded(value); setExpanded(false);
+		try { window.localStorage.setItem(FOLD_KEY, value ? "1" : "0"); } catch { /* this view only */ }
+	};
+	// The grip moves only the wheel: it holds its own pointer, so a drag
+	// never reaches the paper and never makes a mark.
+	const gripDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+		if (p.disabled || (event.pointerType === "mouse" && event.button !== 0)) return;
+		event.preventDefault(); event.stopPropagation();
+		event.currentTarget.setPointerCapture(event.pointerId);
+		drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
+		setDragging(true); setExpanded(false); setGripHint(false);
+	};
+	const gripMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+		const start = drag.current; if (!start || start.id !== event.pointerId || !arcRef.current) return;
+		event.preventDefault();
+		arcRef.current.style.translate = `${event.clientX - start.x}px ${event.clientY - start.y}px`;
+	};
+	const gripEnd = (event: ReactPointerEvent<HTMLButtonElement>, keep: boolean) => {
+		const start = drag.current; if (!start || start.id !== event.pointerId) return;
+		drag.current = null; setDragging(false);
+		const arc = arcRef.current, page = overlayRef.current;
+		if (arc && page && keep) {
+			const a = arc.getBoundingClientRect(), r = page.getBoundingClientRect();
+			if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) setWheelSpot(nearestWheelSpot(a.left + a.width / 2 - r.left, a.top + a.height / 2 - r.top, r.width, r.height));
+		}
+		if (arc) arc.style.translate = "";
+	};
+	// The puck moves like the grip — drag it anywhere; a plain tap opens it.
+	const puck = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+	const puckSkipClick = useRef(false);
+	const puckDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+		if (p.disabled || event.pointerType === "pen" || (event.pointerType === "mouse" && event.button !== 0)) return;
+		puck.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+	};
+	const puckMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+		const start = puck.current; if (!start || start.id !== event.pointerId || !arcRef.current) return;
+		if (!start.moved) {
+			if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < 8) return;
+			start.moved = true; setDragging(true);
+			try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* synthetic */ }
+		}
+		event.preventDefault();
+		arcRef.current.style.translate = `${event.clientX - start.x}px ${event.clientY - start.y}px`;
+	};
+	const puckUp = (event: ReactPointerEvent<HTMLButtonElement>, keep: boolean) => {
+		const start = puck.current; if (!start || start.id !== event.pointerId) return;
+		puck.current = null;
+		if (!start.moved) return;
+		setDragging(false); puckSkipClick.current = true;
+		const arc = arcRef.current, page = overlayRef.current;
+		if (arc && page && keep) {
+			const a = arc.getBoundingClientRect(), r = page.getBoundingClientRect();
+			setWheelSpot(nearestWheelSpot(a.left + a.width / 2 - r.left, a.top + a.height / 2 - r.top, r.width, r.height));
+		}
+		if (arc) arc.style.translate = "";
+	};
+	const gripKey = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+		const [row, side] = spot.split("-") as [typeof ROWS[number], "left" | "right"];
+		const index = ROWS.indexOf(row);
+		const next: WheelSpot | null = event.key === "ArrowLeft" ? `${row}-left` : event.key === "ArrowRight" ? `${row}-right`
+			: event.key === "ArrowUp" ? `${ROWS[Math.max(0, index - 1)]!}-${side}` : event.key === "ArrowDown" ? `${ROWS[Math.min(2, index + 1)]!}-${side}` : null;
+		if (!next) return;
+		event.preventDefault();
+		if (next !== spot) setWheelSpot(next);
+	};
+	const isFolded = variant === "wheel" && folded;
+	const current = p.sizes.find(item => item.value === p.size)?.name;
+	const hubTitle = isFoldedTitle(variant, folded) ? `${label}${current ? ` · ${current}` : ""} — show writing tools` : `${label}${current ? ` · ${current}` : ""} — size and ink`;
+	return <div ref={overlayRef} className="hw-overlay" role="toolbar" aria-label="Writing tools" data-testid="notebook-toolbar" data-variant={variant}
+		data-spot={variant === "wheel" ? spot : undefined} data-look={variant === "wheel" ? look : undefined} data-dragging={dragging || undefined}>
+		<div ref={arcRef} className="hw-arc" data-folded={isFolded || undefined}>
 			<svg className="hw-arcTrack" viewBox="0 0 112 260" aria-hidden="true"><path d="M98 22C-7 58-7 193 98 235" /></svg>
-			{TOOLS.map(tool => <button key={tool.id} type="button" className={`hw-toolButton hw-arc_${tool.id}`} aria-label={tool.label} aria-pressed={p.tool === tool.id} disabled={p.disabled}
-				{...p.handlers(tool.label, () => { p.selectTool(tool.id); setExpanded(p.tool !== tool.id || !expanded); })}>
+			{TOOLS.map(tool => <button key={tool.id} type="button" data-ring-tool={tool.id} className={`hw-toolButton hw-arc_${tool.id}`} aria-label={tool.label} title={tool.label} aria-pressed={p.tool === tool.id} disabled={p.disabled}
+				{...p.handlers(tool.label, () => { p.selectTool(tool.id); setExpanded(variant === "wheel" ? false : p.tool !== tool.id || !expanded); })}>
 				<ToolGlyph tool={tool.id} colour={tool.id === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.colour} dim={p.dimPaper} /><span className="hw-toolName">{tool.label}</span>
+				{variant === "wheel" && <span className="hw-ringLabel" aria-hidden="true">{tool.short}</span>}
 			</button>)}
-			<div className="hw-arcUndo"><button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled || !p.canUndo} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} /></button><button type="button" className="hw-iconButton" aria-label="Redo" title="Redo" disabled={p.disabled || !p.canRedo} {...p.handlers("Redo", p.redo)}><Redo2Icon size={19} /></button></div>
+			{variant === "wheel" && (() => {
+				const tap = p.handlers(isFolded ? "Show writing tools" : "Tool settings", () => { if (puckSkipClick.current) { puckSkipClick.current = false; return; } if (isFolded) fold(false); else setExpanded(v => !v); });
+				return <button type="button" className="hw-wheelHub" data-testid={isFolded ? "wheel-puck" : "wheel-hub"} title={hubTitle} aria-label={isFolded ? `Writing tools: ${label}. Open the wheel` : "Tool settings"} aria-expanded={isFolded ? false : expanded} disabled={p.disabled}
+					{...tap}
+					onPointerDown={event => { tap.onPointerDown?.(event); if (isFolded) puckDown(event); }}
+					onPointerMove={isFolded ? puckMove : undefined}
+					onPointerUp={event => { tap.onPointerUp?.(event); if (isFolded) puckUp(event, true); }}
+					onPointerCancel={event => { tap.onPointerCancel?.(event); if (isFolded) puckUp(event, false); }}
+					onKeyDown={isFolded ? gripKey : undefined}>
+				{isFolded
+					? <ToolGlyph tool={p.tool} colour={p.tool === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.colour} dim={p.dimPaper} />
+					: <span className="hw-wheelSwatch" style={{ backgroundColor: p.tool === "highlighter" ? HANDWRITING_HIGHLIGHT_COLOUR : p.tool === "eraser" ? "transparent" : p.colour, filter: p.dimPaper ? "var(--lh-dim-paper-filter)" : undefined }} data-tool={p.tool} />}
+				{/* The ring names the tools; the hub says the current size (R6).
+				    Folded, the button names the tool it will write with. */}
+				<span className="hw-wheelSize">{isFolded ? TOOLS.find(t => t.id === p.tool)!.short : current ?? TOOLS.find(t => t.id === p.tool)!.short}</span>
+			</button>;
+			})()}
+			{variant === "wheel" && !isFolded && <button type="button" className="hw-wheelGrip" data-testid="wheel-grip" aria-label="Move the wheel" title="Drag to move the wheel · arrow keys move it too" disabled={p.disabled}
+				onPointerDown={gripDown} onPointerMove={gripMove} onPointerUp={event => gripEnd(event, true)} onPointerCancel={event => gripEnd(event, false)} onLostPointerCapture={event => gripEnd(event, true)} onKeyDown={gripKey}>
+				<GripHorizontalIcon aria-hidden size={18} />
+			</button>}
+			{variant === "wheel" && gripHint && !isFolded && <p className="hw-gripHint" role="status" data-testid="wheel-grip-hint">Drag the handle to move the wheel to any corner or side</p>}
+			{/* T7 (round 17): folding the wheel back is on the wheel itself, labelled. */}
+			{variant === "wheel" && !isFolded && <button type="button" className="hw-iconButton hw-wheelFold" data-testid="fold-wheel" aria-label="Fold the wheel to the small puck" title="Fold the wheel" disabled={p.disabled}
+				{...p.handlers("Fold the wheel", () => fold(true))}><Minimize2Icon aria-hidden size={18} /><span className="hw-ringLabel" aria-hidden="true">Fold</span></button>}
+			<div className="hw-arcUndo"><button type="button" className="hw-iconButton" aria-label="Undo" title="Undo" disabled={p.disabled || !p.canUndo} {...p.handlers("Undo", p.undo)}><Undo2Icon size={19} />{variant === "wheel" && <span className="hw-ringLabel" aria-hidden="true">Undo</span>}</button><button type="button" className="hw-iconButton" aria-label="Redo" title="Redo" disabled={p.disabled || !p.canRedo} {...p.handlers("Redo", p.redo)}><Redo2Icon size={19} />{variant === "wheel" && <span className="hw-ringLabel" aria-hidden="true">Redo</span>}</button></div>
 			{expanded && <div className="hw-arcInspector">
 				<div className="hw-inspectorTitle"><span>{label}</span><button type="button" aria-label="Close tool settings" {...p.handlers("Close tool settings", () => setExpanded(false))}><XIcon size={16} /></button></div>
+				{variant === "wheel" && <div role="group" aria-label="Tool" className="hw-toolNames" data-testid="wheel-tool-names">{TOOLS.map(tool => <button key={tool.id} type="button" aria-pressed={p.tool === tool.id} disabled={p.disabled}
+					{...p.handlers(`${tool.label} tool`, () => p.selectTool(tool.id))}>{tool.label}</button>)}</div>}
 				<div role="group" aria-label={`${label} size`} className="hw-sizes">{p.sizes.map((item, index) => <button key={`${p.tool}-${item.name}`} type="button" className="hw-sizeChoice" aria-label={`${item.name} ${p.tool}`} aria-pressed={p.size === item.value} disabled={p.disabled}
 					{...p.handlers(`${item.name} ${p.tool}`, () => { p.selectSize(item.value); setExpanded(false); })}>
 					<span className="hw-sizeMark" style={{ width: p.tool === "pen" ? 20 : 7 + index * 5, height: p.tool === "pen" ? 1.5 + index * 2 : 7 + index * 5 }} /><span>{item.name}</span>
 				</button>)}</div>
 				{p.tool === "pen" && <><div className="hw-sectionLabel">Ink</div><div role="group" aria-label="Pen colour" className="hw-colours">{p.colours.map(item => <button key={item.name} type="button" className="hw-colourChoice" aria-label={`${item.name} pen`} aria-pressed={p.colour === item.value} disabled={p.disabled}
 					{...p.handlers(`${item.name} pen`, () => { p.selectColour(item.value); setExpanded(false); })}><span style={{ backgroundColor: item.value, filter: p.dimPaper ? "var(--lh-dim-paper-filter)" : undefined }} /></button>)}</div></>}
-				<p>Tap the active tool to adjust.</p>
+				{variant !== "wheel" && <p>Tap the active tool to adjust.</p>}
 			</div>}
 		</div>
 	</div>;

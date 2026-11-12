@@ -4,9 +4,9 @@
  * Keyboard shortcuts (shortcut wave A, 2026-09-17) — the single document-level
  * keydown listener. Owns the pieces that belong to no surface in particular:
  *
- * - Tab is DEAD: browser tab-focus navigation is abandoned by owner decision
- *   (2026-09-17). Tab is suppressed everywhere (preventDefault, no-op) and
- *   Shift+Tab cycles the thinking level instead.
+ * - Tab follows the browser's focus order, with two app refinements: from
+ *   nowhere it lands in the surface's first text field, and between several
+ *   text fields it cycles them (see field-cycle.ts). Shift+Tab is native.
  * - Esc is a layered dismiss: topmost popover first (popovers stopPropagation
  *   on their own Esc — usePopoverDismiss + ModelControl), then dictation
  *   CANCEL (discard the transcript, owner 2026-09-17 round 3), then abort of
@@ -43,6 +43,42 @@ import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 // spelling here is how the ⌘B bug happened.
 export { kbdEventForAction };
 
+/** R9 (round 16): the page's Tab order, region by region. Anything a
+ *  region does not contain (menus, panes, dialogs) keeps the browser's order. */
+const TAB_REGIONS: readonly string[] = [
+	".lh-skip-links",
+	"header.lh-topbar, .lh-session-head, .lh-home-navigation, .lh-home-toolbar, .lh-map-toggle",
+	".lh-sessions-panel",
+	".lh-dock-overlay, .lh-home-dock",
+	".lh-app-main",
+];
+// The composer (index 3) comes after the lesson (index 4 matches the rest of
+// the page): the walk visits regions in this order.
+const REGION_ORDER = [0, 1, 2, 4, 3];
+const TABBABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
+function regionOf(el: Element): number {
+	for (let i = 0; i < TAB_REGIONS.length; i++) if (el.closest(TAB_REGIONS[i]!)) return i;
+	return -1;
+}
+export function moveFocusByRegion(step: 1 | -1): boolean {
+	if (typeof document === "undefined") return false;
+	const active = document.activeElement as HTMLElement | null;
+	const inPage = !active || active === document.body || active === document.documentElement;
+	if (!inPage && regionOf(active!) < 0) return false;
+	if (active?.closest('[role="menu"], [role="listbox"], [data-lh-menu]')) return false;
+	const list = [...document.querySelectorAll<HTMLElement>(TABBABLE)]
+		.filter((el) => el.tabIndex >= 0 && regionOf(el) >= 0 && !el.closest("[inert], [aria-hidden='true']") && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== "hidden")
+		.map((el, index) => ({ el, index, rank: REGION_ORDER.indexOf(regionOf(el)) }))
+		.sort((a, b) => a.rank - b.rank || a.index - b.index)
+		.map((item) => item.el);
+	if (list.length === 0) return false;
+	const at = inPage ? -1 : list.findIndex((el) => el === active || el.contains(active!));
+	if (!inPage && at < 0) return false;
+	const next = at < 0 ? (step === 1 ? list[0] : list.at(-1)) : list[(at + step + list.length) % list.length];
+	next?.focus();
+	return !!next;
+}
+
 export function KeyboardShortcuts() {
 	const router = useRouter();
 	const [cheatOpen, setCheatOpen] = useState(false);
@@ -64,15 +100,25 @@ export function KeyboardShortcuts() {
 			// the default action runs after dispatch, so suppressing it here
 			// works from any focus.
 			if (e.key === "Tab") {
-				e.preventDefault();
-				if (e.shiftKey) window.dispatchEvent(new CustomEvent("lh:kbd-cycle-thinking"));
-				// Plain Tab cycles the active surface's text fields (owner,
-				// keyboard round 2026-10-06) — forward-only, wrapping; each
-				// composer-bearing page answers with its own chain. The quiz
-				// dock's rows↔thinking claim stops propagation at document
+				// Tab keeps the browser's focus order except where the app has
+				// something better: from nowhere it lands in the surface's
+				// first text field, and between several text fields it cycles
+				// them. A surface claims the key by cancelling the cycle event;
+				// unclaimed (one field, a focused control, an open modal),
+				// Tab moves on normally so every control stays reachable. The
+				// quiz dock's rows↔thinking claim stops propagation at document
 				// level, so a claimed Tab never reaches this dispatch.
-				else if (!e.metaKey && !e.ctrlKey && !e.altKey)
-					window.dispatchEvent(new CustomEvent("lh:kbd-cycle-fields"));
+				if (e.metaKey || e.ctrlKey || e.altKey) return;
+				if (document.querySelector('[aria-modal="true"]')) return;
+				if (!e.shiftKey) {
+					const cycle = new CustomEvent("lh:kbd-cycle-fields", { cancelable: true });
+					window.dispatchEvent(cycle);
+					if (cycle.defaultPrevented) { e.preventDefault(); return; }
+				}
+				// R9 (round 16): past the text fields, Tab walks the whole page
+				// in one order — header, sessions, lesson, composer — and wraps
+				// to the start, never looping inside the composer.
+				if (moveFocusByRegion(e.shiftKey ? -1 : 1)) e.preventDefault();
 				return;
 			}
 
@@ -117,7 +163,7 @@ export function KeyboardShortcuts() {
 			// ride the window event for the mounted surface to catch.
 			switch (action) {
 				case "new-session":
-					handlersRef.current.router.push("/chat/new");
+					handlersRef.current.router.push("/?mode=teach");
 					break;
 				case "open-settings":
 					// Settings-app wave: the dialog is the surface, the URL is
@@ -143,6 +189,21 @@ export function KeyboardShortcuts() {
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
 	}, [cheatOpen]);
+
+	// Focus rings follow how focus moved: Tab navigation shows them, any
+	// pointer press hides them again — so a clicked control never lights up
+	// later just because other keys (quiz arrows, typing) were pressed.
+	useEffect(() => {
+		const root = document.documentElement;
+		const onKey = (e: KeyboardEvent) => { if (e.key === "Tab") root.dataset.focusSource = "keyboard"; };
+		const onPointer = () => { delete root.dataset.focusSource; };
+		window.addEventListener("keydown", onKey, true);
+		window.addEventListener("pointerdown", onPointer, true);
+		return () => {
+			window.removeEventListener("keydown", onKey, true);
+			window.removeEventListener("pointerdown", onPointer, true);
+		};
+	}, []);
 
 	return <CheatSheet open={cheatOpen} onClose={() => setCheatOpen(false)} />;
 }

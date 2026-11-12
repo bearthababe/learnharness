@@ -644,7 +644,7 @@ export class GraphCanvasRenderer {
 	/** World rect the bitmap covers (drawImage target coords). */
 	private regionRect: { minX: number; minY: number; w: number; h: number } | null = null;
 	/** Region labels: cluster centroid + hue, computed at splat build. */
-	private regionMeta: { id: string; label: string | null; lines: string[] | null; cx: number; cy: number; hue: number }[] = [];
+	private regionMeta: { id: string; label: string | null; lines: string[] | null; cx: number; cy: number; hue: number; members?: number }[] = [];
 	private regionTuning: RegionTuning = DEFAULT_REGION_TUNING;
 	private physicsTuning: PhysicsTuning = DEFAULT_PHYSICS_TUNING;
 	/** Gravity center for the live sim (graph bbox centroid at setData). */
@@ -865,6 +865,22 @@ export class GraphCanvasRenderer {
 		this.visible = visible;
 		this.geoVersion++; // member visibility changes hulls + paths
 		this.markDirty();
+	}
+
+	/** Center the camera on one node, zooming in enough for its label to
+	 *  read, and return its container position (the details card's anchor).
+	 *  Applied through the zoom behavior like every camera move. Null when
+	 *  the node is unknown or the canvas has no size yet. */
+	focusNode(id: string, yFraction = 0.5): { x: number; y: number } | null {
+		const node = this.data?.nodes.find((n) => n.id === id);
+		if (!node || this.viewW <= 0 || this.viewH <= 0) return null;
+		const k = Math.max(this.transform.k, this.kFit * 2.5);
+		const y = this.viewH * yFraction;
+		select(this.canvas).call(
+			this.zoomBehavior.transform,
+			zoomIdentity.translate(this.viewW / 2 - node.x * k, y - node.y * k).scale(k),
+		);
+		return { x: this.viewW / 2, y };
 	}
 
 	/** Frame the whole graph (padding included). Keeps the camera on later
@@ -1427,6 +1443,7 @@ export class GraphCanvasRenderer {
 					cy: sumY / members,
 					hue: clusterHue(cluster.id),
 					lines: null,
+					members,
 				});
 			}
 		});
@@ -1735,12 +1752,31 @@ export class GraphCanvasRenderer {
 			// Screen px ÷ k = world units — the lines stay evenly spaced
 			// at a constant on-screen pitch at any zoom.
 			const lineH = (settings.clusterLabelSize * REGION_LABEL_LINE_HEIGHT) / k;
-			for (const rm of this.regionMeta) {
+			// Labels never pile up: the largest regions place first, and a
+			// label that would overlap one already placed waits until the
+			// zoom separates them (font is screen-constant, distances grow).
+			// A thin halo in the page colour keeps letters off the hull lines.
+			const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
+			const pad = 6 / k;
+			const order = [...this.regionMeta].sort((a, b) => (b.members ?? 0) - (a.members ?? 0));
+			ctx.lineJoin = "round";
+			ctx.lineWidth = 4 / k;
+			ctx.strokeStyle = "rgba(19, 18, 24, 0.85)";
+			for (const rm of order) {
 				if (!rm.lines) continue;
-				ctx.fillStyle = `hsla(${rm.hue}, 55%, 78%, 0.85)`;
+				const w = Math.max(...rm.lines.map((line) => ctx.measureText(line).width));
+				const h = rm.lines.length * lineH;
+				// Keep the label inside the viewport (world bounds of the view).
+				const viewX0 = -this.transform.x / k + pad, viewX1 = (this.viewW - this.transform.x) / k - pad;
+				const cx = viewX1 - viewX0 > w ? Math.min(Math.max(rm.cx, viewX0 + w / 2), viewX1 - w / 2) : rm.cx;
+				const box = { x0: cx - w / 2 - pad, y0: rm.cy - h / 2 - pad, x1: cx + w / 2 + pad, y1: rm.cy + h / 2 + pad };
+				if (placed.some((b) => box.x0 < b.x1 && box.x1 > b.x0 && box.y0 < b.y1 && box.y1 > b.y0)) continue;
+				placed.push(box);
+				ctx.fillStyle = `hsla(${rm.hue}, 60%, 82%, 0.95)`;
 				const firstOffset = (-(rm.lines.length - 1) / 2) * lineH;
 				for (let i = 0; i < rm.lines.length; i++) {
-					ctx.fillText(rm.lines[i]!, rm.cx, rm.cy + firstOffset + i * lineH);
+					ctx.strokeText(rm.lines[i]!, cx, rm.cy + firstOffset + i * lineH);
+					ctx.fillText(rm.lines[i]!, cx, rm.cy + firstOffset + i * lineH);
 				}
 			}
 			ctx.restore();

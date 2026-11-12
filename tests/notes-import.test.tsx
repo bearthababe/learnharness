@@ -69,7 +69,7 @@ for (const outcome of ["completed", "failed", "partial", "aborted", "busy"] as c
 	globalThis.fetch = async () => Response.json({ results: [result] });
 	await mount(); await submit([file]);
 	assert.equal(current.importing, false); assert.equal(starts, 1); assert.equal(finishes, 1);
-	assert.deepEqual(Object.keys(current).sort(), ["errors", "importing", "notices", "onImportFiles"]);
+	assert.deepEqual(Object.keys(current).sort(), ["done", "errors", "importing", "notices", "onImportFiles"]);
 	const html = host!.innerHTML;
 	assert.doesNotMatch(html, /<button|<section|<ul|border|bg-card|rounded|shadow|Retry|Dismiss|Import complete/);
 	if (outcome === "completed") { assert.equal(html, ""); assert.deepEqual(current.errors, []); }
@@ -148,16 +148,15 @@ it("graph menu clearly distinguishes extraction from lesson material, above unch
 	host = document.createElement("div"); document.body.appendChild(host); root = createRoot(host);
 	await act(async () => { root!.render(<NotesImportControl importing={false} onImportFiles={(files) => selected.push(files)} />); });
 	const trigger = host.querySelector<HTMLButtonElement>('[data-testid="import-notes"]')!;
-	assert.equal(trigger.textContent, "Extract files…");
+	assert.equal(trigger.textContent, "Import to knowledge map", "round 14 (P16): named by what it does");
 	assert.ok(trigger.querySelector(".lucide-waypoints"));
 	await act(async () => { trigger.click(); });
 	const menu = host.querySelector('[role="menu"]')!;
-	assert.equal(menu.getAttribute("aria-label"), "Extract files into the graph");
-	assert.equal(menu.querySelector("p")!.textContent, "For lessons, attach material to a session instead.");
+	assert.equal(menu.getAttribute("aria-label"), "Import to knowledge map");
+	assert.equal(menu.querySelector("p")!.textContent, "Adds the ideas in your notes or PDFs to your knowledge map. For material you want in one lesson, attach it inside that session instead.");
 	assert.equal(menu.getAttribute("aria-describedby"), menu.querySelector("p")!.id);
-	assert.ok(menu.className.includes("w-52"), "compact width wraps the short hint");
-	assert.deepEqual(Array.from(menu.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent), ["Files", "Folder"]);
-	assert.equal(menu.firstElementChild!.textContent, "For lessons, attach material to a session instead.");
+	assert.deepEqual(Array.from(menu.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent), ["Files…", "A folder…"]);
+	assert.equal(menu.firstElementChild!.textContent, menu.querySelector("p")!.textContent, "the explanation comes first");
 	const inputs = host.querySelectorAll<HTMLInputElement>('input[type="file"]');
 	let filesClicks = 0, folderClicks = 0;
 	inputs[0]!.click = () => { filesClicks++; }; inputs[1]!.click = () => { folderClicks++; };
@@ -170,8 +169,8 @@ it("graph menu clearly distinguishes extraction from lesson material, above unch
 });
 it("busy graph action names extraction, and preserves the enabled queue picker", () => {
 	const html = renderToStaticMarkup(<NotesImportControl importing onImportFiles={() => {}} />);
-	assert.match(html, /Extracting…/);
-	assert.doesNotMatch(html, /Import notes|Importing…|disabled/);
+	assert.match(html, /Importing…/);
+	assert.doesNotMatch(html, /Import notes|Extracting…|disabled/);
 });
 
 it("alerts/notices stay plain and escaped", () => {

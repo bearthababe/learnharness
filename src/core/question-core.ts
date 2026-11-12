@@ -525,9 +525,28 @@ export interface QuestionFormDraft {
 	confidenceIndex: number;
 }
 
+/** The learner's unsent work in a question's draft (the deployment busy
+ *  signal, merged from main): a pick, any text, a moved confidence, the
+ *  reading note, or an answer that was not sent. Stored drafts keep the
+ *  selection as an array; live ones as a Set. */
+export function questionDraftHasWork(draft: QuestionDraft | undefined): boolean {
+	if (!draft) return false;
+	if (draft.unsent || draft.readingThinking?.trim()) return true;
+	const form = draft.form;
+	if (!form) return false;
+	const selected = form.selection?.selected as Set<number> | readonly number[] | undefined;
+	const picked = selected instanceof Set ? selected.size > 0 : Array.isArray(selected) && selected.length > 0;
+	return picked || !!form.selection?.otherSelected || !!form.selection?.dontKnow || !!form.thinking?.trim() || !!form.other?.trim() || !!form.text?.trim()
+		|| (form.confidenceIndex ?? DEFAULT_CONFIDENCE_INDEX) !== DEFAULT_CONFIDENCE_INDEX;
+}
+
 export interface QuestionDraft {
 	form?: QuestionFormDraft;
 	readingThinking?: string;
+	/** The last answer to this question was not sent (R8, round 12): the
+	 *  question shows "Not sent / Send again" until it goes through. Kept
+	 *  with the draft, so it survives a reload. */
+	unsent?: { at: number };
 }
 
 /**

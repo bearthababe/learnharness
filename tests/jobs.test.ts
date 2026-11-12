@@ -51,6 +51,7 @@ import { handleChatRequest } from "../src/server/chat-handler.ts";
 import { runningTurn } from "../src/server/turn-runs.ts";
 import {
 	abortJob,
+	retryJob,
 	deliverJobResult,
 	noteSteersDurable,
 	discardChatDeliveries,
@@ -1682,6 +1683,38 @@ describe("abort (src/server/jobs.ts abortJob)", () => {
 		assert.equal(fired.length, 1, "exactly one result delivery");
 		assert.equal(fired[0]!.customType, "subagent-steer");
 		assert.equal(jobStore.getJob(job.id)!.status, "done");
+	});
+
+	it("retry (owner O2): a failed job runs again as dispatched, once, as a new job of the same session", () => {
+		const chat = chatStore.createChat("Test: retry failed job");
+		trackChat(chat.id);
+		const input = { query: "sigma.js v3 layout" };
+		const failed = jobStore.createJob({ kind: "research", chatId: chat.id, toolCallId: "call-retry1", input });
+		trackJob(failed.id);
+		const spawned: string[] = [];
+		setJobRespawn((id) => { spawned.push(id); });
+		try {
+			assert.deepEqual(retryJob(failed.id), { ok: false, reason: "not_failed" }, "a running job is not retried");
+			jobStore.updateJob(failed.id, { status: "error", error: "Invalid PDF structure", delivery: { kind: "result", status: "pending" } });
+			assert.deepEqual(retryJob(failed.id), { ok: false, reason: "busy" }, "not while its failure notice is on its way");
+			jobStore.updateJob(failed.id, { delivery: { kind: "result", status: "delivered" } });
+			const outcome = retryJob(failed.id);
+			assert.equal(outcome.ok, true);
+			const retryId = (outcome as { jobId: string }).jobId;
+			trackJob(retryId);
+			const retry = jobStore.getJob(retryId)!;
+			assert.deepEqual(spawned, [retryId], "the same runner starts it");
+			assert.equal(retry.kind, "research");
+			assert.equal(retry.chatId, chat.id);
+			assert.deepEqual(retry.input, input, "the same input");
+			assert.equal(retry.status, "running");
+			assert.equal(retry.retryOf, failed.id);
+			assert.equal(jobStore.getJob(failed.id)!.retriedBy, retryId, "the failure points at its retry");
+			assert.deepEqual(retryJob(failed.id), { ok: false, reason: "already_retried" });
+			assert.deepEqual(retryJob("job_does_not_exist"), { ok: false, reason: "not_found" });
+		} finally {
+			setJobRespawn(() => {});
+		}
 	});
 
 	it("outcome reasons: not_found for unknown, not_running for settled jobs", () => {

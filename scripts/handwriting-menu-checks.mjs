@@ -98,7 +98,14 @@ export async function checkHandwritingMenus({ page, origin }) {
 	// Both accepted notebooks share the current session without taking over
 	// each other's layout, ink, explanation or pending snapshot.
 	await page.setViewport({ width: 1180, height: 1000, isMobile: true, hasTouch: true });
-	await page.locator('button[data-input-owner="notebook"][aria-expanded]').click();
+	// Round 14 (T1): with both notebooks on, the one Notebook button opens the
+	// default (handwriting here) and the chooser offers Equations.
+	const equationToggle = 'button[data-input-owner="notebook"][aria-expanded]';
+	if (await page.$(equationToggle)) await page.locator(equationToggle).click();
+	else {
+		await page.focus('.lh-topbar .lh-notebook-toggle'); await page.keyboard.press("ArrowDown");
+		await page.locator('[data-testid="notebook-open-equations"]').click();
+	}
 	await page.waitForSelector('#notebook-instruction', { visible: true });
 	await page.waitForFunction(() => !document.querySelector('.session-workspace').inert);
 	const combined = await page.evaluate(() => {

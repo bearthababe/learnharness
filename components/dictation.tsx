@@ -109,7 +109,7 @@ export const DEEPGRAM_KEY_ID = "DEEPGRAM_API_KEY";
  * (desktop) or .env.local (dev)") — the surface says the short truth
  * instead. Exported for pins; the errored idle button's click recognizes
  * it and deep-links Settings → Keys → the Deepgram row. */
-export const DICTATION_KEYLESS = "Dictation needs a Deepgram key";
+export const DICTATION_KEYLESS = "To dictate, add a Deepgram speech key";
 
 /** Mint a fresh short-lived token (the route holds the real key
  *  server-side). Module-level: the start path's warm cache and the
@@ -202,6 +202,11 @@ export function rmsToMeter(rms: number): number {
 type SpeechRetention = () => ((text: string) => void) | undefined;
 type SpeechTarget = { append: (text: string) => void; retain?: SpeechRetention };
 let questionTarget: SpeechTarget | null = null;
+/** Claims stack (round 15, F4): a field the learner picks up (the reading
+ *  note while the question is open, say) claims on top and hands the mic
+ *  back to the claim beneath when it lets go. The newest claim speaks. */
+const claimedTargets: SpeechTarget[] = [];
+const settleTarget = () => { questionTarget = claimedTargets.at(-1) ?? null; };
 let dictationCancellation = 0;
 /** Attach/Submit retain the existing speech owner through finalization. */
 export function dictationCheckpoint() {
@@ -231,6 +236,12 @@ export function finishDictation(): Promise<void> {
 	return dictationFinisher ? dictationFinisher() : Promise.resolve();
 }
 
+/** A page owns the dictation hook (round 19: the 🐞 note borrows it — it
+ *  claims the target and toggles through lh:kbd-toggle-dictation). */
+export function dictationAvailable(): boolean {
+	return dictationFinisher !== null;
+}
+
 /** Join a dictated final onto the current text (shared separator rule). */
 export function joinDictation(current: string, final: string): string {
 	return current ? current.replace(/\s+$/, "") + " " + final : final;
@@ -246,9 +257,12 @@ export function useDictationTarget(append: (text: string) => void, claimed: bool
 	useEffect(() => {
 		if (!claimed) return;
 		const target = { append, retain: () => retention.current?.() };
-		questionTarget = target;
+		claimedTargets.push(target);
+		settleTarget();
 		return () => {
-			if (questionTarget === target) questionTarget = null;
+			const index = claimedTargets.indexOf(target);
+			if (index >= 0) claimedTargets.splice(index, 1);
+			settleTarget();
 		};
 	}, [append, claimed]);
 }

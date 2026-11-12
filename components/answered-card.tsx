@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronRightIcon } from "lucide-react";
 import { ConfidenceRail } from "@/components/confidence-rail";
 import { GlyphMark } from "@/components/ui/glyph-mark";
 import { ThinkingBlock } from "@/components/thinking-block";
@@ -29,7 +30,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 	if (answer.dismissed) {
 		return (
 			<>
-			{hasReading && <ThinkingBlock testId="reading-thinking-block" label="YOUR THINKING" text={answer.readingThinking ?? ""} content={answer.readingThinkingContent} defaultOpen />}
+			{hasReading && <ThinkingBlock testId="reading-thinking-block" label="THINKING WHILE READING" text={answer.readingThinking ?? ""} content={answer.readingThinkingContent} defaultOpen />}
 			<div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
 				<span className="font-medium">{answer.questionText}</span> — skipped
 			</div>
@@ -59,7 +60,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 		    ThinkingBlock, instead of an inset inside the answer. Same muted
 		    rail as before; the label is now plain "Your thinking". */}
 		{hasReading && (
-			<ThinkingBlock testId="reading-thinking-block" label="YOUR THINKING" text={answer.readingThinking ?? ""} content={answer.readingThinkingContent} defaultOpen />
+			<ThinkingBlock testId="reading-thinking-block" label="THINKING WHILE READING" text={answer.readingThinking ?? ""} content={answer.readingThinkingContent} defaultOpen />
 		)}
 		{/* [&>*:last-child]:mb-0 (owner round, 2026-10-07): on ask cards the
 		    thinking row is the last child — its my-3 stacked with the card's
@@ -176,11 +177,14 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 			    ask never had one, and records from before the feature carry no
 			    field — nothing to show, nothing rendered. */}
 			{isQuiz && answer.confidence != null && (
-				<div className="mt-3 flex items-center gap-3" data-testid="answered-confidence">
-					<ConfidenceRail value={answer.confidence} className="min-w-0 flex-1" />
-					<span className="w-9 shrink-0 text-right font-mono text-sm tabular-nums text-muted-foreground">
-						{answer.confidence}%
-					</span>
+				/* B10 (round 18): labelled as the learner's own confidence, on a row
+				   of its own under a hairline — never mistaken for a score. */
+				<div className="lh-answered-confidence mt-3 border-t pt-2.5" data-testid="answered-confidence">
+					<div className="flex items-baseline justify-between gap-3 text-sm text-muted-foreground">
+						<span className="font-medium">Your confidence</span>
+						<span className="font-mono tabular-nums" data-testid="answered-confidence-value">{answer.confidence}%</span>
+					</div>
+					<ConfidenceRail value={answer.confidence} className="mt-1.5 min-w-0" />
 				</div>
 			)}
 			{answer.dontKnow && isQuiz && (
@@ -194,7 +198,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 				    the accent lift read too light); rail only, heights identical. */
 				<ThinkingBlock
 					testId="your-thinking"
-					label="YOUR THINKING"
+					label="YOUR REASONING"
 					text={answer.thinking ?? answer.note ?? ""}
 					content={answer.thinkingContent}
 					inCard
@@ -213,9 +217,12 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 					<button
 						type="button"
 						onClick={() => setWhyOpen((v) => !v)}
-						className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+						aria-expanded={whyOpen}
+						data-testid="tucked-explanation-toggle"
+						className="lh-why-toggle"
 					>
-						{whyOpen ? "Hide why" : "Why"}
+						<ChevronRightIcon aria-hidden className="lh-why-chevron" />
+						{whyOpen ? "Hide explanation" : "Show explanation"}
 					</button>
 					{whyOpen && (
 						<div className="mt-1.5 rounded-lg bg-muted py-2 text-sm text-foreground/50">

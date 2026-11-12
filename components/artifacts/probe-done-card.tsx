@@ -39,33 +39,34 @@ export function ProbeDoneCard({ part }: { part: { input?: unknown; output?: unkn
 	const assessment = input?.assessment;
 	const strands = assessment && Array.isArray(assessment.strands) ? assessment.strands : null;
 
+	// Round 14 (P13): shown in the learner's words. A refusal or a malformed
+	// call is the tutor's own bookkeeping and an empty assessment says
+	// nothing to the learner — neither shows; the record keeps both exactly
+	// as written (session history and logs are unchanged).
+	if ((output && !output.ok) || state === "output-error") return null;
+	if (!strands) {
+		if (state === "output-available") return null;
+		return (
+			<p data-testid="probe-done-card" data-pending="" className="lh-tutor-status my-3 text-sm text-muted-foreground">Checking what you already know…</p>
+		);
+	}
 	return (
 		<div data-testid="probe-done-card" className="my-3 rounded-xl border bg-card/60 p-3">
-			<div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-				<ClipboardCheckIcon className="size-3.5 text-primary" />
-				Probe concluded — your assessment
+			<div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
+				<ClipboardCheckIcon className="size-4 text-primary" aria-hidden />
+				What the tutor noticed
 			</div>
-			{output && !output.ok ? (
-				<p className="text-sm text-muted-foreground">The prober retried: {output.error}</p>
-			) : state === "output-error" ? (
-				<p className="text-sm text-muted-foreground">
-					The assessment was malformed — the prober retried with a corrected one.
-				</p>
-			) : strands ? (
-				<div className="space-y-2">
-					{strands.map((s, i) => (
-						<div key={i} className="rounded-lg bg-background/60 px-3 py-2">
-							<div className="text-sm font-medium">{s.strand}</div>
-							<div className="mt-0.5 text-sm text-muted-foreground">{s.assessment}</div>
-						</div>
-					))}
-					{assessment?.summary && (
-						<p className="px-1 text-sm text-muted-foreground">{assessment.summary}</p>
-					)}
-				</div>
-			) : (
-				<p className="text-sm text-muted-foreground">Writing the assessment…</p>
-			)}
+			<div className="space-y-2">
+				{strands.map((s, i) => (
+					<div key={i} className="rounded-lg bg-background/60 px-3 py-2">
+						<div className="text-sm font-medium">{s.strand}</div>
+						<div className="mt-0.5 text-sm text-muted-foreground">{s.assessment}</div>
+					</div>
+				))}
+				{assessment?.summary && (
+					<p className="px-1 text-sm text-muted-foreground">{assessment.summary}</p>
+				)}
+			</div>
 		</div>
 	);
 }

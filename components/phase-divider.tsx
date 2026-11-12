@@ -38,6 +38,19 @@ const CHIP_LABEL: Record<Phase3, string> = {
  *  tooltip, not selectable, not interactive in any way — no pointer events
  *  at all, so it is part of the drag surface instead of a carved-out
  *  target. */
+/** The learner-facing phase label ("Probing" / "Planning" / "Teaching"). */
+export function phaseLabel(phase: Phase3): string {
+	return CHIP_LABEL[phase];
+}
+
+/** What the learner reads while the tutor works (round 14, P13): progress
+ *  in the learner's terms for the phase it is in. Display only — the tutor
+ *  and everything it records are unchanged. */
+export function tutorProgressLabel(phase: Phase3, practice = false): string {
+	if (practice) return "Preparing your problem…";
+	return phase === "probe" ? "Checking what you already know…" : phase === "plan" ? "Planning your lesson…" : "Preparing the next step…";
+}
+
 export function PhaseChip({ phase }: { phase: Phase3 }) {
 	return (
 		<span

@@ -63,21 +63,29 @@
  * camera never moves.
  */
 
-import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
+import { useCallback, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useDesktopPaths } from "@/components/attach-files-button";
+import { sourceFileLabel } from "@/src/core";
+import { ImportNotesLink, NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, NotesImportResults, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
+import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import Link from "next/link";
-import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon } from "lucide-react";
+import { FileTextIcon, ListTreeIcon, Loader2Icon, Maximize2Icon, Minimize2Icon, ScanIcon, SearchIcon, SlidersHorizontalIcon, WaypointsIcon, XIcon } from "lucide-react";
 import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
 import { planCostLabel } from "@/components/usage-format";
 import { GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
 import { usePopoverDismiss } from "@/components/popover-dismiss";
+import { useCardDismiss } from "@/components/card-dismiss";
 import { useActivity } from "@/components/activity-dock";
 import { useServerEvent, useServerResync } from "@/components/server-events";
 import { MenuShell } from "@/components/menu-shell.tsx";
+import { OPEN_GRAPH_DISPLAY_EVENT, publishPageMenu } from "@/components/page-menu";
+import { usePhoneLayout, useTouchLayout } from "@/components/use-phone-viewport";
+import { useDeviceClass } from "@/components/device-features";
 import { DeleteNodeDialog } from "@/components/delete-node-dialog.tsx";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { Hint } from "@/components/ui/hint";
 import { useSidebar } from "@/components/sidebar";
+import { useOneMenu } from "@/components/one-menu";
 import {
 	ARROW_LENGTH_LADDER,
 	CHARGE_RANGE,
@@ -346,6 +354,7 @@ export function GraphCostControl({ costs }: { costs: GraphCostSummary }) {
 	// wraps button + panel, so the toggle itself keeps working.
 	const rootRef = useRef<HTMLDivElement>(null);
 	usePopoverDismiss(rootRef, open, () => setOpen(false));
+	useOneMenu(`graph-popover:${useId()}`, open, () => setOpen(false));
 	return (
 		<div ref={rootRef} className="relative">
 			<Hint
@@ -451,7 +460,9 @@ function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 function GraphSettingsControl({
 	settings,
 	changeSettings,
+	costs,
 }: {
+	costs?: GraphCostSummary | null;
 	settings: GraphRenderSettings;
 	changeSettings: (update: (cur: RenderSettings) => RenderSettings) => void;
 }) {
@@ -459,7 +470,19 @@ function GraphSettingsControl({
 	// Click anywhere outside (or Escape) closes the panel (2026-09-17) —
 	// the root wraps button + panel, so the toggle itself keeps working.
 	const rootRef = useRef<HTMLDivElement>(null);
-	usePopoverDismiss(rootRef, open, () => setOpen(false));
+	// Phones and tablets (round 14, P5): Graph display is a row in the ⋯
+	// menu; its panel then opens from ⋯ (this button is not shown there).
+	const touch = useTouchLayout();
+	usePopoverDismiss(rootRef, open && !touch, () => setOpen(false));
+	// Touch: the card hangs from ⋯ (portaled), so it owns its own dismissal.
+	useCardDismiss(open && touch, () => setOpen(false), ['[data-testid="graph-display"]', '[data-testid="page-menu-button"]']);
+	useOneMenu(`graph-popover:${useId()}`, open, () => setOpen(false));
+	useEffect(() => {
+		const onOpen = () => setOpen(true);
+		window.addEventListener(OPEN_GRAPH_DISPLAY_EVENT, onOpen);
+		publishPageMenu({ graphDisplay: true });
+		return () => { window.removeEventListener(OPEN_GRAPH_DISPLAY_EVENT, onOpen); publishPageMenu({ graphDisplay: false }); };
+	}, []);
 	const regionTuning = settings.regions;
 	const physicsTuning = settings.physics;
 	return (
@@ -478,7 +501,8 @@ function GraphSettingsControl({
 				}`}
 				aria-label="Graph display settings"
 			>
-				<SettingsIcon className="size-4" />
+				{/* Sliders, not the gear: the gear means the app's Settings everywhere (round 12). */}
+				<SlidersHorizontalIcon className="size-4" />
 			</button>
 			</Hint>
 			{open && (
@@ -493,8 +517,9 @@ function GraphSettingsControl({
 				// (pr-2.5) -> scrollbar -> 10px (p-2.5) -> panel edge. The
 				// scrollbar itself does NOT move: it stays pinned at the same
 				// distance from the panel's right border.
-				<div className="absolute right-0 top-full mt-2 flex max-h-[60vh] w-72 flex-col rounded-xl border bg-card/85 p-2.5 shadow-lg backdrop-blur">
+				<GraphDisplayFrame touch={touch} onClose={() => setOpen(false)}>
 					<div className="flex flex-col gap-2 overflow-y-auto pr-2.5">
+							{costs && costs.runs.length > 0 && <div className="lh-graph-costs-in-settings" data-testid="graph-costs-in-settings"><div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Graph costs · {graphUsageLabel(costs)}</div><GraphCostPanel costs={costs} /></div>}
 							{/* Size/zoom/region sliders: LADDER-mapped 0-100, step 10 (11
 							    stops, every DEFAULT dead-center at 50, every value a nice
 							    number — src/core/render-settings.ts). Physics keeps the
@@ -825,10 +850,23 @@ function GraphSettingsControl({
 							/>
 						</div>
 					</div>
-				</div>
+				</GraphDisplayFrame>
 			)}
 		</div>
 	);
+}
+
+/** Graph display's panel: under its own button on laptops; on phones and
+ *  tablets a card opened from the ⋯ menu (round 14, P5). */
+function GraphDisplayFrame({ touch, onClose, children }: { touch: boolean; onClose: () => void; children: React.ReactNode }) {
+	if (touch) return (
+		<MenuShell anchorTestid="page-menu-button" testid="graph-display" preferredSide="down" align="right" onClose={onClose}
+			menuClass="lh-glass flex max-h-[70dvh] w-80 max-w-[calc(100vw-24px)] flex-col rounded-xl border bg-card p-2.5 shadow-xl">
+			<div className="mb-1 px-1 text-sm font-medium">Graph display</div>
+			{children}
+		</MenuShell>
+	);
+	return <div className="absolute right-0 top-full mt-2 flex max-h-[60vh] w-72 flex-col rounded-xl border bg-card/85 p-2.5 shadow-lg backdrop-blur">{children}</div>;
 }
 
 /** The top-chrome actions row's body (empty-graph chrome wave, owner
@@ -844,19 +882,28 @@ export function GraphChromeRow({
 	query,
 	onQuery,
 	noMatch,
+	results = [],
+	onPickResult,
 	importing,
 	searchInputRef,
 	onImportFiles,
 	settings,
 	changeSettings,
 	onOpenChains,
+	costs,
 }: {
+	/** Phones list the graph costs inside the gear's panel (not floating). */
+	costs?: GraphCostSummary | null;
 	isEmpty: boolean;
 	query: string;
 	onQuery: (v: string) => void;
 	/** The search panel's "No matching nodes." note (computed by the
 	 *  wrapper — it owns visibleIds + the snapshot). */
 	noMatch: boolean;
+	/** Matching nodes listed under the search (empty = no list). */
+	results?: { id: string; name: string; statement: string }[];
+	/** Open one result: center it and show its details card. */
+	onPickResult?: (id: string) => void;
 	importing: boolean;
 	searchInputRef: React.RefObject<HTMLInputElement | null>;
 	onImportFiles: (files: FileList | null) => void;
@@ -867,39 +914,94 @@ export function GraphChromeRow({
 	onOpenChains: () => void;
 }) {
 	const { phone } = useSidebar();
+	const touch = useTouchLayout();
+	const [searchOpen, setSearchOpen] = useState(false);
+	const searching = phone && (searchOpen || query !== "");
+	// R8 (phones): the results list spans the screen, 12px from each edge,
+	// wherever the search field sits in the bar.
+	const resultsRef = useRef<HTMLUListElement>(null);
+	const [edges, setEdges] = useState<{ left: number; right: number } | null>(null);
+	const showing = results.length > 0;
+	useLayoutEffect(() => {
+		if (!phone || !showing) return;
+		const place = () => {
+			const parent = (resultsRef.current?.offsetParent as HTMLElement | null)?.getBoundingClientRect();
+			if (parent) setEdges({ left: 12 - parent.left, right: 12 - (window.innerWidth - parent.right) });
+		};
+		place();
+		// The bar changes shape with the width and the full map: follow it.
+		const parent = resultsRef.current?.offsetParent;
+		const observer = typeof ResizeObserver === "function" && parent ? new ResizeObserver(place) : null;
+		if (observer && parent) observer.observe(parent);
+		window.addEventListener("resize", place);
+		return () => { observer?.disconnect(); window.removeEventListener("resize", place); };
+	}, [phone, showing]);
 	return (
 		<>
-			{!isEmpty && (
-				<div className="lh-graph-search graph-chrome-fade-in w-56 min-w-0 shrink rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
+			{/* F2 (round 16, phones): search is an icon in the bar; it opens a
+			    full-width field with Cancel over the header row (the Sessions
+			    search pattern). Cancel restores the bar exactly. */}
+			{!isEmpty && phone && (
+				<button type="button" className="lh-search-icon graph-chrome-fade-in" aria-label="Search ideas" data-testid="graph-search-open"
+					aria-expanded={searching} onClick={() => { setSearchOpen(true); requestAnimationFrame(() => searchInputRef.current?.focus()); }}>
+					<SearchIcon aria-hidden /><span className="lh-search-icon-label" aria-hidden="true">Search</span>
+				</button>
+			)}
+			{!isEmpty && (!phone || searching) && (
+				<div className="lh-graph-search graph-chrome-fade-in w-56 min-w-0 shrink rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur"
+					data-over={phone || undefined} data-testid="graph-search">
 					<Hint
 						// ⌘F focuses node search (surface-scoped registry action).
-						label="Search nodes"
+						label="Search ideas"
 						action="find"
 						side="bottom"
 						disabled={phone}
 					>
-					<div className="relative">
+					<div className="relative lh-graph-search-field">
 						<SearchIcon className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
 						<input
 							ref={searchInputRef}
 							value={query}
 							onChange={(e) => onQuery(e.target.value)}
-							placeholder="Search nodes…"
-							aria-label="Search nodes"
+							onKeyDown={(e) => { if (e.key === "Escape" && phone) { e.stopPropagation(); onQuery(""); setSearchOpen(false); } }}
+							placeholder="Search ideas…"
+							aria-label="Search ideas"
 							spellCheck={false}
+							enterKeyHint="search"
 							className="h-7 w-full rounded-lg border bg-background pl-8 text-xs outline-none placeholder:text-muted-foreground focus:border-ring"
 						/>
 					</div>
 					</Hint>
+					{phone && <button type="button" className="lh-search-cancel" data-testid="graph-search-cancel" onClick={() => { onQuery(""); setSearchOpen(false); }}>Cancel</button>}
+					{/* E5 (round 16): learner words, the map dimmed (not blanked),
+					    and a way on to the sessions. */}
 					{noMatch && (
-						<div className="px-1.5 pt-1 text-[11px] text-muted-foreground">No matching nodes.</div>
+						<div className="lh-graph-nomatch" role="status" data-testid="graph-no-match">
+							<span>No ideas match “{query.trim()}”.</span>
+							<button type="button" data-testid="graph-search-sessions" onClick={() => {
+								window.dispatchEvent(new CustomEvent("lh:kbd-sessions-search", { detail: { query: query.trim() } }));
+							}}>Search sessions instead</button>
+						</div>
+					)}
+					{results.length > 0 && (
+						<ul ref={resultsRef} className="lh-graph-results" role="listbox" aria-label="Matching nodes" data-testid="graph-search-results"
+							style={phone && edges ? { left: edges.left, right: edges.right } : undefined}>
+							{results.map((r) => (
+								<li key={r.id} role="option" aria-selected={false}>
+									<button type="button" data-testid="graph-search-result" onClick={() => onPickResult?.(r.id)}>
+										<span className="lh-graph-result-name">{r.name}</span>
+										{r.statement && <span className="lh-graph-result-statement">{r.statement}</span>}
+									</button>
+								</li>
+							))}
+						</ul>
 					)}
 				</div>
 			)}
 			{/* The chain table (chains overlay, owner plan 2026-09-29). Own
 			    container (36px band), between the search and Import. */}
 				<div className="lh-graph-chains graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
-					<Hint label="Every reasoning chain" side="bottom" disabled={phone}>
+					<Hint label="Browse every idea by source" side="bottom" disabled={phone}>
 						<button
 							type="button"
 							onClick={onOpenChains}
@@ -907,7 +1009,7 @@ export function GraphChromeRow({
 							className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
 						>
 							<ListTreeIcon className="size-3" />
-							Chains
+							Ideas
 						</button>
 					</Hint>
 				</div>
@@ -921,7 +1023,7 @@ export function GraphChromeRow({
 				// is a plain shrink-0 flex child — the panel itself positions
 				// within GraphSettingsControl's own relative root, unaffected.
 				<div className="lh-graph-settings graph-chrome-fade-in shrink-0">
-					<GraphSettingsControl settings={settings} changeSettings={changeSettings} />
+					<GraphSettingsControl settings={settings} changeSettings={changeSettings} costs={touch ? costs : null} />
 				</div>
 			)}
 		</>
@@ -944,7 +1046,24 @@ export function GraphView({
 	onPracticeSelectionChange?: (nodes: { id: string; name: string; statement: string }[]) => void;
 	onChainSelectClose?: () => void;
 }) {
+	const desktop = useDesktopPaths();
 	const containerRef = useRef<HTMLDivElement | null>(null);
+	// P7 (round 14): on phones the knowledge map opens full screen — Search,
+	// Fit and a labelled exit stay; the composer, resume cards and the bar
+	// step away. It is the same graph, so zoom and selection carry over.
+	const phoneMap = usePhoneLayout();
+	const device = useDeviceClass();
+	const mapToggle = phoneMap || device === "tablet";
+	const [fullMap, setFullMap] = useState(false);
+	useEffect(() => {
+		if (!fullMap) return;
+		const root = document.documentElement;
+		root.dataset.graphFull = "true";
+		const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setFullMap(false); };
+		window.addEventListener("keydown", onKey);
+		return () => { delete root.dataset.graphFull; window.removeEventListener("keydown", onKey); };
+	}, [fullMap]);
+	useEffect(() => { if (!mapToggle) setFullMap(false); }, [mapToggle]);
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const cardRef = useRef<HTMLDivElement | null>(null);
 	const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
@@ -1035,12 +1154,38 @@ export function GraphView({
 		return set;
 	}, [snapshot, query]);
 
+	// The search's result list: the best few matches, names first. It opens
+	// on every edit and closes once a result is picked.
+	const [resultsOpen, setResultsOpen] = useState(false);
+	useEffect(() => { setResultsOpen(query.trim() !== ""); }, [query]);
+	const searchResults = useMemo(() => {
+		const q = query.trim().toLowerCase();
+		if (!snapshot || !q) return [];
+		const rank = (n: GraphNode) => (n.name.toLowerCase().startsWith(q) ? 0 : n.name.toLowerCase().includes(q) ? 1 : 2);
+		return snapshot.nodes
+			.filter((n) => visibleIds.has(n.id))
+			.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+			.slice(0, 8)
+			.map((n) => ({ id: n.id, name: n.name, statement: n.statement }));
+	}, [snapshot, query, visibleIds]);
+	const pickResult = useCallback((id: string) => {
+		const snap = snapshotRef.current;
+		const node = snap?.nodes.find((n) => n.id === id);
+		// Phones keep the details card clear of the composer below.
+		const anchor = rendererRef.current?.focusNode(id, window.matchMedia?.("(max-width: 767px)").matches ? 0.28 : 0.5);
+		setResultsOpen(false);
+		if (!snap || !node || !anchor) return;
+		setSelected({ node, sourceIds: snap.nodeSessions[node.id] ?? [], anchor });
+	}, []);
+
 	// Fetch the derived graph. Re-runs when a background pipeline run
 	// finishes (refreshTick) — its merges just landed in the ledger.
 	const [refreshTick, setRefreshTick] = useState(0);
 	// The chain table overlay (chains-overlay plan, 2026-09-29) —
 	// component-local: a browsing surface, not graph state.
 	const [chainsOpen, setChainsOpen] = useState(false);
+	// "Show ideas" after an import opens the list filtered to that file.
+	const [ideasQuery, setIdeasQuery] = useState<string | undefined>();
 	useEffect(() => {
 		if (chainsOpen) return;
 		const onFind = () => searchInputRef.current?.focus();
@@ -1075,11 +1220,16 @@ export function GraphView({
 	// start; from its first setPhase the run announces itself on the events
 	// channel (S5), and the dock rides those announcements thereafter.
 	const refreshActivity = useActivity().refresh;
+	const { open: openSettings } = useSettingsDialog();
 	const notesImport = useNotesImport({
 		onStart: () => {
 			refreshActivity();
 			setTimeout(() => refreshActivity(), 600);
 		},
+		// P3 (round 20): the finished import also refetches the graph, so Ideas
+		// shows the new source at once — a run that finishes before the status
+		// feed ever lists it (or an import with no background run) is covered too.
+		onFinish: () => setRefreshTick((t) => t + 1),
 	});
 	const { importing, onImportFiles } = notesImport;
 
@@ -1423,7 +1573,9 @@ export function GraphView({
 	// Feed #3 — visibility: hidden nodes drop out of rendering, picking,
 	// hover, AND labels; edges drop when either endpoint is hidden.
 	useEffect(() => {
-		rendererRef.current?.setVisible(query.trim() ? visibleIds : null);
+		// E5 (round 16): a search with no match keeps the whole map, dimmed
+		// (the container's data-no-match), rather than blanking it.
+		rendererRef.current?.setVisible(query.trim() && visibleIds.size > 0 ? visibleIds : null);
 		// The open detail card cannot outlive its node's visibility.
 		setSelected((sel) => (sel && visibleIds.has(sel.node.id) ? sel : null));
 	}, [visibleIds, query]);
@@ -1467,22 +1619,44 @@ export function GraphView({
 		card.style.visibility = "visible";
 	}, [selected]);
 
+	// The import result or error, and running pipelines (R1, round 15): in the
+	// bar's column on wider screens, a full-width row of their own on phones.
+	const importStatus = <>
+		<NotesImportResults floating={chainsOpen} importing={importing}>
+		<NotesImportErrors errors={notesImport.errors} onOpenSettings={(section) => openSettings(section)} onDismiss={dismissNotesImportResults} />
+		<NotesImportDone done={notesImport.done} importing={importing} onShowIdeas={() => { setIdeasQuery(notesImport.done.length ? sourceFileLabel(notesImport.done[0]!.filePath) : undefined); dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
+		<NotesImportNotices notices={notesImport.notices} />
+		</NotesImportResults>
+	</>;
+	const pipelinePills = <>{pipelineRuns.map((run) => (
+				<div
+					key={run.id}
+					className="flex items-center gap-2 rounded-full border bg-card/85 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur"
+				>
+					<Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+					<span className="capitalize">{run.phase}</span>
+					<span className="max-w-48 truncate text-foreground">{run.title}</span>
+					<span className="tabular-nums">{Math.max(0, Math.round((Date.now() - run.startedAt) / 1000))}s</span>
+				</div>
+			))}</>;
 	return (
 		<div className="relative h-full w-full">
 			{isEmpty ? (
 				// The empty graph keeps the first action clear without zero-valued statistics.
-				<div className="flex h-full w-full items-center justify-center px-4">
-					<div className="flex flex-col items-center gap-3 text-center text-muted-foreground">
-						<WaypointsIcon className="size-10 opacity-40" strokeWidth={1.25} />
-						<div className="text-lg font-medium text-foreground">Knowledge graph</div>
-						<div className="max-w-sm text-sm">
+				<div className="lh-graph-empty flex h-full w-full items-center justify-center px-6 pb-40">
+					<div className="flex flex-col items-center gap-4 text-center text-muted-foreground">
+						<span className="lh-graph-empty-icon"><WaypointsIcon strokeWidth={1.5} /></span>
+						<div className="lh-graph-empty-title">Your knowledge graph</div>
+						<div className="lh-graph-empty-body max-w-sm">
 							<p>Start a session to begin learning.</p>
-							<p className="mt-1 text-xs">Attach your material with the paperclip or drag and drop.</p>
+							{desktop
+								? <p className="mt-1.5">Attach your material with the paperclip or drag and drop.</p>
+								: <p className="mt-1.5">Bring in your own notes: <ImportNotesLink /></p>}
 						</div>
 					</div>
 				</div>
 			) : (
-				<div ref={containerRef} className="relative h-full w-full">
+				<div ref={containerRef} className="relative h-full w-full" data-no-match={(query.trim() !== "" && visibleIds.size === 0) || undefined}>
 					{/* THE single canvas: every layer (hulls, edges, nodes, both
 					    label systems, hover) draws into it, once per frame. */}
 					<canvas ref={canvasRef} className="block h-full w-full touch-none" />
@@ -1568,6 +1742,9 @@ export function GraphView({
 			    against the full-bleed parent) — the row NEVER wraps (owner
 			    rejected the two-row fold); in narrow windows the search is
 			    the flexible element and shrinks instead. */}
+			{/* P6 (round 14): a tinted band behind the bar where the map pans
+			    under it — a scrim, never a blur over the graph. */}
+			<div className="lh-graph-scrim" aria-hidden="true" />
 			<div className="lh-home-toolbar lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
 			{/* z-20 (2026-09-20): the row paints above the cost number below
 			    it — without this, the later-in-DOM cost control layered over
@@ -1583,36 +1760,52 @@ export function GraphView({
 					query={query}
 					onQuery={setQuery}
 					noMatch={snapshot !== null && visibleIds.size === 0 && query.trim() !== ""}
+					results={resultsOpen ? searchResults : []}
+					onPickResult={pickResult}
 					importing={importing}
 					searchInputRef={searchInputRef}
 					onImportFiles={onImportFiles}
 					settings={settings}
 					changeSettings={changeSettings}
 					onOpenChains={() => setChainsOpen(true)}
+					costs={costs}
 				/>
 			</div>
 
-			<NotesImportErrors errors={notesImport.errors} />
-			<NotesImportNotices notices={notesImport.notices} />
+			{/* B2 (round 17): where Full map has the corner (phones, tablets) the
+			    import results get a row of their own under it, never under it. */}
+			{!mapToggle && importStatus}
+
 			{/* Top-right tail (owner, 2026-09-20): the pipeline cost number —
 			    just a number, hover-highlighted, dropdown breakdown — then
 			    the running-pipeline pills under it. Lives BELOW the actions
 			    row so narrow windows can never push it over the composer
 			    the way the old bottom-left stack did; the whole top-right
 			    cluster is one column, right-aligned. */}
-			{costs && costs.runs.length > 0 && <GraphCostControl costs={costs} />}
-			{pipelineRuns.map((run) => (
-				<div
-					key={run.id}
-					className="flex items-center gap-2 rounded-full border bg-card/85 px-3 py-1.5 text-xs text-muted-foreground shadow-lg backdrop-blur"
-				>
-					<Loader2Icon className="size-3.5 shrink-0 animate-spin" />
-					<span className="capitalize">{run.phase}</span>
-					<span className="max-w-48 truncate text-foreground">{run.title}</span>
-					<span className="tabular-nums">{Math.max(0, Math.round((Date.now() - run.startedAt) / 1000))}s</span>
-				</div>
-			))}
+			{costs && costs.runs.length > 0 && <div className="lh-graph-cost-pill"><GraphCostControl costs={costs} /></div>}
+			{!phoneMap && pipelinePills}
+
 			</div>
+
+			{/* R1 (round 15): on phones the import result or error, and running
+			    pipelines, get a full-width row of their own under the bar and
+			    Full map, never squeezed into the bar's narrow column. */}
+			{mapToggle && <div className="lh-home-status" data-testid="home-status-row">{importStatus}{phoneMap && pipelinePills}</div>}
+			{/* F3 (round 16): Full map and Done are one control in one spot (top
+			    right, under the bar) — expand / collapse — on phones and
+			    tablets; Fit is a map control at the bottom right. Search, the
+			    map position, zoom and selection carry over both ways. */}
+			{mapToggle && !isEmpty && (
+				<button type="button" className="lh-map-toggle lh-no-drag" data-testid={fullMap ? "map-exit" : "map-open"} aria-pressed={fullMap}
+					aria-label={fullMap ? "Done: leave the full-screen map" : "Show the knowledge map full screen"} onClick={() => setFullMap((full) => !full)}>
+					{fullMap ? <Minimize2Icon aria-hidden /> : <Maximize2Icon aria-hidden />}<span>{fullMap ? "Done" : "Full map"}</span>
+				</button>
+			)}
+			{mapToggle && !isEmpty && fullMap && (
+				<button type="button" className="lh-map-fit lh-no-drag" data-testid="map-fit" aria-label="Fit the map to the screen" title="Fit the map to the screen" onClick={() => rendererRef.current?.fit()}>
+					<ScanIcon aria-hidden />
+				</button>
+			)}
 
 			{selected && !isEmpty && (
 				<div
@@ -1623,10 +1816,14 @@ export function GraphView({
 					// lh-no-drag: the card is placed anywhere on the canvas —
 					// when it lands in the top strip it must stay interactive
 					// over home.tsx's drag surface (2026-09-17).
-					className="lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-xl border bg-card p-4 text-left shadow-lg"
+					data-testid="graph-node-card"
+					className="lh-node-card lh-no-drag absolute z-10 w-80 max-w-[calc(100%-1rem)] rounded-xl border bg-card p-4 text-left shadow-lg"
 				>
-					<div className="text-sm font-medium leading-snug">{selected.node.name}</div>
-					<div className="mt-1 text-xs leading-relaxed text-muted-foreground">{selected.node.statement}</div>
+					<button type="button" className="lh-node-card-close" aria-label="Close details" data-testid="graph-node-card-close" onClick={() => setSelected(null)}>
+						<XIcon aria-hidden />
+					</button>
+					<div className="lh-node-card-name text-sm font-medium leading-snug">{selected.node.name}</div>
+					<div className="lh-node-card-statement mt-1 text-xs leading-relaxed text-muted-foreground">{selected.node.statement}</div>
 					{selected.sourceIds.length > 0 ? (
 						<div className="mt-3 flex flex-col gap-1">
 							<div className="text-xs text-muted-foreground">Sessions</div>
@@ -1676,6 +1873,7 @@ export function GraphView({
 			    covers. (DeleteNodeDialog is body-portaled — DOM-irrelevant
 			    here.) */}
 			<ChainTableOverlay
+				initialQuery={ideasQuery}
 				open={chainsOpen}
 				nodes={snapshot?.propositions ?? []}
 				chains={snapshot?.chains ?? []}
@@ -1683,6 +1881,7 @@ export function GraphView({
 				fileSources={snapshot?.fileSources ?? {}}
 				onClose={() => {
 					setChainsOpen(false);
+					setIdeasQuery(undefined);
 					onChainSelectClose?.();
 				}}
 				selectMode={chainSelectOpen}

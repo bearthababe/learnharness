@@ -7,12 +7,14 @@
 	.lh-reading-input > div:first-child { padding: 0 4px 4px; }
 	.lh-compact-row > .lh-phone-reveal { display: inline-flex; }
 	.lh-question-reveal { display: none; }
-	.lh-question-collapsed { visibility: visible; height: auto; overflow: visible; }
-	.lh-question-collapsed [data-dock-scroll-area], .lh-question-collapsed .lh-question-confidence { display: none; }
-	.lh-question-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px; border: 0; background: none; }
+	/* R2 (round 16): the folded bar is only the bar (with what was chosen);
+	   the answer form never sits in it. */
+	/* R1 (round 16): the answer and reasoning fields take the card's full
+	   width; Submit has its own row below. */
+	.lh-question-input { display: flex; flex-direction: column; align-items: stretch; gap: 6px; border: 0; background: none; }
 	.lh-input-label { grid-column: 1 / -1; padding: 0 4px; }
-	.lh-question-submit { display: contents; }
-	.lh-question-submit > span, .lh-wide-submit-label { display: none; }
+	.lh-question-submit { display: flex; justify-content: flex-end; padding: 0; }
+	.lh-question-submit > span:not(.lh-mic-slot), .lh-wide-submit-label { display: none; }
 	.lh-phone-submit-icon { display: block; }
 	.lh-question-submit > button { min-width: 44px; min-height: 44px; padding: 0; margin-bottom: 5px; }
 	.lh-compact-row {
@@ -119,3 +121,42 @@
 .lh-phone-panel-body { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 12px; overflow: auto; overscroll-behavior: contain; font-size: 14px; }
 .lh-phone-panel [data-testid="plan-popup"] .lh-phone-panel-body { overflow: hidden; }
 .lh-phone-panel [data-testid="plan-popup"] .pointer-events-auto { min-height: 44px; min-width: 44px; }
+
+/* Tablets (round 14, owner M3): the mic sits inside every chat box and
+   answer field, as on phones, and never moves when other controls appear.
+   Only the field and its speech controls change; the wider layouts around
+   them (question cards, the composer pill) stay as they are. */
+/* Round 15 (F4/A2): the mic sits inside the field on every device wider
+   than a phone (phones are covered above). */
+@media (min-width: 768px) {
+	.lh-compact-field { display: flex; position: relative; flex: 1 1 auto; min-width: 0; align-self: stretch; }
+	.lh-compact-field > :is(textarea, [data-file-path-input]) { flex: 1 1 auto; width: 100%; min-width: 0; }
+	.lh-compact-field[data-has-mic] > :is(textarea, [data-file-path-input]) { padding-right: 52px; }
+	/* Centred on the first line's height and anchored to the bottom, so the
+	   mic lines up with a one-line field and never moves as it grows. */
+	.lh-compact-speech { display: block; position: absolute; right: 4px; bottom: calc(min(100%, 48px) / 2 - 22px); }
+	/* Recording on a tablet: the strip covers the field in place (nothing
+	   moves), and the field itself stays shown underneath, so typing focus
+	   stays where it was (a hidden field would drop focus). */
+	.lh-compact-field[data-recording] .lh-compact-speech {
+		left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; padding: 0 4px;
+		border-radius: inherit; background: var(--lh-recording-surface, var(--card));
+	}
+	.lh-compact-field[data-recording] .lh-compact-speech > * { flex: 1 1 auto; min-width: 0; }
+	.lh-compact-speech button {
+		display: inline-flex; align-items: center; justify-content: center;
+		min-width: 44px; min-height: 44px; flex-shrink: 0; border-radius: 10px;
+	}
+	.lh-compact-speech button:disabled { opacity: .4; }
+	.lh-compact-speech button:focus-visible { outline: 2px solid var(--primary); }
+	.lh-compact-recording { display: flex; align-items: center; min-width: 0; }
+	.lh-compact-feedback { display: flex; align-items: center; gap: 5px; min-width: 0; flex: 1; padding-left: 5px; }
+	.lh-compact-timer { font-size: 13px; font-variant-numeric: tabular-nums; }
+	.lh-compact-meter { display: flex; align-items: center; height: 24px; flex: 1; min-width: 0; gap: 2px; overflow: hidden; }
+	.lh-compact-meter > span { flex: 1; min-width: 1px; background: var(--foreground); border-radius: 2px; }
+	.lh-compact-status { display: flex; align-items: center; gap: 4px; font-size: 13px; overflow-wrap: anywhere; }
+	.lh-compact-error { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0 6px 4px; color: var(--destructive); font-size: 14px; overflow-wrap: anywhere; }
+	.lh-compact-error > span { flex: 1; min-width: 0; }
+	.lh-compact-error button { min-height: 44px; min-width: 44px; text-decoration: underline; }
+	form.lh-compact-row { flex-wrap: wrap; }
+}

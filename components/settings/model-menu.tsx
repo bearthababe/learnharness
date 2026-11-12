@@ -93,7 +93,7 @@ export function ModelMenuList({
 							{m.provider === CLAUDE_CODE_PROVIDER ? "CLI billing" : subscriptionLabel(`${m.provider}:${m.id}`) ?? priceLabel(m.cost)}
 						</span>
 					</span>
-					<span className="flex items-center justify-between gap-2 text-muted-foreground">
+					<span className="lh-model-detail flex items-center justify-between gap-2 text-muted-foreground">
 						<span className="truncate">{subscriptionLabel(`${m.provider}:${m.id}`) ? `${subscriptionLabel(`${m.provider}:${m.id}`)} (subscription)` : m.provider} · {m.id}</span>
 						<span className="shrink-0 tabular-nums">{m.contextWindow === null ? "—" : formatTokens(m.contextWindow)}</span>
 					</span>

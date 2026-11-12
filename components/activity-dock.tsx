@@ -1,12 +1,48 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIcon, BotIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
+import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { ActivityIcon, BotIcon, ChevronDownIcon, ChevronRightIcon, FileTextIcon, PenToolIcon, PlayIcon, RotateCwIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CallUsage, JobKind, JobRecord } from "@/src/core";
 import { isModelsRefusal, isProviderKeyRefusal, subscriptionLabel, subscriptionLabels } from "@/src/core";
 import { formatTokens, planCostLabel } from "@/components/usage-format";
 import { useServerEvent, useServerResync } from "@/components/server-events";
+
+/** A settled job in words: cancelled is not a failure. */
+function jobStatusText(job: { status: string; error?: string }): string {
+	if (job.status === "aborted" || job.status === "cancelled" || /\babort|cancel/i.test(job.error ?? "")) return "Cancelled";
+	if (job.status === "error") return "Failed";
+	return "Finished";
+}
+
+/** A failed job's reason in plain words, with what to do next (owner O2,
+ *  P8): no raw codes ("ENOENT"), no file paths, no stack — the known
+ *  causes say what happened and how to recover; anything else is shown
+ *  cleaned, never cut to a fragment. */
+const JOB_ERRORS: [RegExp, string][] = [
+	[/ENOENT|no such file|not found on disk|file .* (?:missing|not found)/i, "The file it needed is no longer where it was imported from. Import it again (Import to knowledge map, on Home), then retry."],
+	[/EACCES|EPERM|permission denied/i, "LearnHarness isn't allowed to read that file. Check the file's permissions, then retry."],
+	[/invalid pdf|pdf structure|bad xref|not a pdf|pdf.*(?:corrupt|damaged)/i, "This PDF couldn't be read; it may be damaged. Export or download it again, then retry."],
+	[/aborted by learner|cancell?ed/i, "You stopped this job."],
+	[/ETIMEDOUT|timed? ?out|deadline/i, "It took too long and stopped. Retry when you're ready."],
+	[/ENOTFOUND|ECONNREFUSED|ECONNRESET|fetch failed|network|socket hang up/i, "LearnHarness couldn't reach the service it needed. Check your connection, then retry."],
+	[/\b401\b|unauthori[sz]ed|invalid (?:api )?key|api key/i, "The model provider refused the request. Check its key in Settings → Providers, then retry."],
+	[/\b429\b|rate ?limit|too many requests/i, "The model provider is busy right now. Retry in a minute."],
+	[/\b5\d\d\b|overloaded|internal server error|bad gateway|unavailable/i, "The model provider had a problem. Retry in a minute."],
+];
+export function readableJobError(error: string): string {
+	for (const [pattern, plain] of JOB_ERRORS) if (pattern.test(error)) return plain;
+	const firstLines = error.split(/\n\s*at\s/)[0] ?? error;
+	const cleaned = firstLines
+		.replace(/^(?:\s*(?:error|failed|fatal)\s*[:—-]\s*)+/i, "")
+		.replace(/\b[A-Z][A-Z0-9_]{2,}:\s*/g, "") // codes like "EISDIR: "
+		.replace(/(?:[A-Za-z]:)?[\\/][^\s'"`,;)]+/g, "the file") // paths
+		.replace(/\s+/g, " ")
+		.trim();
+	if (!cleaned) return "The job stopped without saying why. Retry, or open the session and ask the tutor.";
+	return `${cleaned.replace(/[.!]?$/, ".")} Retry, or open the session and ask the tutor.`;
+}
 
 /**
  * THE BACKGROUND-AGENTS SECTION (owner, sidebar round — the successor of
@@ -67,9 +103,26 @@ export interface FeedExtraction {
 	startedAt: number;
 }
 
+/** A settled background job (server-joined title), newest first. */
+export interface FeedRecentJob {
+	id: string;
+	kind: JobKind;
+	status: JobRecord["status"];
+	chatId: string;
+	title: string;
+	updatedAt: string;
+	error?: string;
+	/** A failed job that can run again (owner O2). */
+	canRetry?: boolean;
+	/** Set once retried: the re-run's id. */
+	retriedBy?: string;
+}
+
 export interface ActivityFeed {
 	jobs: FeedJob[];
 	extractions: FeedExtraction[];
+	/** Recently settled jobs; absent on older payloads. */
+	recent?: FeedRecentJob[];
 }
 
 const EMPTY_FEED: ActivityFeed = { jobs: [], extractions: [] };
@@ -109,7 +162,7 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
 				if (res.ok) {
 					const data = (await res.json()) as Partial<ActivityFeed>;
 					if (alive)
-						setFeed({ jobs: data.jobs ?? [], extractions: data.extractions ?? [] });
+						setFeed({ jobs: data.jobs ?? [], extractions: data.extractions ?? [], recent: data.recent ?? [] });
 				}
 			} catch {
 				// transport blip: keep the last feed, announce again next event
@@ -161,6 +214,15 @@ export function ActivityProvider({ children }: { children: React.ReactNode }) {
 export function useActivity(): { feed: ActivityFeed; refresh: () => void } {
 	return useContext(ActivityContext);
 }
+
+/** Failures that can still be retried: what Helpers reports first (its
+ *  header, and the laptop's folded rail, round 20 L1). */
+export function failedHelpers(recent: FeedRecentJob[]): number {
+	return recent.filter((job) => job.status === "error" && job.canRetry && jobStatusText(job) === "Failed").length;
+}
+
+/** R12 (round 16): one line saying what Helpers are (the sheet, ⋯). */
+export const HELPERS_DESCRIPTION = "Background work the tutor started for your lessons";
 
 // ─── Pure presentation helpers (exported for tests) ──────────────────────────
 
@@ -288,10 +350,40 @@ const KIND_ICON: Record<JobKind, typeof SearchIcon> = {
 /** Abort states per blob id: pending (fired) / failed (backend absent). */
 type AbortState = "pending" | "failed";
 
-export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
+const KIND_LABEL: Record<JobKind, string> = {
+	research: "Researcher",
+	demo: "Demo builder",
+	visual: "Figure maker",
+	pdf: "PDF reader",
+};
+
+/** "just now" / "5m ago" / "3h ago" / "2d ago" / ISO date. */
+function settledAgo(iso: string, now = Date.now()): string {
+	const min = Math.floor((now - new Date(iso).getTime()) / 60_000);
+	if (!(min >= 1)) return "just now";
+	if (min < 60) return `${min}m ago`;
+	const h = Math.floor(min / 60);
+	if (h < 24) return `${h}h ago`;
+	const d = Math.floor(h / 24);
+	return d < 7 ? `${d}d ago` : iso.slice(0, 10);
+}
+
+/** `trailing` shares the header row (the sidebar puts Settings there: one
+ *  quiet footer row instead of two, so the sessions get the room). */
+export function ActivitySection({ feed: feedProp, trailing, sheet = false }: {
+	feed?: ActivityFeed;
+	trailing?: ReactNode;
+	/** The ⋯ menu's own sheet (phones and tablets, round 14 P14): the list
+	 *  opens expanded, under its name. */
+	sheet?: boolean;
+}) {
 	const ctx = useContext(ActivityContext);
 	const feed = feedProp ?? ctx.feed;
+	const recent = feed.recent ?? [];
+	const [historyOpen, setHistoryOpen] = useState(sheet);
 	const refresh = ctx.refresh;
+	// Failures that can still be retried are what the header reports first.
+	const failedCount = failedHelpers(recent);
 	const blobs = useMemo(() => toBlobs(feed), [feed]);
 	const [openBlob, setOpenBlob] = useState<string | null>(null); // detail, inline-expanded
 	const [abortStates, setAbortStates] = useState<Record<string, AbortState>>({});
@@ -305,6 +397,19 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 		return priced.length === 0 ? null : priced.reduce((a, c) => a + c, 0);
 	}, [blobs]);
 
+	// Retry (owner O2): a failed job runs again as it was dispatched.
+	const [retrying, setRetrying] = useState<Record<string, "pending" | "failed">>({});
+	const retry = useCallback(async (jobId: string) => {
+		setRetrying((s) => ({ ...s, [jobId]: "pending" }));
+		try {
+			const res = await fetch("/api/activity/retry", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: jobId }) });
+			if (!res.ok && res.status !== 409) throw new Error(String(res.status));
+			setRetrying((s) => { const { [jobId]: _done, ...rest } = s; return rest; });
+			refresh();
+		} catch {
+			setRetrying((s) => ({ ...s, [jobId]: "failed" }));
+		}
+	}, [refresh]);
 	const abort = useCallback(async (blob: ActivityBlob) => {
 		const { setAbortStates: set } = abortRef.current;
 		set((s) => ({ ...s, [blob.id]: "pending" }));
@@ -344,16 +449,74 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 	// rows match the session rows' hover. Empty means empty: the header sits
 	// alone (the cost span is population, not decoration).
 	return (
-		<section data-testid="activity-section" className="border-t border-border px-3 pb-3 pt-2">
-			<div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-widest text-muted-foreground/70">
-				<ActivityIcon className="size-3" />
-				Background agents
+		<section data-testid="activity-section" data-sheet={sheet || undefined} className="lh-activity-section border-t border-border px-3 pb-2 pt-2">
+			<div className="lh-activity-bar">
+			<button
+				type="button"
+				className="lh-activity-header flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm text-muted-foreground"
+				aria-expanded={recent.length > 0 ? historyOpen : undefined}
+				data-testid="activity-history-toggle"
+				title="Helpers"
+				onClick={() => { if (recent.length > 0) setHistoryOpen((v) => !v); }}
+			>
+				<ActivityIcon className="size-4 shrink-0" />
+				{/* Round 14 (P14): the tutor's background helpers, in words —
+				    "Helpers · 1 failed"; the full name is the accessible name. */}
+				<span className="truncate" aria-hidden="true">Helpers</span>
+				<span className="sr-only">Helpers</span>
+				{blobs.length === 0 && (
+					<span className="lh-activity-count ml-auto flex shrink-0 items-center gap-1 text-xs text-muted-foreground/80" data-failed={failedCount > 0 || undefined}>
+						{failedCount > 0 ? `${failedCount} failed` : recent.length > 0 ? `${recent.length} recent` : "Idle"}
+						{recent.length > 0 && <ChevronDownIcon className={cn("size-3.5 transition-transform", historyOpen && "rotate-180")} aria-hidden />}
+					</span>
+				)}
 				{blobs.length > 0 && (
 					<span className="ml-auto tabular-nums" data-testid="activity-total-cost" title="Total running cost (inferred)">
 						{planCostLabel(totalCost, subscriptionLabels(blobs.map((blob) => blob.model)))}
 				</span>
 				)}
+			</button>
+			{trailing}
 			</div>
+			{/* R12 (round 16): what Helpers are, in one line. */}
+			{(sheet || historyOpen) && <p className="lh-activity-desc" data-testid="helpers-description">{HELPERS_DESCRIPTION}</p>}
+			{sheet && recent.length === 0 && blobs.length === 0 && (
+				<p className="lh-activity-empty">No helpers have run yet. When the tutor sends one off (an import, a search), it shows here.</p>
+			)}
+			{historyOpen && recent.length > 0 && (
+				<ul className="lh-activity-history" data-testid="activity-history" aria-label="Recent helpers">
+					{recent.map((job) => {
+						const Icon = KIND_ICON[job.kind] ?? BotIcon;
+						const status = jobStatusText(job);
+						const failed = status === "Failed";
+						return (
+							<li key={job.id} className="lh-activity-recent" data-status={status === "Cancelled" ? "cancelled" : job.status}>
+								<Icon className="size-4 shrink-0" aria-hidden />
+								<span className="min-w-0 flex-1">
+									<span className="lh-activity-recent-title">{KIND_LABEL[job.kind] ?? "Sub-agent"} · {job.title}</span>
+									<span className="lh-activity-recent-meta">
+										<span className="lh-activity-recent-status">{job.retriedBy ? "Failed · retried" : status}</span>
+										<span className="lh-activity-recent-when">· {settledAgo(job.updatedAt)}</span>
+									</span>
+									{/* The whole reason, readable (owner O2): never cut to a fragment. */}
+									{failed && job.error && <span className="lh-activity-error" data-testid="activity-recent-error">{readableJobError(job.error)}</span>}
+									<span className="lh-activity-actions">
+										{failed && job.canRetry && (
+											<button type="button" className="lh-activity-action" data-testid="activity-retry" disabled={retrying[job.id] === "pending"} onClick={() => void retry(job.id)}>
+												<RotateCwIcon aria-hidden />{retrying[job.id] === "pending" ? "Retrying…" : "Retry"}
+											</button>
+										)}
+										<Link href={`/chat/${job.chatId}`} className="lh-activity-action" data-testid="activity-recent">
+											Open session<ChevronRightIcon aria-hidden />
+										</Link>
+									</span>
+									{retrying[job.id] === "failed" && <span role="alert" className="lh-activity-error">Couldn't start it again. Open the session and ask the tutor instead.</span>}
+								</span>
+							</li>
+						);
+					})}
+				</ul>
+			)}
 			{blobs.length > 0 && (
 				<div className="flex max-h-[40dvh] flex-col gap-1 overflow-y-auto">
 					{blobs.map((blob) => (
@@ -497,6 +660,55 @@ function ActivityBlobRow({
 				</div>
 				</div>
 			)}
+		</div>
+	);
+}
+/**
+ * A tutor helper's failure, shown in the session it affects (round 14,
+ * P14): the reason in plain words, one tap to try again, and the full list
+ * one step away (Helpers, in ⋯). The list stays the advanced view;
+ * this note is what the learner needs here.
+ */
+export function SessionHelperFailures({ chatId, onOpenHelpers }: { chatId: string; onOpenHelpers?: () => void }) {
+	const { feed, refresh } = useContext(ActivityContext);
+	const failed = (feed.recent ?? []).filter((job) => job.chatId === chatId && job.status === "error" && job.canRetry && jobStatusText(job) === "Failed");
+	const [retrying, setRetrying] = useState<Record<string, "pending" | "failed">>({});
+	if (!failed.length) return null;
+	const retry = async (jobId: string) => {
+		setRetrying((s) => ({ ...s, [jobId]: "pending" }));
+		try {
+			const res = await fetch("/api/activity/retry", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: jobId }) });
+			if (!res.ok && res.status !== 409) throw new Error(String(res.status));
+			setRetrying((s) => { const { [jobId]: _done, ...rest } = s; return rest; });
+			refresh();
+		} catch {
+			setRetrying((s) => ({ ...s, [jobId]: "failed" }));
+		}
+	};
+	// L2 (round 19): one concise card however many helpers failed — what
+	// happened in plain words, Retry, and each one's technical detail behind
+	// a disclosure, so repeated Retry cards never take over the lesson.
+	const one = failed.length === 1 ? failed[0]! : null;
+	const pending = failed.some((job) => retrying[job.id] === "pending"), refused = failed.some((job) => retrying[job.id] === "failed");
+	return (
+		<div className="lh-helper-failures" data-testid="session-helper-failures" data-count={failed.length}>
+			<div role="status" className="lh-helper-failure">
+				<span className="lh-helper-failure-text">
+					<strong>{one ? "A helper couldn't finish" : `${failed.length} helpers couldn't finish`}</strong>
+					{one ? <> ({KIND_LABEL[one.kind] ?? "Helper"} · {one.title}). {readableJobError(one.error ?? "")}</> : ". Retry them, or open Helpers for each one."}
+					{refused && " Couldn't start one again — ask the tutor instead."}
+				</span>
+				<span className="lh-helper-failure-actions">
+					<button type="button" className="lh-activity-action" data-testid="session-helper-retry" disabled={pending} onClick={() => { for (const job of failed) void retry(job.id); }}>
+						<RotateCwIcon aria-hidden />{pending ? "Retrying…" : one ? "Retry" : "Retry all"}
+					</button>
+					{onOpenHelpers && <button type="button" className="lh-activity-action" onClick={onOpenHelpers}>Helpers<ChevronRightIcon aria-hidden /></button>}
+				</span>
+				<details className="lh-tech-detail" data-testid="session-helper-detail">
+					<summary>Technical detail</summary>
+					{failed.map((job) => <div key={job.id}>{!one && <p>{KIND_LABEL[job.kind] ?? "Helper"} · {job.title}: {readableJobError(job.error ?? "")}</p>}<pre>{job.error ?? "No error text."}</pre></div>)}
+				</details>
+			</div>
 		</div>
 	);
 }

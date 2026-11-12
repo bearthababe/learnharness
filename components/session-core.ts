@@ -182,6 +182,10 @@ function sameDetails(a: unknown, b: unknown): boolean {
 export interface SessionState {
 	messages: LhViewMessage[];
 	nativeMessages: LhMessage[];
+	/** The server-read record alone (no optimistic tail): the only proof
+	 *  that a message was delivered. Notebook submissions give their
+	 *  optimistic bubble the submission id, so ids cannot tell them apart. */
+	recordMessages: LhMessage[];
 	/** Server-read history only; optimistic bubbles are not delivery proof. */
 	hasConfirmedConversation: boolean;
 	/** Completed conversation usage; null after compaction or before first usage. */
@@ -306,6 +310,7 @@ export class SessionModel {
 		return {
 			messages: projectView(messages, live),
 			nativeMessages: messages,
+			recordMessages: this.base,
 			hasConfirmedConversation: this.base.some(m => m.role === "user" || m.role === "assistant"),
 			contextTokens: measuredContextTokens(messages, this.incompleteUsageIds),
 			status: this.statusValue,
@@ -851,9 +856,11 @@ export class SessionModel {
 
 	/** The answer path (the dock): the answer IS the question call's tool
 	 *  result (fork 1), riding as its input event. */
-	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission" | "writingIds">): Promise<void> {
+	/** Resolves true once the server accepted the answer, false when it was
+	 *  not sent (the question comes back with its draft). */
+	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string, fields?: Pick<Extract<ChatInput, { type: "answer" }>, "submission" | "writingIds">): Promise<boolean> {
 		void tool;
-		return this.send({ type: "answer", toolCallId, answer: output, submission: fields?.submission, writingIds: fields?.writingIds }, undefined, questionKey).then(() => undefined);
+		return this.send({ type: "answer", toolCallId, answer: output, submission: fields?.submission, writingIds: fields?.writingIds }, undefined, questionKey).then((accepted) => accepted === true);
 	}
 
 	/** The dismissal path (owner design 2026-10-03, "A2"): the skipped
@@ -914,20 +921,81 @@ export class SessionModel {
 		this.setStatus("ready");
 	}
 
-	/** Submission snapshots outlive the dock, not the session mount. */
+	/** Question drafts (the answer, its "why", the reading notes) outlive
+	 *  the dock and, in the browser, the page: a reload or leaving the
+	 *  session never loses them (iPhone Safari reloads background tabs). */
 	questionDraft(questionKey: string): QuestionDraft | undefined {
+		// Render-time read: never touches storage, so a server-rendered page
+		// hydrates unchanged. The device copy arrives through
+		// restoreStoredQuestionDrafts(), called once the view has mounted.
 		return this.questionDrafts.get(questionKey);
 	}
 
+	/** Bring this session's device-kept drafts into the view (after mount).
+	 *  True when it added any, so the view can re-seed its fields. */
+	restoreStoredQuestionDrafts(): boolean {
+		if (this.questionDraftsLoaded) return false;
+		const before = this.questionDrafts.size;
+		this.loadQuestionDrafts();
+		return this.questionDrafts.size > before;
+	}
+
 	saveQuestionDraft(questionKey: string, draft: Partial<QuestionDraft>): void {
+		if (!this.questionDraftsLoaded) this.loadQuestionDrafts();
 		this.questionDrafts.set(questionKey, { ...this.questionDrafts.get(questionKey), ...draft });
+		this.persistQuestionDrafts();
+	}
+
+	private questionDraftsLoaded = false;
+	private questionDraftStorage(): Storage | null {
+		try { return typeof window !== "undefined" ? window.localStorage : null; } catch { return null; }
+	}
+	private loadQuestionDrafts(): void {
+		this.questionDraftsLoaded = true;
+		const storage = this.questionDraftStorage();
+		if (!storage) return;
+		try {
+			const saved = JSON.parse(storage.getItem(`lh:question-drafts:${this.chatId}`) ?? "null") as Record<string, QuestionDraft & { form?: { selection?: { selected?: number[] } } }> | null;
+			for (const [key, draft] of Object.entries(saved ?? {})) {
+				if (this.questionDrafts.has(key)) continue; // this view's newer draft wins
+				const form = draft.form ? { ...draft.form, selection: { ...draft.form.selection, selected: new Set(draft.form.selection?.selected ?? []) } } as QuestionDraft["form"] : undefined;
+				this.questionDrafts.set(key, { ...draft, form });
+			}
+		} catch { /* unreadable copy: start fresh, never throw */ }
+	}
+	private pruneStoredQuestionDrafts(keep: string | undefined): void {
+		const storage = this.questionDraftStorage();
+		if (!storage) return;
+		try {
+			const name = `lh:question-drafts:${this.chatId}`;
+			const saved = JSON.parse(storage.getItem(name) ?? "null") as Record<string, unknown> | null;
+			if (!saved) return;
+			const kept = Object.fromEntries(Object.entries(saved).filter(([key]) => key === keep));
+			if (Object.keys(kept).length === Object.keys(saved).length) return;
+			if (Object.keys(kept).length) storage.setItem(name, JSON.stringify(kept));
+			else storage.removeItem(name);
+		} catch { /* unreadable copy: leave it */ }
+	}
+	private persistQuestionDrafts(): void {
+		const storage = this.questionDraftStorage();
+		if (!storage) return;
+		try {
+			const entries = [...this.questionDrafts].map(([key, draft]) => [key, draft.form ? { ...draft, form: { ...draft.form, selection: { ...draft.form.selection, selected: [...draft.form.selection.selected] } } } : draft]);
+			if (entries.length) storage.setItem(`lh:question-drafts:${this.chatId}`, JSON.stringify(Object.fromEntries(entries)));
+			else storage.removeItem(`lh:question-drafts:${this.chatId}`);
+		} catch { /* storage blocked or full: this view keeps the draft */ }
 	}
 
 	private forgetResolvedDrafts(record: readonly LhMessage[]): void {
 		const pendingKey = pendingQuestionOf(record)?.key;
+		let forgot = false;
 		for (const key of this.questionDrafts.keys()) {
-			if (key !== pendingKey) this.questionDrafts.delete(key);
+			if (key !== pendingKey) { this.questionDrafts.delete(key); forgot = true; }
 		}
+		if (this.questionDraftsLoaded) { if (forgot) this.persistQuestionDrafts(); }
+		// Not yet restored into the view: prune the device copy directly (an
+		// empty record is "not loaded yet", never "everything resolved").
+		else if (record.length > 0) this.pruneStoredQuestionDrafts(pendingKey);
 		for (const [id, key] of this.unconfirmedAnswers) {
 			if (key !== pendingKey) this.unconfirmedAnswers.delete(id);
 		}
@@ -980,4 +1048,36 @@ export class SessionModel {
 	clearError(): void {
 		this.setError(null);
 	}
+
+	/** A practice/drill working that was not acknowledged stays in its box:
+	 *  drop its local "sent" card. Returns whether one was removed. */
+	discardUnsentThinking(problemCallId: string, text: string): boolean {
+		const index = this.tail.findLastIndex((message) => {
+			const marker = message as { role?: string; customType?: string; id?: unknown; details?: { problemCallId?: string; text?: string } };
+			return marker.role === "custom" && marker.customType === "practice-thinking" && typeof marker.id === "string" && marker.id.startsWith("c_") &&
+				marker.details?.problemCallId === problemCallId && (marker.details?.text ?? "") === text;
+		});
+		if (index < 0) return false;
+		this.mutate(() => { this.tail = this.tail.filter((_, i) => i !== index); });
+		return true;
+	}
+
+	/** A text send that was not acknowledged goes back to the composer: drop
+	 *  its local optimistic bubble (never a canonical record message), and
+	 *  the failure banner with it. Returns whether a bubble was removed. */
+	discardUnsentText(text: string): boolean {
+		const index = this.tail.findLastIndex((message) =>
+			message.role === "user" && typeof message.id === "string" && message.id.startsWith("c_") &&
+			userMessageText(message) === text);
+		if (index < 0) return false;
+		this.mutate(() => { this.tail = this.tail.filter((_, i) => i !== index); });
+		return true;
+	}
+}
+
+function userMessageText(message: LhMessage): string {
+	const content = (message as { content?: unknown }).content;
+	if (typeof content === "string") return content;
+	if (Array.isArray(content)) return content.map((part) => (part && typeof part === "object" && (part as { type?: string }).type === "text" ? String((part as { text?: unknown }).text ?? "") : "")).join("");
+	return "";
 }

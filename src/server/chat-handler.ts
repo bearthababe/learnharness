@@ -45,6 +45,7 @@ import {
 import { modelsNotConfigured, providerKeyMissing as providerKeyMissingEnvelope, ROLE_SLOT, type ModelSlotName, type ProviderKeyMissing } from "../core/settings.ts";
 import { beginTurn, endTurn } from "./turn-liveness.ts";
 import { applyParkedDismissal } from "./dismissal-park.ts";
+import { noteLearnerActivity } from "./learner-activity.ts";
 import { registerTurn, rememberTurnFailure, unregisterTurn } from "./turn-runs.ts";
 import { persistTurn, triggerExtraction, TurnPersistenceError } from "./turn-service.ts";
 import { hasProbeDone, hasUnresolvedQuestion } from "../core/native-messages.ts";
@@ -194,7 +195,13 @@ export async function handleChatRequest(
 		}
 		throw err;
 	}
-	return handleChatInput(chatId, input, buildAgent);
+	const response = await handleChatInput(chatId, input, buildAgent);
+	// The learner's page sent this and it was taken: the learner acted here,
+	// so the sessions list moves (round 13). A refused request writes
+	// nothing, and the stamp never comes before the input's own write. The
+	// wake pipeline's turns enter through handleChatInput directly.
+	if (response.ok) noteLearnerActivity(chatId);
+	return response;
 }
 
 /**

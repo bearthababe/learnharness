@@ -9,13 +9,15 @@ export const pageOriginSchema = z.discriminatedUnion("kind", [
 	z.object({ kind: z.literal("recovered"), writingId }).strict(),
 	z.object({ kind: z.literal("external"), writingId, seedHead: z.string(), seedFingerprint: fingerprint }).strict(),
 	z.object({ kind: z.literal("duplicate"), from, seedFingerprint: fingerprint }).strict(),
+	// Round 14 (T4): "Add page" starts an empty page of its own.
+	z.object({ kind: z.literal("blank") }).strict(),
 ]);
 export const pageSummarySchema = z.object({ id: notebookPageIdSchema, origin: pageOriginSchema, createdAt: z.iso.datetime().nullable() }).strict();
 export const handwritingPageSchema = pageSummarySchema.extend({ version: z.literal(1), journal: handwritingV2Schema }).strict().superRefine((page, ctx) => {
 	if (page.id !== page.journal.pageId || (page.id === "page_initial" ? page.origin.kind !== "working" || page.createdAt !== null : page.createdAt === null)) ctx.addIssue({ code: "custom", message: "Invalid page identity or metadata" });
 	if (page.origin.kind === "external" && page.journal.events[page.origin.seedHead]?.kind !== "import-background") ctx.addIssue({ code: "custom", message: "Missing external seed" });
 });
-export const pageCreationSchema = z.object({ id: z.string().regex(/^[A-Za-z0-9_-]+$/), kind: z.enum(["duplicate", "recover", "external"]), seedFingerprint: fingerprint, from }).strict();
+export const pageCreationSchema = z.object({ id: z.string().regex(/^[A-Za-z0-9_-]+$/), kind: z.enum(["duplicate", "recover", "external", "blank"]), seedFingerprint: fingerprint, from }).strict();
 export type HandwritingPage = z.infer<typeof handwritingPageSchema>;
 export type PageSummary = z.infer<typeof pageSummarySchema>;
 export type PageCreation = z.infer<typeof pageCreationSchema>;
@@ -35,6 +37,9 @@ export function validatePageCreation(page: HandwritingPage, creation: PageCreati
 	if (creation.kind === "recover") {
 		if (creation.from.kind === "working") { if (creation.from.pageId !== page.id) throw new HandwritingConflict("Invalid local recovery identity"); }
 		else if (page.id !== "page_initial" && (origin.kind !== "recovered" || origin.writingId !== creation.from.writingId)) throw new HandwritingConflict("Invalid recovery identity");
+	} else if (creation.kind === "blank") {
+		// A blank page names itself as its seed and starts with nothing on it.
+		if (origin.kind !== "blank" || creation.from.kind !== "working" || creation.from.pageId !== page.id || page.journal.head !== null) throw new HandwritingConflict("Invalid blank page identity");
 	} else if (origin.kind !== creation.kind || origin.seedFingerprint !== creation.seedFingerprint || (origin.kind === "duplicate" ? canonicalHandwriting(origin.from) !== canonicalHandwriting(creation.from) : creation.from.kind !== "snapshot" || origin.writingId !== creation.from.writingId)) throw new HandwritingConflict("Conflicting creation identity");
 }
 export function existingPageCreation(current: HandwritingPage, seed: HandwritingPage, creation: PageCreation): HandwritingPage {

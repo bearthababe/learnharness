@@ -48,7 +48,7 @@ export function useChainNavigation(rootRef: RefObject<HTMLDivElement | null>, se
 	const active = useRef<string | null>(null);
 	const pendingEnter = useRef<string | null>(null);
 	const pendingFocus = useRef<string | null>(null);
-	const readRows = () => [...(rootRef.current?.querySelectorAll<HTMLElement>("[data-chain-nav-row]") ?? [])].map((element) => ({
+	const readRows = () => [...(rootRef.current?.querySelectorAll<HTMLElement>("[data-chain-nav-row]") ?? [])].filter((element) => !element.closest("[hidden]")).map((element) => ({
 		element, key: element.dataset.chainNavRow!, depth: Number(element.dataset.chainNavDepth),
 		expanded: element.dataset.chainNavExpanded === undefined ? undefined : element.dataset.chainNavExpanded === "true",
 	}));

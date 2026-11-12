@@ -5,13 +5,16 @@ export const notesPath = (file: File): string => file.webkitRelativePath || file
 /** Folder imports silently exclude dot-prefixed files and directories below
  * the chosen root. The root is segment 0 and stays importable even when hidden. */
 const hiddenInFolder = (file: File): boolean => file.webkitRelativePath.split("/").slice(1).some((part) => part.startsWith("."));
+export interface ImportDone { filePath: string; ideas: number; chains: number }
 export interface ImportQueueSnapshot {
 	importing: boolean;
 	errors: string[];
 	notices: string[];
+	/** Files that finished, with what they added (shown until dismissed). */
+	done: ImportDone[];
 	completion: number;
 }
-export const EMPTY_IMPORT_QUEUE: ImportQueueSnapshot = { importing: false, errors: [], notices: [], completion: 0 };
+export const EMPTY_IMPORT_QUEUE: ImportQueueSnapshot = { importing: false, errors: [], notices: [], done: [], completion: 0 };
 
 /** PR198's refill-on-completion, one-request-per-file transport, extended to
  * accept later selections. One instance per page, NOT three workers per click.
@@ -21,11 +24,12 @@ export function createNotesImportQueue(post: (files: readonly File[]) => Promise
 	const pending: { file: File; index: number }[] = [];
 	const failures = new Map<number, string>();
 	const notices = new Map<number, string>();
+	const done = new Map<number, ImportDone>();
 	let active = 0, sequence = 0;
 	let snapshot = EMPTY_IMPORT_QUEUE;
 	const ordered = (map: Map<number, string>) => [...map].sort(([a], [b]) => a - b).map(([, text]) => text);
 	const publish = (completed = false) => {
-		snapshot = { importing: active > 0 || pending.length > 0, errors: ordered(failures), notices: ordered(notices), completion: snapshot.completion + Number(completed) };
+		snapshot = { importing: active > 0 || pending.length > 0, errors: ordered(failures), notices: ordered(notices), done: [...done].sort(([a], [b]) => a - b).map(([, item]) => item), completion: snapshot.completion + Number(completed) };
 		for (const listener of [...listeners]) listener();
 	};
 	// Normalize a synchronously throwing transport to the same async settlement.
@@ -41,7 +45,10 @@ export function createNotesImportQueue(post: (files: readonly File[]) => Promise
 					if (!r.ok) {
 						const details = [r.provider, r.missing?.join(", "), r.slots?.join(", ")].filter(Boolean);
 						failures.set(index, `${r.filePath}: ${r.error}${r.code ? `\n${[r.code, ...details].join(" — ")}` : ""}`);
-					} else if (r.notice) notices.set(index, `${r.filePath}: ${r.notice}`);
+					} else {
+						done.set(index, { filePath: r.filePath, ideas: r.stats?.nodes ?? 0, chains: r.stats?.chains ?? 0 });
+						if (r.notice) notices.set(index, `${r.filePath}: ${r.notice}`);
+					}
 				} catch (error) {
 					// Never retry an ambiguous response: the merge may have committed.
 					failures.set(index, `${notesPath(file)}: ${error instanceof Error ? error.message : String(error)}`);
@@ -55,15 +62,23 @@ export function createNotesImportQueue(post: (files: readonly File[]) => Promise
 	}
 	return {
 		getSnapshot: () => snapshot,
+		/** Clear settled errors and notices (the learner dismissed them). */
+		dismiss() {
+			if (failures.size === 0 && notices.size === 0 && done.size === 0) return;
+			failures.clear(); notices.clear(); done.clear();
+			publish();
+		},
 		subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
 		append(files: readonly File[]) {
 			if (files.length === 0) return;
-			if (!snapshot.importing) { failures.clear(); notices.clear(); sequence = 0; }
+			if (!snapshot.importing) { failures.clear(); notices.clear(); done.clear(); sequence = 0; }
 			for (const file of files) {
 				const index = sequence++;
 				const path = notesPath(file);
 				if (file.webkitRelativePath && hiddenInFolder(file)) continue;
-				if (!IMPORT_EXTENSIONS.test(path) || !validNotesPath(path, file.name)) failures.set(index, `${path}: Unsupported format or unsafe relative path.`);
+				// Say which cause applies, and what does work.
+				if (!IMPORT_EXTENSIONS.test(path)) failures.set(index, `${path}: This file type can't be imported. Use Markdown (.md), text (.txt) or PDF.`);
+				else if (!validNotesPath(path, file.name)) failures.set(index, `${path}: This file's location can't be read safely. Move it into a plain folder and try again.`);
 				else if (file.size > MAX_IMPORT_BYTES) failures.set(index, `${path}: Too big. Max 25 MB.`);
 				else pending.push({ file, index });
 			}

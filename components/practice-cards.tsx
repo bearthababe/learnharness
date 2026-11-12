@@ -20,7 +20,7 @@ import type { ArtifactPartProps, LearnerExplanation } from "@/src/core";
  *   language in a faint user-side shell, never collapsible.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ThinkingBlock } from "@/components/thinking-block";
@@ -56,7 +56,13 @@ export interface PracticeThinkingData {
 	text: string;
 }
 
+/** The problem the dock is showing right now (its call id). The transcript
+ *  copy of that problem folds to a one-line pointer so the statement is
+ *  read once, beside the learner's working. */
+export const ActiveProblemContext = createContext<string | null>(null);
+
 export function ProblemCard({ part }: ArtifactPartProps) {
+	const active = useContext(ActiveProblemContext) === part.toolCallId;
 	// Always open, no chevron (owner round, 2026-10-05): the record IS the
 	// statement — same container + eyebrow discipline as the answered card
 	// and the dock (which mirrors this in Slice D). The commitment never
@@ -64,8 +70,8 @@ export function ProblemCard({ part }: ArtifactPartProps) {
 	const input = (part.input ?? {}) as { statement?: string };
 	const statement = typeof input.statement === "string" ? input.statement : "";
 	return (
-		<div data-testid="problem-card" className="lh-card-enter my-1 rounded-xl border bg-card p-4">
-			<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Problem</div>
+		<div data-testid="problem-card" data-active={active || undefined} className="lh-problem-card lh-card-enter my-1 rounded-xl border bg-card p-4">
+			<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Problem{active && <span className="lh-problem-active-note"> · answering below</span>}</div>
 			<div className="lh-prose text-[15px]">
 				<ToolContentResponse>{statement}</ToolContentResponse>
 			</div>
@@ -238,7 +244,7 @@ function MetadataPopover({
 					});
 				}}
 				aria-expanded={open}
-				className="flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
+				className="lh-row-toggle flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground"
 			>
 				Metadata
 			</button>

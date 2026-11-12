@@ -28,6 +28,7 @@ import {
 	useEffect,
 	useRef,
 	useState,
+	useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 import { useBackdropDismiss } from "@/components/backdrop-dismiss";
@@ -42,7 +43,9 @@ import {
 import { useAppearance } from "./appearance.tsx";
 import { SettingsSection } from "./controls.tsx";
 import { UpdateSettings } from "./update-settings.tsx";
+import { DeviceToolsSettings } from "./device-tools.tsx";
 import { RuntimeSettings } from "./runtime-settings.tsx";
+import { AboutSection } from "./about-section.tsx";
 import { AgentSection } from "./agent-section.tsx";
 import type { ModelsSettings } from "@/src/core";
 import { MENU_CLOSE_EVENT, MENU_OPEN_EVENT } from "@/components/menu-shell";
@@ -51,20 +54,52 @@ import { KeysSection } from "./keys-section.tsx";
 import { Hint } from "@/components/ui/hint";
 import { AppearanceSection, GraphSection } from "./appearance-section.tsx";
 import { KeyboardSection } from "./keyboard-section.tsx";
+import { TryoutsSection } from "./tryouts-section.tsx";
 import { ChatGPTUIProvider } from "./chatgpt-connection.tsx";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { useDeviceClass } from "@/components/device-features";
+import { ActivityIcon, BrainIcon, ChevronLeftIcon, ChevronRightIcon, FlaskConicalIcon, InfoIcon, KeyRoundIcon, KeyboardIcon, PaletteIcon, SlidersHorizontalIcon } from "lucide-react";
 import { NativeSubscriptionUIProvider } from "./subscription-connections.tsx";
+import { useOneMenu } from "@/components/one-menu";
+import { useDialogFocus } from "@/components/dialog-focus";
 
 /** Owner (2026-09-20): hints earn their place — mechanics-explaining
  *  prose is out; only the keyboard note stays (storage location is a
  *  real question users ask). */
 const SECTIONS = [
-	{ id: "keys", label: "Providers" },
-	{ id: "agent", label: "Agent" },
-	{ id: "appearance", label: "Appearance" },
-	{ id: "graph", label: "Graph" },
-	{ id: "keyboard", label: "Keyboard", hint: "Stored on this device" },
-	{ id: "general", label: "General" },
+	{ id: "keys", label: "Providers", blurb: "Model keys and subscriptions" },
+	{ id: "agent", label: "Agent", blurb: "Models, tools and context" },
+	{ id: "appearance", label: "Appearance", blurb: "Reading size, fonts and colours" },
+	{ id: "graph", label: "Graph", blurb: "Knowledge graph and extraction" },
+	{ id: "keyboard", label: "Keyboard", hint: "Stored on this device", blurb: "Shortcuts" },
+	{ id: "general", label: "General", blurb: "Tools on this device, updates" },
+	// Round 16: alternatives to compare, after the everyday settings.
+	{ id: "tryouts", label: "Try-out designs", blurb: "Alternative designs to compare" },
+	// Round 19 (L15, §0): the build and the 🐞 problem reports, last.
+	{ id: "about", label: "About this app", blurb: "Build and problem reports" },
 ] as const;
+// Phones only: tablets keep the two-pane list beside the section, so
+// switching categories stays one tap.
+const NARROW_SETTINGS = "(max-width: 767px)";
+function subscribeNarrow(update: () => void) {
+	const media = window.matchMedia?.(NARROW_SETTINGS);
+	media?.addEventListener("change", update);
+	return () => media?.removeEventListener("change", update);
+}
+function useNarrowSettings() {
+	return useSyncExternalStore(subscribeNarrow, () => window.matchMedia?.(NARROW_SETTINGS).matches ?? false, () => false);
+}
+
+const SECTION_ICON = {
+	keys: KeyRoundIcon,
+	agent: BrainIcon,
+	appearance: PaletteIcon,
+	graph: ActivityIcon,
+	keyboard: KeyboardIcon,
+	general: SlidersHorizontalIcon,
+	tryouts: FlaskConicalIcon,
+	about: InfoIcon,
+} as const;
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 /** `open(section?, row?)` — the optional ROW deep-links into the Keys
@@ -85,17 +120,20 @@ export function SettingsDialogProvider({
 	const [show, setShow] = useState(false);
 	const [landOn, setLandOn] = useState<SectionId>("keys");
 	const [landOnRow, setLandOnRow] = useState<string | null>(null);
+	const [landExplicit, setLandExplicit] = useState(false);
 	const open = useCallback((section?: string, row?: string) => {
 		setLandOn(section ? section as SectionId : "keys");
 		setLandOnRow(row ?? null);
+		setLandExplicit(!!section);
 		setShow(true);
 	}, []);
 	useEffect(() => window.lh?.onOpenSettings?.((section) => open(section)), [open]);
+	useOneMenu("settings", show, () => setShow(false));
 	return (
 		<ChatGPTUIProvider><NativeSubscriptionUIProvider><DialogContext.Provider value={{ open }}>
 			{children}
 			{show && (
-				<SettingsDialog onClose={() => setShow(false)} initialSection={landOn} initialRow={landOnRow} />
+				<SettingsDialog onClose={() => setShow(false)} initialSection={landOn} initialRow={landOnRow} startWithList={!landExplicit} />
 			)}
 		</DialogContext.Provider></NativeSubscriptionUIProvider></ChatGPTUIProvider>
 	);
@@ -109,11 +147,14 @@ function SettingsDialog({
 	onClose,
 	initialSection,
 	initialRow,
+	startWithList,
 }: {
 	onClose: () => void;
 	initialSection: SectionId;
 	/** The keys-section row to unfold (see DialogContext above). */
 	initialRow: string | null;
+	/** Phones open on the section list unless a caller asked for a section. */
+	startWithList: boolean;
 }) {
 	const backdropDismiss = useBackdropDismiss(onClose);
 	// Plain dim backdrop (no blur — nothing decorative); a genuine
@@ -124,7 +165,7 @@ function SettingsDialog({
 			data-testid="settings-backdrop"
 			{...backdropDismiss}
 		>
-			<SettingsDialogBody onClose={onClose} initialSection={initialSection} initialRow={initialRow} />
+			<SettingsDialogBody onClose={onClose} initialSection={initialSection} initialRow={initialRow} startWithList={startWithList} />
 		</div>,
 		document.body,
 	);
@@ -136,8 +177,11 @@ export function SettingsDialogBody({
 	onClose,
 	initialSection = "keys",
 	initialRow = null,
+	startWithList = false,
 }: {
 	onClose: () => void;
+	/** Phones: show the section list first (drill-in navigation). */
+	startWithList?: boolean;
 	initialSection?: SectionId;
 	/** The keys row to unfold on arrival (null = none). While-open
 	 *  retargets follow it exactly like initialSection below. */
@@ -190,6 +234,18 @@ export function SettingsDialogBody({
 	useEffect(() => {
 		setActive(initialSection);
 	}, [initialSection]);
+	// Below 840px wide settings is one column that drills into a section.
+	const phoneLayout = usePhoneLayout();
+	const narrowSettings = useNarrowSettings();
+	const phone = phoneLayout || narrowSettings;
+	// T10 (round 17): keyboard shortcuts are for computers; phones and tablets
+	// (touch devices) do not list them.
+	const deviceClass = useDeviceClass();
+	const noShortcuts = phone || deviceClass === "phone" || deviceClass === "tablet";
+	useEffect(() => { if (noShortcuts && active === "keyboard") setActive("general"); }, [noShortcuts, active]);
+	const [listOpen, setListOpen] = useState(startWithList);
+	const phoneList = phone && listOpen;
+	const activeLabel = SECTIONS.find((x) => x.id === active)?.label ?? "Settings";
 
 	// Fetch once per dialog mount. 200 {settings: null} is FIRST BOOT
 	// (no record = factory everything), not a failure — the error state is
@@ -264,18 +320,27 @@ export function SettingsDialogBody({
 		[onAppearanceChange],
 	);
 
+	const dialogRef = useRef<HTMLDivElement>(null);
+	useDialogFocus(dialogRef);
 	return (
 		<div
+			ref={dialogRef}
 			role="dialog"
 			aria-modal="true"
 			aria-label="Settings"
 			data-testid="settings-dialog"
-			className="settings-dialog-pop flex h-[620px] max-h-[85vh] w-[920px] max-w-[90vw] flex-col overflow-hidden rounded-md border border-border bg-card shadow-xl"
+			data-phone-view={phone ? (phoneList ? "list" : "section") : undefined}
+			className="lh-settings settings-dialog-pop flex h-[680px] max-h-[88vh] w-[960px] max-w-[92vw] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl"
 			onClick={(e) => e.stopPropagation()}
 		>
-			{/* Header — the app's quiet CMU title language. */}
-			<header className="flex h-15 shrink-0 items-center gap-3 border-b border-border px-5">
-				<h2 className="font-title text-2xl tracking-tight">Settings</h2>
+			<header className="lh-settings-header flex h-15 shrink-0 items-center gap-3 border-b border-border px-5">
+				{phone && !phoneList && (
+					<button type="button" className="lh-settings-back" data-testid="settings-back" onClick={() => setListOpen(true)} aria-label="All settings">
+						<ChevronLeftIcon aria-hidden />
+						<span>Settings</span>
+					</button>
+				)}
+				<h2 className="lh-settings-title">{phone && !phoneList ? activeLabel : "Settings"}</h2>
 				<Hint
 						// Esc closes the dialog (its own listener) — surface it.
 						label="Close"
@@ -286,12 +351,12 @@ export function SettingsDialogBody({
 					type="button"
 					aria-label="Close settings"
 					data-testid="settings-close"
-					className="ml-auto size-7 rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					className="lh-settings-close ml-auto size-9 rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 					onClick={onClose}
 				>
 					<svg
 						viewBox="0 0 16 16"
-						className="mx-auto size-3.5"
+						className="mx-auto size-4"
 						fill="none"
 						stroke="currentColor"
 						strokeWidth="1.5"
@@ -308,24 +373,29 @@ export function SettingsDialogBody({
 				<nav
 					aria-label="Settings sections"
 					data-testid="settings-nav"
-					className="flex w-44 shrink-0 flex-col gap-1 border-r border-border p-2"
+					hidden={phone && !phoneList}
+					className="lh-settings-nav flex w-52 shrink-0 flex-col gap-0.5 border-r border-border p-2"
 				>
-					{SECTIONS.map((s) => (
-						<button
-							key={s.id}
-							type="button"
-							data-testid={`settings-nav-${s.id}`}
-							aria-current={active === s.id}
-							className={`rounded-sm px-3 py-1.5 text-left font-ui text-sm transition-colors ${
-								active === s.id
-									? "bg-accent text-foreground"
-									: "text-muted-foreground hover:bg-accent hover:text-foreground"
-							}`}
-							onClick={() => setActive(s.id)}
-						>
-							{s.label}
-						</button>
-					))}
+					{SECTIONS.filter((s) => !(noShortcuts && s.id === "keyboard")).map((s) => {
+						const Icon = SECTION_ICON[s.id];
+						return (
+							<button
+								key={s.id}
+								type="button"
+								data-testid={`settings-nav-${s.id}`}
+								aria-current={!phone && active === s.id}
+								className="lh-settings-nav-item"
+								onClick={() => { setActive(s.id); setListOpen(false); }}
+							>
+								<span className="lh-settings-nav-icon"><Icon aria-hidden /></span>
+								<span className="min-w-0 flex-1">
+									<span className="lh-settings-nav-label">{s.label}</span>
+									<span className="lh-settings-nav-blurb">{s.blurb}</span>
+								</span>
+								<ChevronRightIcon className="lh-settings-nav-chevron" aria-hidden />
+							</button>
+						);
+					})}
 				</nav>
 
 				{/* Content column — one section at a time, this scrolls — and
@@ -336,7 +406,8 @@ export function SettingsDialogBody({
 				    nothing may shift when the lock engages. */}
 				<div
 					ref={contentRef}
-					className="min-w-0 flex-1 overflow-y-auto"
+					hidden={phoneList}
+					className="lh-settings-content min-w-0 flex-1 overflow-y-auto"
 					data-testid="settings-content"
 				>
 					{error && (
@@ -363,6 +434,8 @@ export function SettingsDialogBody({
 									title="General"
 									testid="section-general"
 								>
+									<DeviceToolsSettings />
+									{/* main: the running service's status, beside its updates. */}
 									<RuntimeSettings />
 									<UpdateSettings
 										autoUpdate={record.general?.autoUpdate ?? true}
@@ -426,7 +499,17 @@ export function SettingsDialogBody({
 									/>
 								</SettingsSection>
 							)}
-							{active === "keyboard" && (
+							{active === "tryouts" && (
+								<SettingsSection title="Try-out designs" testid="section-tryouts">
+									<TryoutsSection />
+								</SettingsSection>
+							)}
+							{active === "about" && (
+								<SettingsSection title="About this app" testid="section-about">
+									<AboutSection />
+								</SettingsSection>
+							)}
+							{active === "keyboard" && !noShortcuts && (
 								<SettingsSection
 									title="Keyboard"
 									hint="Stored on this device"

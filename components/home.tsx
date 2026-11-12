@@ -1,16 +1,22 @@
 "use client";
 
+import { useCoarsePointer, usePhoneLayout } from "@/components/use-phone-viewport";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CornerDownLeftIcon, DumbbellIcon } from "lucide-react";
+import { ArrowUpIcon, BookOpenIcon, DumbbellIcon, TargetIcon } from "lucide-react";
+import { CompactLearningInput, useMicSlot, useFocusWithin } from "@/components/compact-learning-input";
+import { ResumeStrip } from "@/components/resume-strip";
 import { GraphView } from "@/components/graph-view";
 import { MinimalHome } from "@/components/minimal-home";
 import { SetupDialog } from "@/components/setup-dialog";
-import { ComposerActions, NodePickerControl } from "@/components/composer-actions";
+import { ComposerActions } from "@/components/composer-actions";
 import { useModelSetup, selectedModelUnavailable, openModelPicker, ZeroKeysPill } from "@/components/setup-cta";
 import { DictationBar, joinDictation, useDictation } from "@/components/dictation";
 import { useFieldCycle } from "@/components/field-cycle";
 import { SidebarToggle } from "@/components/sidebar";
+import { HomeButton } from "@/components/app-nav";
+import { PageMenuButton } from "@/components/page-menu";
 import { StatsBar } from "@/components/stats-bar";
 import { OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { PathInput } from "@/components/path-input";
@@ -24,18 +30,46 @@ import type { TurnUsage } from "@/src/core";
  * under the header and the new-session dock, both of which float over it
  * with no gradient scrims. Sessions live in the toggleable sidebar.
  */
+/** One line per mode (R7): what starting it here does. */
+const MODE_HINT = {
+	teach: "The tutor starts by finding out what you already know.",
+	practice: "Describe what to practise, or",
+	drill: "Short, repeated exercises on one skill.",
+} as const;
+
+/** What Home asks the server for (the one place sessions start): the
+ *  learner's words as the title; practice and drill as their own kind;
+ *  picked ideas only when there are some. */
+export function sessionStartRequest(
+	title: string,
+	mode: "teach" | "practice" | "drill",
+	picks: readonly { id: string; name: string; statement: string }[] = [],
+) {
+	return {
+		title,
+		...(mode !== "teach" ? { kind: "practice" as const } : {}),
+		...(mode === "drill" ? { practiceMode: "drill" as const } : {}),
+		...(picks.length > 0 ? { graphContext: { propositions: [...picks] } } : {}),
+	};
+}
+
 export function Home({
 	initialConfigured,
 	rendering = true,
+	initialMode,
 }: {
 	initialConfigured: boolean;
 	/** GRAPH RENDERING off (owner, 2026-10-06): the home's main view is
 	 * the chains view, not the canvas. Read server-side per navigation —
 	 * changing the setting applies on the next visit home. */
 	rendering?: boolean;
+	/** "New session" from anywhere (owner O4): the mode it asked for. */
+	initialMode?: "teach" | "practice" | "drill";
 }) {
 	const router = useRouter();
 	const [topic, setTopic] = useState("");
+	const [composerFocused, composerFocusHandlers] = useFocusWithin();
+	const coarse = useCoarsePointer();
 	/* The topic MIRROR ("nothing gets lost" round, 2026-10-01 — same
 	 * mechanics as the chat composer, owner's consistency ruling): a
 	 * dictation flush lands via setState, invisible to a closure that
@@ -59,6 +93,11 @@ export function Home({
 			setTopic(v);
 		},
 	});
+	const [micSlot, setMicSlot] = useMicSlot();
+	// B2 (round 17): only a keyboard-and-mouse computer starts in the field.
+	// On touch screens a focused field shows as active (and empty) on arrival
+	// without raising a keyboard, which reads as a stuck search.
+	useEffect(() => { if (!window.matchMedia?.("(pointer: coarse)").matches) topicInputRef.current?.focus({ preventScroll: true }); }, []);
 	const [busy, setBusy] = useState(false);
 	const startingRef = useRef(false);
 	const starterRef = useRef(new SessionStarter());
@@ -92,7 +131,16 @@ export function Home({
 	 *  may carry proposition picks from the chain table (the chip above
 	 *  the composer opens the picker; the picks seed the opening prompt).
 	 *  Not enforcing any input format — the picks are a convenience. */
-	const [mode, setMode] = useState<"teach" | "practice" | "drill">("teach");
+	const [mode, setMode] = useState<"teach" | "practice" | "drill">(initialMode ?? "teach");
+	const phoneLayout = usePhoneLayout();
+	// A "New session" link (drawer, shortcut) can arrive while Home is
+	// already showing: take its mode and put the cursor in the box (not on
+	// touch screens, where focusing would pop the keyboard unasked).
+	useEffect(() => {
+		if (!initialMode) return;
+		setMode(initialMode);
+		if (!window.matchMedia?.("(pointer: coarse)").matches) topicInputRef.current?.focus({ preventScroll: true });
+	}, [initialMode]);
 	const [practiceProps, setPracticeProps] = useState<{ id: string; name: string; statement: string }[]>([]);
 	const [chainSelectOpen, setChainSelectOpen] = useState(false);
 	// The chain table is CONTROLLED off this id set (the lifted pick).
@@ -144,12 +192,7 @@ export function Home({
 			// graph-context marker as message[0] (a separate custom message
 			// before the learner's first user message, propositions + the
 			// chains among them); the prompt stays the learner's own words.
-			const target = await starterRef.current.start({
-				title: t,
-				...(mode !== "teach" ? { kind: "practice" } : {}),
-				...(mode === "drill" ? { practiceMode: "drill" } : {}),
-				...(practiceProps.length > 0 ? { graphContext: { propositions: practiceProps } } : {}),
-			}, fetch, JSON.stringify(catalog?.slots.strong));
+			const target = await starterRef.current.start(sessionStartRequest(t, mode, practiceProps), fetch, JSON.stringify(catalog?.slots.strong));
 			router.push(target);
 		} catch {
 			startingRef.current = false;
@@ -202,8 +245,14 @@ export function Home({
 			    div above, and the toggle's lh-no-drag subtracts from it (it is
 			    later in the tree, so the subtraction sticks). */}
 			<header className="lh-home-navigation pointer-events-none absolute inset-x-0 top-0 flex items-center gap-2 px-3 py-2">
-				<div className="pointer-events-auto">
+				<div className="pointer-events-auto flex items-center gap-2">
 					<SidebarToggle />
+					{/* The same pair as every bar; here Home is where you are. */}
+					<HomeButton current />
+				</div>
+				{/* Phones: the new-session model and reasoning (owner O1). */}
+				<div className="lh-home-page-menu pointer-events-auto ml-auto">
+					<PageMenuButton />
 				</div>
 			</header>
 
@@ -211,7 +260,7 @@ export function Home({
 			    OVER the graph (no gradient: the graph runs clean under it to the
 			    bottom edge). Matches chat.tsx's DOCK geometry (max-w-[46rem]
 			    px-4) so nothing shifts when a session starts (owner). */}
-			<div className="pointer-events-none absolute inset-x-0 bottom-0 pb-5">
+			<div className="lh-home-dock pointer-events-none absolute inset-x-0 bottom-0 pb-5">
 				<div className="pointer-events-auto mx-auto w-full max-w-[46rem] px-4">
 					{/* The pick bar (owner vision, 2026-10-04): the chain
 					    table's selection is PERSISTENT — picked
@@ -220,14 +269,41 @@ export function Home({
 					    send consumes it). Practice mode with nothing picked
 					    shows the pick HINT so the affordance is discoverable;
 					    teaching mode with nothing picked renders nothing. */}
+					{configured && <ResumeStrip />}
+					<div className="lh-mode-row">
+						<div className="lh-segmented lh-mode-switch" role="group" aria-label="Session type" data-testid="home-mode-switch">
+								{(["teach", "practice", "drill"] as const).map((m) => (
+									<button
+										key={m}
+										type="button"
+										data-testid={`home-mode-${m}`}
+										data-kind={m}
+										data-active={mode === m}
+										aria-pressed={mode === m}
+										onClick={() => setMode(m)}
+									>
+										{m === "teach" ? <BookOpenIcon aria-hidden="true" /> : m === "drill" ? <TargetIcon aria-hidden="true" /> : <DumbbellIcon aria-hidden="true" />}
+										{m === "teach" ? "Teach" : m === "drill" ? "Drill" : "Practice"}
+									</button>
+								))}
+							</div>
+					</div>
+					{/* R7 (round 13): what the chosen mode does, in one line — the
+					    same height for every mode, so switching never moves anything.
+					    Round 14 (P4): choosing ideas is a link in this line (the
+					    squashed badge beside the modes is gone); chosen ideas show
+					    here in any mode, since every start takes them along. */}
+					<p className="lh-mode-hint" data-testid="mode-hint" data-kind={mode}>
+						{practiceProps.length > 0 ? <>
+							<span>{practiceProps.length} {practiceProps.length === 1 ? "idea" : "ideas"} chosen</span>
+							<button type="button" className="lh-hint-link" data-testid="practice-props-chip" onClick={() => setChainSelectOpen(true)}>Change ›</button>
+							<button type="button" className="lh-hint-link" data-testid="practice-props-clear" aria-label="Clear chosen ideas" onClick={() => setPracticeProps([])}>Clear</button>
+						</> : mode === "practice" ? <>
+							<span>{MODE_HINT.practice}</span>
+							<button type="button" className="lh-hint-link" data-testid="practice-props-chip" onClick={() => setChainSelectOpen(true)}>choose ideas ›</button>
+						</> : MODE_HINT[mode]}
+					</p>
 					<ComposerActions
-						picker={(practiceProps.length > 0 || mode === "practice") && (
-							<NodePickerControl
-								count={practiceProps.length}
-								onOpen={() => setChainSelectOpen(true)}
-								onClear={() => setPracticeProps([])}
-							/>
-						)}
 						setup={zeroKeys ? (
 							<ZeroKeysPill inline onOpen={() => setSetupOpen(true)} />
 						) : (
@@ -236,7 +312,7 @@ export function Home({
 									type="button"
 									data-testid="setup-cta"
 									onClick={() => setSetupOpen(true)}
-									className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
+									className="lh-setup-cta cursor-pointer"
 								>
 									Set up your models
 								</button>
@@ -246,13 +322,14 @@ export function Home({
 					{startError && <p role="alert" className="mb-2 text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
 					<form
 						data-attachment-composer=""
-						className="flex items-end gap-1.5 rounded-2xl border bg-card p-1.5 shadow-lg"
+						className="lh-composer-shell lh-compact-row flex items-end gap-1.5 rounded-2xl border bg-card p-1.5 shadow-lg"
+						{...composerFocusHandlers}
 					onSubmit={(e) => {
 						e.preventDefault();
 						void start();
 					}}
 				>
-					<PathInput
+					<CompactLearningInput dictation={dictation} micSlot={micSlot}><PathInput
 						ref={topicInputRef}
 						value={topic}
 						onValueChange={(value) => {
@@ -275,20 +352,25 @@ export function Home({
 								void start();
 							}
 						}}
-						placeholder={mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
-						autoFocus
+						/* B8 (round 18): a short form on phones, where the field sits beside the mic and Start. */
+						placeholder={phoneLayout ? (mode === "drill" ? "What to drill?" : mode === "practice" ? "What to practice?" : "What to learn?") : mode === "drill" ? "What do you want to drill?" : mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
 						className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
-					/>
+					/></CompactLearningInput>
 					<AttachFilesButton editorRef={topicInputRef} />
+					{/* S1 (round 17): the mic, right before Start. */}
+					<span ref={setMicSlot} className="lh-mic-slot" />
 					{/* No tooltip on the start square — the ↵ glyph is the
 					    affordance (owner, subtlety round 2026-09-25). */}
 					<button
 						type="submit"
 						aria-label="Start session"
 						disabled={(!topic.trim() && !dictation.active) || busy}
-						className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-40"
+						// R12 (round 15): on laptops Send appears with something to send,
+						// as in sessions; on touch screens focus shows it too (M6).
+						data-ready={(!!topic.trim() || dictation.active || (composerFocused && coarse)) || undefined}
+						className="lh-send-button flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-40"
 					>
-						<CornerDownLeftIcon className="size-5" />
+						<ArrowUpIcon className="size-5" />
 					</button>
 					</form>
 					{/* Same as the chat view's under-composer stats bar (owner) — no
@@ -298,27 +380,7 @@ export function Home({
 					<StatsBar
 						dictationSlot={<DictationBar dictation={dictation} />}
 						turns={[] as TurnUsage[]}
-						leadingSlot={
-							<div className="flex items-center gap-0.5 rounded-md border border-border/60 bg-background p-0.5" data-testid="home-mode-switch">
-								{(["teach", "practice", "drill"] as const).map((m) => (
-									<button
-										key={m}
-										type="button"
-										data-testid={`home-mode-${m}`}
-										onClick={() => setMode(m)}
-										className={
-											"flex items-center gap-1 rounded-sm px-2 py-0.5 text-[11px] uppercase tracking-wider transition-colors " +
-											(mode === m
-												? "bg-accent text-foreground"
-												: "text-muted-foreground hover:text-foreground")
-										}
-									>
-										{m !== "teach" ? <DumbbellIcon aria-hidden="true" className="size-3" /> : null}
-										{m === "teach" ? "Teach" : m === "drill" ? "Drill" : "Practice"}
-									</button>
-								))}
-							</div>
-						}
+						compactInput
 					/>
 				</div>
 			</div>

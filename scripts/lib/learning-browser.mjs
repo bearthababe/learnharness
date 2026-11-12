@@ -116,7 +116,9 @@ export async function learningBrowser(root, run) {
 		await page.evaluateOnNewDocument(() => localStorage.setItem("lh:sidebar-open", "0"));
 		const sessions = new Map();
 		// Settled: the client shows no running turn, and either the composer or the practice dock owns input.
-		const idle = () => page.waitForFunction(() => !document.body.innerText.includes("THINKING…")
+		// A running turn reads "THINKING…" on main and, in the redesign, the phase's own words in the
+		// tutor-progress row ("Preparing your problem…"): neither may be showing.
+		const idle = () => page.waitForFunction(() => !document.body.innerText.includes("THINKING…") && !document.querySelector('[data-testid="tutor-progress"]')
 			&& (document.querySelector('[data-testid="composer"] [aria-label="Send"][disabled]') || document.querySelector('[data-testid="next-problem-button"]') || document.querySelector('[data-testid="practice-send"]')), { timeout: 120_000 });
 		// One synthetic learner session per key; switching navigates the same browser to it.
 		const session = async (key, body = { title: "zz-prove-it-learning-goal" }) => {
@@ -181,15 +183,25 @@ export async function learningBrowser(root, run) {
 				}
 				if (!nodes.length) return;
 				await idle();
-				await page.waitForSelector('[data-testid="plan-chip"]', { visible: true, timeout: 30_000 });
-				// A freshly reopened page can paint the chip before it is interactive; retry the
-				// click until the popup opens, and keep a screenshot if it never does.
+				// Phones open the plan from ⋯ (the redesign moved Plan there in round 17);
+				// wider screens keep the chip. The server cannot know the device, so the
+				// chip is in the first HTML and leaves at hydration: wait for the app to
+				// hydrate, then use the opener it shows.
+				await page.waitForFunction(() => document.documentElement.dataset.sidebarSynced !== undefined, { timeout: 60_000 });
+				// A freshly reopened page can paint its opener before it is interactive; retry
+				// until the popup opens, and keep a screenshot if it never does.
 				for (let attempt = 0; !(await page.$('[data-testid="plan-popup"]')); attempt++) {
 					if (attempt === 10) {
 						await page.screenshot({ path: path.join(run, `${name}-no-popup.png`), fullPage: true });
-						throw new Error("Plan popup never opened from the plan chip");
+						throw new Error("Plan popup never opened from the plan chip or ⋯ → Plan");
 					}
-					await page.click('[data-testid="plan-chip"]');
+					const chip = await page.$('[data-testid="plan-chip"]');
+					if (chip && await chip.isVisible()) await chip.click();
+					else {
+						if (!(await page.$('[data-testid="page-menu"]'))) await page.click('[data-testid="page-menu-button"]');
+						await page.waitForSelector('[data-testid="page-menu-plan"]', { visible: true, timeout: 3_000 }).catch(() => {});
+						await page.click('[data-testid="page-menu-plan"]').catch(() => {});
+					}
 					await page.waitForSelector('[data-testid="plan-popup"]', { timeout: 3_000 }).catch(() => {});
 				}
 				for (const id of nodes) await page.waitForSelector(`[data-testid="plan-popup"] [data-testid="plan-node-${id}"]`, { visible: true });

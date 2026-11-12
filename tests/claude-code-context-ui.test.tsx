@@ -30,7 +30,7 @@ test("compact CLI context is numeric only; effective-window explanation appears 
 	const turn: TurnUsage = { id: "cli-turn", messageId: "cli-message", model: "claude-code:opus", at: "2026-10-28T00:00:00Z", steps: [{ inputTokens: 42000, outputTokens: 1, cacheReadTokens: undefined, cacheWriteTokens: undefined, reasoningTokens: undefined }] };
 	const render = (window: { model: string; tokens: number } | null) => root!.render(<StatsBar chatId="cli-session" turns={[turn]} contextTokens={42000} cliContextWindow={window} />);
 	await act(async () => render({ model: "claude-code:opus", tokens: 200000 }));
-	assert.equal(document.querySelector('[data-testid="stats-context"]')?.textContent, "42k / 200k");
+	assert.equal(document.querySelector('[data-testid="stats-context"]')?.textContent, "Memory 21% full");
 	assert(!document.body.textContent?.includes("auto-compaction"));
 	assert.equal(document.querySelector('[data-testid="stats-cost"]')?.textContent, "CLI");
 	const summary = document.querySelector<HTMLButtonElement>('[data-testid="stats-summary"]')!;
@@ -38,9 +38,9 @@ test("compact CLI context is numeric only; effective-window explanation appears 
 	await act(async () => summary.click());
 	assert.match(document.querySelector('[data-testid="stats-detail"]')?.textContent ?? "", /Window reported by Claude Code; may be lower for auto-compaction\./);
 	assert.equal(document.querySelector('[data-testid="stats-detail"] li > span:last-child > span:last-child')?.textContent, "CLI");
-	assert.equal(document.querySelector('[data-testid="stats-context"]')?.textContent, "42k / 200k");
+	assert.equal(document.querySelector('[data-testid="stats-context"]')?.textContent, "Memory 21% full");
 	await act(async () => render(null));
-	assert.equal(document.querySelector('[data-testid="stats-context"]')?.textContent, "42k");
+	assert.equal(document.querySelector('[data-testid="stats-context"]')?.textContent, "Memory 42k used");
 	await act(async () => render({ model: "claude-code:sonnet", tokens: 1000000 }));
-	assert.equal(document.querySelector('[data-testid="stats-context"]')?.textContent, "42k", "another alias cannot supply this session's denominator");
+	assert.equal(document.querySelector('[data-testid="stats-context"]')?.textContent, "Memory 42k used", "another alias cannot supply this session's denominator");
 });

@@ -45,6 +45,19 @@ it("upload preserves the original and stays pending across reads without startin
 	assert.equal((await (await get(c.id)).json()).pending.length, 1);
 });
 
+it("removing a pending image takes it out of the next message but keeps the file", async () => {
+	const c = chat();
+	const { writing } = await (await upload(c.id)).json();
+	const remove = (id: string) => sharedWritingResponse(new Request("http://test/writing", { method: "DELETE" }), c.id, id);
+	assert.equal((await remove(writing.id)).status, 204);
+	assert.deepEqual((await (await get(c.id)).json()).pending, []);
+	assert.throws(() => resolveSharedWriting(c.id, { type: "text", text: "", writingIds: [writing.id] }, []), /missing/);
+	// The original stays readable; removing again is a no-op conflict.
+	assert.equal((await sharedWritingResponse(new Request("http://test/image"), c.id, writing.id)).status, 200);
+	assert.equal((await remove(writing.id)).status, 409);
+	assert.equal((await remove("writing_missing")).status, 409);
+});
+
 it("rejects invalid and oversized uploads without recording work", async () => {
 	const c = chat();
 	assert.equal((await upload(c.id, Buffer.from("not a PNG"))).status, 415);

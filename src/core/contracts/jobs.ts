@@ -35,6 +35,10 @@ export interface JobRecord {
 	/** The sub-agent's result (steer-artifact payload). */
 	result?: unknown;
 	error?: string;
+	/** The job that re-ran this one after it failed (Retry, round 12). */
+	retriedBy?: string;
+	/** The failed job this one re-runs (Retry, round 12). */
+	retryOf?: string;
 	/** Money channel (observability, 2026-09): accumulated token usage of
 	 * the sub-agent's run, written by the runner as steps complete. Cost is
 	 * inferred at read time (core/prices.ts). Absent on pre-2026-09 jobs and

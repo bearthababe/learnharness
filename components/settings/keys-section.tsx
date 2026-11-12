@@ -215,6 +215,7 @@ function KeyTableRow({
 							if (e.key === "Enter") void save();
 						}}
 						placeholder="Paste key…"
+						data-lh-secret=""
 						aria-label={`${label} key`}
 						data-testid={`${testid}-input`}
 						disabled={busy}
@@ -284,7 +285,8 @@ function KeyTableRow({
 							key ↗
 						</a>
 					)}
-					<span data-testid={`${testid}-status`} className="font-mono text-[11px] text-muted-foreground">
+					{/* data-lh-secret: a 🐞 screenshot never shows even the masked key tail (round 19). */}
+					<span data-testid={`${testid}-status`} data-lh-secret={status.present ? "" : undefined} className="font-mono text-[11px] text-muted-foreground">
 						{keyStatusLine(status)}
 					</span>
 				</span>
@@ -639,6 +641,7 @@ function AddProviderEditor({
 					if (e.key === "Enter" && value.trim()) onSave(value);
 				}}
 				placeholder="Paste key…"
+						data-lh-secret=""
 				aria-label={`${provider.label} key`}
 				data-testid={`key-${provider.id}-input`}
 				autoFocus
@@ -919,6 +922,7 @@ function CustomEndpointEditor({
 					}}
 					placeholder={keyPresent ? "Leave blank to keep effective key" : "API key"}
 					aria-label="Custom endpoint API key"
+					data-lh-secret=""
 					data-testid="custom-key-input"
 					disabled={busy || pinsBusy || keySource === "env"}
 					className="h-7 min-w-0 flex-1 rounded-sm border border-border bg-background px-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-muted-foreground/50"

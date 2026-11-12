@@ -6,8 +6,11 @@
  * user-editable key map without touching any component.
  *
  * Design (owner-approved plan):
- * - Tab is DEAD: browser tab-focus navigation is abandoned entirely. Tab
- *   does nothing; Shift+Tab alone cycles the thinking level.
+ * - Tab (rounds 16–18): from nowhere it lands in the surface's first text
+ *   field; between several focusable text fields it moves to the next; past
+ *   them it walks the page's controls in order (header, sessions, lesson,
+ *   composer). Shift+Tab walks back. An open question card walks its own
+ *   stops first. See components/keyboard-shortcuts.tsx and field-cycle.ts.
  * - Esc is a layered dismiss: topmost popover (each popover stopPropagation's
  *   its own Esc) → dictation stop → abort in-flight turn.
  * - The key map persists overrides in localStorage (`lh:keymap`, overrides
@@ -30,6 +33,7 @@ export type KeyAction =
 	| "rename-session"
 	| "cheat-sheet"
 	| "find"
+	| "page-tab"
 	| "question-focus"
 	| "question-next-row"
 	| "question-prev-row"
@@ -58,7 +62,7 @@ export const KEYBOARD_ACTIONS: readonly KeyActionDef[] = [
 	{ id: "toggle-dictation", label: "Toggle dictation", scope: "global", binding: "mod+d" },
 	{ id: "open-settings", label: "Open settings", scope: "global", binding: "mod+," },
 	{ id: "open-model-picker", label: "Model selector", scope: "global", binding: "mod+k" },
-	{ id: "cycle-thinking", label: "Cycle thinking level", scope: "global", binding: "shift+tab" },
+	{ id: "cycle-thinking", label: "Cycle thinking level", scope: "global", binding: "mod+." },
 	{ id: "toggle-sidebar", label: "Toggle sessions sidebar", scope: "global", binding: "mod+b" },
 	{ id: "sessions-search", label: "Search sessions", scope: "global", binding: "mod+shift+f" },
 	// (The Alt+↑/↓/↵ session cycle was RETIRED, owner 2026-10-10: barely
@@ -76,7 +80,9 @@ export const KEYBOARD_ACTIONS: readonly KeyActionDef[] = [
 	// The question dock's row machine (wave B) — displayOnly: the dock owns
 	// the keys while a question is expanded; the registry never dispatches
 	// them, so bare arrows stay free everywhere else.
-	{ id: "question-focus", label: "Question · focus thinking ↔ rows", scope: "chat", binding: "tab", displayOnly: true },
+	// B11 (round 18): what Tab really does, so Settings describes it correctly.
+	{ id: "page-tab", label: "Next text field, then the page's controls", scope: "global", binding: "tab", displayOnly: true },
+	{ id: "question-focus", label: "Question · next stop: options, reasoning, mic, Submit", scope: "chat", binding: "tab", displayOnly: true },
 	// (The model-menu entries — "walk results" ↑/↓, "pick result" ↵ — were
 	// REMOVED, owner 2026-10-10: obvious in-field menu navigation, never
 	// dispatched, never rebindable — not settings material. The menu's own
@@ -173,6 +179,7 @@ function modifiedKey(e: KeyboardEvent): string {
 	// Inspect the reported character: lowercasing can expand it (İ → i̇).
 	if (e.key.length !== 1 || e.key <= "\x7f" || !(e.metaKey || e.ctrlKey || e.altKey)) return key;
 	if (e.code === "Comma") return ",";
+	if (e.code === "Period") return ".";
 	const letter = /^Key([A-Z])$/.exec(e.code);
 	return letter?.[1] ? letter[1].toLowerCase() : key;
 }

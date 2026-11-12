@@ -53,7 +53,7 @@ export function createSourceDirectory(deps: { chatStore: ChatStore; graphStore: 
 	}
 	/** Before starting the file's existing extraction pipeline. The source key
 	 * is the pipeline's unchanged path hash; no source text is stored here. */
-	function registerImport(filePath: string): void {
+	function registerImport(filePath: string): { sourceId: string; createdFolderIds: string[] } {
 		const id = `src_${createHash("sha256").update(filePath).digest("hex").slice(0, 12)}`;
 		const state = deps.sourceOrganizationStore.read();
 		// Legacy imports with no organization record already live at root.
@@ -61,12 +61,43 @@ export function createSourceDirectory(deps: { chatStore: ChatStore; graphStore: 
 		if (!placementOf(state, id) && deps.graphStore.readSources().some((s) => s.id === id)) {
 			state.placements = { ...state.placements, [id]: { folderId: null } };
 			deps.sourceOrganizationStore.write(state);
-			return;
+			return { sourceId: id, createdFolderIds: [] };
 		}
+		const before = new Set(state.folders.map((f) => f.id));
 		const next = placeImportedSource(state, id, filePath, freshFolder);
 		if (next !== state) deps.sourceOrganizationStore.write(next);
+		return { sourceId: id, createdFolderIds: next.folders.filter((f) => !before.has(f.id)).map((f) => f.id) };
 	}
-	return { read, change, registerImport };
+	/** Undo registrations whose import was refused before any source record
+	 *  was written (round 11: no models set up must not leave an empty
+	 *  source or folder in Ideas). Only placements with no source behind
+	 *  them go, and only folders these registrations created that are now
+	 *  empty; a source that exists keeps its place. */
+	function forgetImports(sourceIds: readonly string[], createdFolderIds: readonly string[]): void {
+		const sources = new Set(deps.graphStore.readSources().map((s) => s.id));
+		const next = structuredClone(deps.sourceOrganizationStore.read());
+		let changed = false;
+		for (const id of sourceIds) {
+			if (sources.has(id) || !(id in next.placements)) continue;
+			const { [id]: _gone, ...rest } = next.placements;
+			next.placements = rest;
+			changed = true;
+		}
+		const created = new Set(createdFolderIds);
+		for (let pruned = true; pruned;) {
+			pruned = false;
+			for (const folder of next.folders) {
+				if (!created.has(folder.id)) continue;
+				const used = Object.values(next.placements).some((p) => p.folderId === folder.id) || next.folders.some((f) => f.parentId === folder.id);
+				if (used) continue;
+				next.folders = next.folders.filter((f) => f.id !== folder.id);
+				pruned = changed = true;
+				break;
+			}
+		}
+		if (changed) deps.sourceOrganizationStore.write(next);
+	}
+	return { read, change, registerImport, forgetImports };
 }
 
 export const sourceDirectory = createSourceDirectory(stores);

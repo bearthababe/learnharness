@@ -65,7 +65,12 @@ describe("KnowledgeSummary — the quiet home summary (2026-10-06)", () => {
 	it("the empty knowledge base points to sessions and path attachments, without dropping statistics", () => {
 		const html = render({ propositions: 0, chains: 0, teachSessions: 0, practiceSessions: 0, importedNotes: 0 });
 		assert.ok(html.includes("<p>Start a session to begin learning.</p>"));
-		assert.ok(html.includes("Attach your material with the paperclip or drag and drop.</p>"));
+		// A browser (and the server render) points to the import action by its
+		// round 14 name (P16); the paperclip attaches local files only in the
+		// desktop app.
+		// Round 15 (R3): the hint's import is a button that opens the import menu.
+		assert.ok(html.includes("Bring in your own notes: ") && html.includes('data-testid="import-link"') && html.includes("Import to knowledge map"));
+		assert.ok(!html.includes("paperclip"));
 		assert.ok(html.includes("0 propositions") && html.includes("0 imported notes"));
 		assert.ok(!html.includes("import notes to begin"));
 	});

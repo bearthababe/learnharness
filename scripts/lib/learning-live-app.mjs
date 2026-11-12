@@ -95,7 +95,8 @@ export async function liveApp({ root, run, tutorModel, gate }) {
 			const refusal = /D-8 tool boundary violated: [^\n]*/.exec(log);
 			if (refusal) throw new Error(refusal[0]);
 			const current = await record();
-			const idle = await page.evaluate(() => !document.body.innerText.includes("THINKING…") && !document.body.innerText.includes("COMPACTING CONTEXT…")
+			// A running turn: "THINKING…" (main) or the redesign's tutor-progress row ("Checking what you already know…").
+			const idle = await page.evaluate(() => !document.body.innerText.includes("THINKING…") && !document.querySelector('[data-testid="tutor-progress"]') && !document.body.innerText.includes("COMPACTING CONTEXT…")
 				&& Boolean(document.querySelector('[data-testid="question-dock"], [data-testid="teach-check-reveal"], [data-testid="question-dock-bar"]') || document.querySelector('[data-testid="composer"] [aria-label="Send"][disabled]'))).catch(() => false);
 			if (!current.turnInFlight && idle) { stableSince ||= Date.now(); if (Date.now() - stableSince >= 15_000) return current; }
 			else stableSince = 0;

@@ -34,7 +34,7 @@ test("cache hit rate appears only inside expanded session stats, follows the ses
 	try {
 		await act(async () => render([turn(900)]));
 		const collapsedSummary = summary().textContent;
-		assert.equal(summary().querySelector('.lh-usage-numbers')?.textContent, "42k·—");
+		assert.equal(summary().querySelector('.lh-usage-numbers')?.textContent, "Memory 42k used·—");
 		assert.equal(cacheRow(), null);
 		assert(!host.textContent?.includes("Cache hit rate"), "no new chip in the collapsed bar");
 
@@ -43,7 +43,7 @@ test("cache hit rate appears only inside expanded session stats, follows the ses
 		assert.equal(cacheRow()?.textContent, "Cache hit rate90.0%");
 		assert(detail.contains(cacheRow()));
 		const labels = [...detail.querySelectorAll(".flex.justify-between > span:first-child")].map((el) => el.textContent);
-		assert.deepEqual(labels.slice(0, 3), ["Context (last call)", "Total cost", "Cache hit rate"]);
+		assert.deepEqual(labels.slice(0, 3), ["Tutor's memory (last reply)", "Total cost", "Cache hit rate"]);
 		assert.equal(summary().textContent, collapsedSummary);
 
 		await act(async () => render([turn(900), { ...turn(0), id: "second", messageId: "second" }]));

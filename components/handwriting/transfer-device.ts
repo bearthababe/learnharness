@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { canonicalHandwriting, notebookPageIdSchema, parseChatInput, type ChatInput } from "../../src/core/index.ts";
+import { canonicalHandwriting, notebookSlotIdSchema, parseChatInput, type ChatInput } from "../../src/core/index.ts";
 
 export type EditorSnapshot = { text?: string; thinking?: string; other?: string; confidenceIndex?: number; readingThinking?: string; selection?: { selected: number[]; otherSelected: boolean; dontKnow: boolean } };
 const editorSchema = z.object({ text: z.string().optional(), thinking: z.string().optional(), other: z.string().optional(), confidenceIndex: z.number().int().nonnegative().optional(), readingThinking: z.string().optional(), selection: z.object({ selected: z.array(z.number().int().nonnegative()), otherSelected: z.boolean(), dontKnow: z.boolean() }).strict().optional() }).strict();
@@ -30,17 +30,17 @@ function validateSession(value: unknown): Session {
 	return z.object({ version: z.literal(1), chatId: z.string(), generation: z.number().int().nonnegative(), deleted: z.boolean() }).strict().parse(value);
 }
 function validateCapture(value: unknown): CaptureRecord {
-	const record = z.object({ version: z.literal(1), chatId: z.string(), pageId: notebookPageIdSchema, writingId: z.string(), expectedPageRevision: z.number().int().nonnegative(), sourceJson: z.string(), sourceFingerprint: z.string(), contentFingerprint: z.string(), capturedAt: z.string(), explanationDraft: draftSchema.pick({ targetKey: true, draftId: true, revision: true }), raster: z.object({ width: z.literal(1400), height: z.literal(1800), rgba: z.instanceof(ArrayBuffer) }).strict().optional(), png: z.instanceof(Blob).optional(), state: z.enum(["captured", "ready", "uploading", "failed", "conflicted"]), error: z.string().optional() }).strict().parse(value);
+	const record = z.object({ version: z.literal(1), chatId: z.string(), pageId: notebookSlotIdSchema, writingId: z.string(), expectedPageRevision: z.number().int().nonnegative(), sourceJson: z.string(), sourceFingerprint: z.string(), contentFingerprint: z.string(), capturedAt: z.string(), explanationDraft: draftSchema.pick({ targetKey: true, draftId: true, revision: true }), raster: z.object({ width: z.literal(1400), height: z.literal(1800), rgba: z.instanceof(ArrayBuffer) }).strict().optional(), png: z.instanceof(Blob).optional(), state: z.enum(["captured", "ready", "uploading", "failed", "conflicted"]), error: z.string().optional() }).strict().parse(value);
 	if ((!record.png && !record.raster) || (record.raster && record.raster.rgba.byteLength !== 1400 * 1800 * 4)) throw new Error("Corrupt saved raster");
 	return record;
 }
 function validateAttempt(value: unknown): SubmissionAttempt {
-	const record = z.object({ version: z.literal(1), chatId: z.string(), submissionId: z.string(), input: z.unknown(), imageVersions: z.array(z.object({ writingId: z.string(), notebook: z.object({ pageId: notebookPageIdSchema, pageRevision: z.number().int().positive() }).strict().optional() }).strict()), targetKey: z.string(), draftId: z.string(), draftRevision: z.number().int().nonnegative(), editor: editorSchema, createdAt: z.string(), state: z.enum(["prepared", "sending", "uncertain"]), lastError: z.string().optional() }).strict().parse(value);
+	const record = z.object({ version: z.literal(1), chatId: z.string(), submissionId: z.string(), input: z.unknown(), imageVersions: z.array(z.object({ writingId: z.string(), notebook: z.object({ pageId: notebookSlotIdSchema, pageRevision: z.number().int().positive() }).strict().optional() }).strict()), targetKey: z.string(), draftId: z.string(), draftRevision: z.number().int().nonnegative(), editor: editorSchema, createdAt: z.string(), state: z.enum(["prepared", "sending", "uncertain"]), lastError: z.string().optional() }).strict().parse(value);
 	const input = parseChatInput(record.input);
 	if (!("submissionId" in input) || input.submissionId !== record.submissionId || !input.writingIds?.length || input.writingIds.join() !== record.imageVersions.map(image => image.writingId).join()) throw new Error("Corrupt saved submission");
 	return { ...record, input };
 }
-const receiptSchema = z.object({ version: z.literal(1), chatId: z.string(), pageId: notebookPageIdSchema, sourceFingerprint: z.string(), contentFingerprint: z.string(), writingId: z.string(), pageRevision: z.number().int().positive(), createdAt: z.string() }).strict();
+const receiptSchema = z.object({ version: z.literal(1), chatId: z.string(), pageId: notebookSlotIdSchema, sourceFingerprint: z.string(), contentFingerprint: z.string(), writingId: z.string(), pageRevision: z.number().int().positive(), createdAt: z.string() }).strict();
 
 /** Native IndexedDB only. A successful request is not durability: every public
  * write resolves at transaction completion, including the generation check. */

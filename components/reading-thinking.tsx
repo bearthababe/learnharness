@@ -1,13 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { PathInput } from "@/components/path-input";
 import { useHandwritingEditor } from "./handwriting/submission";
 import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import type { NotebookSession } from "./notebook-session";
-import { useNotebookActivityDraft } from "./notebook-activity-draft";
-import { CompactLearningInput } from "@/components/compact-learning-input";
-import { ChevronRightIcon } from "lucide-react";
+import { plainNotebookCopy, useNotebookActivityDraft } from "./notebook-activity-draft";
+import { CompactLearningInput, useFocusWithin, useMicSlot } from "@/components/compact-learning-input";
+import { usePhoneLayout } from "@/components/use-phone-viewport";
+import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, NotebookPenIcon } from "lucide-react";
+import { readPathSelection, restorePathSelection, type TextSelection } from "./path-input-dom";
+import { useRevealStyle, useTryout } from "@/components/device-prefs";
+import { useCoarsePointer } from "@/components/use-phone-viewport";
+import { BigMic, KeyboardToggle, PaneBar, PeekReturn, settleDocumentScroll, usePaneViewport } from "@/components/pane-kit";
+import { PrototypeSwitch } from "@/components/prototype-switch";
+import { PageMenuButton } from "@/components/page-menu";
 
 /**
  * The reading-thinking field (owner design 2026-10-03, "two questions per
@@ -35,6 +43,7 @@ export function ReadingThinkingField({
 	claim,
 	dictation,
 	targetKey = "reading",
+	questionOpen = false,
 }: {
 	notebook?: NotebookSession;
 	toolCallId?: string;
@@ -52,8 +61,59 @@ export function ReadingThinkingField({
 	claim: boolean;
 	dictation?: Dictation;
 	targetKey?: string;
+	/** The question is open (the learner came to the pane from it): the
+	 *  pane's Back names it ("‹ Question"), else "‹ Lesson". */
+	questionOpen?: boolean;
 }) {
 	const [draft, setDraft] = useState(value);
+	// Phones fold the notes while the question is open (owner B12): the
+	// step stays, the box steps back; one tap unfolds it to re-read or add.
+	const [unfolded, setUnfolded] = useState(false);
+	// P8: it grows while the learner is in it, and otherwise previews the
+	// thought on one line — it never shrinks while they type.
+	const [focused, focusHandlers] = useFocusWithin();
+	const phone = usePhoneLayout();
+	const revealStyle = useRevealStyle();
+	// F6 (round 15): on phones the note lives in a full-screen pane that
+	// slides in from the right; the lesson keeps only a labelled button.
+	// Round 17: the owner's picks are the design — the big mic bar with the
+	// keyboard button (S1) and Peek (S2); tablets keep the note on the page
+	// (T1), redesigned like the pane's controls. S4 tries the pane as a card.
+	const paneMode = phone;
+	const touch = useCoarsePointer();
+	const card = useTryout("cardLayout") === "card";
+	const [paneOpen, setPaneOpen] = useState(false);
+	const [peeking, setPeeking] = useState(false);
+	const [micSlot, setMicSlot] = useMicSlot();
+	const paneRef = useRef<HTMLDivElement>(null);
+	const place = useRef<{ selection: TextSelection | null; scroll: number } | null>(null);
+	const placeKey = `lh:reading-pane:${toolCallId || "page"}`;
+	const paneId = `lh-reading-pane-${toolCallId || "page"}`;
+	// The session workspace this note belongs to: the pane lives outside it
+	// (a full-screen layer) yet still counts as its field for focus and speech.
+	const entryRef = useRef<HTMLDivElement>(null);
+	const [workspaceId, setWorkspaceId] = useState<string | undefined>(undefined);
+	useEffect(() => { setWorkspaceId(entryRef.current?.closest<HTMLElement>("[data-session-workspace]")?.id || undefined); }, [paneMode]);
+	// F4 (round 15): the mic is in this field on every device. The field takes
+	// the mic while the learner is in it (or dictating into it), and hands it
+	// back to the question when they move on.
+	const [engaged, setEngaged] = useState(false);
+	const [heldMic, setHeldMic] = useState(false);
+	const rootRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (dictation?.active && (engaged || paneOpen)) setHeldMic(true);
+		if (!dictation?.active) setHeldMic(false);
+	}, [dictation?.active, engaged, paneOpen]);
+	useEffect(() => {
+		if (!engaged) return;
+		const away = (event: PointerEvent) => {
+			const inside = event.target instanceof Node && (rootRef.current?.contains(event.target) || paneRef.current?.contains(event.target));
+			if (!inside) setEngaged(false);
+		};
+		document.addEventListener("pointerdown", away, true);
+		return () => document.removeEventListener("pointerdown", away, true);
+	}, [engaged]);
+	const owns = claim || engaged || heldMic || (paneMode && paneOpen);
 	useLayoutEffect(() => { setDraft(value); }, [revision, value]);
 	const owner = { kind: "question" as const, toolCallId, channel: "reading-thinking" as const };
 	const owned = useNotebookActivityDraft(notebook, owner);
@@ -69,7 +129,8 @@ export function ReadingThinkingField({
 	}, [owned.enabled, owned.draft, notebook, toolCallId, value]);
 	const change = (value: string) => {
 		textRef.current = value;
-		if (notebook?.getSnapshot().view?.contextId) notebook.tutor.updateText(owner, value);
+		// D1 (round 20): a plain notebook copy stays current while the notebook is closed.
+		if (notebook?.getSnapshot().view?.contextId || plainNotebookCopy(notebook, owner)) notebook!.tutor.updateText(owner, value);
 		if (mounted.current) { setDraft(value); onChange(value); }
 	};
 	const transfer = useHandwritingEditor(targetKey, () => ({ readingThinking: textRef.current }), draft => change(draft.readingThinking ?? ""), claim);
@@ -80,23 +141,89 @@ export function ReadingThinkingField({
 			},
 			[notebook, toolCallId, onChange],
 		),
-		claim,
+		owns,
 		() => transfer?.retainSpeech(targetKey, "readingThinking"),
 	);
-	return (
-		<div
-			data-input-owner="tutor"
-			data-notebook-question={toolCallId}
-			data-notebook-channel="reading-thinking"
-			data-reading-claim={claim}
-			data-testid="reading-thinking-field"
-			className="lh-reading-input pointer-events-auto mb-2 rounded-2xl border bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50"
-		>
-			<div className="pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-				Thinking while reading
-			</div>
-			{owned.state.error && <p role="alert" className="text-xs text-destructive">{owned.state.error}</p>}
-			<div className="lh-compact-row"><CompactLearningInput dictation={claim ? dictation : undefined}><PathInput
+	const editor = () => paneRef.current?.querySelector<HTMLElement>('[aria-label="Thinking while reading"]') ?? null;
+	const savePlace = () => {
+		const field = editor();
+		if (!field) return;
+		const saved = { selection: field.contains(document.activeElement) || document.activeElement === field ? readPathSelection(field) : place.current?.selection ?? null, scroll: field.scrollTop };
+		place.current = saved;
+		try { window.localStorage.setItem(placeKey, JSON.stringify(saved)); } catch { /* this view only */ }
+		field.blur();
+	};
+	const restorePlace = () => {
+		// The cursor and scroll come back where they were (this visit, or the
+		// last one, kept on this device like other drafts).
+		requestAnimationFrame(() => {
+			const field = editor();
+			if (!field) return;
+			let saved = place.current;
+			if (!saved) { try { saved = JSON.parse(window.localStorage.getItem(placeKey) ?? "null"); } catch { saved = null; } }
+			field.focus({ preventScroll: true });
+			if (saved) {
+				field.scrollTop = saved.scroll;
+				if (saved.selection) { try { restorePathSelection(field, saved.selection); } catch { /* text changed: caret at the end */ } }
+			}
+		});
+	};
+	const openPane = () => {
+		setPeeking(false);
+		setPaneOpen(true);
+		restorePlace();
+	};
+	const closePane = () => {
+		savePlace();
+		setPeeking(false);
+		setPaneOpen(false);
+		settleDocumentScroll();
+	};
+	// S2 (Peek): the lesson where the learner left it, with only a quiet
+	// "Return to writing" (and a dictation indicator while dictation runs);
+	// the pane is held behind it, so the draft, caret, scroll and dictation
+	// come back exactly as they were.
+	const peek = () => { savePlace(); setPeeking(true); settleDocumentScroll(); };
+	const unpeek = () => { setPeeking(false); restorePlace(); };
+	// Show question from the pane (P1): the pane closes first, then the
+	// question opens, as from the lesson.
+	const showQuestionFromPane = onOpen ? () => { closePane(); onOpen(); } : undefined;
+	useEffect(() => {
+		if (!peeking) return;
+		const root = document.documentElement;
+		root.dataset.readingPeek = questionOpen ? "question" : "lesson";
+		const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); unpeek(); } };
+		document.addEventListener("keydown", onKey);
+		return () => { delete root.dataset.readingPeek; document.removeEventListener("keydown", onKey); };
+	}, [peeking, questionOpen]);
+	// The pane fits the visible viewport, so its bottom bar sits above the
+	// on-screen keyboard, in thumb reach.
+	usePaneViewport(paneRef, paneOpen);
+	// Swipe the pane back to the right to close it (a mostly sideways drag).
+	const swipe = useRef<{ id: number; x: number; y: number; dx: number; on: boolean } | null>(null);
+	const swipeDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+		if (event.pointerType !== "touch" || !event.isPrimary) return;
+		swipe.current = { id: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, on: false };
+	};
+	const swipeMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+		const s = swipe.current; if (!s || s.id !== event.pointerId) return;
+		const dx = event.clientX - s.x, dy = event.clientY - s.y;
+		if (!s.on) { if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.5 || dx < 0) { if (Math.abs(dy) > 12) swipe.current = null; return; } s.on = true; }
+		s.dx = Math.max(0, dx);
+		if (paneRef.current) paneRef.current.style.transform = `translateX(${s.dx}px)`;
+	};
+	const swipeEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+		const s = swipe.current; if (!s || s.id !== event.pointerId) return;
+		swipe.current = null;
+		if (paneRef.current) paneRef.current.style.transform = "";
+		if (s.on && s.dx > Math.min(120, window.innerWidth * 0.3)) closePane();
+	};
+	const preview = text.trim();
+	// One "Show question" in any state (T1): on phones it sits beside the
+	// note's button on the lesson; tablets and laptops show only the check
+	// card's own.
+	const showQuestion = phone && claim && onOpen ? <button type="button" className="lh-phone-reveal" data-style={revealStyle} aria-label="Show question" data-testid="teach-check-reveal" onClick={onOpen}><span className="lh-phone-reveal-label" aria-hidden="true">Show question</span><ChevronRightIcon size={18} /></button> : null;
+	const field: ReactNode = <CompactLearningInput dictation={dictation} speech={!paneMode} micSlot={paneMode ? undefined : micSlot}><PathInput
 				aria-label="Thinking while reading"
 				value={text}
 				onValueChange={change}
@@ -137,11 +264,119 @@ export function ReadingThinkingField({
 						e.currentTarget.blur();
 					}
 				}}
-				placeholder="Whatever comes to mind as you read."
+				// P8 (round 14): on phones the field is a one-line invitation whose
+				// placeholder carries the step's name (the label row steps back).
+				placeholder={paneMode ? "Write, or tap the mic and speak" : "Whatever comes to mind as you read."}
 				className="field-sizing-content lh-input max-h-40 w-full resize-none bg-transparent py-0.5 outline-none placeholder:text-muted-foreground/70"
-			/></CompactLearningInput>
-			{claim && onOpen && <button type="button" className="lh-phone-reveal bg-primary text-primary-foreground" aria-label="Check your understanding" data-testid="teach-check-reveal" onClick={onOpen}><ChevronRightIcon size={20} /></button>}
+			/></CompactLearningInput>;
+	const label = <div className="pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground lh-reading-label">Thinking while reading</div>;
+	const error = owned.state.error && <p role="alert" className="text-xs text-destructive">{owned.state.error}</p>;
+	const ownerProps = {
+		"data-input-owner": "tutor",
+		"data-notebook-question": toolCallId,
+		"data-notebook-channel": "reading-thinking",
+	} as const;
+	const engage = () => setEngaged(true);
+	if (paneMode) {
+		// The lesson keeps a labelled button (with a preview of the thought);
+		// the pane holds the one editor, mounted throughout so the draft,
+		// cursor and scroll stay exactly where the learner left them.
+		const backLabel = questionOpen ? "Back to question" : "Back to lesson";
+		// P1: Show question returns as a quiet shortcut beside Back (it is the
+		// card's main action in the S4 card layout).
+		const forward = !questionOpen && !!showQuestionFromPane && claim;
+		const pane = (
+			<div ref={paneRef} id={paneId} {...ownerProps} data-learning-surface="" data-reading-pane-for={workspaceId} role="dialog" aria-modal="true" aria-label="Thinking while reading" data-testid="reading-pane"
+				data-open={paneOpen || undefined} data-peeking={peeking || undefined} data-layout={card ? "card" : "plain"} inert={!paneOpen || peeking} className="lh-reading-pane lh-pane"
+				onPointerDown={swipeDown} onPointerMove={swipeMove} onPointerUp={swipeEnd} onPointerCancel={swipeEnd}
+				onKeyDown={(event) => {
+					// One Escape, one layer: a menu opened from the pane closes first.
+					if (event.key !== "Escape" || dictation?.active || event.defaultPrevented || (event.target as Element | null)?.closest?.('[role="menu"], [data-lh-menu], [data-testid="page-menu"], [data-testid="helpers-sheet"]')) return;
+					event.preventDefault(); event.stopPropagation(); closePane();
+				}}>
+				<div className="lh-pane-surface" data-testid="reading-pane-surface">
+					{/* §0 (round 19): the pane covers the page bar, so it has the page's
+					    ⋯ in its own top-right corner — the same menu (🐞 Report, Settings,
+					    the keyboard switch, Plan). */}
+					<div className="lh-pane-menu" data-testid="reading-pane-menu"><PageMenuButton secondary /></div>
+					<header className="lh-pane-head">
+						<p className="lh-pane-context">{questionOpen ? "For this question" : "While you read"}</p>
+						<h2 className="lh-pane-title">Thinking while reading</h2>
+						<p className="lh-pane-hint">Whatever comes to mind as you read. It goes with your answer.</p>
+					</header>
+					<div className="lh-pane-body" data-testid="reading-thinking-field" data-reading-claim={claim} data-focused={focused || undefined} {...focusHandlers}>
+						{error}
+						<div className="lh-reading-pane-field">{field}</div>
+					</div>
+					{/* S4 (card): one filled main action, a quiet text action under it. */}
+					{card && <div className="lh-pane-actions" data-testid="reading-pane-actions">
+						{forward
+							? <button type="button" className="lh-pane-main" data-testid="reading-pane-show-question" onClick={showQuestionFromPane}>Show question</button>
+							: <button type="button" className="lh-pane-main" data-testid="reading-pane-done" onClick={closePane}>{questionOpen ? "Back to question" : "Done"}</button>}
+						{forward && <button type="button" className="lh-pane-quiet" data-testid="reading-pane-close" aria-label={backLabel} onClick={closePane}>{backLabel}</button>}
+					</div>}
+				</div>
+				{/* P1: Back and the quiet Show question shortcut on the left, above the
+				    big mic bar — in thumb reach, above the keyboard. */}
+				{!card && <nav className="lh-pane-nav" aria-label="Leave the note">
+					<button type="button" className="lh-pane-back" data-testid="reading-pane-close" aria-label={backLabel} onClick={closePane}>
+						<ChevronLeftIcon aria-hidden />{questionOpen ? "Question" : "Lesson"}
+					</button>
+					{forward && <button type="button" className="lh-pane-shortcut" data-testid="reading-pane-show-question" onClick={showQuestionFromPane}>
+						Show question<ChevronRightIcon aria-hidden />
+					</button>}
+				</nav>}
+				<PaneBar testid="reading-pane-bar"
+					start={<button type="button" className="lh-pane-peek" data-testid="reading-pane-peek" aria-label="Peek at the lesson" onClick={peek}>
+						<EyeIcon aria-hidden /><span aria-hidden="true">Peek</span>
+					</button>}
+					mic={<BigMic dictation={dictation} testid="reading-pane-mic" />}
+					end={<KeyboardToggle testid="reading-pane-keyboard" />} />
 			</div>
+		);
+		return (
+			<div ref={entryRef} className="lh-reading-entry pointer-events-auto" data-testid="reading-entry" {...ownerProps} data-reading-claim={claim} data-reading-pane-id={paneId}>
+				<button type="button" className="lh-reading-open" data-testid="reading-pane-open" aria-haspopup="dialog" aria-expanded={paneOpen} onClick={openPane}>
+					<NotebookPenIcon aria-hidden />
+					<span className="lh-reading-open-text">
+						<span className="lh-reading-open-label">Thinking while reading</span>
+						<span className="lh-reading-open-preview">{preview || "Add a thought"}</span>
+					</span>
+					<ChevronRightIcon aria-hidden />
+				</button>
+				{showQuestion}
+				{/* B18 (round 18): Prototype view's switch for the Show question style. */}
+				{showQuestion && <PrototypeSwitch tryout="reveal-style" anchors={[{ selector: ".lh-reading-entry .lh-phone-reveal", places: ["above-end", "above-start", "left"] }]} />}
+				{typeof document !== "undefined" && createPortal(pane, document.body)}
+				{peeking && <PeekReturn label="Return to writing" testid="reading-pane-return" dictation={dictation} onReturn={unpeek} />}
+			</div>
+		);
+	}
+	return (
+		<div
+			ref={rootRef}
+			{...ownerProps}
+			data-reading-claim={claim}
+			data-testid="reading-thinking-field"
+			data-folded={!claim && !unfolded ? "true" : undefined}
+			data-focused={focused || undefined}
+			{...focusHandlers}
+			onPointerDownCapture={engage}
+			onFocusCapture={engage}
+			className="lh-reading-input pointer-events-auto mb-2 rounded-2xl border bg-card/60 px-3 py-2 transition-colors focus-within:border-primary/50"
+		>
+			{!claim && <button type="button" className="lh-reading-fold" aria-expanded={unfolded} data-testid="reading-thinking-fold" onClick={() => setUnfolded((open) => !open)}>
+				<span className="lh-reading-fold-label">Thinking while reading</span>
+				{/* R12 (round 15): the preview shows only while folded — opened,
+				    the text is right below, never twice. */}
+				{!unfolded && <span className="lh-reading-fold-preview">{preview || "Add a thought"}</span>}
+				<ChevronRightIcon aria-hidden className="lh-reading-fold-chevron" />
+			</button>}
+			{label}
+			{error}
+			{/* T1 (round 17): the row has the big mic and, on touch screens, the
+			    keyboard button — no Back, and no second Show question. */}
+			<div className="lh-compact-row lh-reading-row">{field}{touch && <KeyboardToggle testid="reading-row-keyboard" />}<span ref={setMicSlot} className="lh-mic-slot" /></div>
 		</div>
 	);
 }

@@ -42,7 +42,7 @@ export function attachmentPopupPlacement(button: { left: number; right: number }
 const noSubscribe = () => () => {};
 /** The bridge is fixed for the window's life; the server render is always
  *  the browser case, so hydration never mismatches. */
-function useDesktopPaths(): boolean {
+export function useDesktopPaths(): boolean {
 	return useSyncExternalStore(noSubscribe, () => Boolean(window.lh?.getPathForFile), () => false);
 }
 
@@ -141,7 +141,7 @@ export function AttachFilesButton({ editorRef }: { editorRef: React.RefObject<HT
 					aria-haspopup="menu"
 					aria-expanded={open}
 					data-testid="attach-files"
-					onClick={() => { if (desktop) { setNotice(""); setOpen(!open); } }}
+					onClick={() => { if (desktop) { setNotice(""); setOpen(!open); } else setNotice(notice ? "" : BROWSER_NOTICE); }}
 					className="flex size-10 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent aria-disabled:hover:text-muted-foreground"
 				>
 					<PaperclipIcon className="size-4" />

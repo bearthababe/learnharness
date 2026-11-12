@@ -103,3 +103,5 @@ export * from "./handwriting.ts";
 export * from "./writing-submission.ts";
 export * from "./handwriting-pages.ts";
 export type { RuntimeStatus } from "./contracts/runtime.ts";
+// Round 19 §0 / merge proof: one credential redaction for reports (client recorder and server).
+export { redactSecrets, redactDeep } from "./redact.ts";

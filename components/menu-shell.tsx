@@ -45,6 +45,10 @@ const CAP_VH = 0.6; // 60vh — the graph pattern's cap
 const MIN_USABLE = 96; // floor: a shorter cap is an unusable sliver; the
 // cap then overflows the edge instead of crushing the menu
 const PHONE_DURATION = 400;
+/** Phone cards open and close at once, like the Settings and Extract files
+ *  menus (owner, round 11: the "fall-out" motion is gone). The motion code
+ *  stays behind this switch, so it can be restored deliberately. */
+const PHONE_MOTION = false;
 const PHONE_EASING = "linear";
 
 /** Grow about the bottom anchor without compressing the rounded corners. Give
@@ -151,6 +155,7 @@ export function computeMenuPlacement(
 	contentHeight: number,
 	preferredSide: MenuSide,
 	align: MenuAlign,
+	cap = CAP_VH,
 ): MenuPlacement {
 	const availDown = viewport.height - EDGE - (rect.bottom + GAP);
 	const availUp = rect.top - GAP - EDGE;
@@ -165,12 +170,41 @@ export function computeMenuPlacement(
 		}
 	}
 	const avail = side === "down" ? availDown : availUp;
-	const maxHeight = Math.max(MIN_USABLE, Math.min(CAP_VH * viewport.height, avail));
+	const maxHeight = Math.max(MIN_USABLE, Math.min(cap * viewport.height, avail));
 	const horizontal: Record<string, number> =
 		align === "right" ? { right: viewport.width - rect.right } : { left: rect.left };
 	const vertical: Record<string, number> =
 		side === "down" ? { top: rect.bottom + GAP } : { bottom: viewport.height - rect.top + GAP };
 	return { side, style: { ...horizontal, ...vertical }, maxHeight };
+}
+
+/** Round 14 (C5): a placed menu always stays on screen — never past an
+ *  edge horizontally (a wide menu starts at the left edge and is capped to
+ *  the screen), never below or above the screen vertically (its cap shrinks
+ *  to the room, and when even the usable floor does not fit, the menu moves
+ *  inside instead of hanging off). It scrolls inside its cap. Pure. */
+export function clampMenuPlacement(p: MenuPlacement, menuWidth: number, viewport: { width: number; height: number }): MenuPlacement {
+	const style: Record<string, string | number> = { ...p.style };
+	const width = Math.min(menuWidth, viewport.width - 2 * EDGE);
+	const wantedLeft = typeof style.right === "number" ? viewport.width - style.right - menuWidth : typeof style.left === "number" ? style.left : EDGE;
+	delete style.right;
+	style.left = Math.max(EDGE, Math.min(viewport.width - EDGE - width, wantedLeft));
+	style.maxWidth = viewport.width - 2 * EDGE;
+	let maxHeight = Math.min(p.maxHeight, viewport.height - 2 * EDGE);
+	if (typeof style.top === "number") {
+		const room = viewport.height - EDGE - style.top;
+		if (room < maxHeight) {
+			if (room >= MIN_USABLE) maxHeight = room;
+			else style.top = Math.max(EDGE, viewport.height - EDGE - maxHeight);
+		}
+	} else if (typeof style.bottom === "number") {
+		const room = viewport.height - style.bottom - EDGE;
+		if (room < maxHeight) {
+			if (room >= MIN_USABLE) maxHeight = room;
+			else style.bottom = Math.max(EDGE, viewport.height - EDGE - maxHeight);
+		}
+	}
+	return { ...p, style, maxHeight };
 }
 
 /** Phone keyboards can cover the anchor without resizing the layout viewport.
@@ -180,11 +214,11 @@ export function computeVisibleMenuPlacement(
 	rect: { top: number; bottom: number; left: number; right: number },
 	viewport: { width: number; height: number; offsetTop: number; offsetLeft: number },
 	contentHeight: number, menuWidth: number, preferredSide: MenuSide, align: MenuAlign,
-	dockSearch = false,
+	dockSearch = false, cap = CAP_VH,
 ): MenuPlacement {
 	const clampY = (y: number) => Math.max(EDGE, Math.min(viewport.height - EDGE, y - viewport.offsetTop));
 	const local = { ...rect, top: clampY(rect.top), bottom: clampY(rect.bottom) };
-	const side = dockSearch ? "up" : computeMenuPlacement(local, viewport, contentHeight, preferredSide, align).side;
+	const side = dockSearch ? "up" : computeMenuPlacement(local, viewport, contentHeight, preferredSide, align, cap).side;
 	// Focused phone search covers the composer instead of reserving its height.
 	// The visible bottom is the browser-reported keyboard/accessory boundary.
 	const edge = dockSearch ? viewport.height : side === "up" ? Math.max(EDGE, local.top - GAP) : Math.min(viewport.height - EDGE, local.bottom + GAP);
@@ -194,7 +228,7 @@ export function computeVisibleMenuPlacement(
 	const left = Math.max(EDGE, Math.min(viewport.width - EDGE - width, wantedLeft));
 	return {
 		side,
-		maxHeight: Math.max(0, Math.min(CAP_VH * viewport.height, room)),
+		maxHeight: Math.max(0, Math.min(cap * viewport.height, room)),
 		style: { left: viewport.offsetLeft + left, top: viewport.offsetTop + edge,
 			maxWidth: Math.max(0, viewport.width - 2 * EDGE), transform: side === "up" ? "translateY(-100%)" : "none" },
 	};
@@ -213,6 +247,7 @@ export function MenuShell({
 	children,
 	focusSearch = true,
 	fitVisualViewport = false,
+	cap = CAP_VH,
 	onClose,
 	matchAnchorWidth = false,
 	phoneTriggerTestid,
@@ -235,6 +270,10 @@ export function MenuShell({
 	focusSearch?: boolean;
 	/** Phone Model fits the visible area and docks there during search. */
 	fitVisualViewport?: boolean;
+	/** The share of the viewport the menu may take (60% by default). P3
+	 *  (round 17): the phone's ⋯ menu uses all the room below its button, so
+	 *  its last row is never half hidden. */
+	cap?: number;
 	onClose?: () => void;
 	matchAnchorWidth?: boolean;
 	/** The actual opener, kept visible above the phone blur and used for entrance. */
@@ -293,7 +332,7 @@ export function MenuShell({
 	}, [placed, focusSearch]);
 
 	useLayoutEffect(() => {
-		if (!fitVisualViewport || !placed || !phoneTriggerTestid || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		if (!PHONE_MOTION || !fitVisualViewport || !placed || !phoneTriggerTestid || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 		const menu = menuRef.current;
 		const content = motionContentRef.current;
 		const backdrop = phoneBackdropRef.current;
@@ -313,7 +352,7 @@ export function MenuShell({
 	useLayoutEffect(() => {
 		if (!closing || !onClosed) return;
 		const menu = menuRef.current, content = motionContentRef.current, backdrop = phoneBackdropRef.current;
-		if (!fitVisualViewport || !placed || !menu || !content || !backdrop || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+		if (!PHONE_MOTION || !fitVisualViewport || !placed || !menu || !content || !backdrop || matchMedia("(prefers-reduced-motion: reduce)").matches) {
 			onClosed();
 			return;
 		}
@@ -428,8 +467,13 @@ export function MenuShell({
 				const nextSignature = [height, width, offsetTop, offsetLeft, progress, rect.top, rect.bottom, rect.left, rect.right, menu.scrollHeight].join(",");
 				if (nextSignature === signature) return;
 				signature = nextSignature;
-				const p = computeVisibleMenuPlacement(rect, { width, height, offsetTop, offsetLeft }, menu.scrollHeight, matchAnchorWidth ? rect.width : menu.getBoundingClientRect().width, preferredSide, align, !!input);
-				if (input) {
+				// A card hanging DOWN from a top opener (the phone's More, round 13)
+				// keeps its place under it; its height follows the visible area, so
+				// the keyboard shortens it from below. Search docking is for cards
+				// that rise from the composer.
+				const dockSearch = !!input && preferredSide !== "down";
+				const p = computeVisibleMenuPlacement(rect, { width, height, offsetTop, offsetLeft }, menu.scrollHeight, matchAnchorWidth ? rect.width : menu.getBoundingClientRect().width, preferredSide, align, dockSearch, cap);
+				if (input && dockSearch) {
 					// The frozen lesson's trigger has one resting position. Let the
 					// keyboard push that card up, then reveal its resting position
 					// again, without an early re-anchor or a late second jump.
@@ -485,14 +529,16 @@ export function MenuShell({
 		const place = () => {
 			const el = anchor();
 			if (!el || !menuRef.current) return;
+			const view = { width: window.innerWidth, height: window.innerHeight };
 			const p = computeMenuPlacement(
 				el.getBoundingClientRect(),
-				{ width: window.innerWidth, height: window.innerHeight },
+				view,
 				menuRef.current.scrollHeight,
 				preferredSide,
 				align,
+				cap,
 			);
-			setPlaced(p);
+			setPlaced(clampMenuPlacement(p, menuRef.current.offsetWidth, view));
 		};
 		place();
 		const rePlace = () => {
@@ -506,7 +552,7 @@ export function MenuShell({
 			window.removeEventListener("scroll", rePlace, true);
 			window.removeEventListener("resize", rePlace);
 		};
-	}, [anchorRef, anchorTestid, preferredSide, align, fitVisualViewport, matchAnchorWidth]);
+	}, [anchorRef, anchorTestid, preferredSide, align, fitVisualViewport, matchAnchorWidth, cap]);
 
 	// First pass: mounted hidden at the viewport's top-left so the layout
 	// effect can measure the real content height before anything is seen.
@@ -542,7 +588,7 @@ export function MenuShell({
 			// default blue ring around it must not draw (owner, polish
 			// round). Arrow cycling moves DOM focus to the buttons, which
 			// carry their own hover/highlight; the ring is pure noise.
-			className={`${menuClass} outline-none`}
+			className={`${menuClass} lh-glass outline-none`}
 		>
 			<div ref={motionContentRef} style={{ display: "contents" }}>
 			{fitVisualViewport && !focusSearch && (

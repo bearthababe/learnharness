@@ -15,6 +15,7 @@ import { verifyNotebookLayout } from "./smoke-notebook-layout.mjs";
 import { checkHandwritingTransfers } from "./handwriting-transfer-checks.mjs";
 import { checkTransferDevice } from "./handwriting-device-checks.mjs";
 import { checkHandwritingMenus } from "./handwriting-menu-checks.mjs";
+import { checkReportCapture } from "./report-capture-checks.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const dir = await createRunDirectory();
@@ -49,6 +50,7 @@ for (const id of ["mobile_notebook_menus", "mobile_remount_success", "mobile_rem
 const call = (name, args, id) => assistant([{ type: "toolCall", name, arguments: args, id }], `assistant_${id}`);
 const result = (name, details, id) => ({ role: "toolResult", toolName: name, toolCallId: id, id: `result_${id}`, content: [{ type: "text", text: "Ready." }], details, isError: false, timestamp: Date.now() });
 await writeFile(path.join(dir, "data/chats/mobile_transfer_speech.json"), JSON.stringify({ ...conversation, id: "mobile_transfer_speech", messages: [assistant([...["first", "second"].map(id => ({ type: "toolCall", name: "ask_user_question", id, arguments: { question: `${id} speech owner`, mode: "text" } }))])] }));
+await writeFile(path.join(dir, "data/chats/mobile_transfer_speech_locked.json"), JSON.stringify({ ...conversation, id: "mobile_transfer_speech_locked", messages: [assistant([...["first", "second"].map(id => ({ type: "toolCall", name: "ask_user_question", id, arguments: { question: `${id} speech owner`, mode: "text" } }))])] }));
 const teaching = [
 	call("probe_done", { summary: "Ready for pressure." }, "probe_done"), result("probe_done", { ok: true }, "probe_done"),
 	call("plan_create", {}, "plan"), result("plan_create", { tree: { nodes: [{ id: "pressure", title: "Pressure and area", description: "Relate force, area and pressure." }], edges: [] } }, "plan"),
@@ -190,6 +192,7 @@ try {
 	await page.evaluateOnNewDocument(() => {
 		if (window !== window.top) return;
 		localStorage.setItem("lh:sidebar-open", "0");
+		localStorage.setItem("lh:device-tool:writing", "on"); localStorage.setItem("lh:device-tool:notebook", "on"); // both working tools, whatever the emulated device
 		// Keep the real graph/worklet/audio. Only emulate Safari's paused state
 		// between runs; a resumed graph must produce actual PCM again.
 		const NativeAudioContext = window.AudioContext;
@@ -256,7 +259,8 @@ try {
 	const assertMicSpace = async selector => {
 		const separate = await page.$eval(selector, e => {
 			const editor = e.getBoundingClientRect();
-			const mic = e.parentElement.querySelector('[aria-label="Start dictation"]').getBoundingClientRect();
+			// S1 (round 17): the mic sits right before the row's main action.
+			const mic = e.closest('form, .lh-question-input, .lh-compact-row').querySelector('[aria-label="Start dictation"]').getBoundingClientRect();
 			return editor.right <= mic.left;
 		});
 		assert.ok(separate, "Empty placeholder and typed text have their own space before the microphone target");
@@ -277,13 +281,29 @@ try {
 		for (const width of [320, 375, 430]) {
 			await page.setViewport({ width, height: 550, isMobile: true, hasTouch: true });
 			await fill(selector, "A substantial explanation.\n".repeat(16));
-			await hitTargets([`${fieldSelector} .lh-compact-field button`], `In-field controls fit and receive taps at ${width}px`, true);
+			// S1 (round 17): the mic sits in the Submit row under the field; with a
+			// long draft that row is reached by scrolling, like Submit itself.
+			await page.$eval(`${fieldSelector} .lh-mic-button`, e => e.scrollIntoView({ block: "center" }));
+			await hitTargets([`${fieldSelector} .lh-mic-button`], `The field's mic fits and receives taps at ${width}px`, true);
 		}
 		await page.setViewport({ width: 375, height: 350, isMobile: true, hasTouch: true });
 		await page.$eval(selector, e => e.focus());
 		await page.waitForFunction(sel => { const r = document.querySelector(sel).getBoundingClientRect(); return r.top >= 0 && r.bottom <= 350; }, {}, selector);
 		assert.ok(await page.$eval(selector, e => e.scrollHeight > e.clientHeight), "Long draft scrolls internally in a keyboard-sized viewport");
 		await page.setViewport({ width: 375, height: 667, isMobile: true, hasTouch: true });
+	};
+	// T5 (round 17): inside a question the attached pages start folded to one
+	// line (a chevron with what they are); unfold them to see the page.
+	const unfoldTray = async () => {
+		await page.waitForSelector('[data-testid="shared-writing-fold"]', { visible: true });
+		if (await page.$eval('[data-testid="shared-writing-fold"]', e => e.getAttribute("aria-expanded") === "false")) await page.click('[data-testid="shared-writing-fold"]');
+	};
+	// P3 (round 17): phones open Plan from the top of ⋯ (wider screens: the chip).
+	const openPlan = async () => {
+		if (await page.$eval('[data-testid="plan-chip"]', e => e.checkVisibility()).catch(() => false)) { await page.click('[data-testid="plan-chip"]'); return; }
+		await page.click('[data-testid="page-menu-button"]');
+		await page.waitForSelector('[data-testid="page-menu-plan"]', { visible: true });
+		await page.click('[data-testid="page-menu-plan"]');
 	};
 	const scrollBack = async () => {
 		const point = await page.evaluate(() => {
@@ -317,7 +337,7 @@ try {
 			return buttons.map(button => {
 				const r = button.getBoundingClientRect();
 				const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-				return { selector, width: r.width, height: r.height, fits: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, hit: button === hit || button.contains(hit) };
+				return { selector, width: r.width, height: r.height, fits: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight, hit: button === hit || button.contains(hit), edges: [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom), innerWidth, innerHeight] };
 			});
 		}), { selectors, allMatches });
 		assert.ok(targets.length && targets.every(r => r.width >= 44 && r.height >= 44 && r.fits && r.hit), `${label}: ${JSON.stringify(targets)}`);
@@ -432,7 +452,7 @@ try {
 	await page.click(mic);
 	await page.waitForSelector('.lh-compact-error');
 	await page.waitForSelector('[data-testid="composer"] [aria-label="Start dictation"]');
-	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /Dictation needs a Deepgram key.*Settings/);
+	assert.match(await page.$eval('.lh-compact-error', e => e.textContent), /add a Deepgram speech key.*Settings/);
 	await page.click('.lh-compact-error button');
 	await page.waitForSelector('[data-testid="settings-dialog"]');
 	await page.waitForSelector('[data-testid="key-deepgram_api_key-input"]');
@@ -448,7 +468,7 @@ try {
 	console.log("PASS: missing-key Settings round trip and subsequent capture");
 	const navigateSession = async title => {
 		const previousInput = await page.$(input);
-		await page.click('button[aria-label="Open sidebar"]');
+		await page.click('button[data-testid="open-sidebar"]');
 		await page.waitForSelector('[data-testid="session-search"]', { visible: true });
 		await fill('[data-testid="session-search"]', title);
 		const row = await page.waitForFunction(title => [...document.querySelectorAll('[data-testid="session-list"] button')].find(e => e.textContent.includes(title)), {}, title);
@@ -492,10 +512,17 @@ try {
 		await page.waitForFunction(() => location.pathname.endsWith("mobile_conversation"));
 		console.log(`PASS: navigation cancels ${phase} without cross-session leakage`);
 	}
+	// Round 12 (owner O1): on phones Model, Reasoning and Usage open from
+	// the page menu ("More" in the bar); their cards are unchanged.
+	const openPhoneCard = async (row) => {
+		await page.click('[data-testid="page-menu-button"]');
+		await page.waitForSelector(`[data-testid="page-menu-${row}"]`, { visible: true });
+		await page.click(`[data-testid="page-menu-${row}"]`);
+	};
 	for (const width of [320, 375, 430]) {
 		await page.setViewport({ width, height: 550, isMobile: true, hasTouch: true });
 		await fill(input, "Panel round trip keeps this draft.");
-		await page.click('[data-testid="stats-model"]');
+		await openPhoneCard("model");
 		await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 		assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Phone Model opens without search focus");
 		await page.$eval('[data-testid="model-menu"]', async e => { await Promise.all(e.getAnimations().map(a => a.finished.catch(() => {}))); });
@@ -503,7 +530,7 @@ try {
 		assert.ok(menu.left >= 0 && menu.right <= width && menu.top >= 0 && menu.bottom <= 550, `Real model options fit ${width}px`);
 		await page.keyboard.press("Escape");
 		await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
-		await page.click('[data-testid="stats-summary"]');
+		await openPhoneCard("usage");
 		await page.waitForSelector('[data-testid="stats-detail"]');
 		await page.$eval('[data-testid="stats-detail"]', async e => { await Promise.all(e.getAnimations().map(a => a.finished.catch(() => {}))); });
 		const usage = await page.$eval('[data-testid="stats-detail"]', e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top }; });
@@ -557,7 +584,13 @@ try {
 	await page.waitForFunction(() => window.speech.finishing);
 	await page.evaluate(() => { window.speech.final("Final image explanation."); window.speech.close(); });
 	await page.waitForFunction(() => !document.querySelector('.lh-shared-writing [data-testid="shared-writing-images"]'));
-	const withImage = await (await fetch(`${origin}/api/chats/mobile_conversation`)).json();
+	// The tray empties when the send starts, before the server has stored it:
+	// wait for the stored message instead of racing it (round 12).
+	let withImage = await (await fetch(`${origin}/api/chats/mobile_conversation`)).json();
+	for (let tries = 0; tries < 60 && !withImage.messages.some(m => m.sharedWriting?.length); tries++) {
+		await new Promise(resolve => setTimeout(resolve, 250));
+		withImage = await (await fetch(`${origin}/api/chats/mobile_conversation`)).json();
+	}
 	assert.equal(withImage.messages.filter(m => m.sharedWriting?.length).length, 1, "Deliberate Send persists the reviewed image once");
 	assert.equal(withImage.messages.find(m => m.sharedWriting?.length).sharedWriting.length, 3, "Deliberate Send includes all three recovered pending images");
 	assert.ok(withImage.messages.some(m => m.writingSubmission && JSON.stringify(m.content).includes("Final image explanation.")), "Image-bearing conversation uses receipt and finalized speech");
@@ -607,171 +640,30 @@ try {
 				baseline, above, opacity: Number(css.opacity), fontSize: css.fontSize };
 		};
 	});
-	const assertContour = samples => {
-		const full = samples.reduce((a, b) => a.height > b.height ? a : b);
-		assert.ok(full.baseline.every(inset => inset > 1), "Resting rounded baseline is shorter than the card width");
-		for (const sample of samples) {
-			// Hit testing snaps transformed coordinates to pixels. Near a circle's
-			// tangent that can move the reported intersection a few horizontal px.
-			assert.ok(sample.baseline.every((inset, i) => inset > 8 && Math.abs(inset - full.baseline[i]) <= 4), "Bottom contour retains resting corners through early/late frames");
-			assert.equal(sample.above, false, "Unrevealed card area cannot receive input");
-		}
-	};
-	const captureCardExit = () => page.evaluate(() => {
-		const animate = Element.prototype.animate, effects = [];
-		const clock = Object.getOwnPropertyDescriptor(Animation.prototype, "startTime");
-		window.__lhExitStarts = null;
-		window.__lhExitAnimations = [];
-		Element.prototype.animate = function (...args) {
-			const animation = animate.apply(this, args);
-			if (this.matches('[data-lh-menu][data-closing="true"], [data-testid="phone-menu-backdrop"]')) {
-				const effect = { animation, start: null };
-				effects.push(effect);
-				window.__lhExitAnimations.push(animation);
-				// Pause at the real shared start, before a remote round trip or a
-				// settings read can outlast the 400ms interval under inspection.
-				Object.defineProperty(animation, "startTime", {
-					configurable: true,
-					get() { return clock.get.call(animation); },
-					set(value) {
-						clock.set.call(animation, value);
-						effect.start = value;
-						animation.pause();
-						delete animation.startTime;
-						if (effects.length === 2 && effects.every(e => e.start !== null)) window.__lhExitStarts = effects.map(e => e.start);
-					},
-				});
-				if (effects.length === 2) Element.prototype.animate = animate;
-			}
-			return animation;
-		};
-	});
+	// Round 11 (owner): phone cards open and close at once, like Settings and
+	// Extract files — no fall-out motion. The functional checks stay: the
+	// card opens and fits, the opener and outside taps close it without
+	// reopening or reaching what lies beneath, Escape closes, focus returns.
+	const captureCardExit = async () => {};
 	const assertCardExit = async (trigger, card) => {
-		await page.waitForFunction(() => !!window.__lhExitStarts);
-		await page.waitForSelector(`[data-testid="${card}"][data-closing="true"]`);
-		const exit = await page.evaluate(({ trigger, card }) => {
-			const menu = document.querySelector(`[data-testid="${card}"]`), backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-			const animation = window.__lhExitAnimations.find(animation => animation.effect.target === menu);
-			const blur = window.__lhExitAnimations.find(animation => animation.effect.target === backdrop);
-			const starts = window.__lhExitStarts, timings = [animation.effect.getTiming(), blur.effect.getTiming()];
-			animation.pause(); blur.pause();
-			const samples = [0, 1, 4, 8, 16, 32, 100, 200, 300, 368, 384, 392, 396, 399, 400].map(time => {
-				animation.currentTime = time; blur.currentTime = time;
-				return { time, ...window.__lhPhoneFrameSample(menu),
-					blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]), shellHeight: document.querySelector('.lh-app-shell').getBoundingClientRect().height };
-			});
-			animation.currentTime = 200; blur.currentTime = 200;
-			return { starts, timings, samples, buttonTop: document.querySelector(`[data-testid="${trigger}"]`).getBoundingClientRect().top,
-				locked: document.querySelector('.lh-app-shell').inert, cardInert: menu.inert };
-		}, { trigger, card });
-		assert.ok(exit.starts[0] !== null);
-		assert.equal(exit.starts[0], exit.starts[1], "Exit card and blur share a start time");
-		for (const timing of exit.timings) { assert.equal(timing.duration, 400); assert.equal(timing.easing, "linear"); }
-		const start = exit.samples[0], end = exit.samples.at(-1);
-		assertContour(exit.samples);
-		assert.ok(end.height <= 2, `Card collapses to its fixed bottom edge: ${JSON.stringify({ card, ...exit })}`);
-		for (const sample of exit.samples) {
-			const progress = sample.time / 400;
-			assert.ok(Math.abs(sample.height - (start.height + (end.height - start.height) * progress)) <= 1, "Closing height follows elapsed time linearly");
-			assert.ok(Math.abs(sample.blur - 4 * (1 - progress)) < .001, "Closing blur shares linear progress");
-			assert.equal(sample.opacity, 1, "No separate line-fade phase");
-		}
-		assert.ok(exit.samples.every(s => Math.abs(s.bottom - start.bottom) <= 1 && s.bottom <= exit.buttonTop - 3), "Bottom edge stays above the button for the whole close");
-		assert.ok(exit.samples.every(s => s.width === start.width && s.fontSize === start.fontSize), "Card width and text size stay constant");
-		assert.equal(start.blur, 4); assert.equal(end.blur, 0);
-		assert.ok(exit.locked && exit.cardInert, "Lesson and departing options cannot receive input");
-		assert.ok(exit.samples.every(sample => sample.shellHeight === start.shellHeight), "Lesson remains stationary through exit");
-		await page.keyboard.press("Escape");
-		await page.locator('[data-testid="phone-menu-trigger"]').click();
-		assert.ok(await page.$(`[data-testid="${card}"]`), "Repeated Escape neither removes nor restarts the paused exit");
-		assert.equal(await page.$eval(`[data-testid="${card}"]`, menu => window.__lhExitAnimations.find(animation => animation.effect.target === menu).currentTime), 200, "Repeated opener tap does not restart exit");
-		await page.evaluate(() => window.__lhExitAnimations.forEach(animation => animation.finish()));
-		await page.waitForSelector(`[data-testid="${card}"]`, { hidden: true });
-		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Lesson unlocks only after exit completes");
+		await page.waitForSelector(`[data-testid="${card}"]`, { hidden: true, timeout: 3000 });
+		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "The backdrop leaves with the card");
+		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "The lesson unlocks as soon as the card closes");
+		assert.ok(await page.$(`[data-testid="${trigger}"]`), "The opener stays in place");
 	};
-	for (const [trigger, card, otherTrigger] of [
-		["stats-model", "model-menu", "stats-thinking"],
-		["stats-thinking", "thinking-menu", "stats-model"],
-		["stats-summary", "stats-detail", "stats-model"],
+	// The opener on phones is the page menu's button (its aperture stays
+	// sharp above the blur); an outside tap lands on Home and must not go there.
+	const trigger = "page-menu-button", otherTrigger = "nav-home";
+	for (const [row, card] of [
+		["model", "model-menu"],
+		["reasoning", "thinking-menu"],
+		["usage", "stats-detail"],
 	]) {
-		await page.evaluate(() => {
-			const animate = Element.prototype.animate;
-			window.__lhRestoreAnimate = () => { Element.prototype.animate = animate; };
-			Element.prototype.animate = function (...args) {
-				const animation = animate.apply(this, args);
-				if (this.matches("[data-lh-menu]")) {
-					// Reproduce a stale timeline tick after expensive layout. Starting
-					// from that old tick would skip the entire 400ms entrance.
-					if (!window.__lhDelayedFrameChecked) {
-						const until = performance.now() + 650;
-						while (performance.now() < until) { /* controlled main-thread stall */ }
-						window.__lhDelayedFrameChecked = true;
-					}
-					window.__lhCreatedAt = performance.now();
-					window.__lhCardEntrance = animation;
-				}
-				if (this.matches('[data-testid="phone-menu-backdrop"]')) {
-					window.__lhBlurEntrance = animation;
-					// Capture in the browser after the shared start frame, rather than
-					// racing a remote poll against a shorter, already-finished effect.
-					requestAnimationFrame(() => {
-						// Also delay execution within the frame: its supplied timestamp
-						// can now be stale even though it is a newly requested frame.
-						if (!window.__lhDelayedCallbackChecked) {
-							const until = performance.now() + 450;
-							while (performance.now() < until) { /* controlled callback delay */ }
-							window.__lhDelayedCallbackChecked = true;
-						}
-						window.__lhBeforeStartCallback = performance.now();
-						requestAnimationFrame(() => {
-							const card = window.__lhCardEntrance, blur = window.__lhBlurEntrance;
-							window.__lhEntranceStarts = [card.startTime, blur.startTime];
-							card.pause(); blur.pause();
-						});
-					});
-				}
-				return animation;
-			};
-		});
-		await page.locator(`[data-testid="${trigger}"]`).click();
-		await page.waitForFunction(() => !!window.__lhEntranceStarts);
-		const entrance = await page.evaluate(({ trigger, card }) => {
-			const animation = window.__lhCardEntrance, blur = window.__lhBlurEntrance;
-			const menu = document.querySelector(`[data-testid="${card}"]`);
-			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-			const button = document.querySelector(`[data-testid="${trigger}"]`);
-			const startTimes = window.__lhEntranceStarts;
-			animation.pause(); blur.pause();
-			const samples = [0, 1, 4, 8, 16, 32, 100, 200, 300, 368, 384, 392, 396, 399, 400].map(time => {
-				animation.currentTime = time; blur.currentTime = time;
-				return { time, ...window.__lhPhoneFrameSample(menu),
-					blur: parseFloat(getComputedStyle(backdrop).backdropFilter.match(/blur\(([^p]+)px\)/)[1]) };
-			});
-			const timings = [animation.effect.getTiming(), blur.effect.getTiming()];
-			animation.finish(); blur.finish(); animation.cancel(); blur.cancel(); window.__lhRestoreAnimate(); delete window.__lhCardEntrance; delete window.__lhBlurEntrance; delete window.__lhEntranceStarts;
-			return { samples, timings, startTimes, createdAt: window.__lhCreatedAt, callbackAt: window.__lhBeforeStartCallback, buttonTop: button.getBoundingClientRect().top };
-		}, { trigger, card });
-		assert.ok(entrance.startTimes[0] !== null);
-		assert.ok(entrance.startTimes[0] >= entrance.createdAt - 20, "Fresh shared start does not backdate through a blocked frame");
-		assert.ok(entrance.startTimes[0] >= entrance.callbackAt - 1, "Shared start excludes delay within the frame callback");
-		assert.equal(entrance.startTimes[0], entrance.startTimes[1], "Card and blur share the same animation start");
-		for (const timing of entrance.timings) {
-			assert.equal(timing.duration, 400);
-			assert.equal(timing.easing, "linear");
-		}
-		const start = entrance.samples[0], end = entrance.samples.at(-1);
-		assertContour(entrance.samples);
-		assert.ok(start.height <= 2, "Card begins at its bottom edge");
-		for (const sample of entrance.samples) {
-			const progress = sample.time / 400;
-			assert.ok(Math.abs(sample.height - (start.height + (end.height - start.height) * progress)) <= 1, "Opening height follows elapsed time linearly");
-			assert.ok(Math.abs(sample.blur - 4 * progress) < .001, "Opening blur shares linear progress");
-			assert.equal(sample.opacity, 1, "Expansion starts immediately without a line-reveal phase");
-		}
-		assert.ok(entrance.samples.every(s => Math.abs(s.bottom - end.bottom) <= 1 && s.bottom <= entrance.buttonTop - 3), "Bottom edge never moves or crosses the opener");
-		assert.ok(entrance.samples.every(s => s.width === end.width && s.fontSize === end.fontSize), "Growing card keeps full width and normal-sized text");
-		assert.equal(entrance.samples[0].blur, 0, "Background starts clear");
-		assert.equal(end.blur, 4, "Background settles at lighter blur");
+		await openPhoneCard(row);
+		await page.waitForSelector(`[data-testid="${card}"]`, { visible: true });
+		assert.equal(await page.$eval(`[data-testid="${card}"]`, e => e.getAnimations().length), 0, "The card opens at once, without a fall-out animation");
+		assert.equal(await page.$eval('[data-testid="phone-menu-backdrop"]', e => e.getAnimations().length), 0, "The backdrop appears at once too");
+		await fitPanel(`[data-testid="${card}"]`);
 		await assertCardBackdrop();
 		const foreground = await page.evaluate(trigger => {
 			const original = document.querySelector(`[data-testid="${trigger}"]`), button = document.querySelector('[data-testid="phone-menu-trigger"]');
@@ -795,48 +687,25 @@ try {
 		await tapAt(trigger);
 		await assertCardExit(trigger, card);
 		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Opener closes without reopening");
-		await page.locator(`[data-testid="${trigger}"]`).click();
+		await openPhoneCard(row);
+		await page.waitForSelector(`[data-testid="${card}"]`, { visible: true });
 		await fitPanel(`[data-testid="${card}"]`);
 		await tapAt(otherTrigger, true);
 		assert.ok(await page.$(`[data-testid="${card}"]`), "Cancelled outside gesture leaves the card open");
 		await tapAt(otherTrigger);
 		await assertCardExit(trigger, card);
 		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Outside tap cannot activate another card underneath");
+		assert.ok(new URL(page.url()).pathname.startsWith("/chat/"), "The outside tap did not go Home");
 	}
 	await cardTouch.detach();
-	// Closing during early or later expansion stays continuous.
-	for (const time of [1, 20, 100]) {
-		await page.locator('[data-testid="stats-model"]').click();
-		await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]')?.getAnimations()[0]?.startTime != null);
-		const partial = await page.$eval('[data-testid="model-menu"]', (menu, time) => {
-			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-			for (const animation of [...menu.getAnimations(), ...backdrop.getAnimations()]) { animation.pause(); animation.currentTime = time; }
-			return { ...window.__lhPhoneFrameSample(menu), blur: getComputedStyle(backdrop).backdropFilter };
-		}, time);
-		await captureCardExit();
-		await page.keyboard.press("Escape");
-		await page.waitForFunction(() => !!window.__lhExitStarts);
-		assert.ok(await page.$('[data-testid="model-menu"][data-closing="true"]'), "Quick close remains mounted while captured");
-		const exitStart = await page.$eval('[data-testid="model-menu"]', menu => {
-			const backdrop = document.querySelector('[data-testid="phone-menu-backdrop"]');
-			for (const animation of window.__lhExitAnimations) { animation.pause(); animation.currentTime = 0; }
-			return { ...window.__lhPhoneFrameSample(menu), blur: getComputedStyle(backdrop).backdropFilter };
-		});
-		assert.ok(Math.abs(partial.top - exitStart.top) <= 1, "Quick close starts from the current expansion height");
-		assert.deepEqual(exitStart.baseline, partial.baseline, "Quick close preserves the rounded baseline");
-		assert.equal(exitStart.opacity, partial.opacity, "Quick close retains full opacity");
-		assert.equal(exitStart.blur, partial.blur, "Quick close starts from the current blur");
-		await page.evaluate(() => {
-			Object.defineProperty(visualViewport, "height", { configurable: true, get: () => innerHeight - 100 });
-			visualViewport.dispatchEvent(new Event("resize"));
-		});
-		await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
-		assert.equal(await page.$('[data-testid="phone-menu-backdrop"]'), null, "Viewport interruption releases both exit effects");
-		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Interrupted exit releases the lesson lock");
-		await page.evaluate(() => { delete visualViewport.height; visualViewport.dispatchEvent(new Event("resize")); });
-	}
+	// Escape closes an open card at once and returns the lesson.
+	await openPhoneCard("model");
+	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
+	await page.keyboard.press("Escape");
+	await assertCardExit("page-menu-button", "model-menu");
 	await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
-	await page.locator('[data-testid="stats-model"]').click();
+	await openPhoneCard("model");
+	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	assert.equal(await page.$eval('[data-testid="model-menu"]', e => e.getAnimations().length), 0, "Reduced motion skips card entrance");
 	assert.equal(await page.$eval('[data-testid="phone-menu-backdrop"]', e => e.getAnimations().length), 0, "Reduced motion skips blur entrance too");
 	await assertCardBackdrop();
@@ -862,7 +731,7 @@ try {
 		const readingPosition = await scrollHistoryBack();
 		const assertReading = async label => assert.ok(Math.abs(await page.$eval(history, e => e.scrollTop) - readingPosition) <= 1, `${label}: reading position ${readingPosition} → ${await page.$eval(history, e => e.scrollTop)}`);
 		assert.ok(readingPosition > 0, "Panel review starts partway through scrollable history");
-		await page.click('[data-testid="stats-model"]');
+		await openPhoneCard("model");
 		await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 		await fitPanel('[data-testid="model-menu"]');
 		await assertCardBackdrop();
@@ -877,9 +746,9 @@ try {
 		await captureCardExit();
 		await page.locator(modelRow).click();
 		await pickedModel;
-		await assertCardExit("stats-model", "model-menu");
+		await assertCardExit("page-menu-button", "model-menu");
 		await assertReading("Model selection");
-		await page.click('[data-testid="stats-thinking"]');
+		await openPhoneCard("reasoning");
 		await page.waitForSelector('[data-testid="thinking-menu"]', { visible: true });
 		await fitPanel('[data-testid="thinking-menu"]');
 		await assertCardBackdrop();
@@ -892,10 +761,10 @@ try {
 		const settings = (await (await fetch(`${origin}/api/chats/mobile_panels`)).json()).settings;
 		assert.equal(settings.model.id, longModel.id);
 		assert.equal(settings.thinkingLevel, level, "Real model/thinking choices persist through the session API");
-		await assertCardExit("stats-thinking", "thinking-menu");
+		await assertCardExit("page-menu-button", "thinking-menu");
 		await assertReading("Thinking selection");
 		await page.focus(input);
-		await page.click('[data-testid="stats-summary"]');
+		await openPhoneCard("usage");
 		await page.waitForSelector('[data-testid="stats-detail"]');
 		await fitPanel('[data-testid="stats-detail"]');
 		await assertCardBackdrop();
@@ -905,11 +774,11 @@ try {
 		assert.ok(lastUsageVisible, "Usage's overflowed final turn is reachable and visible");
 		await captureCardExit();
 		await page.keyboard.press("Escape");
-		await assertCardExit("stats-summary", "stats-detail");
+		await assertCardExit("page-menu-button", "stats-detail");
 		assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false, "Card dismissal restores lesson interaction");
 		await assertReading("Usage dismissal");
 		await page.focus(input);
-		await page.click('.lh-phone-plan');
+		await openPlan(); // phones open Plan from the top of ⋯ (round 17, P3)
 		await page.waitForSelector('[data-testid="plan-popup"]');
 		await fitPanel('[data-testid="plan-popup"]');
 		assert.match(await page.$eval('[data-testid="plan-popup"]', e => e.textContent), /Pressure and area/);
@@ -932,9 +801,23 @@ try {
 	});
 	const keyboardEntryShell = await page.$eval('.lh-app-shell', e => { const r = e.getBoundingClientRect(); return { top: r.top, height: r.height }; });
 	assert.equal(keyboardEntryShell.height, 350, "Composer keyboard shrinks the lesson before opening Model");
-	await page.click('[data-testid="stats-model"]');
+	await openPhoneCard("model");
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Keyboard-open entry still leaves search unfocused");
+	// Round 13 (R2): the phone's Model card hangs below More, the opener in
+	// the page bar, never from the hidden chip under the composer. Keyboard
+	// motion never moves it off More; the visible area only shortens it.
+	const underMore = () => page.evaluate(() => {
+		const card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
+		const more = document.querySelector('[data-testid="page-menu-button"]').getBoundingClientRect();
+		const shell = document.querySelector('.lh-app-shell').getBoundingClientRect();
+		const top = visualViewport.offsetTop, bottom = visualViewport.offsetTop + visualViewport.height;
+		return { top: card.top, bottom: card.bottom, moreBottom: more.bottom, moreTop: more.top, visibleTop: top, visibleBottom: bottom, shellTop: shell.top, shellHeight: shell.height };
+	});
+	const hangsUnderMore = (frame, label) => {
+		assert.ok(frame.top >= Math.max(frame.moreBottom, frame.visibleTop) - 1 && frame.top <= Math.max(frame.moreBottom, frame.visibleTop) + 12, `${label}: the card hangs just below More: ${JSON.stringify(frame)}`);
+		assert.ok(frame.bottom <= frame.visibleBottom + 1, `${label}: the whole card is in the visible area: ${JSON.stringify(frame)}`);
+	};
 	const keyboardEntryFrames = await page.evaluate(async () => {
 		const frames = [];
 		for (const height of [350, 400, 475, 550, 625, 700]) {
@@ -943,16 +826,16 @@ try {
 			visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 			const card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
-			const opener = document.querySelector('[data-testid="stats-model"]').getBoundingClientRect();
+			const more = document.querySelector('[data-testid="page-menu-button"]').getBoundingClientRect();
 			const shell = document.querySelector('.lh-app-shell').getBoundingClientRect();
-			frames.push({ bottom: card.bottom, openerTop: opener.top, shellTop: shell.top, shellHeight: shell.height });
+			frames.push({ top: card.top, bottom: card.bottom, moreBottom: more.bottom, visibleTop: visualViewport.offsetTop, visibleBottom: visualViewport.offsetTop + height, shellTop: shell.top, shellHeight: shell.height });
 		}
 		delete visualViewport.height; delete visualViewport.offsetTop;
 		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 		return frames;
 	});
 	for (const frame of keyboardEntryFrames) {
-		assert.ok(Math.abs(frame.bottom - (frame.openerTop - 4)) <= 1, `Keyboard-open entry stays above its frozen opener: ${JSON.stringify(frame)}`);
+		hangsUnderMore(frame, "Keyboard-open entry");
 		assert.equal(frame.shellTop, keyboardEntryShell.top);
 		assert.equal(frame.shellHeight, keyboardEntryShell.height, "Keyboard-open entry keeps the lesson stationary");
 	}
@@ -967,14 +850,19 @@ try {
 		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 	});
-	const entrySearch = await page.$eval('[data-testid="model-menu"]', e => ({ bottom: e.getBoundingClientRect().bottom, keyboardTop: visualViewport.offsetTop + visualViewport.height }));
-	assert.ok(Math.abs(entrySearch.bottom - entrySearch.keyboardTop) <= 1, `Search after keyboard-open entry docks at the keyboard: ${JSON.stringify(entrySearch)}`);
-	assert.ok(await page.$eval('[data-testid="phone-menu-trigger"]', e => e.hidden), "Covered opener is hidden and cannot intercept search results");
-	assert.equal(await page.$eval('[data-testid="phone-menu-backdrop"]', e => getComputedStyle(e).clipPath), "none", "Covered opener has no clear backdrop aperture");
-	assert.ok(await page.$eval('[data-testid="stats-model"]', e => {
-		const r = e.getBoundingClientRect();
-		return document.querySelector('[data-testid="model-menu"]').contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
-	}), "The covered opener's location receives card input, not Close");
+	const entrySearch = await underMore();
+	hangsUnderMore(entrySearch, "Search after keyboard-open entry");
+	// The opener is "More" in the bar, above the card — never covered, so its
+	// close target can never sit over the search results, and its clear
+	// aperture stays.
+	const noOverlap = () => page.evaluate(() => {
+		const proxy = document.querySelector('[data-testid="phone-menu-trigger"]'), card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
+		if (proxy.hidden) return true;
+		const r = proxy.getBoundingClientRect();
+		return r.bottom <= card.top || r.top >= card.bottom || r.right <= card.left || r.left >= card.right;
+	});
+	assert.ok(await noOverlap(), "The opener's close target cannot intercept search results");
+	assert.ok(await page.$eval('[data-testid="phone-menu-backdrop"]', e => getComputedStyle(e).clipPath.startsWith("polygon(evenodd,")), "The uncovered opener keeps its clear aperture");
 	await fill('[data-testid="model-search"]', "a");
 	const entryResults = await page.$$eval('[data-testid="model-list"] button', buttons => buttons.map(e => e.dataset.testid));
 	await page.click('[data-testid="model-hide-keyboard"]');
@@ -986,21 +874,25 @@ try {
 			visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 			const card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
-			const opener = document.querySelector('[data-testid="stats-model"]').getBoundingClientRect();
-			frames.push({ height, bottom: card.bottom, openerTop: opener.top, hidden: document.querySelector('[data-testid="phone-menu-trigger"]').hidden });
+			const more = document.querySelector('[data-testid="page-menu-button"]').getBoundingClientRect();
+			const proxy = document.querySelector('[data-testid="phone-menu-trigger"]').getBoundingClientRect();
+			frames.push({ top: card.top, bottom: card.bottom, moreBottom: more.bottom, visibleTop: visualViewport.offsetTop, visibleBottom: visualViewport.offsetTop + height, clear: proxy.bottom <= card.top || proxy.top >= card.bottom });
 		}
 		delete visualViewport.height; delete visualViewport.offsetTop;
 		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 		return frames;
 	});
 	for (const frame of entryReturn) {
-		const resting = frame.openerTop - 4;
-		assert.ok(Math.abs(frame.bottom - (resting + (entrySearch.bottom - resting) * (700 - frame.height) / 350)) <= 1, "Search returns continuously to its frozen browsing anchor");
-		assert.equal(frame.hidden, frame.bottom > frame.openerTop, "Opener restores only when the card uncovers it");
+		hangsUnderMore(frame, "Keyboard dismissal");
+		assert.ok(frame.clear, "The opener's close target stays clear of the card throughout");
 	}
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e.value), "a");
 	assert.deepEqual(await page.$$eval('[data-testid="model-list"] button', buttons => buttons.map(e => e.dataset.testid)), entryResults, "Search dismissal retains results after keyboard-open entry");
-	assert.ok(await page.$eval('[data-testid="phone-menu-backdrop"]', e => getComputedStyle(e).clipPath.startsWith("polygon(evenodd,")), "Uncovered opener regains its clear aperture");
+	assert.ok(await page.evaluate(() => {
+		const opener = document.querySelector('[data-testid="page-menu-button"]').getBoundingClientRect(), card = document.querySelector('[data-testid="model-menu"]').getBoundingClientRect();
+		const covered = opener.left < card.right && opener.right > card.left && opener.top < card.bottom && opener.bottom > card.top;
+		return getComputedStyle(document.querySelector('[data-testid="phone-menu-backdrop"]')).clipPath.startsWith("polygon(evenodd,") === !covered;
+	}), "The opener's clear aperture follows whether the card covers it");
 	await page.keyboard.press("Escape");
 	await page.waitForSelector('[data-testid="model-menu"]', { hidden: true });
 	assert.equal(await page.$eval(input, e => e.textContent), "Already-open keyboard preserves this draft.");
@@ -1009,14 +901,14 @@ try {
 		delete visualViewport.height; delete visualViewport.offsetTop;
 		visualViewport.dispatchEvent(new Event("resize")); visualViewport.dispatchEvent(new Event("scroll"));
 	});
-	console.log("PASS: Model opened with the composer keyboard visible keeps its frozen opener anchor through keyboard dismissal");
+	console.log("PASS: Model opened with the composer keyboard visible hangs under More through keyboard motion and dismissal");
 	// End keyboard-open entry regression.
 	// iOS keyboards shrink the VISUAL viewport without changing innerHeight.
 	// Whole-viewport resizing above cannot catch a menu positioned behind it.
 	await page.setViewport({ width: 375, height: 700, isMobile: true, hasTouch: true });
 	await fill(input, "Keyboard-aware panels preserve this draft.");
 	const keyboardReading = await scrollHistoryBack();
-	await page.click('[data-testid="stats-model"]');
+	await openPhoneCard("model");
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), false, "Opening Model does not request a keyboard");
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0, "Model uses the compact floating menu");
@@ -1041,8 +933,7 @@ try {
 	}
 	const compactModel = await visibleBounds('[data-testid="model-menu"]');
 	assert.ok(compactModel.height <= 350 * .6 && compactModel.width < 375, "Model keeps the compact menu cap and edge spacing");
-	assert.ok(Math.abs(compactModel.bottom - compactModel.visibleBottom) <= 1, "Focused search attaches the whole card to the keyboard/accessory boundary");
-	assert.equal(await page.$eval('[data-model-menu-footer]', e => getComputedStyle(e).display), "none", "Focused search only shows search/results, without the explanatory footer");
+	hangsUnderMore(await underMore(), "Focused search"); // round 13: no docking at the keyboard — the card stays under More
 	assert.equal(await page.$eval('[data-testid="model-search"]', e => e === document.activeElement), true, "Viewport movement does not steal deliberate search focus");
 	assert.ok(await page.$eval('[data-testid="model-search"]', e => parseFloat(getComputedStyle(e).fontSize) >= 16), "Search avoids iOS focus autozoom");
 	await page.$eval('[data-testid="model-list"]', e => { e.scrollTop = e.scrollHeight; });
@@ -1109,7 +1000,8 @@ try {
 			await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 		});
 		const redocked = await visibleBounds('[data-testid="model-menu"]');
-		assert.ok(Math.abs(redocked.bottom - redocked.visibleBottom) <= 1, "Resumed search reattaches above keyboard controls");
+		assert.ok(redocked.bottom <= redocked.visibleBottom + 1, "Resumed search keeps the card above the keyboard");
+		hangsUnderMore(await underMore(), "Resumed search");
 	}
 	page.off("request", countDismissWrites);
 	assert.equal(dismissWrites, 0, "Keyboard-dismiss/reopen never changes settings");
@@ -1136,12 +1028,13 @@ try {
 		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 	});
 	const smallerModel = await visibleBounds('[data-testid="model-menu"]');
-	assert.ok(Math.abs(smallerModel.bottom - smallerModel.visibleBottom) <= 1 && smallerModel.top >= smallerModel.visibleTop);
+	assert.ok(smallerModel.bottom <= smallerModel.visibleBottom + 1 && smallerModel.top >= smallerModel.visibleTop);
+	hangsUnderMore(await underMore(), "Less room");
 	assert.ok(smallerModel.height <= 250 * .6, "Card shrinks when iPhone controls reduce available space");
 	await fill('[data-testid="model-search"]', "no-model-can-match-this-fixture-query");
 	await page.waitForFunction(() => document.querySelector('[data-testid="model-menu"]').textContent.includes("No models match."));
 	const emptyModel = await visibleBounds('[data-testid="model-menu"]');
-	assert.ok(Math.abs(emptyModel.bottom - emptyModel.visibleBottom) <= 1, "Filtering to no results keeps the card attached");
+	hangsUnderMore(await underMore(), "Filtering to no results");
 	await fill('[data-testid="model-search"]', longModel.id);
 	const visibleModel = `[data-testid="model-option-${longModel.id.replace(/[^a-z0-9-]/gi, "_")}"]`;
 	const keyboardPick = page.waitForResponse(r => new URL(r.url()).pathname === "/api/chats/mobile_panels/settings" && r.request().method() === "PUT" && r.ok());
@@ -1168,7 +1061,7 @@ try {
 		visualViewport.dispatchEvent(new Event("scroll"));
 		await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 	});
-	await page.click('[data-testid="stats-summary"]');
+	await openPhoneCard("usage");
 	await page.waitForSelector('[data-testid="stats-detail"]');
 	await fitPanel('[data-testid="stats-detail"]');
 	const usagePopup = await visibleBounds('[data-testid="stats-detail"]');
@@ -1178,7 +1071,7 @@ try {
 	await page.waitForSelector('[data-testid="stats-detail"]', { hidden: true });
 	assert.equal(await page.$eval('.lh-app-shell', e => e.inert), false);
 	// A browser can expose new viewport geometry before notifying listeners.
-	await page.click('[data-testid="stats-model"]');
+	await openPhoneCard("model");
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	await fitPanel('[data-testid="model-menu"]');
 	await page.click('[data-testid="model-search"]');
@@ -1203,7 +1096,7 @@ try {
 		delete visualViewport.height; delete visualViewport.offsetTop;
 		visualViewport.dispatchEvent(new Event("resize"));
 	});
-	await page.click('.lh-phone-plan');
+	await openPlan(); // phones open Plan from the top of ⋯ (round 17, P3)
 	await page.waitForSelector('[data-testid="plan-popup-dialog"]');
 	const fullPlan = await visibleBounds('[data-testid="plan-popup"]');
 	assert.equal(fullPlan.top, 0);
@@ -1246,7 +1139,7 @@ try {
 	assert.equal(await page.$eval(input, e => e.textContent), "Keyboard-aware panels preserve this draft.");
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0, "Closing panels releases native modal ownership");
 	// Compact menus retain the inherited desktop placement across the breakpoint.
-	await page.click('[data-testid="stats-model"]');
+	await openPhoneCard("model");
 	await page.setViewport({ width: 1100, height: 800, isMobile: true, hasTouch: true });
 	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
 	await fitPanel('[data-testid="model-menu"]');
@@ -1255,9 +1148,14 @@ try {
 	assert.equal(await page.evaluate(() => document.querySelectorAll(":modal").length), 0);
 	await page.keyboard.press("Escape");
 	assert.equal(await page.evaluate(() => document.body.style.overflow), "", "Phone modal releases its background lock on desktop");
-	// A fresh desktop open retains the inherited search-focus behavior.
-	await page.click('[data-testid="stats-model"]');
-	await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "model-search");
+	// Round 14 (M4): a touch screen of any width opens Model from ⋯ and never
+	// raises the keyboard on open (a fine pointer keeps the row and search
+	// focus; changing touch emulation here would reload the page).
+	await page.click('[data-testid="page-menu-button"]');
+	await page.waitForSelector('[data-testid="page-menu-model"]', { visible: true });
+	await page.click('[data-testid="page-menu-model"]');
+	await page.waitForSelector('[data-testid="model-menu"]', { visible: true });
+	assert.notEqual(await page.evaluate(() => document.activeElement?.getAttribute("data-testid")), "model-search", "A touch open does not raise the keyboard");
 	await page.keyboard.press("Escape");
 	console.log("PASS: linear fixed-edge 400ms opening/closing and blur with no separate line phase, normal-sized text, selection exits, quick-close continuity, repeated-close guards, viewport interruption/reduced motion, safe taps, stationary lesson, keyboard/query/results, Plan pinch/pan and drafts");
 	// Native image modal must retain its own background lock after input blur.
@@ -1281,26 +1179,58 @@ try {
 	await page.goto(`${origin}/chat/mobile_teaching`, { waitUntil: "networkidle2" });
 	const reading = '[data-testid="reading-thinking-field"] [data-file-path-input]';
 	await page.waitForSelector('[data-testid="teach-check-reveal"]', { visible: true });
-	assert.ok(await page.$('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]'), "Before reveal, the reading input owns the in-field microphone");
-	await assertMicSpace(reading);
+	// B15 (round 18): the lesson's bottom row as it is before the pane opens —
+	// the P6 regression check below compares against it.
+	const bottomRow = () => page.evaluate(() => {
+		const entry = document.querySelector('.lh-reading-entry [data-testid="teach-check-reveal"]'), r = entry?.getBoundingClientRect();
+		const hit = r && document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+		return { kind: document.querySelector(".lh-dock-overlay")?.dataset.dockKind, top: r ? Math.round(r.top) : null, reachable: !!hit && !!entry?.contains(hit), scroll: Math.round(document.scrollingElement.scrollTop) };
+	});
+	const rowBeforePane = await bottomRow();
+	assert.ok(rowBeforePane.reachable && rowBeforePane.top !== null, `the lesson's Show question entry is in view before the pane opens: ${JSON.stringify(rowBeforePane)}`);
+	// Round 15 (F6): on phones the reading note is a full-screen pane that
+	// slides in from the right; the lesson keeps a labelled button for it.
+	await page.click('[data-testid="reading-pane-open"]');
+	await page.waitForSelector('[data-testid="reading-pane"][data-open]');
+	// P1 (round 17): the pane's big mic bar carries the note's microphone.
+	const paneMic = '[data-testid="reading-pane-mic"]';
+	assert.ok(await page.$(`${paneMic}[aria-label="Start dictation"]`), "Before reveal, the reading pane owns the big microphone");
 	for (let run = 1; run <= 2; run++) {
-		await page.locator('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]').click();
+		await page.locator(`${paneMic}[aria-label="Start dictation"]`).click();
 		await page.waitForFunction(() => window.speech?.readyState === 1);
 		await page.waitForFunction(() => window.speech.frames >= 3, { timeout: 5000 });
 		assert.equal(await page.evaluate(() => window.captureContext.state), "running", `Reading capture ${run} must run the actual audio graph`);
 		await page.evaluate(n => window.speech.final(`Capture ${n}.`), run);
-		await page.locator('[aria-label="Stop dictation"]').click();
+		// The big mic is the note's Stop too.
+		await page.locator(`${paneMic}[aria-label="Stop dictation"]`).click();
 		await page.waitForFunction(() => window.speech.finishing);
 		await page.evaluate(() => window.speech.close());
-		await page.waitForSelector('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
+		await page.waitForSelector(`${paneMic}[aria-label="Start dictation"]`);
 		if (run === 1) await page.evaluate(async () => { await window.captureContext.suspend(); window.captureContext.interrupted = true; });
 	}
 	assert.equal(await page.$eval(reading, e => e.textContent), "Capture 1. Capture 2.", "Restart after interrupted audio captures and appends a second recording once");
+	// B15 (round 18, P6 regression): pane → Peek → Return → lesson leaves the
+	// lesson's bottom row exactly where it was, reachable, the page unscrolled.
+	await page.click('[data-testid="reading-pane-peek"]');
+	await page.waitForSelector('[data-testid="reading-pane-return"]', { visible: true });
+	await page.click('[data-testid="reading-pane-return"]');
+	await page.waitForSelector('[data-testid="reading-pane-return"]', { hidden: true });
+	await page.click('[data-testid="reading-pane-close"]');
+	await page.waitForSelector('[data-testid="reading-pane"]:not([data-open])');
+	await page.waitForFunction(before => { const e = document.querySelector('.lh-reading-entry [data-testid="teach-check-reveal"]'); return !!e && Math.round(e.getBoundingClientRect().top) === before; }, { timeout: 5000 }, rowBeforePane.top).catch(() => {});
+	assert.deepEqual(await bottomRow(), rowBeforePane, "pane → Peek → Return → lesson keeps the lesson's bottom row in place and reachable (P6)");
+	console.log("PASS: pane → Peek → Return → lesson keeps the bottom row in place, reachable and unscrolled (P6 regression)");
+	await page.click('[data-testid="reading-pane-open"]');
+	await page.waitForSelector('[data-testid="reading-pane"][data-open]');
 	await fill(reading, "Reading thought.");
-	await page.click('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]');
+	await page.click(`${paneMic}[aria-label="Start dictation"]`);
 	await waitForSpeechAudio();
 	await page.evaluate(() => window.speech.final("Before reveal."));
-	await page.click('[data-testid="teach-check-reveal"]');
+	// Back to the lesson (dictation keeps going into the note), then the
+	// lesson's Show question.
+	await page.click('[data-testid="reading-pane-close"]');
+	await page.waitForSelector('[data-testid="reading-pane"]:not([data-open])');
+	await page.click('.lh-reading-entry [data-testid="teach-check-reveal"]');
 	await page.waitForFunction(() => window.speech.finishing);
 	assert.ok(await page.$('[data-testid="teach-check-reveal"]'), "Reveal waits for final speech");
 	await page.evaluate(() => { window.speech.final("Late reading thought."); window.speech.close(); });
@@ -1309,17 +1239,28 @@ try {
 	const answer = '[data-testid="answer-field"] [data-file-path-input]';
 	assert.equal(await page.$eval(answer, e => e.textContent), "", "Reading speech is separate from the newly revealed answer");
 	assert.equal(await page.$eval('[data-testid="question-dock"] button[type="submit"]', e => e.disabled), true, "Empty text questions keep their existing submit gate");
-	assert.equal(await page.$('[data-testid="reading-thinking-field"] [aria-label="Start dictation"]'), null, "Secondary reading input must not imply that it owns speech after reveal");
+	// Round 15 (F4): every field has its mic; after reveal the reading pane is
+	// closed and the answer field's mic is the one in view.
+	assert.equal(await page.$eval('[data-testid="reading-pane"]', e => e.hasAttribute("data-open")), false, "The reading pane closes when the question opens");
+	assert.ok(await page.$eval('[data-testid="answer-field"] [aria-label="Start dictation"]', e => e.checkVisibility({ visibilityProperty: true })), "The answer field shows its own mic");
 	await checkPhoneInput('[data-testid="answer-field"]');
 	await fill(answer, "Answer draft.");
-	// Wheel the actual history rather than invoking the dock's state machine.
-	await scrollBack();
+	// Round 13 (owner P7): on phones an open question owns the screen, so the
+	// lesson is not scrolled behind it; "Back to lesson" folds it to its bar.
+	assert.equal(await page.$eval('.lh-dock-overlay', e => {
+		const area = e.offsetParent?.getBoundingClientRect(), r = e.getBoundingClientRect();
+		return e.hasAttribute("data-question-open") && getComputedStyle(e).overflowY === "auto" && !!area && Math.abs(r.top - area.top) < 1 && Math.abs(r.height - area.height) < 1;
+	}), true, "The open question owns the lesson area below the page bar");
+	await page.click('[data-testid="question-back"]');
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { visible: true });
-	assert.ok(await page.$eval(answer, e => e.checkVisibility()), "A revealed question keeps its answer input visible when history scrolling collapses the question");
+	// Round 16 (R2): the folded bar is only the bar — it says what was written,
+	// and the answer form waits behind it with every word kept.
+	assert.equal(await page.$eval(answer, e => e.checkVisibility({ visibilityProperty: true })), false, "The folded question bar never holds the answer form");
+	assert.equal(await page.$eval('[data-testid="question-summary"]', e => e.textContent), "Your answer: Answer draft.", "The folded bar shows what was written");
 	assert.equal(await page.$eval(answer, e => e.textContent), "Answer draft.");
 	await page.click('[data-testid="question-dock-bar"]');
 	await page.waitForSelector('[data-testid="question-dock-bar"]', { hidden: true });
-	await upload("mobile_teaching"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
+	await upload("mobile_teaching"); await unfoldTray(); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="answer-field"] [aria-label="Start dictation"]');
 	await waitForSpeechAudio(1);
 	await page.evaluate(() => window.speech.final("Spoken answer."));
@@ -1334,16 +1275,20 @@ try {
 	assert.ok(answerRecord.writingSubmission && answerRecord.sharedWriting.length === 1, "Actual free-text adapter carries receipt and image");
 	await page.waitForFunction(() => !document.querySelector('[data-testid="handwriting-attempt-review"]'));
 	await page.goto(`${origin}/chat/mobile_selection`, { waitUntil: "networkidle2" });
-	await page.click('[data-testid="reading-thinking-field"] [data-testid="teach-check-reveal"]');
-	await page.waitForSelector('[data-testid="thinking-field"] [data-file-path-input]', { visible: true });
+	await page.click('.lh-reading-entry [data-testid="teach-check-reveal"]');
+	// Phones take a check in two steps (owner ruling 3): pick first, then
+	// confidence and "why" open beneath the choices.
+	await page.waitForSelector('[data-testid="question-pick-hint"]', { visible: true });
+	assert.equal(await page.$('[data-testid="thinking-field"] [data-file-path-input]').then(e => e?.isVisible()), false, "Before a choice, the why field waits");
 	await page.locator('[role="radio"]').filter(button => button.textContent.includes("Halve the area")).click();
+	await page.waitForSelector('[data-testid="thinking-field"] [data-file-path-input]', { visible: true });
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "The force stays the same.");
 	assert.ok(await page.$('[data-testid="confidence-slider"]'), "Selection questions retain confidence");
-	await page.click('.lh-phone-plan');
+	await openPlan(); // phones open Plan from the top of ⋯ (round 17, P3)
 	await page.waitForSelector('[data-testid="plan-popup"]');
 	await page.keyboard.press("Escape");
 	assert.equal(await page.$eval('[data-testid="thinking-field"] [data-file-path-input]', e => e.textContent), "The force stays the same.", "Real Plan dismissal preserves the question draft");
-	await upload("mobile_selection"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
+	await upload("mobile_selection"); await unfoldTray(); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
 	const selected = await (await fetch(`${origin}/api/chats/mobile_selection`)).json();
@@ -1357,7 +1302,7 @@ try {
 	await page.locator('[role="checkbox"]').filter(button => button.textContent.includes("Start with force")).click();
 	await fill('[data-testid="other-option"] [data-file-path-input]', "Compare both areas.");
 	await fill('[data-testid="thinking-field"] [data-file-path-input]', "My custom reasoning.");
-	await upload("mobile_other_answer"); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
+	await upload("mobile_other_answer"); await unfoldTray(); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 	await page.click('[data-testid="question-dock"] button[type="submit"]');
 	await page.waitForFunction(() => document.body.textContent.includes("Scripted tutor received your working."));
 	const otherRecord = (await (await fetch(`${origin}/api/chats/mobile_other_answer`)).json()).messages.find(m => m.role === "toolResult" && m.toolCallId === "question");
@@ -1371,7 +1316,7 @@ try {
 		assert.ok(await page.$('[data-testid="practice-thinking-field"] [aria-label="Start dictation"]'), "Practice/drill thinking owns the same in-field microphone");
 		await checkPhoneInput('[data-testid="practice-thinking-field"]');
 		await fill(thinking, "100 divided by 2.");
-		await upload(id); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
+		await upload(id); await unfoldTray(); await page.waitForSelector('[aria-label="Open handwritten working 1"]');
 		await page.locator('[data-testid="practice-thinking-field"] [aria-label="Start dictation"]').click();
 		await page.waitForFunction(() => window.speech?.readyState === 1);
 		await scrollBack();
@@ -1441,7 +1386,7 @@ try {
 		assert.equal(await gesture(selector, "middle", -30), false, "Interior gestures keep native scrolling");
 	}
 	assert.equal(await gesture('[data-testid="composer"]', "top", 30), true, "Composer gestures do not move the surrounding page");
-	assert.equal(await gesture('button[aria-label="Open sidebar"]', "top", 30), true, "Header gestures do not move the surrounding page");
+	assert.equal(await gesture('button[data-testid="open-sidebar"]', "top", 30), true, "Header gestures do not move the surrounding page");
 	assert.equal(await gesture(input, "middle", -30, 2), false, "Pinch gestures are not cancelled");
 	await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
 	await page.locator(mic).click();
@@ -1454,9 +1399,12 @@ try {
 	await page.setViewport({ width: 1100, height: 800, isMobile: true, hasTouch: true });
 	await page.waitForFunction(() => getComputedStyle(document.body).position !== "fixed");
 	assert.equal(await page.$eval(input, e => e.textContent), longDraft, "Wide-layout transition releases the focus lock without losing the draft");
-	assert.ok(await page.$eval('[data-testid="dictation-toggle"]', e => e.checkVisibility()), "Wide layouts retain their original dictation strip");
-	assert.equal(await page.$eval(mic, e => e.checkVisibility()), false, "Compact microphone stays phone-only");
+	// Round 14 (M3/M4): a touch screen of any width keeps one mic, inside the
+	// field; the row under the composer (and its dictation strip) is not shown.
+	assert.equal(await page.$eval('[data-testid="dictation-toggle"]', e => e.checkVisibility({ visibilityProperty: true })), false, "Touch screens do not show the row's dictation strip");
+	assert.equal(await page.$eval(mic, e => e.checkVisibility({ visibilityProperty: true })), true, "The in-field mic stays on wide touch screens");
 	await checkHandwritingMenus({ page, origin });
+	await checkReportCapture({ page, origin });
 	}
 	assert.deepEqual(errors, [], "No browser runtime errors");
 	console.log("PASS: conversation, reading/reveal, free-text/selection/Other answers, practice/drills, real persisted submissions, speech recovery, image review, panels, phone geometry and focus/gesture containment.");

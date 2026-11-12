@@ -31,15 +31,17 @@ test("meter keeps its measured numerator across selected-model/catalog changes, 
 	try {
 		await act(async () => root.render(<StatsBar chatId="fixture" turns={[turn]} contextTokens={83_000} pricing={pricing} />));
 		const context = () => host.querySelector('[data-testid="stats-context"]')?.textContent;
-		assert.equal(context(), "83k / 100k", "summarizer's 4.3k money log is not the meter source");
+		assert.equal(context(), "Memory 83% full", "summarizer's 4.3k money log is not the meter source (83k / 100k)");
 		selected = "b";
 		await act(async () => notifySettingsSaved("models"));
-		assert.equal(context(), "83k / 200k", "only denominator changes");
+		assert.equal(context(), "Memory 42% full", "only denominator changes (83k / 200k)");
 		await act(async () => root.render(<StatsBar chatId="fixture" turns={[turn]} contextTokens={null} pricing={pricing} />));
-		assert.equal(context(), "? / 200k");
+		// Round 15 (A7): after compaction the meter says when it returns, in
+		// plain words — never "? / …" (round 14, C6) and never just gone.
+		assert.equal(context(), "Memory shown after the next reply", "post-compaction unknown says when the figure returns");
 		assert.equal(host.querySelector('[data-testid="stats-cost"]')?.textContent, "$0.0030", "summary spending is still visible");
 		await act(async () => root.render(<StatsBar chatId="fixture" turns={[turn]} contextTokens={72_000} pricing={pricing} />));
-		assert.equal(context(), "72k / 200k");
+		assert.equal(context(), "Memory 36% full");
 	} finally {
 		await act(async () => root.unmount()); host.remove(); globalThis.fetch = originalFetch;
 	}

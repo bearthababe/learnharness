@@ -1,12 +1,14 @@
 "use client";
 
+import { useCoarsePointer } from "@/components/use-phone-viewport";
+
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useDeploymentActivity } from "./deployment-activity";
-import { ArrowRightIcon, CornerDownLeftIcon, SquareIcon } from "lucide-react";
+import { ArrowRightIcon, ArrowUpIcon, SquareIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PathInput } from "@/components/path-input";
 import { AttachFilesButton } from "@/components/attach-files-button";
-import { CompactLearningInput } from "@/components/compact-learning-input";
+import { CompactLearningInput, useMicSlot, useFocusWithin } from "@/components/compact-learning-input";
 import type { Dictation } from "@/components/dictation";
 
 /**
@@ -61,6 +63,7 @@ export function ChatSessionComposer({
 	inputRef,
 	onEscape,
 	placeholder,
+	shortPlaceholder,
 	nextProblem,
 	onNext,
 }: {
@@ -78,6 +81,7 @@ export function ChatSessionComposer({
 	inputRef?: React.RefObject<HTMLDivElement | null>;
 	onEscape?: () => void;
 	placeholder?: string;
+	shortPlaceholder?: string;
 	nextProblem?: boolean;
 	onNext?: () => void;
 }) {
@@ -103,6 +107,7 @@ export function ChatSessionComposer({
 			inputRef={inputRef}
 			onEscape={onEscape}
 			placeholder={placeholder}
+			shortPlaceholder={shortPlaceholder}
 			nextProblem={nextProblem}
 			onNext={onNext}
 		/>
@@ -120,6 +125,9 @@ export function Composer({
 	inputRef,
 	onEscape,
 	placeholder = "Ask, answer, or steer the lesson…",
+	// B8 (round 18): phones show a short form that fits beside the mic and
+	// Send (or Next) at 320–375px; the long one is for wider fields.
+	shortPlaceholder = placeholder === "Ask, answer, or steer the lesson…" ? "Message your tutor…" : undefined,
 	nextProblem = false,
 	onNext,
 	dictation,
@@ -141,6 +149,8 @@ export function Composer({
 	 *  active sessions read "Ask, answer, or steer the lesson…"; the fresh
 	 *  new-session page asks the graph view's opening question instead. */
 	placeholder?: string;
+	/** Shown instead on phones, where the field is narrow. */
+	shortPlaceholder?: string;
 	/** The practice pause is live (owner round 16): Enter on the empty
 	 *  composer fires the next-problem signal instead of doing nothing —
 	 *  the keyboard-first move-on. */
@@ -158,16 +168,23 @@ export function Composer({
 	};
 	const ownInputRef = useRef<HTMLDivElement>(null);
 	const editorRef = inputRef ?? ownInputRef;
+	// M6 (round 14): Send keeps its place and fades in once there is
+	// something to send or the box is in use (focus is tracked here, never
+	// guessed from the keyboard).
+	const [focused, focusHandlers] = useFocusWithin();
+	const coarse = useCoarsePointer();
+	const [micSlot, setMicSlot] = useMicSlot();
 	return (
 		<form
 			data-testid="composer"
 			className={cn("flex items-end gap-1.5 p-1.5", dictation && "lh-compact-row")}
+			{...focusHandlers}
 			onSubmit={(e) => {
 				e.preventDefault();
 				act();
 			}}
 		>
-			<CompactLearningInput dictation={dictation} enabled={!!dictation}><PathInput
+			<CompactLearningInput dictation={dictation} enabled={!!dictation} micSlot={micSlot}><PathInput
 				ref={editorRef}
 				value={value}
 				onValueChange={onChange}
@@ -192,10 +209,13 @@ export function Composer({
 					}
 				}}
 				placeholder={placeholder}
+				data-placeholder-short={shortPlaceholder}
 				autoFocus={autoFocus}
 				className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 			/></CompactLearningInput>
 			<AttachFilesButton editorRef={editorRef} />
+			{/* S1 (round 17): the mic, right before Send. */}
+			{dictation && <span ref={setMicSlot} className="lh-mic-slot" />}
 			{/* The button follows the text (owner report 2026-10-03): while
 				 a turn runs WITH text typed it stays the SEND affordance
 				 (click = steer — steering must be clickable, not Enter-only);
@@ -215,9 +235,9 @@ export function Composer({
 						type="submit"
 						data-testid="next-problem-button"
 						aria-label="Next problem"
-						className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[10px] bg-green-600 px-4 font-ui text-xs font-medium uppercase tracking-wide text-white transition-colors hover:bg-green-500"
+						className="flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full bg-green-600 px-4 font-ui text-sm font-semibold text-white transition-colors hover:bg-green-500"
 					>
-						Next problem
+						<span className="lh-next-long">Next problem</span><span className="lh-next-short" aria-hidden="true">Next</span>
 						<ArrowRightIcon className="size-4" />
 					</button>
 				) : (
@@ -225,14 +245,17 @@ export function Composer({
 						type="submit"
 						aria-label={busy && !canSend ? "Stop" : "Send"}
 						disabled={!busy && !canSend}
+						// R12 (round 15): focus shows Send on touch screens only (M6);
+						// laptops show it with something to send, as on Home.
+						data-ready={(busy || canSend || (focused && coarse)) || undefined}
 						className={cn(
-							"flex size-10 shrink-0 items-center justify-center rounded-[10px] transition-colors",
+							"lh-send-button flex size-10 shrink-0 items-center justify-center rounded-full transition-colors",
 							busy && !canSend
 								? "bg-secondary text-foreground hover:bg-accent"
 								: "bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40",
 						)}
 					>
-						{busy && !canSend ? <SquareIcon className="size-4" /> : <CornerDownLeftIcon className="size-5" />}
+						{busy && !canSend ? <SquareIcon className="size-4" /> : <ArrowUpIcon className="size-5" />}
 					</button>
 				)}
 		</form>

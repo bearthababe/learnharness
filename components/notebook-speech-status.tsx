@@ -14,9 +14,12 @@ export function NotebookSpeechRecovery({ session }: { session: NotebookSession }
 	const [error, setError] = useState<string | null>(null);
 	const runs = view?.speechRuns ?? [];
 	const fragments = runs.flatMap(run => run.fragments.filter(fragment => run.unplaced?.includes(fragment.id) && !run.discarded?.includes(fragment.id)).map(fragment => ({ run, fragment })));
-	const interrupted = runs.some(run => run.status === "interrupted");
+	// Only a run that actually received words has anything to restore; an
+	// attempt that never connected (no key, no permission) says so in its
+	// own error, so it gets no "words were restored" note.
+	const interrupted = runs.some(run => run.status === "interrupted" && run.fragments.length > 0);
 	if (!interrupted && !fragments.length && !speech.error) return null;
-	return <section aria-label="Dictation recovery" className="space-y-2 border-t border-border p-3 text-sm">
+	return <section aria-label="Dictation recovery" className="lh-dictation-recovery space-y-2 border-t border-border p-3 text-sm">
 		{interrupted && <p role="status">Recording interrupted. Received words were restored; some speech may be missing.</p>}
 		{fragments.length > 0 && <><h3 className="font-medium">Unplaced dictation</h3><p>Some dictation could not be placed. Review the retained text.</p></>}
 		{fragments.map(({ run, fragment }) => <article key={`${run.id}:${fragment.id}`} className="space-y-2 rounded border border-border p-2">

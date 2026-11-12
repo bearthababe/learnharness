@@ -29,7 +29,7 @@ test("actual select → submit → saved result → historical Why uses source d
 		assert.ok(choice);
 		await act(async () => choice.click());
 		assert.equal(choice.getAttribute("aria-checked"), "true");
-		const submit = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.includes("Submit answer"))!;
+		const submit = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.getAttribute("aria-label") === "Submit answer")!; // round 14 (P10): visibly "Submit"
 		assert.equal(submit.disabled, false);
 		// linkedom does not implement the browser's default button→form
 		// action; dispatch its native submit event through React instead.
@@ -45,7 +45,7 @@ test("actual select → submit → saved result → historical Why uses source d
 		assert.equal(persisted.details.explanation, explanation);
 		const saved = structuredClone(persisted.details);
 		await act(async () => root.render(<AnsweredCard answer={persisted.details} input={input} />));
-		const why = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Why")!;
+		const why = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Show explanation")!;
 		await act(async () => why.click());
 		assert.equal(host.querySelectorAll("mtr").length, 4, "question and revealed explanation retain their rows");
 		const paragraphs = host.querySelectorAll('[data-testid="tucked-explanation"] p');

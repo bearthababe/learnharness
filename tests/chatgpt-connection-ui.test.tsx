@@ -69,12 +69,12 @@ async function begin() { await click(byTest("chatgpt-login")); await click(byTes
 async function confirmDisconnect() { await click(byTest("chatgpt-disconnect")); await click(byTest("chatgpt-confirm-disconnect")); }
 afterEach(async () => { await act(async () => root?.unmount()); host?.remove(); root = undefined; host = undefined; delete window.lh; globalThis.fetch = originalFetch; });
 
-test("Providers is the first/default page; General is last and other pages keep relative order", () => {
+test("Providers is the first/default page; General ends the everyday settings, Try-out designs follows, About this app ends the list", () => {
  const html = renderToStaticMarkup(<SettingsDialogBody onClose={() => {}} />);
  const ids = [...html.matchAll(/data-testid="settings-nav-([^"]+)"/g)].map((m) => m[1]);
- assert.deepEqual(ids, ["keys", "agent", "appearance", "graph", "keyboard", "general"]);
- assert.match(html, /settings-nav-keys[^>]*aria-current="true"/); assert.match(html, />Providers<\/button>/);
- assert.doesNotMatch(html, />Model providers<\/button>/);
+ assert.deepEqual(ids, ["keys", "agent", "appearance", "graph", "keyboard", "general", "tryouts", "about"]); // round 16: Try-out designs follows the everyday settings; round 19 (L15): About this app ends Settings
+ assert.match(html, /settings-nav-keys[^>]*aria-current="true"/); assert.match(html, /settings-nav-keys[\s\S]*?lh-settings-nav-label">Providers</);
+ assert.doesNotMatch(html, />Model providers</);
 });
 
 test("Providers has five ordered sections including External CLI; unknown variables stay masked/read-only at the end of Model API keys", async () => {

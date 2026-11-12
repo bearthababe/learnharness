@@ -22,7 +22,10 @@ import { useCallback, useEffect, useState } from "react";
 import { ListTreeIcon } from "lucide-react";
 import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { GraphCostControl } from "@/components/graph-view.tsx";
-import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
+import { useDesktopPaths } from "@/components/attach-files-button";
+import { sourceFileLabel } from "@/src/core";
+import { ImportNotesLink, NotesImportControl, NotesImportDone, NotesImportErrors, NotesImportNotices, NotesImportResults, dismissNotesImportResults, useNotesImport } from "@/components/notes-import.tsx";
+import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import { Hint } from "@/components/ui/hint";
 import { useSidebar } from "@/components/sidebar";
 import type { ChatSummary, GraphCostSummary, GraphSnapshot } from "@/src/core";
@@ -45,6 +48,7 @@ export function KnowledgeSummary({
 }) {
 	const empty =
 		propositions === 0 && chains === 0 && teachSessions === 0 && practiceSessions === 0 && importedNotes === 0;
+	const desktop = useDesktopPaths();
 	return (
 		<div data-testid="knowledge-summary" className="flex flex-col items-center text-center">
 			{/* Own-line law (owner, 2026-10-06): every count sits on its own
@@ -75,7 +79,11 @@ export function KnowledgeSummary({
 			{empty && (
 				<div className="pt-2 font-ui text-xs text-muted-foreground/70">
 					<p>Start a session to begin learning.</p>
-					<p className="mt-1">Attach your material with the paperclip or drag and drop.</p>
+					{/* The paperclip attaches local files only in the desktop app;
+					    in a browser, notes come in through Extract files. */}
+					{desktop
+						? <p className="mt-1">Attach your material with the paperclip or drag and drop.</p>
+						: <p className="mt-1">Bring in your own notes: <ImportNotesLink /></p>}
 				</div>
 			)}
 		</div>
@@ -100,6 +108,8 @@ export function MinimalHome({
 	const [costs, setCosts] = useState<GraphCostSummary | null>(null);
 	const [chats, setChats] = useState<ChatSummary[]>([]);
 	const [chainsOpen, setChainsOpen] = useState(false);
+	// "Show ideas" after an import opens the list filtered to that file.
+	const [ideasQuery, setIdeasQuery] = useState<string | undefined>();
 
 	const readState = useCallback(() => {
 		fetch("/api/graph")
@@ -128,6 +138,7 @@ export function MinimalHome({
 	}, [chainSelectOpen]);
 
 	// Refetch even after incomplete imports: earlier writes and spend remain.
+	const { open: openSettings } = useSettingsDialog();
 	const notesImport = useNotesImport({ onFinish: readState });
 	const { importing, onImportFiles } = notesImport;
 
@@ -167,14 +178,17 @@ export function MinimalHome({
 								className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
 							>
 								<ListTreeIcon className="size-3" />
-								Chains
+								Ideas
 							</button>
 						</Hint>
 					</div>
 					<NotesImportControl importing={importing} onImportFiles={onImportFiles} />
 				</div>
-				<NotesImportErrors errors={notesImport.errors} />
+				<NotesImportResults floating={chainsOpen} importing={notesImport.importing}>
+				<NotesImportErrors errors={notesImport.errors} onOpenSettings={(section) => openSettings(section)} onDismiss={dismissNotesImportResults} />
+				<NotesImportDone done={notesImport.done} importing={notesImport.importing} onShowIdeas={() => { setIdeasQuery(notesImport.done.length ? sourceFileLabel(notesImport.done[0]!.filePath) : undefined); dismissNotesImportResults(); setChainsOpen(true); }} onDismiss={dismissNotesImportResults} />
 				<NotesImportNotices notices={notesImport.notices} />
+				</NotesImportResults>
 				{costs && costs.runs.length > 0 && <GraphCostControl costs={costs} />}
 			</div>
 
@@ -184,6 +198,7 @@ export function MinimalHome({
 			    order, so a full-bleed surface covering the drag band must
 			    paint after everything it covers. */}
 			<ChainTableOverlay
+				initialQuery={ideasQuery}
 				open={chainsOpen}
 				nodes={snapshot?.propositions ?? []}
 				chains={snapshot?.chains ?? []}
@@ -191,6 +206,7 @@ export function MinimalHome({
 				fileSources={snapshot?.fileSources ?? {}}
 				onClose={() => {
 					setChainsOpen(false);
+					setIdeasQuery(undefined);
 					onChainSelectClose?.();
 				}}
 				selectMode={chainSelectOpen}

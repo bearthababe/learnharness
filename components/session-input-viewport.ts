@@ -70,10 +70,12 @@ export function useSessionInputViewport(rootRef: RefObject<HTMLElement | null>, 
 				if (!scrollable) continue;
 				const position = horizontal ? el.scrollLeft : el.scrollTop;
 				const max = horizontal ? el.scrollWidth - el.clientWidth : el.scrollHeight - el.clientHeight;
-				if (max <= 1) continue;
+				if (max <= 2) continue;
 				const delta = horizontal ? dx : dy;
 				if (delta > 0 ? position > 0 : position < max - 1) return;
-				break;
+				// Round 15 (F3): at its edge a scroller hands the gesture to the
+				// one around it (the lesson); only a contained one keeps it.
+				if (/contain|none/.test(style.overscrollBehavior)) break;
 			}
 			event.preventDefault();
 		};

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { registerDraftFlush } from "@/components/draft-flush";
 import { createPortal } from "react-dom";
 import { FilePathChip } from "./file-path-chip";
 import { cn } from "../lib/utils";
@@ -241,6 +242,14 @@ export const PathInput = React.forwardRef<HTMLDivElement, PathInputProps>(functi
 		};
 		paint(saved, false);
 		if (initial.current.autoFocus) { root.focus(); restorePathSelection(root, saved); }
+		// D1 (round 13): a word still inside an input method's composition
+		// (iPhone predictive text) has not been reported yet. When the page
+		// hides or unloads, report what the field shows, so the surface saves it.
+		const unflush = registerDraftFlush(() => {
+			if (!mounted || !composing.current) return;
+			const live = normalizePathInputValue(readPathInput(root), callbacks.current.singleLine);
+			if (live !== current) { current = live; callbacks.current.onValueChange(live); }
+		});
 		root.addEventListener(INSERT_FILE_PATHS_EVENT, insertEvent);
 		root.addEventListener("beforeinput", beforeInput);
 		root.addEventListener("input", input);
@@ -255,6 +264,7 @@ export const PathInput = React.forwardRef<HTMLDivElement, PathInputProps>(functi
 			mounted = false;
 			composing.current = false;
 			controllerRef.current = null;
+			unflush();
 			root.removeEventListener(INSERT_FILE_PATHS_EVENT, insertEvent);
 			root.removeEventListener("beforeinput", beforeInput);
 			root.removeEventListener("input", input);

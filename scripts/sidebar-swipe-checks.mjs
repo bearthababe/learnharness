@@ -21,8 +21,10 @@ export async function checkSidebarSwipes(page, check, origin, chatId) {
 		await finish(cancel);
 		return preview;
 	};
+	// P4 (round 17): the page under the bar closes from its Sessions chip.
 	const close = async () => {
-		await page.click('button[aria-label="Close sidebar"]');
+		if (await page.$eval('button[aria-label="Close sidebar"]', e => e.checkVisibility()).catch(() => false)) await page.click('button[aria-label="Close sidebar"]');
+		else await page.click('button[data-testid="open-sidebar"][aria-current="page"]');
 		await page.waitForFunction(() => document.querySelector('aside[aria-label="Sessions"]').getAttribute("aria-hidden") === "true");
 	};
 	try {
@@ -44,7 +46,7 @@ export async function checkSidebarSwipes(page, check, origin, chatId) {
 		check(!(await state()).hidden, "A real touch swipe opens Sessions from Home");
 		await frame();
 		check(await camera() === before, "A Sessions swipe does not move the graph camera");
-		check(await page.$eval('button[aria-label="Close sidebar"]', element => element === document.activeElement), "Committed swipe opening focuses the existing modal close control");
+		check(await page.evaluate(() => { const panel = document.querySelector('aside[aria-label="Sessions"]'); const active = document.activeElement; return !!active && panel.contains(active) && active.matches("button, a, input"); }), "Committed swipe opening puts focus on the sessions page's first control");
 		if (process.env.LH_MOBILE_TEST_DIR) await page.screenshot({ path: path.join(process.env.LH_MOBILE_TEST_DIR, "sessions-swipe-open.png") });
 		await close();
 		await drag([48, graphY], [130, graphY]);
@@ -73,7 +75,7 @@ export async function checkSidebarSwipes(page, check, origin, chatId) {
 		await page.goto(`${origin}/chat/${chatId}`, { waitUntil: "networkidle2" });
 		await page.waitForSelector('[data-file-path-input][contenteditable="true"]');
 		const conversationY = 180;
-		const opener = await page.$eval('button[aria-label="Open sidebar"]', element => { const rect = element.getBoundingClientRect(); return { x: rect.right - 5, y: rect.y + rect.height / 2 }; });
+		const opener = await page.$eval('button[data-testid="open-sidebar"]', element => { const rect = element.getBoundingClientRect(); return { x: rect.right - 5, y: rect.y + rect.height / 2 }; });
 		await send("touchStart", [point(opener.x, opener.y)]);
 		await finish();
 		await page.waitForFunction(() => document.querySelector('aside[aria-label="Sessions"]').getAttribute("aria-hidden") === "false");

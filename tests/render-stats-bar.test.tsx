@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { StatsBar, formatContextMeasurement } from "../components/stats-bar.tsx";
+import { StatsBar, formatContextMeasurement, plainContextLabel } from "../components/stats-bar.tsx";
 import { sessionCost } from "../src/server/pricing.ts";
 import { catalogLimits } from "../components/model-picker.tsx";
 import type { ModelCatalogEntry, ModelCatalogResponse } from "../src/core/contracts.ts";
@@ -57,7 +57,7 @@ describe("stats bar", () => {
 		// live catalog's — and the bar doesn't hold the index yet (the
 		// catalog join lands with the UI chunk), so the meter renders
 		// USAGE-ONLY (owner amendment: never a fallback window).
-		assert.match(html, /data-testid="stats-context">11k</);
+		assert.match(html, /data-testid="stats-context">Memory 11k used</);
 		// Pi 1.5.0: each turn costs $0.0003773; two round to $0.0008.
 		assert.match(html, /data-testid="stats-cost">\$0\.0008</);
 		// model button label: SSR (record fetch not run yet) reads "—" —
@@ -74,18 +74,31 @@ describe("stats bar", () => {
 		// unknown model: no catalog limit exists, but the footprint is
 		// still an honest reading — usage-only (never "—" theater over
 		// real data, never a fake window)
-		assert.match(html, /data-testid="stats-context">11k</);
+		assert.match(html, /data-testid="stats-context">Memory 11k used</);
 	});
 
 	it("unknown context is explicit; changing the selected limit preserves the measurement", () => {
-		assert.equal(formatContextMeasurement(null, 100_000), "? / 100k");
+		assert.equal(formatContextMeasurement(null, 100_000), "—", "round 14 (C6): nothing measured reads \"—\", never \"? / 100k\"");
 		assert.equal(formatContextMeasurement(83_000, 100_000), "83k / 100k");
 		assert.equal(formatContextMeasurement(83_000, 200_000), "83k / 200k");
 		assert.equal(formatContextMeasurement(83_000, null), "83k");
+		// Round 15 (A7): with replies but no figure (after a compaction) the
+		// meter says when it returns, in words; never "? / …" (round 14, C6).
 		const html = renderToStaticMarkup(<StatsBar chatId="fixture" turns={[turn()]} contextTokens={null} />);
-		assert.match(html, /data-testid="stats-context">\?</);
+		assert.ok(html.includes("Memory shown after the next reply") && !html.includes("? /"), "plain words, no \"? / …\"");
+		assert.match(html, /data-testid="stats-cost"/);
 		const empty = renderToStaticMarkup(<StatsBar chatId="fixture" turns={[]} />);
-		assert.match(empty, /data-testid="stats-context">\?</);
+		assert.ok(!empty.includes("? /"));
+	});
+
+	it("L2 (round 20): the composer's figure reads in plain words", () => {
+		assert.equal(plainContextLabel(83_000, 100_000, 1), "Memory 83% full");
+		assert.equal(plainContextLabel(400, 1_000_000, 1), "Memory under 1% full", "a sliver never reads 0%");
+		assert.equal(plainContextLabel(0, 100_000, 1), "Memory 0% full");
+		assert.equal(plainContextLabel(120_000, 100_000, 1), "Memory 100% full", "never over 100%");
+		assert.equal(plainContextLabel(11_000, null, 1), "Memory 11k used", "no window known: usage only");
+		assert.equal(plainContextLabel(null, 100_000, 2), "Memory shown after the next reply");
+		assert.equal(plainContextLabel(null, null, 0), "Not measured yet");
 	});
 
 	it("prettyModel strips only the vendor path, preserving versions, dates and variants", () => {

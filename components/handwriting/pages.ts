@@ -1,7 +1,7 @@
 import { appendHandwriting, canonicalHandwriting, copyHandwriting, handwritingAtHead, handwritingContent, handwritingFingerprints, handwritingPageSchema, handwritingPrefix, handwritingSchema, initialHandwritingPage, normalizeHandwriting, notebookSource, notebookSourceSchema, orderedPages, pageSummary, pageSummarySchema, reconcileHandwritingPage, adoptHandwritingPageMetadata, replayHandwriting, restoreHandwriting, importHandwritingBackground, type BackgroundPixels, type HandwritingPage, type HandwritingStroke, type HandwritingOperation, type HandwritingV2, type NotebookSource, type PageCreation, type PageSummary, type SharedWriting } from "../../src/core/index.ts";
 import { compactPage, hydratePage, pageDeviceKey, pageRecoveryKey, PageDeviceConflict, type PagesDevice, type PageAction } from "./pages-device.ts";
 import { handwritingKey, handwritingRecoveryKey } from "./device.ts";
-import { HandwritingConflict } from "../../src/core/index.ts";
+import { HandwritingConflict, slotPage } from "../../src/core/index.ts";
 
 type StoragePort = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 type Dependencies = { device: PagesDevice; storage: () => StoragePort; fetch: typeof fetch; prepare: (page: HandwritingPage) => Promise<void>; flatten: (url: string) => Promise<BackgroundPixels>; preserveDrafts?: () => Promise<void> };
@@ -234,7 +234,7 @@ export class HandwritingPages {
 			if (action) this.actions.set(action.actionId, action);
 			let mirrored = true;
 			for (const page of pages) { this.remember(page); this.localSaved.add(page.id); mirrored = this.mirror(page) && mirrored; }
-			this.activate(target, mirrored ? action?.kind === "restore" ? "Snapshot restored · Undo available" : action?.kind === "duplicate" ? "Copy opened · not attached" : null : "Page saved on this device. Couldn’t finish opening it.", false, action?.kind === "restore" || action?.kind === "duplicate" ? "top" : "preserve");
+			this.activate(target, mirrored ? action?.kind === "restore" ? "Snapshot restored · Undo available" : action?.kind === "duplicate" ? "Copy opened · not attached" : null : "Page saved on this device. Couldn’t finish opening it.", false, action?.kind === "restore" || action?.kind === "duplicate" || action?.kind === "blank" ? "top" : "preserve");
 			for (const page of pages) void this.sync(page.id);
 			return true;
 		} catch { if (this.alive()) this.update({ notice: deviceFailure }); return false; }
@@ -254,6 +254,18 @@ export class HandwritingPages {
 		catch { this.update({ notice: deviceFailure }); return false; }
 		finally { this.update({ busy: false }); }
 	}
+	/** Round 14 (T4): a new, empty page after the others, opened at once. */
+	async addBlankPage() {
+		if (!this.state.ready || this.state.busy || this.strokes) return false;
+		const epoch = this.actionEpoch;
+		this.update({ busy: true, notice: "Adding page…" });
+		try {
+			const id = `page_${crypto.randomUUID()}`, journal = copyHandwriting({ version: 1, operations: [] }, id), { sourceFingerprint } = await handwritingFingerprints(notebookSource(journal));
+			const target: HandwritingPage = { version: 1, id, createdAt: new Date().toISOString(), origin: { kind: "blank" }, journal };
+			return await this.transition(target, { version: 1, chatId: this.chatId, actionId: crypto.randomUUID(), kind: "blank", pageId: id, seedHead: journal.head, seedFingerprint: sourceFingerprint, state: "local-committed" }, epoch);
+		} catch { this.update({ notice: deviceFailure }); return false; }
+		finally { this.update({ busy: false }); }
+	}
 	private async copy(source: NotebookSource, from: PageCreation["from"]) {
 		const epoch = this.actionEpoch;
 		const id = `page_${crypto.randomUUID()}`, journal = copyHandwriting(source.journal, id), { sourceFingerprint } = await handwritingFingerprints(notebookSource(journal));
@@ -269,7 +281,7 @@ export class HandwritingPages {
 			let source: NotebookSource, external = false, target: HandwritingPage | null = null;
 			if (response.ok) {
 				source = notebookSourceSchema.parse(await response.json());
-				if (writing.notebook && writing.notebook.pageId !== source.journal.pageId) throw new Error("Snapshot page identity mismatch");
+				if (writing.notebook && slotPage(writing.notebook.pageId) !== source.journal.pageId) throw new Error("Snapshot page identity mismatch");
 				if (writing.notebook && writing.notebook.contentFingerprint !== (await handwritingFingerprints(source)).contentFingerprint) throw new Error("Snapshot content identity mismatch");
 			} else {
 				const result = await response.json();
@@ -331,7 +343,7 @@ export class HandwritingPages {
 	private creation(page: HandwritingPage, action: PageAction): { page: HandwritingPage; creation: PageCreation } {
 		// The page wrapper is part of the frozen seed: server metadata adoption
 		// must retire this action in the same transaction before replacing it.
-		const from = action.kind === "recover" && !action.writingId ? { kind: "working" as const, pageId: page.id } : page.origin.kind === "duplicate" ? page.origin.from : { kind: "snapshot" as const, writingId: action.writingId! };
+		const from = action.kind === "blank" || (action.kind === "recover" && !action.writingId) ? { kind: "working" as const, pageId: page.id } : page.origin.kind === "duplicate" ? page.origin.from : { kind: "snapshot" as const, writingId: action.writingId! };
 		return { page: { ...page, journal: handwritingAtHead(page.journal, action.seedHead) }, creation: { id: action.actionId, kind: action.kind as PageCreation["kind"], seedFingerprint: action.seedFingerprint, from } };
 	}
 	private sync(pageId: string): Promise<void> {

@@ -1,16 +1,43 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Loader2Icon, MicIcon, SquareIcon, XIcon } from "lucide-react";
 import { DICTATION_KEYLESS, sampleDictationMeter, useDictationRecovery, type Dictation } from "@/components/dictation";
 import { readPathInput, readPathSelection, restorePathSelection, type TextSelection } from "./path-input-dom";
 
+/** Whether focus is inside an element (a composer), from focus events —
+ *  never a guess about the on-screen keyboard (round 14, M6). */
+export function useFocusWithin(): [boolean, { onFocus: () => void; onBlur: (event: FocusEvent<HTMLElement>) => void }] {
+	const [focused, setFocused] = useState(false);
+	const onFocus = useCallback(() => setFocused(true), []);
+	const onBlur = useCallback((event: FocusEvent<HTMLElement>) => {
+		if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setFocused(false);
+	}, []);
+	return [focused, useMemo(() => ({ onFocus, onBlur }), [onFocus, onBlur])];
+}
+
 /** Presentation around the existing, always-mounted editor. Capture, ownership
- * and submission stay with the caller. Wide layouts use display:contents. */
-export function CompactLearningInput({ children, dictation, enabled = true }: {
+ * and submission stay with the caller. Every learning field has its mic
+ * (round 15, F4/A2); the keyboard switch lives in ⋯ and the panes' bars.
+ *
+ * S1 (round 17, "dictation is central"): the mic is a big, muted round
+ * button — prominent by size, never a loud colour — placed deliberately:
+ * right before the field's main action (Send, Submit, Start, Apply), in a
+ * slot the caller provides. While dictating it is the Stop button, and the
+ * field shows the recording strip (status, time, level, Cancel), so the
+ * recording state is always in view. Without a slot it sits at the field's
+ * trailing edge. */
+export function CompactLearningInput({ children, dictation, enabled = true, speech = true, micSlot }: {
 	children: ReactNode;
 	dictation?: Dictation;
 	enabled?: boolean;
+	/** The panes' big mic bar carries the mic and its recording state
+	 *  instead, so the field shows neither. */
+	speech?: boolean;
+	/** S1: where the mic button goes — the caller's slot right before its
+	 *  main action. Null until mounted (then the mic waits there). */
+	micSlot?: HTMLElement | null;
 }) {
 	const field = useRef<HTMLDivElement>(null);
 	const saved = useRef<{ value: string; start: number; end: number; direction: "forward" | "backward" | "none"; scroll: number } | null>(null);
@@ -85,22 +112,38 @@ export function CompactLearningInput({ children, dictation, enabled = true }: {
 	}, [active]);
 	const recover = useDictationRecovery(dictation, remember);
 	return <>
-		{enabled && dictation?.error && <div role="alert" className="lh-compact-error">
+		{enabled && dictation?.error && <div role={dictation.error === DICTATION_KEYLESS ? "status" : "alert"} className="lh-compact-error" data-setup={dictation.error === DICTATION_KEYLESS || undefined}>
 			<span>{dictation.error}</span>
 			<button type="button" onClick={recover}>{dictation.error === DICTATION_KEYLESS ? "Settings" : "Retry"}</button>
 		</div>}
-		<div ref={field} className={enabled ? "lh-compact-field" : "contents"} data-recording={active || undefined} data-has-mic={!!dictation || undefined}>
+		<div ref={field} className={enabled ? "lh-compact-field" : "contents"} data-recording={(speech && active) || undefined}
+			data-has-mic={(speech && !!dictation && micSlot === undefined) || undefined} data-mic-outside={(speech && !!dictation && micSlot !== undefined) || undefined}>
 			{children}
-			{enabled && dictation && <div className="lh-compact-speech">
-				{active ? <Recording dictation={dictation} /> : <button type="button" aria-label="Start dictation" data-testid="compact-dictation-toggle" onPointerDown={remember} onClick={recover}>
-					<MicIcon size={20} />
-				</button>}
+			{enabled && speech && dictation && (micSlot === undefined || active) && <div className="lh-compact-speech">
+				{active ? <Recording dictation={dictation} outside={micSlot !== undefined} /> : <MicButton dictation={dictation} remember={remember} recover={recover} />}
 			</div>}
 		</div>
+		{enabled && speech && dictation && micSlot && createPortal(<MicButton dictation={dictation} remember={remember} recover={recover} />, micSlot)}
 	</>;
 }
 
-function Recording({ dictation }: { dictation: Dictation }) {
+/** S1: the field's mic — big and muted; while dictating it is Stop. */
+function MicButton({ dictation, remember, recover }: { dictation: Dictation; remember: () => void; recover: () => void }) {
+	const active = dictation.active;
+	if (active) return <button type="button" className="lh-mic-button" data-recording="" aria-label="Stop dictation" onClick={dictation.stop} disabled={dictation.phase === "stopping"}>
+		<SquareIcon aria-hidden />
+	</button>;
+	return <button type="button" className="lh-mic-button" aria-label="Start dictation" data-testid="compact-dictation-toggle" onPointerDown={remember} onClick={recover}>
+		<MicIcon aria-hidden />
+	</button>;
+}
+
+/** Callers' slot for the mic, right before their main action. */
+export function useMicSlot(): [HTMLSpanElement | null, (element: HTMLSpanElement | null) => void] {
+	return useState<HTMLSpanElement | null>(null);
+}
+
+function Recording({ dictation, outside = false }: { dictation: Dictation; outside?: boolean }) {
 	const { phase, levelRef, stop, cancel } = dictation;
 	const [elapsed, setElapsed] = useState(0);
 	const [levels, setLevels] = useState<number[]>(Array(20).fill(0));
@@ -121,6 +164,7 @@ function Recording({ dictation }: { dictation: Dictation }) {
 			</> : <span className="lh-compact-status"><Loader2Icon size={14} />{status}</span>}
 		</div>
 		<button type="button" aria-label="Cancel dictation" onClick={cancel}><XIcon size={18} /></button>
-		<button type="button" aria-label="Stop dictation" onClick={stop} disabled={phase === "stopping"}><SquareIcon size={16} /></button>
+		{/* With the mic outside the field, Stop is that button (S1). */}
+		{!outside && <button type="button" aria-label="Stop dictation" onClick={stop} disabled={phase === "stopping"}><SquareIcon size={16} /></button>}
 	</div>;
 }

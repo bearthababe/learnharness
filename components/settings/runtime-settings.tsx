@@ -18,5 +18,10 @@ export function RuntimeSettings() {
 		const timer = setInterval(refresh, 15000);
 		return () => { controller.abort(); clearInterval(timer); };
 	}, []);
+	// L15 (round 19): only inside main's managed local service does this row
+	// have something real to say; elsewhere it was "Commit unknown · Build
+	// unknown · … External runtime" on every device. The build shows in
+	// Settings → About this app instead.
+	if (status?.mode !== "local-service") return null;
 	return <SettingsRow label="Running service" testid="row-runtime" hint={<span role="status" data-testid="runtime-status" className="[overflow-wrap:anywhere]">{status ? <><span className="block">Commit {status.revision}</span><span className="block">Build {status.buildId ?? status.sourceHash} · Process {status.pid ?? "external"}</span><span className="block">{status.mode === "local-service" ? `Local Linux service · ${status.updater === "running" ? "Updater running" : "Updater not running"} · ${status.updateState} · Activity ${status.activity}` : "External runtime · Updates managed outside this service"}</span>{status.candidate && <span className="block">Candidate {status.candidate}</span>}{status.updateReason && <span className="block">{status.updateReason}</span>}{!!status.activityReasons?.length && <span className="block">{status.activityReasons.join(", ")}</span>}</> : "Runtime status unavailable"}</span>}>{null}</SettingsRow>;
 }

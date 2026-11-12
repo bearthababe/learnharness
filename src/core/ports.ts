@@ -41,6 +41,8 @@ export interface SharedWritingStore {
 	putNotebook(chatId: string, capture: NotebookCapture): NotebookCaptureReceipt;
 	readSource(chatId: string, id: string): NotebookSource | null;
 	readSnapshot(chatId: string): WritingSnapshot;
+	/** Take a pending snapshot out of the next message (kept on disk). */
+	dismiss(chatId: string, id: string): void;
 	deleteChat(chatId: string): void;
 }
 
@@ -61,6 +63,8 @@ export interface HandwritingStore {
 // ─── ChatStore — the session record's home (data/chats) ─────────────────────
 
 export interface ChatStore {
+	/** The learner acted in this session (round 13): stamps the list order. */
+	markLearnerActivity?(id: string): void;
 	/** Compare-and-write only the notebook; retain latest conversation fields. */
 	saveNotebook(id: string, expectedRevision: number, notebook: NotebookRecord): NotebookRecord;
 	/** Atomically accept notebook input/outbox and consume its owned draft. */
@@ -182,6 +186,8 @@ export interface CreateJobInit {
 	activity?: string;
 	/** Saved on the job before its worker is spawned. */
 	input?: unknown;
+	/** A Retry of a failed job (round 12). */
+	retryOf?: string;
 }
 
 /** Mergeable fields — identity (id, kind, chatId, toolCallId, createdAt) is immutable. */

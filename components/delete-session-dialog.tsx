@@ -118,7 +118,7 @@ export function DeleteSessionDialog({
 
 	return createPortal(
 		<div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-background/80"
+			className="lh-dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-background/80"
 			{...backdropDismiss}
 		>
 			<DeleteSessionBody
@@ -162,16 +162,16 @@ export function DeleteSessionBody({
 			aria-label="Delete session"
 			data-testid="delete-session-dialog"
 			onClick={(e) => e.stopPropagation()}
-			className="w-[32rem] max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-5 shadow-xl"
+			className="lh-dialog w-[30rem] max-w-[calc(100vw-2rem)] rounded-2xl border bg-card p-6 shadow-xl"
 		>
-			<h2 className="text-sm font-semibold text-destructive">Delete session?</h2>
+			<h2 className="text-lg font-semibold text-foreground">Delete session?</h2>
 			{/* The session name below the title in JetBrains Mono (owner,
 			    2026-09-24): no code-block chrome — the font already says
 			    code. Owner, 2026-10-13 polish: normal text-sm size (was
 			    sized-up text-lg), still white. Same shape as the node
 			    dialog. */}
 			<div className="mt-1.5">
-				<code data-testid="session-name-code" className="font-mono text-sm text-foreground">
+				<code data-testid="session-name-code" className="font-prose text-base font-medium text-foreground">
 					{chat.title}
 				</code>
 			</div>
@@ -181,7 +181,7 @@ export function DeleteSessionBody({
 			</p>
 			<label
 				data-testid={TRACES_COPY.testid}
-				className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-border/60 px-4 py-3"
+				className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-border px-4 py-3"
 			>
 				<input
 					type="checkbox"
@@ -216,14 +216,14 @@ export function DeleteSessionBody({
 			)}
 			{/* The node dialog's exact bottom row: quiet Cancel, destructive
 			    red Delete (border + text, fill on hover — the app's
-			    established destructive pair). */}
+			    established destructive pair). P5 (round 20): 44px targets. */}
 			<div className="mt-4 flex justify-end gap-2">
 				<button
 					type="button"
 					data-testid="delete-cancel"
 					onClick={onClose}
 					disabled={busy}
-					className="rounded-sm px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+					className="h-11 rounded-xl border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-40"
 				>
 					Cancel
 				</button>
@@ -232,7 +232,7 @@ export function DeleteSessionBody({
 					data-testid="delete-confirm"
 					onClick={onRun}
 					disabled={busy}
-					className="rounded-sm border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-xs text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-40"
+					className="h-11 rounded-xl bg-[#c94545] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#d65252] disabled:opacity-40"
 				>
 					{busy ? "Deleting…" : "Delete"}
 				</button>

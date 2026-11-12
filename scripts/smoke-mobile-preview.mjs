@@ -82,12 +82,12 @@ async function checkLaunch(page, destination, manifestPath) {
 }
 
 async function checkReload(page, destination) {
-	const input = '[data-file-path-input][data-placeholder="What do you want to learn?"]';
+	const input = '[data-file-path-input]:is([data-placeholder="What do you want to learn?"], [data-placeholder="What to learn?"])'; // B8 (round 18): phones show the short form
 	const draft = "Preview verification: unsent draft must reset on reload.";
 	await page.locator(input).fill(draft);
 	assert.equal(await page.$eval(input, element => element.textContent), draft);
 	await page.evaluate(() => { window.__lhPreviewBeforeReload = true; });
-	await page.locator('button[aria-label="Open sidebar"]').click();
+	await page.locator('button[data-testid="open-sidebar"]').click();
 	await page.waitForSelector('[aria-label="Sessions"][role="dialog"]');
 	await page.locator('aside[aria-label="Sessions"] summary').filter(element => element.textContent.trim() === "Tools").click();
 	const [response] = await Promise.all([
