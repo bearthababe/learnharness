@@ -18,14 +18,19 @@ import assert from "node:assert/strict";
  * Keys on screen are masked in the shot (§0: screenshots mask secrets; never
  * put keys in a report): a line holding a key-shaped string and a line
  * holding a key this instance holds (a synthetic one, saved for the check in
- * the suite's disposable key file) come out short, so the place where the
- * key's tail would be drawn stays blank.
+ * the suite's disposable key file), whole or glued inside a longer word, come
+ * out short, so the place where the key's tail would be drawn stays blank.
+ * The glued line uses a second held key that is nowhere on screen whole, so
+ * only the glued match can mask it.
+ * The dialog says where reports go (here: filing off, so they stay local).
  */
 export async function checkReportCapture({ page, origin }) {
 	const known = new Set((await (await fetch(`${origin}/api/bugs`)).json()).reports.map(report => report.id));
 	// Test-only fake keys, built at run time.
-	const shaped = "sk-" + "proj" + "0123456789abcdefghijklmnopq", held = "zzproveit" + "R5HELDmistral0123456789abcdefgh";
-	assert.equal((await fetch(`${origin}/api/keys/MISTRAL_API_KEY`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value: held }) })).status, 200, "the check's synthetic key is held");
+	const shaped = "sk-" + "proj" + "0123456789abcdefghijklmnopq", held = "zzproveit" + "R5HELDmistral0123456789abcdefgh", gluedKey = "zzproveit" + "R5HELDtogether0123456789abcdef";
+	for (const [name, value] of [["MISTRAL_API_KEY", held], ["TOGETHER_API_KEY", gluedKey]]) {
+		assert.equal((await fetch(`${origin}/api/keys/${name}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ value }) })).status, 200, "the check's synthetic key is held");
+	}
 	try {
 		const area = await page.evaluate((keyLines) => {
 			const box = document.createElement("div");
@@ -48,12 +53,12 @@ export async function checkReportCapture({ page, origin }) {
 			field.value = lines;
 			const keys = document.createElement("div");
 			keys.id = "zz-report-capture-keys";
-			keys.style.cssText = "position:fixed;left:0;top:510px;width:420px;height:40px;overflow:hidden;white-space:pre;font:700 16px/20px monospace;color:#000;background:#fff;z-index:2147483000;margin:0;padding:0";
+			keys.style.cssText = "position:fixed;left:0;top:510px;width:420px;height:60px;overflow:hidden;white-space:pre;font:700 16px/20px monospace;color:#000;background:#fff;z-index:2147483000;margin:0;padding:0";
 			keys.textContent = keyLines.join("\n");
 			document.body.append(text, field, keys);
 			text.scrollTop = text.scrollHeight; field.scrollTop = field.scrollHeight;
 			return { scrollTop: box.scrollTop, text: text.scrollTop, field: field.scrollTop, keyWidth: Math.round(keys.scrollWidth) };
-		}, [`zz ${shaped}`, `zz ${held}`]);
+		}, [`zz ${shaped}`, `zz ${held}`, `zz abc${gluedKey}xyz`]);
 		assert.equal(area.scrollTop, 240, "the fixture area scrolls");
 		assert.ok(area.text > 200 && area.field > 200, `the text fields scroll to their last lines (${area.text}, ${area.field})`);
 		await page.evaluate(() => window.dispatchEvent(new CustomEvent("lh:bug-capture", { detail: { keepMenus: false } })));
@@ -70,7 +75,7 @@ export async function checkReportCapture({ page, origin }) {
 			context.drawImage(bitmap, 0, 0);
 			const at = (x, y) => [...context.getImageData(x, y, 1, 1).data.slice(0, 3)];
 			const dark = (left, top, width, height) => { const { data } = context.getImageData(left, top, Math.min(width, bitmap.width - left), height); let count = 0; for (let i = 0; i < data.length; i += 4) if (data[i] + data[i + 1] + data[i + 2] < 300) count++; return count; };
-			return { top: at(100, 20), body: at(100, 120), bottom: at(100, 225), text: dark(0, 250, 200, 120), field: dark(0, 380, 200, 120), shapedTail: dark(190, 510, 170, 20), heldTail: dark(190, 530, 170, 20) };
+			return { top: at(100, 20), body: at(100, 120), bottom: at(100, 225), text: dark(0, 250, 200, 120), field: dark(0, 380, 200, 120), shapedTail: dark(240, 510, 120, 20), heldTail: dark(240, 530, 120, 20), gluedTail: dark(240, 550, 120, 20) };
 		}, report.id);
 		const near = (rgb, want) => rgb.every((value, i) => Math.abs(value - want[i]) <= 60);
 		assert.ok(near(pixels.top, [230, 0, 0]), `the row pinned to the top stays in the shot (got rgb ${pixels.top})`);
@@ -81,12 +86,14 @@ export async function checkReportCapture({ page, origin }) {
 		assert.ok(area.keyWidth > 300, `the key lines are drawn wide on screen (${area.keyWidth}px)`);
 		assert.ok(pixels.shapedTail < 40, `a key-shaped string on screen is masked in the shot (${pixels.shapedTail} dark pixels where its tail would be)`);
 		assert.ok(pixels.heldTail < 40, `a key this instance holds, on screen, is masked in the shot (${pixels.heldTail} dark pixels where its tail would be)`);
+		assert.ok(pixels.gluedTail < 40, `a held key glued inside a longer word on screen is masked in the shot (${pixels.gluedTail} dark pixels where its tail would be)`);
 		let masked;
 		for (let tries = 0; tries < 40 && typeof masked !== "number"; tries++) {
 			masked = (await (await fetch(`${origin}/api/bugs/${report.id}`)).json()).screenshotMasked;
 			if (typeof masked !== "number") await new Promise(resolve => setTimeout(resolve, 250));
 		}
-		assert.ok(masked >= 2, `the report counts what its screenshot masked (${masked})`);
+		assert.ok(masked >= 3, `the report counts what its screenshot masked (${masked})`);
+		assert.equal(await page.$eval('[data-testid="bug-hint"]', element => element.textContent), "Reports stay on this computer.", "with filing off, the dialog says reports stay local");
 		assert.equal(await page.evaluate(() => document.querySelectorAll("[data-lh-shot-shift], [data-lh-shot-text]").length), 0, "the capture leaves no marks on the page");
 		// The fixtures go first: on a phone they sit over the dialog's buttons.
 		await page.evaluate(() => { for (const id of ["zz-report-capture", "zz-report-capture-text", "zz-report-capture-field", "zz-report-capture-keys"]) document.getElementById(id)?.remove(); });
@@ -94,6 +101,6 @@ export async function checkReportCapture({ page, origin }) {
 		await page.waitForFunction(() => !document.querySelector('[data-testid="bug-dialog"]'));
 		assert.equal((await fetch(`${origin}/api/bugs/${report.id}`, { method: "DELETE" })).ok, true, "the check's report is discarded");
 	} finally {
-		await fetch(`${origin}/api/keys/MISTRAL_API_KEY`, { method: "DELETE" });
+		for (const name of ["MISTRAL_API_KEY", "TOGETHER_API_KEY"]) await fetch(`${origin}/api/keys/${name}`, { method: "DELETE" });
 	}
 }

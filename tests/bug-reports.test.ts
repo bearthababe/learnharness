@@ -262,9 +262,14 @@ it("§0 (merge proof, round 4): ordinary lesson phrases stay; glued, encoded and
 		authStore.setAuthVar("DEEPSEEK_API_KEY", late);
 		assert.ok(store.scrubReports() >= 1);
 		assert.ok(!fs.readFileSync(file, "utf-8").includes(late), "the file the coordinator collects no longer holds it");
-		// Which words on the screen are held keys: only words the page sent come back.
-		const res = await maskRoute.POST(new Request("http://test/api/bugs/mask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ words: [mistral, "ordinary-words-here", held, "short"] }) }));
-		assert.deepEqual((await res.json()).held.sort(), [held, mistral].sort());
+		// Which words on the screen hold a held key — whole, or inside a longer
+		// word — come back with the key cut out; ordinary words don't come back,
+		// and no answer holds a key.
+		const glued = `abc${mistral}xyz`;
+		const res = await maskRoute.POST(new Request("http://test/api/bugs/mask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ words: [mistral, "ordinary-words-here", held, glued, "short"] }) }));
+		const answer = await res.json() as { held: { word: string; masked: string }[] };
+		assert.deepEqual(answer.held.map((entry) => [entry.word, entry.masked]).sort(), [[mistral, "[redacted key]"], [held, "[redacted key]"], [glued, "abc[redacted key]xyz"]].sort());
+		assert.ok(!answer.held.some((entry) => entry.masked.includes(mistral) || entry.masked.includes(held)), "an answer never holds a key");
 	} finally {
 		for (const name of ["TOGETHER_API_KEY", "MISTRAL_API_KEY", "DEEPSEEK_API_KEY"]) authStore.deleteAuthVar(name);
 	}
@@ -284,4 +289,17 @@ it("§0 (merge proof, round 4): ordinary lesson phrases stay; glued, encoded and
 	assert.ok(rolled && rolled !== "discarded" && rolled.at !== "2026-02-30T10:00:00.000Z");
 	const issue = issueText({ id: "r-x", kind: "bug", at: "2026-11-12T10:00:00.000Z", path: "/", note: "n", log: [{ at: "xxxxxxxxxxxsk-zzproveitglued", kind: "error", text: "boom" }] });
 	assert.ok(issue.body.includes("--:--:-- error boom") && !issue.body.includes("sk-zz"));
+});
+
+it("§0 (merge proof): Settings → About says where reports go — kept here, and filed in the configured repo when filing is on", async () => {
+	const aboutRoute = await import("../app/api/about/route.ts");
+	const before = process.env.LH_REPORTS_REPO;
+	try {
+		delete process.env.LH_REPORTS_REPO;
+		assert.equal((await aboutRoute.GET().json()).reportsFiledTo, null);
+		process.env.LH_REPORTS_REPO = "zz-prove-it/zz-reports";
+		assert.equal((await aboutRoute.GET().json()).reportsFiledTo, "zz-prove-it/zz-reports");
+	} finally {
+		if (before === undefined) delete process.env.LH_REPORTS_REPO; else process.env.LH_REPORTS_REPO = before;
+	}
 });

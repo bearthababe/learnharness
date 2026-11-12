@@ -75,12 +75,14 @@ function maskClone(node: Node) {
 /**
  * Keys in the screen's text (round 19 §0: screenshots mask secrets; never
  * put keys in a report). Text shaped like a key is masked by the same rules
- * as a report's stored text, and words equal to a key this instance holds
- * are masked too: the page asks the server which of its words those are,
- * and the server answers only with words the page sent (no key leaves it).
+ * as a report's stored text, and words holding a key this instance holds
+ * (the whole word, or inside a longer one) are masked too: the page asks
+ * the server which of its words those are, and the server answers only
+ * with the words the page sent, the key cut out (no key leaves it).
  */
 const SHOT_EXCLUDED = ".lh-bug-sheet, .lh-bug-toast, .lh-bug-backdrop";
-let heldOnScreen = new Set<string>();
+/** Words on screen holding a held key, longest first, each with its cut form. */
+let heldOnScreen: { word: string; masked: string }[] = [];
 function screenWords(root: Element): string[] {
 	const words = new Set<string>();
 	const add = (text: string) => {
@@ -91,16 +93,16 @@ function screenWords(root: Element): string[] {
 	for (const field of root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")) if (!field.closest(SHOT_EXCLUDED)) add(field.value);
 	return [...words].slice(0, 5000);
 }
-async function findHeldOnScreen(root: Element): Promise<Set<string>> {
+async function findHeldOnScreen(root: Element): Promise<{ word: string; masked: string }[]> {
 	try {
 		const res = await fetch("/api/bugs/mask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ words: screenWords(root) }) });
-		const { held } = (await res.json()) as { held?: string[] };
-		return new Set((held ?? []).sort((a, b) => b.length - a.length));
-	} catch { return new Set(); }
+		const { held } = (await res.json()) as { held?: { word: string; masked: string }[] };
+		return (held ?? []).filter((entry) => typeof entry?.word === "string" && typeof entry.masked === "string").sort((a, b) => b.word.length - a.word.length);
+	} catch { return []; }
 }
 function maskKeyText(text: string): string {
 	let out = text;
-	for (const key of heldOnScreen) if (out.includes(key)) out = out.split(key).join("[redacted key]");
+	for (const { word, masked } of heldOnScreen) if (out.includes(word)) out = out.split(word).join(masked);
 	return redactSecrets(out);
 }
 /** How many keys a masking took out of a text. */
@@ -248,7 +250,8 @@ const transport: BugTransport = {
 type Shot = "pending" | "ok" | "failed";
 type Toast = { text: string; id?: string } | null;
 
-export function BugCapture() {
+/** `filing`: LH_REPORTS_REPO is set, so leaving the dialog also files the report as a GitHub issue. */
+export function BugCapture({ filing = false }: { filing?: boolean }) {
 	const device = useDeviceClass();
 	const pathname = usePathname();
 	const [open, setOpen] = useState(false);
@@ -402,7 +405,7 @@ export function BugCapture() {
 					// shot, instead of showing from its top; its pinned rows stay where
 					// they show, and a scrolled field shows the lines on screen (merge proof N1).
 					features: { restoreScrollPosition: true },
-				}).finally(() => { unmark(); heldOnScreen = new Set(); });
+				}).finally(() => { unmark(); heldOnScreen = []; });
 				await draft.flush();
 				if (draft.value.discardPending) return;
 				const res = await fetch(`/api/bugs/${reportId}/screenshot`, { method: "PUT", headers: { "Content-Type": blob.type }, body: blob });
@@ -483,7 +486,11 @@ export function BugCapture() {
 							</button>
 						)}
 					</div>
-					<p className="lh-bug-hint">{kind === "change" ? "A change keeps your note, the page and the screenshot (no error log)." : "Reports stay on this computer."}</p>
+					<p className="lh-bug-hint" data-testid="bug-hint">{[
+						kind === "change" ? "A change keeps your note, the page and the screenshot (no error log)." : "",
+						// Where it goes, as configured: kept here only, or kept here and filed on GitHub.
+						filing ? "Saved on this computer and filed as a GitHub issue when you close this." : kind === "change" ? "" : "Reports stay on this computer.",
+					].filter(Boolean).join(" ")}</p>
 					<div className="lh-bug-actions">
 						<button type="button" className="lh-bug-primary" data-testid="bug-close" onClick={() => void leave()}>Save and close</button>
 						{url ? <Link href={url} className="lh-bug-secondary" data-testid="bug-open" onClick={() => void leave()}>Open report</Link> : <span className="lh-bug-secondary" aria-disabled="true">Open report</span>}

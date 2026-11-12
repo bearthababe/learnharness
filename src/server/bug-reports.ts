@@ -51,12 +51,16 @@ function heldKeys(): string[] {
 	for (const key of heldKeyValues()) for (const form of [key, encodeURIComponent(key), encodeURI(key)]) forms.add(form);
 	return [...forms].sort((a, b) => b.length - a.length);
 }
-/** Which of these words from the screen are keys this instance holds: the
- *  screenshot masks them without any key leaving the server (it answers
- *  only with words the page already has). */
-export function heldKeysAmong(words: string[]): string[] {
-	const held = new Set(heldKeyValues());
-	return [...new Set(words)].filter((word) => held.has(word));
+/** Which of these words from the screen hold a key this instance holds —
+ *  the whole word, or inside a longer one — each with that key cut out:
+ *  the screenshot masks them without any key leaving the server (it
+ *  answers only with the words the page sent, cut). */
+export function heldKeysWithin(words: string[]): { word: string; masked: string }[] {
+	const keys = heldKeys();
+	return [...new Set(words)].flatMap((word) => {
+		const masked = keys.reduce((out, key) => (out.includes(key) ? out.split(key).join("[redacted key]") : out), word);
+		return masked === word ? [] : [{ word, masked }];
+	});
 }
 /** Redaction for one report: the held keys, then the shared patterns. */
 export function reportRedactor(): (text: string) => string {

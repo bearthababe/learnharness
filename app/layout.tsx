@@ -70,7 +70,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 			    every 🐞 entry opens (the ⋯ menu, the notebook's options, the
 			    laptop's sidebar, Settings → About). */}
 			<BugRecorder />
-			<BugCapture />
+			{/* Filing is on when LH_REPORTS_REPO is set (src/server/report-issues.ts reportsRepo). */}
+			<BugCapture filing={Boolean((process.env.LH_REPORTS_REPO || "").trim())} />
 			{process.env.LH_NOTEBOOK_PREVIEW === "1" && <NotebookPreviewTools />}
 		</body>
 		</html>
