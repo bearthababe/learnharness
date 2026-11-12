@@ -8,6 +8,7 @@ import { useDeploymentActivity } from "@/components/deployment-activity";
 import { useDeviceClass } from "@/components/device-features";
 import { dictationAvailable, finishDictation, joinDictation, useDictationTarget } from "@/components/dictation";
 import { isDictationActive, useDictationActive } from "@/components/dictation-state";
+import { redactSecrets } from "@/src/core";
 import { BugDraft, newReportId, persistDraft, readOutbox, type BugDraftValue, type BugKind, type BugTransport } from "@/components/bug-draft";
 
 /**
@@ -69,6 +70,52 @@ function maskClone(node: Node) {
 		if (node instanceof HTMLTextAreaElement) node.textContent = masked;
 		node.removeAttribute("placeholder");
 	} else node.textContent = DOTS;
+}
+
+/**
+ * Keys in the screen's text (round 19 §0: screenshots mask secrets; never
+ * put keys in a report). Text shaped like a key is masked by the same rules
+ * as a report's stored text, and words equal to a key this instance holds
+ * are masked too: the page asks the server which of its words those are,
+ * and the server answers only with words the page sent (no key leaves it).
+ */
+const SHOT_EXCLUDED = ".lh-bug-sheet, .lh-bug-toast, .lh-bug-backdrop";
+let heldOnScreen = new Set<string>();
+function screenWords(root: Element): string[] {
+	const words = new Set<string>();
+	const add = (text: string) => {
+		for (const word of text.split(/[\s"'`<>()[\]{},;|]+/)) for (const part of [word, ...word.split(/[=:?&]+/)]) if (part.length >= 8 && part.length <= 512) words.add(part);
+	};
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	for (let text = walker.nextNode(); text && words.size < 5000; text = walker.nextNode()) if (!text.parentElement?.closest(SHOT_EXCLUDED)) add(text.textContent ?? "");
+	for (const field of root.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")) if (!field.closest(SHOT_EXCLUDED)) add(field.value);
+	return [...words].slice(0, 5000);
+}
+async function findHeldOnScreen(root: Element): Promise<Set<string>> {
+	try {
+		const res = await fetch("/api/bugs/mask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ words: screenWords(root) }) });
+		const { held } = (await res.json()) as { held?: string[] };
+		return new Set((held ?? []).sort((a, b) => b.length - a.length));
+	} catch { return new Set(); }
+}
+function maskKeyText(text: string): string {
+	let out = text;
+	for (const key of heldOnScreen) if (out.includes(key)) out = out.split(key).join("[redacted key]");
+	return redactSecrets(out);
+}
+/** How many keys a masking took out of a text. */
+const cuts = (before: string, after: string) => Math.max(1, (after.match(/\[redacted/g)?.length ?? 0) - (before.match(/\[redacted/g)?.length ?? 0));
+function maskKeysInClone(node: Node) {
+	if (!(node instanceof Element)) return;
+	for (const child of node.childNodes) {
+		if (child.nodeType !== Node.TEXT_NODE) continue;
+		const text = child.textContent ?? "", clean = maskKeyText(text);
+		if (clean !== text) { child.textContent = clean; maskedCount += cuts(text, clean); }
+	}
+	if ((node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) && !node.matches(SECRET_FIELDS)) {
+		const value = node.getAttribute("value") ?? "", clean = maskKeyText(value);
+		if (clean !== value) { node.value = clean; node.setAttribute("value", clean); if (node instanceof HTMLTextAreaElement) node.textContent = clean; maskedCount += cuts(value, clean); }
+	}
 }
 
 /**
@@ -339,20 +386,23 @@ export function BugCapture() {
 			try {
 				const { domToBlob } = await import("modern-screenshot");
 				maskedCount = 0;
+				heldOnScreen = await findHeldOnScreen(document.body);
 				const h = innerHeight;
 				const unmark = markForShot(document.body);
 				const blob = await domToBlob(document.body, {
-					width: innerWidth, height: h, scale: 1, font: false, type: "image/jpeg", quality: 0.85,
+					// The page's own fonts (local files, same origin) are drawn into the
+					// shot, so its text wraps and fits as on screen (merge proof N1).
+					width: innerWidth, height: h, scale: 1, type: "image/jpeg", quality: 0.85,
 					backgroundColor: getComputedStyle(document.body).backgroundColor,
 					style: { margin: "0" },
-					filter: node => !(node instanceof Element) || !node.closest(".lh-bug-sheet, .lh-bug-toast, .lh-bug-backdrop"),
-					onCloneEachNode: node => { placePinnedRow(node); maskClone(node); placeScrolledText(node); },
+					filter: node => !(node instanceof Element) || !node.closest(SHOT_EXCLUDED),
+					onCloneEachNode: node => { placePinnedRow(node); maskClone(node); maskKeysInClone(node); placeScrolledText(node); },
 					// The current screen as the learner sees it: a scrolled area (a
 					// Settings pane, the lesson, a list) keeps its scroll position in the
 					// shot, instead of showing from its top; its pinned rows stay where
 					// they show, and a scrolled field shows the lines on screen (merge proof N1).
 					features: { restoreScrollPosition: true },
-				}).finally(unmark);
+				}).finally(() => { unmark(); heldOnScreen = new Set(); });
 				await draft.flush();
 				if (draft.value.discardPending) return;
 				const res = await fetch(`/api/bugs/${reportId}/screenshot`, { method: "PUT", headers: { "Content-Type": blob.type }, body: blob });

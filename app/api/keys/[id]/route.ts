@@ -16,7 +16,7 @@
  * — unknown file vars are preserved, not editable.
  */
 import { isWritableAuthKey } from "@/src/server";
-import { deleteKey, saveKey } from "@/src/server";
+import { deleteKey, saveKey, scrubReports } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +38,8 @@ export async function PUT(req: Request, { params }: Params) {
 	}
 	const result = saveKey(id, (body as { value: string }).value);
 	if (!result.ok) return Response.json({ error: result.error }, { status: 400 });
+	// A saved key also leaves every saved 🐞 report (round 19 §0; merge proof N1).
+	try { scrubReports(); } catch { /* reads clean them too */ }
 	return Response.json({ status: result.status });
 }
 

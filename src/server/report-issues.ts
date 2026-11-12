@@ -33,7 +33,7 @@ export function issueText(r: StoredReport): { title: string; body: string; label
 		`| When | ${r.at || "?"} |`,
 		"",
 		`Full report with screenshot: ${link}`,
-		!change && problems.length ? ["", "Recent errors and failed requests:", "```", ...problems.map(l => `${String(l.at).slice(11, 19)} ${l.kind} ${l.text}`), "```"].join("\n") : "",
+		!change && problems.length ? ["", "Recent errors and failed requests:", "```", ...problems.map(l => `${/^\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2})/.exec(String(l.at))?.[1] ?? "--:--:--"} ${l.kind} ${l.text}`), "```"].join("\n") : "",
 		"",
 		"_Filed from the app's 🐞 Report a problem._",
 	].filter(line => line !== "").join("\n");

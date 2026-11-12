@@ -65,5 +65,5 @@ export { noteLearnerActivity } from "./learner-activity.ts";
 export { handwritingResponse, handwritingPagesResponse } from "./handwriting.ts";
 export { runtimeStatus } from "./runtime-status.ts";
 // Round 19 (§0): 🐞 problem reports and their optional GitHub filing.
-export { createReport, updateReport, deleteReport, getReport, listReports, saveScreenshot, readScreenshot, serverContext, redactSecrets, safeReportId, bugsDir, type ReportKind, type StoredReport } from "./bug-reports.ts";
+export { createReport, updateReport, deleteReport, getReport, listReports, saveScreenshot, readScreenshot, serverContext, redactSecrets, safeReportId, bugsDir, scrubReports, heldKeysAmong, type ReportKind, type StoredReport } from "./bug-reports.ts";
 export { fileReport, reportsRepo, closeFiledIssue, issueText } from "./report-issues.ts";

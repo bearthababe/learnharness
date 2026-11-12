@@ -212,3 +212,76 @@ it("§0 (merge proof, round 3): the keys this instance holds never reach a repor
 		delete process.env.ZZ_PROVE_IT_API_KEY;
 	}
 });
+
+it("§0 (merge proof, round 4): ordinary lesson phrases stay; glued, encoded and app-shaped keys go; a held key never names a report; old reports are cleaned on disk", async () => {
+	const { authStore } = await import("../src/store/auth.ts");
+	const { chatStore } = await import("../src/store/chats.ts");
+	const { issueText } = await import("../src/server/report-issues.ts");
+	const maskRoute = await import("../app/api/bugs/mask/route.ts");
+	// Round 4's ordinary phrases: each stays as written (title, note, log)…
+	const phrases = [
+		"Basic concepts of probability", "tokens: how a tokenizer splits words", "Secret: none of this is secret", "passwords: why length beats complexity", "Bearer bonds and coupon payments",
+		"Password: how long is long enough?", "Password strength: hashing and salting", "API keys: what they are and how to keep them safe", "access_token: OAuth explained", "secret_key: Django settings explained",
+		"private_key: what signs a message", "TOKEN: the smallest unit of a program", "Tokens: 182000 of 200000", "Bearer tokens in HTTP/2 headers", "Bearer authentication/authorization",
+		"Two-factor auth: one-time passwords (OTP)", "The secret key: why we hash passwords", "Secret Santa maths: derangements", "password: field shown on the sign-in screen",
+		"Basic 1/2+1/4+1/8 sums", "Basic HTML5/CSS3 layouts", "Basic Math101/Algebra", "basic arithmetic warm-up", "the basic derivatives question froze", "sk-learn-pipelines for beginners",
+		"Key=value pairs in Python dicts", "context nearly full, tokens: 182000 of 200000", "MAX_TOKENS=4096 reached", "fc-barcelona-vs-real-madrid",
+	];
+	for (const [i, phrase] of phrases.entries()) {
+		const chat = chatStore.createChat(phrase);
+		const report = store.createReport(`r-words-r4-${i}`, { path: `/chat/${chat.id}`, note: phrase, log: [{ at: "2026-11-12T10:00:00.000Z", kind: "warn", text: phrase }] });
+		assert.ok(report && report !== "discarded");
+		const saved = JSON.parse(fs.readFileSync(path.join(store.bugsDir(), `r-words-r4-${i}`, "report.json"), "utf-8"));
+		assert.deepEqual([saved.server.session.title, saved.note, saved.log[0].text], [phrase, phrase, phrase], `"${phrase}" is kept`);
+	}
+	// …while a password set in a config line is still cut.
+	assert.equal(store.redactSecrets("My password=hunter2 is it safe"), "My password=[redacted] is it safe");
+	// Test-only fake keys, built at run time.
+	const held = "zz+proveit/" + "R4HELDb64key==", groq = "gsk_" + "zzproveitR4GROQ00000000000000000000", firecrawl = "fc-" + "zzproveitFIRECRAWL0000000000";
+	authStore.setAuthVar("TOGETHER_API_KEY", held);
+	try {
+		const report = store.createReport("r-keys-r4-1", {
+			path: "/", url: `http://x/chat/c?q=${encodeURIComponent(held)}`, note: `GROQ_KEY_${groq} and ${firecrawl}`,
+			log: [{ at: "2026-11-12T10:00:00.000Z", kind: "nav", text: `/chat/c?q=${encodeURIComponent(held)}` }],
+		});
+		assert.ok(report && report !== "discarded");
+		const stored = fs.readFileSync(path.join(store.bugsDir(), "r-keys-r4-1", "report.json"), "utf-8");
+		for (const secret of [held, encodeURIComponent(held), groq, firecrawl]) assert.ok(!stored.includes(secret), `stored report holds ${secret.slice(0, 8)}…`);
+		// A held key (any shape) never names a report folder.
+		const mistral = "zzproveit" + "R4MISTRALHELD0123456789ab";
+		authStore.setAuthVar("MISTRAL_API_KEY", mistral);
+		for (const id of [mistral, `r-zz-${mistral}`]) {
+			assert.equal(store.createReport(id, { path: "/" }), null, "a held key is refused as a report id");
+			assert.equal(fs.existsSync(path.join(store.bugsDir(), id)), false);
+		}
+		// A report saved before its key was held: cleaned on disk once the key is saved.
+		const late = "zzproveit" + "R4LATEKEY0123456789abcd";
+		store.createReport("r-before-key-r4", { path: "/", note: `before ${late} end` });
+		const file = path.join(store.bugsDir(), "r-before-key-r4", "report.json");
+		assert.ok(fs.readFileSync(file, "utf-8").includes(late), "nothing held it when it was saved");
+		authStore.setAuthVar("DEEPSEEK_API_KEY", late);
+		assert.ok(store.scrubReports() >= 1);
+		assert.ok(!fs.readFileSync(file, "utf-8").includes(late), "the file the coordinator collects no longer holds it");
+		// Which words on the screen are held keys: only words the page sent come back.
+		const res = await maskRoute.POST(new Request("http://test/api/bugs/mask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ words: [mistral, "ordinary-words-here", held, "short"] }) }));
+		assert.deepEqual((await res.json()).held.sort(), [held, mistral].sort());
+	} finally {
+		for (const name of ["TOGETHER_API_KEY", "MISTRAL_API_KEY", "DEEPSEEK_API_KEY"]) authStore.deleteAuthVar(name);
+	}
+	// An old report with only ordinary content reads back unchanged, deep fields included, and its file is untouched.
+	let deep: Record<string, unknown> = { leaf: "zz-prove-it leaf at depth 10" };
+	for (let i = 0; i < 10; i++) deep = { next: deep };
+	const oldDir = path.join(store.bugsDir(), "r-ordinary-old-r4");
+	fs.mkdirSync(oldDir, { recursive: true });
+	const old = { id: "r-ordinary-old-r4", kind: "bug", at: "2026-11-01T10:00:00.000Z", path: "/", note: "Basic 1/2+1/4+1/8 sums", deep, log: [{ at: "x", kind: "warn", text: "password: field shown on the sign-in screen" }], server: { session: { title: "Password: how long is long enough?" } } };
+	fs.writeFileSync(path.join(oldDir, "report.json"), JSON.stringify(old));
+	const { hasScreenshot: _shot, dir: _dir, ...readBack } = store.getReport("r-ordinary-old-r4")!;
+	void _shot; void _dir;
+	assert.deepEqual(readBack, old);
+	assert.equal(fs.readFileSync(path.join(oldDir, "report.json"), "utf-8"), JSON.stringify(old));
+	// A rolled-over date is not a capture time; a log time that is not a timestamp files as "--:--:--".
+	const rolled = store.createReport("r-rolled-at-r4", { path: "/", at: "2026-02-30T10:00:00.000Z" });
+	assert.ok(rolled && rolled !== "discarded" && rolled.at !== "2026-02-30T10:00:00.000Z");
+	const issue = issueText({ id: "r-x", kind: "bug", at: "2026-11-12T10:00:00.000Z", path: "/", note: "n", log: [{ at: "xxxxxxxxxxxsk-zzproveitglued", kind: "error", text: "boom" }] });
+	assert.ok(issue.body.includes("--:--:-- error boom") && !issue.body.includes("sk-zz"));
+});

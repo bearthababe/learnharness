@@ -1,38 +1,61 @@
 /**
  * One definition of "looks like a credential" (round 19 §0: never put
  * auth.json content or keys in a report), used where a report's text is
- * kept — the client's rolling log as it records, and the server for every
- * string a report brings with it before anything is stored. The server also
- * cuts the exact keys this instance holds, whatever their shape
- * (src/server/bug-reports.ts); these patterns catch keys it does not hold.
+ * kept — the client's rolling log as it records, the screenshot's text, and
+ * the server for every string a report brings with it before anything is
+ * stored. The server also cuts the exact keys this instance holds, whatever
+ * their shape (src/server/bug-reports.ts); these patterns catch keys it does
+ * not hold.
  *
- * Ordinary words stay: "Basic concepts", "tokens: how a tokenizer works",
- * "Bearer bonds" are not credentials (merge proof N1, round 3).
+ * Ordinary lesson words stay (merge proof N1, rounds 3–4): "Basic concepts",
+ * "Basic HTML5/CSS3 layouts", "Password: how long is long enough?",
+ * "TOKEN: the smallest unit of a program", "Bearer authentication/
+ * authorization", "sk-learn-pipelines" are not credentials. So:
+ * - a key shape needs a key-like tail — a hyphenated tail must hold a
+ *   digit, an unhyphenated one is long;
+ * - "Basic"/"Bearer"/"Token" count as an auth scheme only in an
+ *   Authorization header, or (Bearer) before a token-shaped value;
+ * - `NAME: value` counts only when the value is token-shaped (letters and
+ *   digits, no spaces); `NAME=value` (a config or env line) always counts,
+ *   except a plain number.
+ * No lookbehind: the client recorder runs this on older Safari too.
  */
-const KEY_SHAPES = new RegExp([
+/** A key's tail: hyphenated runs need a digit; otherwise letters/digits/_ only. */
+const tail = (n: number) => `(?:(?=[A-Za-z0-9_-]*\\d)[A-Za-z0-9_-]{${n},}|[A-Za-z0-9_]{${n},})`;
+const KEY_SHAPES = new RegExp(`(^|[^A-Za-z0-9])(?:${[
 	// OpenAI/Anthropic/OpenRouter-style, Stripe-style.
-	"(?:sk|pk|rk)-[A-Za-z0-9_-]{8,}", "(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{8,}",
+	`(?:sk|pk|rk)-${tail(16)}`, "(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{8,}",
 	// GitHub, GitLab, Slack, Google, AWS.
-	"gh[pousr]_[A-Za-z0-9]{12,}", "github_pat_[A-Za-z0-9_]{20,}", "glpat-[A-Za-z0-9_-]{16,}", "xox[abpr]-[A-Za-z0-9-]{10,}", "AIza[0-9A-Za-z_-]{20,}", "AKIA[0-9A-Z]{16}",
-	// Providers and search engines the app takes keys for: Groq, Tavily, xAI,
-	// Firecrawl, Hugging Face, Cerebras, NVIDIA.
-	"gsk_[A-Za-z0-9]{20,}", "tvly-(?:dev-|prod-)?[A-Za-z0-9]{16,}", "xai-[A-Za-z0-9]{20,}", "fc-[A-Fa-f0-9]{24,}", "hf_[A-Za-z0-9]{20,}", "csk-[A-Za-z0-9]{20,}", "nvapi-[A-Za-z0-9_-]{20,}",
-].map((shape) => `\\b${shape}`).join("|"), "g");
-/** A value already cut by an earlier rule, or the next run of non-space. */
-const VALUE = "(?:\\[redacted[^\\]]*\\]|[^\\s&\"'`]+)";
+	"gh[pousr]_[A-Za-z0-9]{12,}", "github_pat_[A-Za-z0-9_]{20,}", `glpat-${tail(16)}`, "xox[abpr]-[A-Za-z0-9-]{10,}", "AIza[0-9A-Za-z_-]{20,}", "AKIA[0-9A-Z]{16}",
+	// Providers and search engines the app takes keys for, with the app's own
+	// key gate's lengths (src/core/auth-keys.ts): Groq, Tavily (20+ in all),
+	// xAI, Firecrawl (20+ in all), Hugging Face, Cerebras, NVIDIA.
+	`gsk_${tail(20)}`, `tvly-${tail(15)}`, `xai-${tail(20)}`, `fc-${tail(17)}`, `hf_${tail(20)}`, `csk-${tail(20)}`, `nvapi-${tail(20)}`,
+].join("|")})`, "g");
+/** A value already cut by an earlier rule. */
+const CUT = "\\[redacted[^\\]]*\\]";
+/** The next run of non-space (a config value), or an already-cut one. */
+const VALUE = `(?:${CUT}|[^\\s&"'\`]+)`;
+/** A token-shaped value: letters and digits together, 8+ characters, no spaces. */
+const TOKENISH = `(?:${CUT}|(?=[^\\s&"'\`]*\\d)(?=[^\\s&"'\`]*[A-Za-z])[^\\s&"'\`]{8,})`;
+/** `=value` (not a plain number), or `: token-shaped value`. */
+const ASSIGNED = `(\\s*=\\s*(?![0-9.]+(?![^\\s&"'\`]))|\\s*:\\s*(?=${TOKENISH}))${VALUE}`;
+const ENV_NAME = new RegExp(`\\b((?=[A-Z0-9_]*_)[A-Z0-9_]*(?:API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?)[A-Z0-9_]*)${ASSIGNED}`, "g");
+const KEY_NAME = new RegExp(`\\b([A-Za-z0-9_-]*?(?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|client[_-]?secret|secret[_-]?key|private[_-]?key|password|passwd))${ASSIGNED}`, "gi");
 
 export function redactSecrets(text: string): string {
 	return text
-		.replace(KEY_SHAPES, "[redacted key]")
-		// Authorization headers: a token-shaped value only (digits or symbols, or long).
-		.replace(/\b([Bb]earer)\s+(?:(?=[A-Za-z0-9._~+/=-]*[0-9._~+/=])[A-Za-z0-9._~+/=-]{8,}|[A-Za-z0-9._~+/=-]{16,})/g, "$1 [redacted]")
-		.replace(/\b(Basic)\s+(?=[A-Za-z0-9+/]*[0-9+/=])[A-Za-z0-9+/]{8,}={0,2}/g, "$1 [redacted]")
+		.replace(KEY_SHAPES, "$1[redacted key]")
+		// Authorization headers: whatever follows the scheme.
+		.replace(new RegExp(`(\\bauthorization["']?\\s*[:=]\\s*["']?(?:Bearer|Basic|Token|Digest)\\s+)${VALUE}`, "gi"), "$1[redacted]")
+		// A bearer token outside a header: token-shaped only.
+		.replace(/\b([Bb]earer\s+)(?:(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{12,}|[A-Za-z0-9_-]{24,})/g, "$1[redacted]")
 		// Keys in URLs.
-		.replace(/([?&](?:key|token|api_key|apikey|access_token)=)(?:\[redacted[^\]]*\]|[^&\s"'`<>|#)\]]+)/gi, "$1[redacted]")
-		// Environment-style names: NAME_KEY=value, GITHUB_TOKEN: value …
-		.replace(new RegExp(`\\b([A-Z0-9_]*(?:API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?)[A-Z0-9_]*)\\s*[:=]\\s*${VALUE}`, "g"), "$1=[redacted]")
-		// Names that only ever hold one: apiKey=…, client_secret: …, password: …
-		.replace(new RegExp(`\\b([A-Za-z0-9_-]*?(?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|client[_-]?secret|secret[_-]?key|private[_-]?key|password|passwd))\\s*[:=]\\s*${VALUE}`, "gi"), "$1=[redacted]")
+		.replace(new RegExp(`([?&](?:key|token|api_key|apikey|access_token)=)(?:${CUT}|[^&\\s"'\`<>|#)\\]]+)`, "gi"), "$1[redacted]")
+		// Environment-style names (NAME_KEY=value, GITHUB_TOKEN: value) and names
+		// that only ever hold one (apiKey=…, client_secret: …, password=…).
+		.replace(ENV_NAME, "$1$2[redacted]")
+		.replace(KEY_NAME, "$1$2[redacted]")
 		// "apiKey": "…" in JSON (a quoted name).
 		.replace(/("[A-Za-z0-9_-]*?(?:api[_-]?key|token|secret|password|authorization|credential)s?"\s*:\s*)"[^"]*"/gi, "$1\"[redacted]\"");
 }

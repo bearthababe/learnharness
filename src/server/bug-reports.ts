@@ -34,15 +34,29 @@ export const safeReportId = (id: string) => /^[A-Za-z0-9][A-Za-z0-9-]{5,80}$/.te
 export { redactSecrets };
 
 const SECRET_NAME = /API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i;
-/** The keys this instance holds: every auth.json value and every
- *  secret-named environment variable (longest first). */
-function heldKeys(): string[] {
+/** The keys this instance holds: every auth.json value, the custom
+ *  endpoint's key and every secret-named environment variable. */
+function heldKeyValues(): string[] {
 	const keys = new Set<string>();
 	const add = (value: unknown) => { const key = typeof value === "string" ? value.trim() : ""; if (key.length >= 8) keys.add(key); };
 	try { for (const value of Object.values(authStore.authVars())) add(value); } catch { /* no keys file */ }
 	try { add(readCustomAuth().fileKey()); } catch { /* no custom key */ }
 	for (const [name, value] of Object.entries(process.env)) if (SECRET_NAME.test(name)) add(value);
-	return [...keys].sort((a, b) => b.length - a.length);
+	return [...keys];
+}
+/** Each held key as it can appear in a report — as it is, and as a URL
+ *  carries it (percent-encoded) — longest first. */
+function heldKeys(): string[] {
+	const forms = new Set<string>();
+	for (const key of heldKeyValues()) for (const form of [key, encodeURIComponent(key), encodeURI(key)]) forms.add(form);
+	return [...forms].sort((a, b) => b.length - a.length);
+}
+/** Which of these words from the screen are keys this instance holds: the
+ *  screenshot masks them without any key leaving the server (it answers
+ *  only with words the page already has). */
+export function heldKeysAmong(words: string[]): string[] {
+	const held = new Set(heldKeyValues());
+	return [...new Set(words)].filter((word) => held.has(word));
 }
 /** Redaction for one report: the held keys, then the shared patterns. */
 export function reportRedactor(): (text: string) => string {
@@ -93,11 +107,21 @@ export function serverContext(pagePath: string) {
 function reportDir(id: string) { return path.join(bugsDir(), id); }
 function readReport(id: string): StoredReport | null {
 	if (!safeReportId(id)) return null;
-	try {
-		const stored = JSON.parse(fs.readFileSync(path.join(reportDir(id), "report.json"), "utf8")) as StoredReport;
-		// A report saved before a key was added (or by an older build) is read back without it.
-		return { ...redactDeep(stored, 8, reportRedactor()), id: stored.id };
-	} catch { return null; }
+	let stored: StoredReport;
+	try { stored = JSON.parse(fs.readFileSync(path.join(reportDir(id), "report.json"), "utf8")) as StoredReport; } catch { return null; }
+	// A report saved before a key was added (or by an older build) is read
+	// back without it, and the file the coordinator collects is rewritten
+	// without it too. Nothing else changes: no depth limit on what is stored.
+	const clean = { ...redactDeep(stored, 64, reportRedactor()), id: stored.id } as StoredReport;
+	if (JSON.stringify(clean) !== JSON.stringify(stored)) { try { writeReport(clean); } catch { /* served clean; the file is cleaned on the next write */ } }
+	return clean;
+}
+/** Every saved report rewritten without the keys this instance now holds
+ *  (called when a key is saved; reading a report does the same for it). */
+export function scrubReports(): number {
+	let ids: string[] = [];
+	try { ids = fs.readdirSync(bugsDir()).filter(safeReportId); } catch { return 0; }
+	return ids.filter((id) => readReport(id) !== null).length;
 }
 function writeReport(report: StoredReport) {
 	const dir = reportDir(report.id);
@@ -123,7 +147,8 @@ function shaped(report: StoredReport): StoredReport {
  */
 const CAPTURE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$/;
 export function createReport(id: string, page: Record<string, unknown>): StoredReport | "discarded" | null {
-	if (!safeReportId(id)) return null;
+	// An id holding a key (of any shape this instance holds) never names a folder.
+	if (!safeReportId(id) || reportRedactor()(id) !== id) return null;
 	if (discarded(id)) return "discarded";
 	const existing = readReport(id);
 	if (existing) return existing;
@@ -132,7 +157,7 @@ export function createReport(id: string, page: Record<string, unknown>): StoredR
 	const pagePath = redact(String(page.path ?? "/")).slice(0, 500);
 	const given = Object.fromEntries(Object.entries(page).filter(([name]) => !SERVER_FIELDS.includes(name)));
 	// The capture time is a timestamp or the server's own clock.
-	const at = typeof page.at === "string" && CAPTURE_TIME.test(page.at) && Number.isFinite(Date.parse(page.at)) ? page.at : new Date().toISOString();
+	const at = typeof page.at === "string" && CAPTURE_TIME.test(page.at) && Number.isFinite(Date.parse(page.at)) && new Date(page.at).toISOString().slice(0, 19) === page.at.slice(0, 19) ? page.at : new Date().toISOString();
 	// Everything the report holds — what the page sent (its error log, URL,
 	// title, device details) and what the server adds (the session's title,
 	// its jobs) — is cut of credentials before it is stored, whatever the
