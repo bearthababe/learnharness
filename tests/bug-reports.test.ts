@@ -12,6 +12,7 @@ import { it } from "node:test";
 
 const TMP_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "lh-bug-reports-"));
 process.env.LH_DATA_DIR = TMP_DATA;
+process.env.LH_AUTH_FILE = path.join(TMP_DATA, "auth.json");
 process.env.LH_BUILD_ID = "B-test-1234567";
 const logFile = path.join(TMP_DATA, "server.log");
 fs.writeFileSync(logFile, ["boot ok", "OPENAI_API_KEY=sk-live1234567890abcdef leaked", "Authorization: Bearer abcdefghijklmnop", "last line"].join("\n"));
@@ -164,4 +165,50 @@ it("§0 (merge proof, round 2): the server's own details, the capture time, deep
 	// A report on disk from before (unredacted) still files without its keys.
 	const issue = issueText({ id: "r-old", kind: "bug", at: "2026-11-12T10:00:00.000Z", path: "/", note: `see ${github}`, log: [{ at: "2026-11-12T10:00:00.000Z", kind: "error", text: `boom ${google}` }] });
 	for (const secret of [github, google]) assert.ok(!issue.title.includes(secret) && !issue.body.includes(secret), `a filed issue holds ${secret.slice(0, 6)}…`);
+});
+
+it("§0 (merge proof, round 3): the keys this instance holds never reach a report, whatever their shape; ordinary words stay; the page cannot set server fields", async () => {
+	const { authStore } = await import("../src/store/auth.ts");
+	const { chatStore } = await import("../src/store/chats.ts");
+	const { issueText } = await import("../src/server/report-issues.ts");
+	// Test-only fake keys, built at run time: one held in auth.json with no
+	// known prefix (a Mistral-style key), one in a secret-named environment variable.
+	const held = "zzHeld" + "Mistral0123456789abcdef", fromEnv = "zzEnv" + "Held0123456789abcdef";
+	authStore.setAuthVar("MISTRAL_API_KEY", held);
+	process.env.ZZ_PROVE_IT_API_KEY = fromEnv;
+	try {
+		const prefixed = ["gsk_" + "abcdefghijklmnopqrstuvwx1234", "tvly-dev-" + "abcdefghijklmnop1234", "xai-" + "abcdefghijklmnopqrstu123", "fc-" + "0123456789abcdef0123456789abcdef", "hf_" + "abcdefghijklmnopqrstuv1234", "csk-" + "abcdefghijklmnopqrstu123", "nvapi-" + "abcdefghijklmnopqrstu123"];
+		const chat = chatStore.createChat(`Basic concepts of probability ${held}`);
+		const report = store.createReport("r-redact-held-3", {
+			path: `/chat/${chat.id}`, at: "9999-99-99T99:99:99Z",
+			note: `tokens: how a tokenizer splits text; ${fromEnv}`,
+			log: prefixed.map(key => ({ at: "2026-11-12T10:00:00.000Z", kind: "error", text: `failed with ${key}` })),
+			issue: "https://github.com/zz-other/zz-repo/issues/1", server: { session: { title: held } }, noteSeq: 99,
+		});
+		assert.ok(report && report !== "discarded");
+		const stored = fs.readFileSync(path.join(store.bugsDir(), "r-redact-held-3", "report.json"), "utf-8");
+		for (const secret of [held, fromEnv, ...prefixed]) assert.ok(!stored.includes(secret), `stored report holds ${secret.slice(0, 6)}…`);
+		const saved = JSON.parse(stored);
+		assert.equal(saved.server.session.title, "Basic concepts of probability [redacted key]", "ordinary words stay; the held key goes");
+		assert.equal(saved.note, "tokens: how a tokenizer splits text; [redacted key]");
+		assert.equal(saved.issue, undefined, "the page cannot point filing at an issue");
+		assert.equal(saved.noteSeq, 0);
+		assert.notEqual(saved.at, "9999-99-99T99:99:99Z", "an impossible capture time becomes the server's clock");
+		// A key-shaped id is refused, not stored under a redacted folder.
+		assert.equal(store.createReport("ghp_" + "A1b2C3d4E5f6G7h8I9j0K1l2", { path: "/" }), null);
+		// A report saved before the key was held is read back, and filed, without it.
+		const old = path.join(store.bugsDir(), "r-held-old-1");
+		fs.mkdirSync(old, { recursive: true });
+		fs.writeFileSync(path.join(old, "report.json"), JSON.stringify({ id: "r-held-old-1", kind: "bug", at: "2026-11-01T10:00:00.000Z", path: "/", note: `see ${held}`, server: { session: { title: fromEnv } } }));
+		const readBack = JSON.stringify(store.getReport("r-held-old-1"));
+		assert.ok(!readBack.includes(held) && !readBack.includes(fromEnv), "an older report is read back without held keys");
+		const issue = issueText(store.getReport("r-held-old-1")!);
+		assert.ok(!issue.title.includes(held) && !issue.body.includes(held));
+		// Ordinary words and settings names stay as they were.
+		for (const text of ["Basic concepts of probability", "tokens: how a tokenizer splits text", "Secret: the ending", "passwords: are hashed", "Bearer bonds", "keyboard-off ask-tutor try:card-layout fc-barcelona hf_hub sk-learn"]) assert.equal(store.redactSecrets(text), text);
+		assert.equal(store.redactSecrets("page `/chat/x?key=AIza" + "Sy0123456789abcdefghijklmnopq` here"), "page `/chat/x?key=[redacted]` here");
+	} finally {
+		authStore.deleteAuthVar("MISTRAL_API_KEY");
+		delete process.env.ZZ_PROVE_IT_API_KEY;
+	}
 });

@@ -6,13 +6,18 @@
  * the instance unless LH_REPORTS_REPO is set (see report-issues.ts).
  *
  * Privacy: the server context never reads auth.json, settings secrets or
- * environment keys; log lines are redacted before they are stored.
+ * environment keys into a report. Every string a report holds — what the
+ * page sent and what the server adds — is cut of the keys this instance
+ * holds (auth.json and secret-named environment variables, whatever their
+ * shape) and of anything shaped like a key, before it is stored, when it is
+ * read back and before it is filed (round 19 §0; merge proof N1).
  */
 import fs from "node:fs";
 import path from "node:path";
 import { PATHS } from "../../config.ts";
 import { pendingQuestionOf } from "../core/native-messages.ts";
 import { redactDeep, redactSecrets } from "../core/redact.ts";
+import { authStore, readCustomAuth } from "../store/auth.ts";
 import { stores } from "./stores.ts";
 
 export type ReportKind = "bug" | "change";
@@ -21,14 +26,33 @@ export type StoredReport = Record<string, unknown> & { id: string; kind: ReportK
 
 export const bugsDir = () => path.join(PATHS.data, "bugs");
 const tombstones = () => path.join(bugsDir(), ".discarded");
-/** A client-made id: `r-<time>-<random>` (letters, digits, dashes). */
-export const safeReportId = (id: string) => /^[A-Za-z0-9][A-Za-z0-9-]{5,80}$/.test(id);
+/** A client-made id: `r-<time>-<random>` (letters, digits, dashes), never shaped like a key. */
+export const safeReportId = (id: string) => /^[A-Za-z0-9][A-Za-z0-9-]{5,80}$/.test(id) && redactSecrets(id) === id;
 
 /** Strip anything that looks like a credential from free text (log lines,
  *  notes): one definition, shared with the client's recorder (src/core). */
 export { redactSecrets };
 
-function tailLines(file: string, lines: number): string[] {
+const SECRET_NAME = /API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i;
+/** The keys this instance holds: every auth.json value and every
+ *  secret-named environment variable (longest first). */
+function heldKeys(): string[] {
+	const keys = new Set<string>();
+	const add = (value: unknown) => { const key = typeof value === "string" ? value.trim() : ""; if (key.length >= 8) keys.add(key); };
+	try { for (const value of Object.values(authStore.authVars())) add(value); } catch { /* no keys file */ }
+	try { add(readCustomAuth().fileKey()); } catch { /* no custom key */ }
+	for (const [name, value] of Object.entries(process.env)) if (SECRET_NAME.test(name)) add(value);
+	return [...keys].sort((a, b) => b.length - a.length);
+}
+/** Redaction for one report: the held keys, then the shared patterns. */
+export function reportRedactor(): (text: string) => string {
+	const keys = heldKeys();
+	return (text) => redactSecrets(keys.reduce((out, key) => (out.includes(key) ? out.split(key).join("[redacted key]") : out), text));
+}
+/** Fields only the server sets; a page cannot supply them. */
+const SERVER_FIELDS = ["id", "kind", "note", "noteSeq", "issue", "server", "screenshotMasked", "hasScreenshot", "dir"];
+
+function tailLines(file: string, lines: number, redact: (text: string) => string): string[] {
 	try {
 		const stat = fs.statSync(file);
 		const size = Math.min(stat.size, 256 * 1024);
@@ -36,13 +60,14 @@ function tailLines(file: string, lines: number): string[] {
 		try {
 			const buffer = Buffer.alloc(size);
 			fs.readSync(fd, buffer, 0, size, stat.size - size);
-			return buffer.toString("utf8").split("\n").filter(Boolean).slice(-lines).map(line => redactSecrets(line).slice(0, 2000));
+			return buffer.toString("utf8").split("\n").filter(Boolean).slice(-lines).map(line => redact(line).slice(0, 2000));
 		} finally { fs.closeSync(fd); }
 	} catch { return []; }
 }
 
 /** What the server knows about the screen the report came from. */
 export function serverContext(pagePath: string) {
+	const redact = reportRedactor();
 	const chatId = pagePath.match(/^\/chat\/([^/?#]+)/)?.[1] ?? null;
 	let session: Record<string, unknown> | null = null, jobs: Record<string, unknown>[] = [];
 	if (chatId) {
@@ -51,7 +76,7 @@ export function serverContext(pagePath: string) {
 			if (chat) {
 				const pending = pendingQuestionOf(chat.messages);
 				session = { id: chat.id, title: chat.title, mode: chat.practiceMode ?? chat.kind ?? "teach", messages: chat.messages.length, openQuestion: pending ? { tool: pending.tool, toolCallId: pending.toolCallId } : null };
-				jobs = stores.jobStore.listJobs(chat.id).slice(-15).map(job => ({ kind: job.kind, status: job.status, activity: redactSecrets(String(job.activity ?? "")).slice(0, 300), updatedAt: job.updatedAt }));
+				jobs = stores.jobStore.listJobs(chat.id).slice(-15).map(job => ({ kind: job.kind, status: job.status, activity: redact(String(job.activity ?? "")).slice(0, 300), updatedAt: job.updatedAt }));
 			}
 		} catch { /* the report still saves without it */ }
 	}
@@ -61,14 +86,18 @@ export function serverContext(pagePath: string) {
 		serverTime: new Date().toISOString(),
 		session,
 		jobs,
-		serverLog: log ? tailLines(log, 120) : [],
+		serverLog: log ? tailLines(log, 120, redact) : [],
 	};
 }
 
 function reportDir(id: string) { return path.join(bugsDir(), id); }
 function readReport(id: string): StoredReport | null {
 	if (!safeReportId(id)) return null;
-	try { return JSON.parse(fs.readFileSync(path.join(reportDir(id), "report.json"), "utf8")) as StoredReport; } catch { return null; }
+	try {
+		const stored = JSON.parse(fs.readFileSync(path.join(reportDir(id), "report.json"), "utf8")) as StoredReport;
+		// A report saved before a key was added (or by an older build) is read back without it.
+		return { ...redactDeep(stored, 8, reportRedactor()), id: stored.id };
+	} catch { return null; }
 }
 function writeReport(report: StoredReport) {
 	const dir = reportDir(report.id);
@@ -99,16 +128,16 @@ export function createReport(id: string, page: Record<string, unknown>): StoredR
 	const existing = readReport(id);
 	if (existing) return existing;
 	const kind: ReportKind = page.kind === "change" ? "change" : "bug";
-	const pagePath = redactSecrets(String(page.path ?? "/")).slice(0, 500);
-	const { kind: _k, note: _n, ...given } = page;
-	void _k; void _n;
+	const redact = reportRedactor();
+	const pagePath = redact(String(page.path ?? "/")).slice(0, 500);
+	const given = Object.fromEntries(Object.entries(page).filter(([name]) => !SERVER_FIELDS.includes(name)));
 	// The capture time is a timestamp or the server's own clock.
-	const at = typeof page.at === "string" && CAPTURE_TIME.test(page.at) ? page.at : new Date().toISOString();
+	const at = typeof page.at === "string" && CAPTURE_TIME.test(page.at) && Number.isFinite(Date.parse(page.at)) ? page.at : new Date().toISOString();
 	// Everything the report holds — what the page sent (its error log, URL,
 	// title, device details) and what the server adds (the session's title,
 	// its jobs) — is cut of credentials before it is stored, whatever the
 	// client did (round 19 §0: never put keys in a report; merge proof N1).
-	const report = shaped(redactDeep({ ...given, id, kind, at, path: pagePath, note: typeof page.note === "string" ? redactSecrets(page.note).slice(0, 4000) : "", noteSeq: 0, server: serverContext(pagePath) }) as StoredReport);
+	const report = shaped({ ...redactDeep({ ...given, kind, at, path: pagePath, note: typeof page.note === "string" ? redact(page.note).slice(0, 4000) : "", noteSeq: 0, server: serverContext(pagePath) }, 8, redact), id } as StoredReport);
 	writeReport(report);
 	return report;
 }
@@ -120,7 +149,7 @@ export function updateReport(id: string, patch: { note?: string; kind?: ReportKi
 	const seq = typeof patch.seq === "number" ? patch.seq : null;
 	if (seq !== null && (report.noteSeq ?? 0) > seq) return report;
 	let next: StoredReport = { ...report };
-	if (patch.note !== undefined) next.note = redactSecrets(String(patch.note)).slice(0, 4000);
+	if (patch.note !== undefined) next.note = reportRedactor()(String(patch.note)).slice(0, 4000);
 	if (seq !== null) next.noteSeq = seq;
 	if (patch.issue) next.issue = patch.issue;
 	if (typeof patch.screenshotMasked === "number") next.screenshotMasked = Math.max(0, Math.floor(patch.screenshotMasked));

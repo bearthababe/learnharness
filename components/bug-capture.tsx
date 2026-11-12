@@ -80,11 +80,27 @@ function maskClone(node: Node) {
  * scrolled area is measured where it shows and where it would sit unpinned
  * (a style swap with no paint in between); the copy places it where it shows.
  */
-const SHOT_SHIFT = "data-lh-shot-shift";
-function markPinnedRows(root: Element): () => void {
+const SHOT_SHIFT = "data-lh-shot-shift", SHOT_TEXT = "data-lh-shot-text";
+/**
+ * A scrolled field whose text the library cannot move (merge proof N1,
+ * round 3): it shifts an area's element children, and plain text, inline
+ * children and a textarea's own text ignore that — the composer or a
+ * reasoning field scrolled to its last lines would show its first ones.
+ */
+function holdsLooseText(area: Element): boolean {
+	if (area instanceof HTMLTextAreaElement) return true;
+	if (!/^(block|flow-root|inline-block|list-item)$/.test(getComputedStyle(area).display)) return false;
+	for (const child of area.childNodes) {
+		if (child.nodeType === Node.TEXT_NODE && /\S/.test(child.textContent ?? "")) return true;
+		if (child instanceof HTMLElement && getComputedStyle(child).display === "inline") return true;
+	}
+	return false;
+}
+function markForShot(root: Element): () => void {
 	const marked: Element[] = [], seen = new Set<Element>();
 	for (const area of root.querySelectorAll("*")) {
 		if (!area.scrollTop && !area.scrollLeft) continue;
+		if (holdsLooseText(area)) { area.setAttribute(SHOT_TEXT, `${area.scrollLeft} ${area.scrollTop}`); marked.push(area); }
 		for (const row of area.querySelectorAll<HTMLElement>("*")) {
 			if (seen.has(row)) continue;
 			seen.add(row);
@@ -98,17 +114,53 @@ function markPinnedRows(root: Element): () => void {
 			marked.push(row);
 		}
 	}
-	return () => { for (const row of marked) row.removeAttribute(SHOT_SHIFT); };
+	return () => { for (const element of marked) { element.removeAttribute(SHOT_SHIFT); element.removeAttribute(SHOT_TEXT); } };
+}
+const shotOffset = (element: Element, mark: string): [number, number] => {
+	const [x, y] = (element.getAttribute(mark) ?? "").split(" ").map(Number);
+	return [x || 0, y || 0];
+};
+/** The copy of a scrolled field: its content moves up as one, as scrolled. */
+function placeScrolledText(node: Node) {
+	if (!(node instanceof HTMLElement)) return;
+	// A textarea's text is not content the copy can move: its parent swaps it
+	// for a box of the same look holding the text, moved as scrolled.
+	for (const child of [...node.children]) if (child instanceof HTMLTextAreaElement && child.hasAttribute(SHOT_TEXT)) child.replaceWith(textareaAsText(child));
+	if (node instanceof HTMLTextAreaElement || !node.hasAttribute(SHOT_TEXT)) return;
+	const [left, top] = shotOffset(node, SHOT_TEXT);
+	node.removeAttribute(SHOT_TEXT);
+	const content = node.ownerDocument.createElement("div");
+	content.style.cssText = `display:block;margin:0;padding:0;border:0;transform:translate(${-left}px, ${-top}px)`;
+	for (const child of [...node.childNodes]) {
+		// The library already moved element children; the whole content moves once instead.
+		if (child instanceof HTMLElement) { const back = new DOMMatrix(child.style.transform || "none"); back.e += left; back.f += top; child.style.transform = back.toString(); }
+		content.append(child);
+	}
+	node.append(content);
+}
+function textareaAsText(area: HTMLTextAreaElement): HTMLElement {
+	const [left, top] = shotOffset(area, SHOT_TEXT);
+	const box = area.ownerDocument.createElement("div");
+	box.style.cssText = area.style.cssText;
+	box.style.setProperty("overflow", "hidden");
+	box.style.setProperty("white-space", "pre-wrap");
+	box.style.setProperty("overflow-wrap", "break-word");
+	const content = area.ownerDocument.createElement("div");
+	content.style.cssText = `transform:translate(${-left}px, ${-top}px)`;
+	// The copy's value (masked already when the field is secret).
+	content.textContent = area.getAttribute("value") ?? area.textContent ?? "";
+	box.append(content);
+	return box;
 }
 function placePinnedRow(node: Node) {
 	if (!(node instanceof HTMLElement) || !node.hasAttribute(SHOT_SHIFT)) return;
-	const [dx, dy] = node.getAttribute(SHOT_SHIFT)!.split(" ").map(Number);
+	const [dx, dy] = shotOffset(node, SHOT_SHIFT);
 	node.removeAttribute(SHOT_SHIFT);
 	// Positioned (it stays above the rows it covered), offset by hand only.
 	node.style.position = "relative";
 	for (const side of ["top", "right", "bottom", "left", "inset-block-start", "inset-block-end", "inset-inline-start", "inset-inline-end"]) node.style.setProperty(side, "auto");
 	const shift = new DOMMatrix(node.style.transform || "none");
-	shift.e += dx || 0; shift.f += dy || 0;
+	shift.e += dx; shift.f += dy;
 	node.style.transform = shift.toString();
 }
 
@@ -288,17 +340,17 @@ export function BugCapture() {
 				const { domToBlob } = await import("modern-screenshot");
 				maskedCount = 0;
 				const h = innerHeight;
-				const unmark = markPinnedRows(document.body);
+				const unmark = markForShot(document.body);
 				const blob = await domToBlob(document.body, {
 					width: innerWidth, height: h, scale: 1, font: false, type: "image/jpeg", quality: 0.85,
 					backgroundColor: getComputedStyle(document.body).backgroundColor,
 					style: { margin: "0" },
 					filter: node => !(node instanceof Element) || !node.closest(".lh-bug-sheet, .lh-bug-toast, .lh-bug-backdrop"),
-					onCloneEachNode: node => { placePinnedRow(node); maskClone(node); },
+					onCloneEachNode: node => { placePinnedRow(node); maskClone(node); placeScrolledText(node); },
 					// The current screen as the learner sees it: a scrolled area (a
 					// Settings pane, the lesson, a list) keeps its scroll position in the
-					// shot, instead of showing from its top, and its pinned rows stay
-					// where they show (merge proof N1).
+					// shot, instead of showing from its top; its pinned rows stay where
+					// they show, and a scrolled field shows the lines on screen (merge proof N1).
 					features: { restoreScrollPosition: true },
 				}).finally(unmark);
 				await draft.flush();
