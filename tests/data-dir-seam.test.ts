@@ -31,7 +31,7 @@ describe("LH_DATA_DIR seam", () => {
 		const home = fs.mkdtempSync(path.join(os.tmpdir(), "lh-default-profile-"));
 		try {
 			const environment: NodeJS.ProcessEnv = { ...process.env, HOME: home, USERPROFILE: home };
-			for (const name of ["LH_PROFILE_DIR", "LH_DATA_DIR", "LH_AUTH_FILE"]) delete environment[name];
+			for (const name of ["LH_PROFILE_DIR", "LH_DATA_DIR", "LH_AUTH_FILE", "NODE_ENV", "NODE_TEST_CONTEXT"]) delete environment[name];
 			const out = execFileSync(
 				process.execPath,
 				["--import", TSX_LOADER, "--eval", `const configuration = await import(${JSON.stringify(path.join(REPO_ROOT, "config.ts"))}); console.log(JSON.stringify({ data: configuration.PATHS.data, chats: configuration.PATHS.chats }));`],
@@ -43,5 +43,46 @@ describe("LH_DATA_DIR seam", () => {
 			assert.equal(parsed.chats, path.join(expected, "chats"));
 			assert.deepEqual(fs.readdirSync(home), []);
 		} finally { fs.rmSync(home, { recursive: true }); }
+	});
+
+	function resolveInTestChild(home: string, extra: Record<string, string>, marker: Record<string, string>) {
+		const environment: NodeJS.ProcessEnv = { ...process.env, HOME: home, USERPROFILE: home, ...marker, ...extra };
+		for (const name of ["LH_PROFILE_DIR", "LH_DATA_DIR", "LH_AUTH_FILE", "NODE_ENV", "NODE_TEST_CONTEXT"]) {
+			if (!(name in extra) && !(name in marker)) delete environment[name];
+		}
+		const out = execFileSync(
+			process.execPath,
+			["--import", TSX_LOADER, "--eval", `const configuration = await import(${JSON.stringify(path.join(REPO_ROOT, "config.ts"))}); console.log(JSON.stringify({ data: configuration.PATHS.data, profile: process.env.LH_PROFILE_DIR ?? null }));`],
+			{ cwd: REPO_ROOT, encoding: "utf-8", env: environment },
+		);
+		return JSON.parse(out) as { data: string; profile: string | null };
+	}
+
+	const markers: Record<string, string>[] = [{ NODE_ENV: "test" }, { NODE_TEST_CONTEXT: "child-v8" }];
+	for (const marker of markers) {
+		it(`a test process (${Object.keys(marker)[0]}) with no profile gets a throwaway one, never the real home profile`, () => {
+			const home = fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-isolation-"));
+			try {
+				const parsed = resolveInTestChild(home, {}, marker);
+				assert.ok(parsed.profile, "the throwaway profile is exported for child processes");
+				assert.equal(parsed.data, path.join(parsed.profile!, "data"));
+				assert.ok(path.basename(parsed.profile!).startsWith("lh-test-profile-"));
+				assert.equal(path.dirname(parsed.profile!), os.tmpdir(), "it lives in the system temp folder");
+				assert.ok(!parsed.data.startsWith(home), "nothing resolves under the home");
+				assert.deepEqual(fs.readdirSync(home), [], "no ~/.config/learnharness is created");
+				fs.rmSync(parsed.profile!, { recursive: true, force: true });
+			} finally { fs.rmSync(home, { recursive: true }); }
+		});
+	}
+
+	it("an explicit LH_DATA_DIR still wins in a test process", () => {
+		const home = fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-isolation-"));
+		const data = fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-explicit-"));
+		try {
+			const parsed = resolveInTestChild(home, { LH_DATA_DIR: data }, { NODE_ENV: "test" });
+			assert.equal(parsed.data, data);
+			assert.equal(parsed.profile, null, "no throwaway profile is invented over an explicit choice");
+			assert.deepEqual(fs.readdirSync(home), []);
+		} finally { fs.rmSync(home, { recursive: true }); fs.rmSync(data, { recursive: true }); }
 	});
 });

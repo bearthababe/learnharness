@@ -48,7 +48,26 @@ function managedRoot(filename, codeRoot) {
 	return root;
 }
 
+const PROFILE_VARIABLES = ["LH_PROFILE_DIR", "LH_DATA_DIR", "LH_AUTH_FILE"];
+
+// A test process that names no profile must never fall through to the owner's
+// real one (~/.config/learnharness, formerly the checkout's ./data): test
+// fixtures leaked there as visible sessions. Give it a private throwaway
+// profile instead, exported so child processes and later resolves agree.
+// Callers passing an explicit `env` (default-path tests) are unaffected.
+function isolateTestProcess() {
+	const environment = process.env;
+	if (environment.NODE_ENV !== "test" && !environment.NODE_TEST_CONTEXT) return;
+	if (PROFILE_VARIABLES.some(name => environment[name] !== undefined)) return;
+	const throwaway = fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-profile-"));
+	environment.LH_PROFILE_DIR = throwaway;
+	process.once("exit", () => {
+		try { fs.rmSync(throwaway, { recursive: true, force: true }); } catch { /* best-effort temp cleanup */ }
+	});
+}
+
 function resolveProfile(options = {}) {
+	if (!options.env) isolateTestProcess();
 	const environment = options.env || process.env;
 	const codeRoot = options.codeRoot || path.resolve(__dirname, "..");
 	const home = options.home || os.homedir();
