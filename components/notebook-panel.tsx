@@ -17,6 +17,17 @@ import { NotebookPeekSheet } from "./notebook-peek-sheet";
 import { useTryout } from "./device-prefs";
 import { useBugPress } from "./bug-capture";
 
+/** B8 / P6 (round 20): the phone pane's command row holds Undo too, so below
+ *  360px the field's example is the short form (the whole hint must fit). */
+const NARROW_PHONE = "(max-width: 359px)";
+function useNarrowPhone() {
+	return useSyncExternalStore((change) => {
+		const media = window.matchMedia?.(NARROW_PHONE);
+		media?.addEventListener("change", change);
+		return () => media?.removeEventListener("change", change);
+	}, () => window.matchMedia?.(NARROW_PHONE).matches ?? false, () => false);
+}
+
 export function NotebookPanel({ session, dictation, viewControls, activity = { kind: "ordinary" }, workspaceId, pane, sessionTitle }: { session: NotebookSession; dictation?: Dictation; viewControls?: NotebookViewControls; activity?: TutorDraftOwner; workspaceId?: string;
 	/** P5 (round 17, phones): the notebook takes over the screen like the
 	 *  thinking pane — "‹ Lesson", the big mic bar, the keyboard button and
@@ -35,6 +46,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 	const askTutor = useTryout("askTutor") === "on";
 	const [micSlot, setMicSlot] = useMicSlot();
 	const card = useTryout("cardLayout") === "card" && !!pane;
+	const narrowPhone = useNarrowPhone();
 	useOneMenu("notebook-options", menu !== null, () => setMenu(null));
 	// After an instruction lands, the lines it added or changed glow briefly
 	// (never on first load), so the learner sees what moved.
@@ -91,7 +103,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 		<form className="notebook-instruction-form" onSubmit={(event) => { event.preventDefault(); apply(); }}>
 			<div className="notebook-input-row">
 			<CompactLearningInput dictation={!dictation?.active || speech.destination === "notebook" ? dictation : undefined} speech={!pane} micSlot={pane ? undefined : micSlot}>
-			<textarea id="notebook-instruction" aria-label="Notebook instruction" placeholder={scopeText ? (expressionSelection ? "Instruction for this term" : "Instruction for this line") : "e.g. Write p = F/A, put in F = 600 N"} value={draftText} rows={1}
+			<textarea id="notebook-instruction" aria-label="Notebook instruction" placeholder={scopeText ? (expressionSelection ? "Instruction for this term" : "Instruction for this line") : pane && narrowPhone ? "e.g. Write p = F/A" : "e.g. Write p = F/A, put in F = 600 N"} value={draftText} rows={1}
 				className="lh-input w-full resize-none bg-transparent text-base"
 				onChange={(event) => { void session.dispatch({ type: "draft", text: event.target.value }).catch(() => {}); }}
 				onKeyDown={(event) => {
