@@ -439,19 +439,47 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 	}
 	function cancelToolTap(event: ReactPointerEvent<HTMLButtonElement>) { if (penToolTap.current?.pointerId === event.pointerId) penToolTap.current = null; }
 	// Round 20: a tap that leaves the notebook (Chat, Close) is never dropped.
-	// While a stroke ends or a page operation finishes, it waits and then
-	// happens (a later such tap replaces it); other controls act only when free.
+	// While a stroke ends, a page operation finishes or the session is locked
+	// for a dictation handoff, it waits and then happens (a later such tap
+	// replaces it); other controls act only when free.
 	const pendingLeave = useRef<(() => void) | null>(null);
-	function leaveWhenFree(action: () => void) {
+	const leaveWhenFree = useCallback((action: () => void) => {
 		pendingLeave.current = action;
 		const started = Date.now();
 		const tick = () => {
 			if (pendingLeave.current !== action) return;
-			if (!active.current && !recovery.current?.getSnapshot().busy) { pendingLeave.current = null; action(); return; }
+			if (!active.current && !recovery.current?.getSnapshot().busy && !slotRef.current?.closest("[inert]")) { pendingLeave.current = null; action(); return; }
 			if (Date.now() - started < 15_000) window.setTimeout(tick, 100); else pendingLeave.current = null;
 		};
 		tick();
-	}
+	}, []);
+	const closeNotebook = () => { if (expanded) prepareViewChange(false); onClose(); };
+	const leaveActions = useRef<Record<string, () => void>>({});
+	useEffect(() => { leaveActions.current = { close: closeNotebook, chat: onClose }; });
+	// Merge proof (CI run 43292266870): while a dictation handoff settles, the
+	// session workspace is inert (main #28: inputs wait for the handoff). The
+	// browser then gives a tap on Chat or Close to the page behind it, so the
+	// tap was lost and the notebook stayed open. A tap that lands on a visible
+	// leave control of an inert notebook is that control's request: it waits
+	// for the handoff like any other busy moment, then happens.
+	useEffect(() => {
+		if (hidden) return;
+		const onClick = (event: MouseEvent) => {
+			const slot = slotRef.current;
+			if (!slot?.closest("[inert]") || (event.target instanceof Node && slot.contains(event.target))) return;
+			for (const control of slot.querySelectorAll<HTMLElement>("[data-notebook-leave]")) {
+				const r = control.getBoundingClientRect();
+				if (!r.width || !control.checkVisibility() || event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) continue;
+				const action = leaveActions.current[control.dataset.notebookLeave ?? ""];
+				if (!action) return;
+				event.preventDefault(); event.stopPropagation();
+				leaveWhenFree(() => leaveActions.current[control.dataset.notebookLeave ?? ""]?.());
+				return;
+			}
+		};
+		document.addEventListener("click", onClick, true);
+		return () => document.removeEventListener("click", onClick, true);
+	}, [hidden, leaveWhenFree]);
 	function handlers(_name: string, action: () => void, leave = false) {
 		const activate = () => { if (leave) leaveWhenFree(action); else if (!active.current && !recovery.current?.getSnapshot().busy) action(); };
 		return { "data-notebook-pencil-control": "", onPointerDown: startToolTap, onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => finishToolTap(event, activate), onPointerCancel: cancelToolTap, onLostPointerCapture: cancelToolTap,
@@ -492,8 +520,8 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 					<Button variant="ghost" size="sm" className="hw-headerAction hw-zoomButton" aria-label="Zoom in" disabled={zoom >= ZOOMS.max} {...handlers("Zoom in", () => zoomAround(zoom * 1.25))} data-testid="notebook-zoom-in"><PlusIcon aria-hidden /></Button>
 				</span>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? `Show ${origin} too` : "Expand notebook"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? `Show ${origin} too` : "Expand"}</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close notebook" {...handlers("Close writing", () => { if (expanded) prepareViewChange(false); onClose(); }, true)}><XIcon aria-hidden />Close</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" {...handlers("Chat", onClose, true)} data-testid="open-notebook-chat">Chat</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close notebook" data-notebook-leave="close" {...handlers("Close writing", closeNotebook, true)}><XIcon aria-hidden />Close</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" data-notebook-leave="chat" {...handlers("Chat", onClose, true)} data-testid="open-notebook-chat">Chat</Button>
 			</header>
 			{attachOpen && <div className="hw-toolsPanel hw-attachPanel" role="menu" aria-label={`Attach to ${attachTarget}`} data-testid="notebook-attach-menu">
 				<p className="hw-attachFor">Goes with {attachTarget}. You can review it and take it out before sending.</p>

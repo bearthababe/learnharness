@@ -20,7 +20,9 @@ export function BugRecorder() {
 		if (window.__lhBugLog) return;
 		const log: BugLogEntry[] = (window.__lhBugLog = []);
 		const add = (kind: BugLogEntry["kind"], text: string) => {
-			log.push({ at: new Date().toISOString(), kind, text: redact(text).slice(0, 1000) });
+			// Only the first 1,000 characters are kept; redacting at most 4,000 bounds
+			// the main thread's work whatever a page logs (no key is longer than 512).
+			log.push({ at: new Date().toISOString(), kind, text: redact(text.slice(0, 4000)).slice(0, 1000) });
 			if (log.length > 80) log.shift();
 		};
 		const str = (a: unknown) => (a instanceof Error ? `${a.message}\n${a.stack ?? ""}` : typeof a === "string" ? a : (() => { try { return JSON.stringify(a); } catch { return String(a); } })());

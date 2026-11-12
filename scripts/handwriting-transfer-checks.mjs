@@ -270,5 +270,35 @@ export async function checkHandwritingTransfers({ page, origin, transferFaults }
 	await page.waitForSelector(`[data-saved-draft="${retained.id}"]`, { visible: true });
 	assert.equal(await page.$eval('[data-testid="question-dock"] [data-file-path-input]', field => field.textContent), "");
 	console.log("PASS actual target unmount during Attach finalization retains old speech durably and never retargets");
+
+	// Merge proof (CI run 43292266870): the same transition while the dictation
+	// handoff is still settling. The session workspace is inert until it
+	// settles (main #28), so the browser gives a tap on Chat to the page behind
+	// it. The tap must wait for the handoff, then happen; it was lost before.
+	// The client's notebook reads are held back 2.5 s after the target changes,
+	// which keeps the handoff unsettled when Chat is tapped.
+	const lockedId = "mobile_transfer_speech_locked";
+	await page.goto(`${origin}/chat/${lockedId}`, { waitUntil: "networkidle2" });
+	await fill('[data-testid="question-dock"] [data-file-path-input]', "Original first draft.");
+	await page.click('[data-testid="question-dock"] [aria-label="Start dictation"]'); await page.waitForFunction(() => window.speech?.readyState === 1);
+	await open(); await draw();
+	await page.click('[data-testid="notebook-attach"]'); await page.waitForFunction(() => window.speech.finishing);
+	transferFaults.handle = request => {
+		if (request.method() !== "GET" || new URL(request.url()).pathname !== `/api/chats/${lockedId}/notebook`) return false;
+		setTimeout(() => { void request.continue().catch(() => {}); }, 2500);
+		return true;
+	};
+	assert.equal((await fetch(`${origin}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chatId: lockedId, input: { type: "answer", toolCallId: "first", answer: { kind: "ask", questionText: "first speech owner", dontKnow: false, answers: [], text: "Answered on another client", answeredAt: new Date().toISOString() } } }) })).status, 200);
+	await page.waitForFunction(() => document.querySelector('[data-testid="question-dock"]')?.textContent.includes("second speech owner"));
+	await page.evaluate(() => { window.speech.final("Late words for first only."); window.speech.close(); });
+	await page.waitForFunction(() => [...document.querySelectorAll('[aria-label="Saved drafts"] [data-saved-draft]')].some(draft => draft.textContent.includes("Original first draft. Late words for first only.")));
+	const lockedDraft = (await (await fetch(`${origin}/api/chats/${lockedId}/notebook`)).json()).tutorDrafts.find(draft => draft.owner.kind === "question" && draft.owner.toolCallId === "first" && draft.owner.channel === "text");
+	assert.equal(await page.$eval('[data-session-workspace]', element => element.inert), true, "Chat is tapped while the dictation handoff still locks the session");
+	await page.click('[data-testid="open-notebook-chat"]');
+	assert.equal(await page.$eval('[data-testid="notebook-slot"]', element => element.hidden), false, "The tap waits for the handoff: the notebook stays until it settles");
+	await page.waitForSelector(`[data-saved-draft="${lockedDraft.id}"]`, { visible: true });
+	assert.equal(await page.$eval('[data-testid="notebook-slot"]', element => element.hidden), true, "Then the tap happens: Chat shows, the notebook is put away");
+	assert.equal(await page.$eval('[data-session-workspace]', element => element.inert), false);
+	console.log("PASS a Chat tap during the dictation handoff lock waits for it, then happens (never lost)");
 	transferFaults.handle = null;
 }

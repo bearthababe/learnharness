@@ -19,9 +19,13 @@
  *   digits, no spaces); `NAME=value` (a config or env line) always counts,
  *   except a plain number.
  * No lookbehind: the client recorder runs this on older Safari too.
+ * Every scan is bounded (key tails and lookaheads 512 characters, names 64),
+ * so the time stays linear in the text: the recorder runs this on the page's
+ * main thread, and a long hyphenated or repeated run used to take seconds
+ * (merge proof, CI run 43292266870 diagnosis).
  */
 /** A key's tail: hyphenated runs need a digit; otherwise letters/digits/_ only. */
-const tail = (n: number) => `(?:(?=[A-Za-z0-9_-]*\\d)[A-Za-z0-9_-]{${n},}|[A-Za-z0-9_]{${n},})`;
+const tail = (n: number) => `(?:(?=[A-Za-z0-9_-]{0,512}?\\d)[A-Za-z0-9_-]{${n},512}|[A-Za-z0-9_]{${n},512})`;
 const KEY_SHAPES = new RegExp(`(^|[^A-Za-z0-9])(?:${[
 	// OpenAI/Anthropic/OpenRouter-style, Stripe-style.
 	`(?:sk|pk|rk)-${tail(16)}`, "(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{8,}",
@@ -37,11 +41,12 @@ const CUT = "\\[redacted[^\\]]*\\]";
 /** The next run of non-space (a config value), or an already-cut one. */
 const VALUE = `(?:${CUT}|[^\\s&"'\`]+)`;
 /** A token-shaped value: letters and digits together, 8+ characters, no spaces. */
-const TOKENISH = `(?:${CUT}|(?=[^\\s&"'\`]*\\d)(?=[^\\s&"'\`]*[A-Za-z])[^\\s&"'\`]{8,})`;
+const TOKENISH = `(?:${CUT}|(?=[^\\s&"'\`]{0,512}?\\d)(?=[^\\s&"'\`]{0,512}?[A-Za-z])[^\\s&"'\`]{8,})`;
 /** `=value` (not a plain number), or `: token-shaped value`. */
 const ASSIGNED = `(\\s*=\\s*(?![0-9.]+(?![^\\s&"'\`]))|\\s*:\\s*(?=${TOKENISH}))${VALUE}`;
-const ENV_NAME = new RegExp(`\\b((?=[A-Z0-9_]*_)[A-Z0-9_]*(?:API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?)[A-Z0-9_]*)${ASSIGNED}`, "g");
-const KEY_NAME = new RegExp(`\\b([A-Za-z0-9_-]*?(?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|client[_-]?secret|secret[_-]?key|private[_-]?key|password|passwd))${ASSIGNED}`, "gi");
+const ENV_NAME = new RegExp(`\\b((?=[A-Z0-9_]{0,64}_)[A-Z0-9_]{0,64}?(?:API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?)[A-Z0-9_]{0,64})${ASSIGNED}`, "g");
+// Starts only where a name can start (not inside a hyphenated run), so each run is scanned once.
+const KEY_NAME = new RegExp(`(^|[^A-Za-z0-9_-])([A-Za-z0-9_-]{0,64}?(?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|client[_-]?secret|secret[_-]?key|private[_-]?key|password|passwd))${ASSIGNED}`, "gi");
 
 export function redactSecrets(text: string): string {
 	return text
@@ -49,15 +54,15 @@ export function redactSecrets(text: string): string {
 		// Authorization headers: whatever follows the scheme.
 		.replace(new RegExp(`(\\bauthorization["']?\\s*[:=]\\s*["']?(?:Bearer|Basic|Token|Digest)\\s+)${VALUE}`, "gi"), "$1[redacted]")
 		// A bearer token outside a header: token-shaped only.
-		.replace(/\b([Bb]earer\s+)(?:(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{12,}|[A-Za-z0-9_-]{24,})/g, "$1[redacted]")
+		.replace(/\b([Bb]earer\s+)(?:(?=[A-Za-z0-9._~+/=-]{0,2048}?\d)[A-Za-z0-9._~+/=-]{12,}|[A-Za-z0-9_-]{24,})/g, "$1[redacted]")
 		// Keys in URLs.
 		.replace(new RegExp(`([?&](?:key|token|api_key|apikey|access_token)=)(?:${CUT}|[^&\\s"'\`<>|#)\\]]+)`, "gi"), "$1[redacted]")
 		// Environment-style names (NAME_KEY=value, GITHUB_TOKEN: value) and names
 		// that only ever hold one (apiKey=…, client_secret: …, password=…).
 		.replace(ENV_NAME, "$1$2[redacted]")
-		.replace(KEY_NAME, "$1$2[redacted]")
+		.replace(KEY_NAME, "$1$2$3[redacted]")
 		// "apiKey": "…" in JSON (a quoted name).
-		.replace(/("[A-Za-z0-9_-]*?(?:api[_-]?key|token|secret|password|authorization|credential)s?"\s*:\s*)"[^"]*"/gi, "$1\"[redacted]\"");
+		.replace(/("[A-Za-z0-9_-]{0,64}?(?:api[_-]?key|token|secret|password|authorization|credential)s?"\s*:\s*)"[^"]*"/gi, "$1\"[redacted]\"");
 }
 
 /**

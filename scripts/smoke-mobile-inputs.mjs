@@ -50,6 +50,7 @@ for (const id of ["mobile_notebook_menus", "mobile_remount_success", "mobile_rem
 const call = (name, args, id) => assistant([{ type: "toolCall", name, arguments: args, id }], `assistant_${id}`);
 const result = (name, details, id) => ({ role: "toolResult", toolName: name, toolCallId: id, id: `result_${id}`, content: [{ type: "text", text: "Ready." }], details, isError: false, timestamp: Date.now() });
 await writeFile(path.join(dir, "data/chats/mobile_transfer_speech.json"), JSON.stringify({ ...conversation, id: "mobile_transfer_speech", messages: [assistant([...["first", "second"].map(id => ({ type: "toolCall", name: "ask_user_question", id, arguments: { question: `${id} speech owner`, mode: "text" } }))])] }));
+await writeFile(path.join(dir, "data/chats/mobile_transfer_speech_locked.json"), JSON.stringify({ ...conversation, id: "mobile_transfer_speech_locked", messages: [assistant([...["first", "second"].map(id => ({ type: "toolCall", name: "ask_user_question", id, arguments: { question: `${id} speech owner`, mode: "text" } }))])] }));
 const teaching = [
 	call("probe_done", { summary: "Ready for pressure." }, "probe_done"), result("probe_done", { ok: true }, "probe_done"),
 	call("plan_create", {}, "plan"), result("plan_create", { tree: { nodes: [{ id: "pressure", title: "Pressure and area", description: "Relate force, area and pressure." }], edges: [] } }, "plan"),

@@ -303,3 +303,23 @@ it("§0 (merge proof): Settings → About says where reports go — kept here, a
 		if (before === undefined) delete process.env.LH_REPORTS_REPO; else process.env.LH_REPORTS_REPO = before;
 	}
 });
+
+it("§0 (merge proof, CI run 43292266870 diagnosis): redaction stays linear on long hyphenated and repeated runs (the recorder runs it on the page's main thread)", () => {
+	const n = 100_000;
+	const shapes: Record<string, string> = {
+		"hyphenated run": "ab-".repeat(n / 3), "repeated sk-": "sk-".repeat(n / 3), "repeated TOKEN_": "TOKEN_".repeat(n / 6), "repeated password:": "password:".repeat(n / 9),
+		"digits and hyphens": "a1-".repeat(n / 3), "quoted letters": "\"a".repeat(n / 2), "bearer then hyphens": "Bearer " + "a-".repeat(n / 2),
+	};
+	let total = 0;
+	for (const [name, text] of Object.entries(shapes)) {
+		const started = performance.now();
+		store.redactSecrets(text);
+		const took = performance.now() - started;
+		total += took;
+		assert.ok(took < 500, `${name} (${text.length} characters) took ${took.toFixed(0)} ms`);
+	}
+	assert.ok(total < 1500, `all shapes took ${total.toFixed(0)} ms`);
+	// The recorder redacts only what it keeps (bounded input).
+	const recorder = fs.readFileSync("components/bug-recorder.tsx", "utf-8");
+	assert.ok(recorder.includes("redact(text.slice(0, 4000)).slice(0, 1000)"));
+});
