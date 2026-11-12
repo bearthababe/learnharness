@@ -71,6 +71,47 @@ function maskClone(node: Node) {
 	} else node.textContent = DOTS;
 }
 
+/**
+ * Pinned rows in a scrolled area (merge proof N1). The screenshot keeps each
+ * scrolled area's position by shifting its content up; a row pinned with
+ * `position: sticky` (a list's "Your turn in …" line, a pinned Submit row)
+ * would be shifted off with it, and its pinning in the copy works out from
+ * the top, not from where the learner had scrolled. So every pinned row in a
+ * scrolled area is measured where it shows and where it would sit unpinned
+ * (a style swap with no paint in between); the copy places it where it shows.
+ */
+const SHOT_SHIFT = "data-lh-shot-shift";
+function markPinnedRows(root: Element): () => void {
+	const marked: Element[] = [], seen = new Set<Element>();
+	for (const area of root.querySelectorAll("*")) {
+		if (!area.scrollTop && !area.scrollLeft) continue;
+		for (const row of area.querySelectorAll<HTMLElement>("*")) {
+			if (seen.has(row)) continue;
+			seen.add(row);
+			if (getComputedStyle(row).position !== "sticky") continue;
+			const shown = row.getBoundingClientRect();
+			const before = row.style.getPropertyValue("position"), priority = row.style.getPropertyPriority("position");
+			row.style.setProperty("position", "static", "important");
+			const unpinned = row.getBoundingClientRect();
+			if (before) row.style.setProperty("position", before, priority); else row.style.removeProperty("position");
+			row.setAttribute(SHOT_SHIFT, `${shown.left - unpinned.left} ${shown.top - unpinned.top}`);
+			marked.push(row);
+		}
+	}
+	return () => { for (const row of marked) row.removeAttribute(SHOT_SHIFT); };
+}
+function placePinnedRow(node: Node) {
+	if (!(node instanceof HTMLElement) || !node.hasAttribute(SHOT_SHIFT)) return;
+	const [dx, dy] = node.getAttribute(SHOT_SHIFT)!.split(" ").map(Number);
+	node.removeAttribute(SHOT_SHIFT);
+	// Positioned (it stays above the rows it covered), offset by hand only.
+	node.style.position = "relative";
+	for (const side of ["top", "right", "bottom", "left", "inset-block-start", "inset-block-end", "inset-inline-start", "inset-inline-end"]) node.style.setProperty(side, "auto");
+	const shift = new DOMMatrix(node.style.transform || "none");
+	shift.e += dx || 0; shift.f += dy || 0;
+	node.style.transform = shift.toString();
+}
+
 /** This device's try-out variants and settings (an allow-list: no drafts, no learner text). */
 const SETTING_KEYS = /^lh:(try:[\w-]+|device-tool:[\w-]+|writing-palette|writing-wheel-look|header-look|reveal-style|keyboard-off|prototype-view|sidebar-open|hw-zoom|hw-split|tablet-ui-size|focus-place|ask-tutor|reading-size|text-size|theme|appearance)$/;
 function deviceSettings(): Record<string, string> {
@@ -247,17 +288,19 @@ export function BugCapture() {
 				const { domToBlob } = await import("modern-screenshot");
 				maskedCount = 0;
 				const h = innerHeight;
+				const unmark = markPinnedRows(document.body);
 				const blob = await domToBlob(document.body, {
 					width: innerWidth, height: h, scale: 1, font: false, type: "image/jpeg", quality: 0.85,
 					backgroundColor: getComputedStyle(document.body).backgroundColor,
 					style: { margin: "0" },
 					filter: node => !(node instanceof Element) || !node.closest(".lh-bug-sheet, .lh-bug-toast, .lh-bug-backdrop"),
-					onCloneEachNode: maskClone,
+					onCloneEachNode: node => { placePinnedRow(node); maskClone(node); },
 					// The current screen as the learner sees it: a scrolled area (a
 					// Settings pane, the lesson, a list) keeps its scroll position in the
-					// shot, instead of showing from its top (merge proof N1).
+					// shot, instead of showing from its top, and its pinned rows stay
+					// where they show (merge proof N1).
 					features: { restoreScrollPosition: true },
-				});
+				}).finally(unmark);
 				await draft.flush();
 				if (draft.value.discardPending) return;
 				const res = await fetch(`/api/bugs/${reportId}/screenshot`, { method: "PUT", headers: { "Content-Type": blob.type }, body: blob });

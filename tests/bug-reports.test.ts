@@ -136,3 +136,32 @@ it("§0 (merge proof): every string a report brings is cut of keys before it is 
 	const recorder = fs.readFileSync("components/bug-recorder.tsx", "utf-8");
 	assert.ok(/import \{ redactSecrets \} from "@\/src\/core";/.test(recorder) && recorder.includes("const redact = redactSecrets"), "the client recorder uses the shared redaction");
 });
+
+it("§0 (merge proof, round 2): the server's own details, the capture time, deep fields and field names are cut of keys too; so is a filed issue", async () => {
+	const { chatStore } = await import("../src/store/chats.ts");
+	const { issueText } = await import("../src/server/report-issues.ts");
+	// Test-only fake key shapes, built at run time.
+	const github = "ghp_" + "Z9y8X7w6V5u4T3s2R1q0P9o8", google = "AIza" + "Sy9876543210zyxwvutsrqponmlk", openai = "sk-" + "proj9876543210fedcba";
+	// A key pasted into Home's opening prompt becomes the session's title.
+	const chat = chatStore.createChat(`explain this ${openai} please`);
+	let deep: Record<string, unknown> = { leaf: `deep ${google}` };
+	for (let i = 0; i < 12; i++) deep = { next: deep };
+	const report = store.createReport("r-redact-server-2", {
+		path: `/chat/${chat.id}`,
+		at: `2026-11-12T10:00:00.000Z ${github}`,
+		deep,
+		fields: { [github]: "named after a key" },
+	});
+	assert.ok(report && report !== "discarded");
+	const stored = fs.readFileSync(path.join(store.bugsDir(), "r-redact-server-2", "report.json"), "utf-8");
+	for (const secret of [github, google, openai]) assert.ok(!stored.includes(secret), `stored report holds ${secret.slice(0, 6)}…`);
+	const saved = JSON.parse(stored);
+	assert.match(saved.server.session.title, /^explain this \[redacted key\] please$/, "the session's title is kept, without the key");
+	assert.match(saved.at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, "a capture time that is not a timestamp becomes the server's clock");
+	assert.equal(store.createReport("r-redact-server-3", { path: "/", at: "2026-11-12T10:00:00.000Z" }) && (store.getReport("r-redact-server-3")!.at), "2026-11-12T10:00:00.000Z", "a real capture time stays");
+	// A value already cut by an earlier rule stays one "[redacted]".
+	assert.equal(store.redactSecrets(`OPENAI_API_KEY=${openai} rest`), "OPENAI_API_KEY=[redacted] rest");
+	// A report on disk from before (unredacted) still files without its keys.
+	const issue = issueText({ id: "r-old", kind: "bug", at: "2026-11-12T10:00:00.000Z", path: "/", note: `see ${github}`, log: [{ at: "2026-11-12T10:00:00.000Z", kind: "error", text: `boom ${google}` }] });
+	for (const secret of [github, google]) assert.ok(!issue.title.includes(secret) && !issue.body.includes(secret), `a filed issue holds ${secret.slice(0, 6)}…`);
+});

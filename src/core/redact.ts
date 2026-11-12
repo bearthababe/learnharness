@@ -14,15 +14,21 @@ export function redactSecrets(text: string): string {
 		// Keys in URLs.
 		.replace(/([?&](?:key|token|api_key|apikey|access_token)=)[^&\s"']+/gi, "$1[redacted]")
 		// NAME_KEY=value, TOKEN: value …
-		.replace(/\b([A-Z0-9_]*(?:API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*)\s*[:=]\s*[^\s&]+/gi, "$1=[redacted]")
+		// (A value an earlier rule already cut stays one "[redacted]".)
+		.replace(/\b([A-Z0-9_]*(?:API_?KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)[A-Z0-9_]*)\s*[:=]\s*(?:\[redacted[^\]]*\]|[^\s&]+)/gi, "$1=[redacted]")
 		// "apiKey": "…" in JSON.
 		.replace(/("?(?:api_?key|token|secret|password|authorization)"?\s*:\s*)"[^"]*"/gi, "$1\"[redacted]\"");
 }
 
-/** Every string inside a value, redacted (objects and arrays walked; depth-bounded). */
+/**
+ * Every string inside a value redacted, field names included (objects and
+ * arrays walked). Anything nested deeper than `depth` is dropped rather than
+ * kept unread.
+ */
 export function redactDeep<T>(value: T, depth = 8): T {
 	if (typeof value === "string") return redactSecrets(value) as T;
-	if (depth <= 0 || value === null || typeof value !== "object") return value;
+	if (value === null || typeof value !== "object") return value;
+	if (depth <= 0) return "[too deep]" as T;
 	if (Array.isArray(value)) return value.map((item) => redactDeep(item, depth - 1)) as T;
-	return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, redactDeep(item, depth - 1)])) as T;
+	return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [redactSecrets(key), redactDeep(item, depth - 1)])) as T;
 }

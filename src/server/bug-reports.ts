@@ -92,6 +92,7 @@ function shaped(report: StoredReport): StoredReport {
  * returns the saved report (a lost response, a retry after reload). A
  * discarded id never comes back.
  */
+const CAPTURE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$/;
 export function createReport(id: string, page: Record<string, unknown>): StoredReport | "discarded" | null {
 	if (!safeReportId(id)) return null;
 	if (discarded(id)) return "discarded";
@@ -101,11 +102,13 @@ export function createReport(id: string, page: Record<string, unknown>): StoredR
 	const pagePath = redactSecrets(String(page.path ?? "/")).slice(0, 500);
 	const { kind: _k, note: _n, ...given } = page;
 	void _k; void _n;
-	// Everything the page sent — its error log, URL, title, device details —
-	// is cut of credentials before it is stored, whatever the client did
-	// (round 19 §0: never put keys in a report; merge proof N1).
-	const rest = redactDeep(given);
-	const report = shaped({ ...rest, id, kind, at: String(page.at ?? new Date().toISOString()), path: pagePath, note: typeof page.note === "string" ? redactSecrets(page.note).slice(0, 4000) : "", noteSeq: 0, server: serverContext(pagePath) } as StoredReport);
+	// The capture time is a timestamp or the server's own clock.
+	const at = typeof page.at === "string" && CAPTURE_TIME.test(page.at) ? page.at : new Date().toISOString();
+	// Everything the report holds — what the page sent (its error log, URL,
+	// title, device details) and what the server adds (the session's title,
+	// its jobs) — is cut of credentials before it is stored, whatever the
+	// client did (round 19 §0: never put keys in a report; merge proof N1).
+	const report = shaped(redactDeep({ ...given, id, kind, at, path: pagePath, note: typeof page.note === "string" ? redactSecrets(page.note).slice(0, 4000) : "", noteSeq: 0, server: serverContext(pagePath) }) as StoredReport);
 	writeReport(report);
 	return report;
 }

@@ -15,6 +15,7 @@ import { verifyNotebookLayout } from "./smoke-notebook-layout.mjs";
 import { checkHandwritingTransfers } from "./handwriting-transfer-checks.mjs";
 import { checkTransferDevice } from "./handwriting-device-checks.mjs";
 import { checkHandwritingMenus } from "./handwriting-menu-checks.mjs";
+import { checkReportCapture } from "./report-capture-checks.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const dir = await createRunDirectory();
@@ -1402,6 +1403,7 @@ try {
 	assert.equal(await page.$eval('[data-testid="dictation-toggle"]', e => e.checkVisibility({ visibilityProperty: true })), false, "Touch screens do not show the row's dictation strip");
 	assert.equal(await page.$eval(mic, e => e.checkVisibility({ visibilityProperty: true })), true, "The in-field mic stays on wide touch screens");
 	await checkHandwritingMenus({ page, origin });
+	await checkReportCapture({ page, origin });
 	}
 	assert.deepEqual(errors, [], "No browser runtime errors");
 	console.log("PASS: conversation, reading/reveal, free-text/selection/Other answers, practice/drills, real persisted submissions, speech recovery, image review, panels, phone geometry and focus/gesture containment.");

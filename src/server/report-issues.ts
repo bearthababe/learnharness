@@ -5,7 +5,7 @@
  * set, leaving the report dialog files (or updates) one issue per report.
  */
 import { execFile } from "node:child_process";
-import { getReport, updateReport, type StoredReport } from "./bug-reports.ts";
+import { getReport, redactSecrets, updateReport, type StoredReport } from "./bug-reports.ts";
 
 export const reportsRepo = () => (process.env.LH_REPORTS_REPO || "").trim() || null;
 const publicUrl = () => (process.env.LH_PUBLIC_URL || "").replace(/\/$/, "");
@@ -37,7 +37,9 @@ export function issueText(r: StoredReport): { title: string; body: string; label
 		"",
 		"_Filed from the app's 🐞 Report a problem._",
 	].filter(line => line !== "").join("\n");
-	return { title, body, labels: [change ? "enhancement" : "bug", "needs-triage"] };
+	// What leaves this machine is cut of credentials once more, whatever the
+	// report on disk holds (round 19 §0; merge proof N1).
+	return { title: redactSecrets(title), body: redactSecrets(body), labels: [change ? "enhancement" : "bug", "needs-triage"] };
 }
 
 /** The dialog was left (Close, Open report, another page): file or update now. */
