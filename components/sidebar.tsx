@@ -1062,15 +1062,17 @@ function SessionsSidebar() {
 				</div>
 
 				{deletedNotice && <p role="status" data-testid="session-deleted-notice" className="lh-deleted-notice">{deletedNotice}</p>}
-				{/* Round 15 (A3): the badge on Sessions, explained where the
-				    sessions are — it counts only those waiting for an answer. */}
-				{yourTurn > 0 && <p className="lh-your-turn-hint" data-testid="your-turn-hint">
-					<span className="lh-your-turn-dot" aria-hidden />
-					{yourTurn === 1 ? "Your turn in 1 session" : `Your turn in ${yourTurn} sessions`}
-					<span className="lh-your-turn-note">The number on Sessions counts only these.</span>
-				</p>}
 				{revealNote && <p className="lh-list-reveal" role="status" data-testid="session-reveal-note">{revealNote}</p>}
 				<div ref={listRef} data-testid="session-list" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-2 pt-1">
+					{/* Round 15 (A3): the badge on Sessions, explained where the
+					    sessions are — it counts only those waiting for an answer.
+					    Round 20 audit: the list's own first line (pinned at its top),
+					    so its arrival with the sessions never pushes the list down. */}
+					{yourTurn > 0 && <p className="lh-your-turn-hint" data-testid="your-turn-hint">
+						<span className="lh-your-turn-dot" aria-hidden />
+						{yourTurn === 1 ? "Your turn in 1 session" : `Your turn in ${yourTurn} sessions`}
+						<span className="lh-your-turn-note">The number on Sessions counts only these.</span>
+					</p>}
 					{shown === null ? (
 						<div className="px-2 py-4 text-sm text-muted-foreground">Loading…</div>
 					) : shown.length === 0 ? (

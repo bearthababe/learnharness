@@ -3303,10 +3303,17 @@ function DockOverlay({
 				    and Keys at the bottom, by the chat box; Focus near the top). */}
 				{focusPlace === "bottom" && <FocusDockButton />}
 				{focusPlace === "tabs" && <FocusEdgeTabs bottom={<>{notebookToggle}<KeyboardToggle testid="edge-tab-keys" /></>} />}
+				{/* The short wait for saved drafts is said without moving anything (round
+				    20 audit): over the fade above the chat box, out of the layout, so the
+				    lesson never jumps when it ends. A failure, which stays and has Retry,
+				    keeps its own line in the dock. */}
+				{!notebook.getSnapshot().view && !notebook.getSnapshot().error && <div className={`${wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK} lh-draft-loading-row`}>
+					<div data-tutor-draft-loading="" role="status" className="lh-draft-loading">Loading saved drafts…</div>
+				</div>}
 				<div className={wideQuestion ? "mx-auto w-full max-w-none px-4" : DOCK}>
 					<div ref={viewportRef} data-dock-viewport="" className="pointer-events-auto">
-					{!notebook.getSnapshot().view && <div data-tutor-draft-loading="" role={notebook.getSnapshot().error ? "alert" : "status"} className="px-3 py-2 text-xs text-muted-foreground">
-						{notebook.getSnapshot().error ? <>Saved drafts could not load. <button type="button" className="min-h-11 underline" onClick={() => { void notebook.refresh(); }}>Retry</button></> : "Loading saved drafts…"}
+					{!notebook.getSnapshot().view && notebook.getSnapshot().error && <div data-tutor-draft-loading="" role="alert" className="px-3 py-2 text-xs text-muted-foreground">
+						Saved drafts could not load. <button type="button" className="min-h-11 underline" onClick={() => { void notebook.refresh(); }}>Retry</button>
 					</div>}
 					<div ref={bodyRef} data-tutor-draft-inputs="" inert={!notebook.getSnapshot().view}>
 					{setupCta}

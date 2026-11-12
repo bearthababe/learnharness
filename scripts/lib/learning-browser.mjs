@@ -116,7 +116,9 @@ export async function learningBrowser(root, run) {
 		await page.evaluateOnNewDocument(() => localStorage.setItem("lh:sidebar-open", "0"));
 		const sessions = new Map();
 		// Settled: the client shows no running turn, and either the composer or the practice dock owns input.
-		const idle = () => page.waitForFunction(() => !document.body.innerText.includes("THINKING…")
+		// A running turn reads "THINKING…" on main and, in the redesign, the phase's own words in the
+		// tutor-progress row ("Preparing your problem…"): neither may be showing.
+		const idle = () => page.waitForFunction(() => !document.body.innerText.includes("THINKING…") && !document.querySelector('[data-testid="tutor-progress"]')
 			&& (document.querySelector('[data-testid="composer"] [aria-label="Send"][disabled]') || document.querySelector('[data-testid="next-problem-button"]') || document.querySelector('[data-testid="practice-send"]')), { timeout: 120_000 });
 		// One synthetic learner session per key; switching navigates the same browser to it.
 		const session = async (key, body = { title: "zz-prove-it-learning-goal" }) => {

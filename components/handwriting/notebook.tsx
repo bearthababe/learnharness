@@ -438,8 +438,22 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 		if (event.clientX >= r.left && event.clientX <= r.right && event.clientY >= r.top && event.clientY <= r.bottom) activate();
 	}
 	function cancelToolTap(event: ReactPointerEvent<HTMLButtonElement>) { if (penToolTap.current?.pointerId === event.pointerId) penToolTap.current = null; }
-	function handlers(_name: string, action: () => void) {
-		const activate = () => { if (!active.current && !recovery.current?.getSnapshot().busy) action(); };
+	// Round 20: a tap that leaves the notebook (Chat, Close) is never dropped.
+	// While a stroke ends or a page operation finishes, it waits and then
+	// happens (a later such tap replaces it); other controls act only when free.
+	const pendingLeave = useRef<(() => void) | null>(null);
+	function leaveWhenFree(action: () => void) {
+		pendingLeave.current = action;
+		const started = Date.now();
+		const tick = () => {
+			if (pendingLeave.current !== action) return;
+			if (!active.current && !recovery.current?.getSnapshot().busy) { pendingLeave.current = null; action(); return; }
+			if (Date.now() - started < 15_000) window.setTimeout(tick, 100); else pendingLeave.current = null;
+		};
+		tick();
+	}
+	function handlers(_name: string, action: () => void, leave = false) {
+		const activate = () => { if (leave) leaveWhenFree(action); else if (!active.current && !recovery.current?.getSnapshot().busy) action(); };
 		return { "data-notebook-pencil-control": "", onPointerDown: startToolTap, onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => finishToolTap(event, activate), onPointerCancel: cancelToolTap, onLostPointerCapture: cancelToolTap,
 			onClick: (event: ReactMouseEvent<HTMLButtonElement>) => {
 				if (penToolClick.current === event.currentTarget && (event.detail > 0 || (event.nativeEvent as PointerEvent).pointerType === "pen")) { penToolClick.current = null; event.preventDefault(); return; }
@@ -478,8 +492,8 @@ export function HandwritingNotebook({ ref, chatId, hidden, expanded, onToggleExp
 					<Button variant="ghost" size="sm" className="hw-headerAction hw-zoomButton" aria-label="Zoom in" disabled={zoom >= ZOOMS.max} {...handlers("Zoom in", () => zoomAround(zoom * 1.25))} data-testid="notebook-zoom-in"><PlusIcon aria-hidden /></Button>
 				</span>
 				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label={expanded ? `Show ${origin} too` : "Expand notebook"} {...handlers("Expand", () => { prepareViewChange(!expanded); onToggleExpanded(); })} data-testid="notebook-expand">{expanded ? <Minimize2Icon /> : <Maximize2Icon />}{expanded ? `Show ${origin} too` : "Expand"}</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close notebook" {...handlers("Close writing", () => { if (expanded) prepareViewChange(false); onClose(); })}><XIcon aria-hidden />Close</Button>
-				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" {...handlers("Chat", onClose)} data-testid="open-notebook-chat">Chat</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction hw-tabletControl" aria-label="Close notebook" {...handlers("Close writing", () => { if (expanded) prepareViewChange(false); onClose(); }, true)}><XIcon aria-hidden />Close</Button>
+				<Button variant="ghost" size="sm" className="hw-headerAction hw-mobileSwitch" {...handlers("Chat", onClose, true)} data-testid="open-notebook-chat">Chat</Button>
 			</header>
 			{attachOpen && <div className="hw-toolsPanel hw-attachPanel" role="menu" aria-label={`Attach to ${attachTarget}`} data-testid="notebook-attach-menu">
 				<p className="hw-attachFor">Goes with {attachTarget}. You can review it and take it out before sending.</p>

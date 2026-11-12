@@ -19,8 +19,23 @@ export function useHandwritingSession(chatId: string) {
 	useEffect(() => {
 		try { if (localStorage.getItem(handwritingVisibilityKey(chatId)) === "1") { setOpen(true); setMounted(true); } } catch { /* visibility is optional */ }
 	}, [chatId]);
+	// Round 20: a request to show or hide the notebook is never dropped. While a
+	// stroke ends, a page operation or a capture finishes, it waits, then
+	// happens (the latest request wins).
+	const pendingShow = useRef<{ value: boolean } | null>(null);
 	function show(value: boolean) {
-		if (ref.current && !ref.current.canResize()) return;
+		if (ref.current && !ref.current.canResize()) {
+			const request = { value }; pendingShow.current = request;
+			const started = Date.now();
+			const tick = () => {
+				if (pendingShow.current !== request) return;
+				if (!ref.current || ref.current.canResize()) { pendingShow.current = null; show(value); return; }
+				if (Date.now() - started < 15_000) window.setTimeout(tick, 100); else pendingShow.current = null;
+			};
+			window.setTimeout(tick, 100);
+			return;
+		}
+		pendingShow.current = null;
 		if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 		setOpen(value); setMounted(true); if (!value) setExpanded(false);
 		try { localStorage.setItem(handwritingVisibilityKey(chatId), value ? "1" : "0"); } catch { /* ink recovery reports its own failures */ }
