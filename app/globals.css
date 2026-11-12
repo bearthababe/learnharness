@@ -3848,7 +3848,8 @@ button[role="switch"]:where(:not(.lh-proto-toggle))[aria-checked="true"] > span 
 	.lh-kbd-hint {
 		display: block;
 		padding: 2px 16px 8px;
-		font-size: 12.5px;
+		/* Round 15's floor for learner-facing labels (R9): 13px. */
+		font-size: 13px;
 		color: var(--muted-foreground);
 	}
 	.lh-kbd-hint kbd {
@@ -3858,7 +3859,7 @@ button[role="switch"]:where(:not(.lh-proto-toggle))[aria-checked="true"] > span 
 		padding: 0 4px;
 		border: 1px solid var(--border);
 		border-radius: 4px;
-		font: 11.5px/1.5 var(--font-sans);
+		font: 13px/1.4 var(--font-sans);
 		text-align: center;
 	}
 }
