@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { finishDictation, dictationCheckpoint, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { explanationHasContent, type NotebookInputFields } from "@/src/core";
 import type { NotebookSession } from "./notebook-session";
-import { useNotebookActivityDraft } from "./notebook-activity-draft";
+import { plainNotebookCopy, useNotebookActivityDraft } from "./notebook-activity-draft";
 import { useDeploymentActivity } from "./deployment-activity";
 import { useHandwritingEditor } from "./handwriting/submission";
 import type { SharedWriting } from "@/src/core";
@@ -97,7 +97,11 @@ export function PracticeDock({ chatId, dictation, problemCallId, input, expanded
 	const update = (text: string) => {
 		thinkingRef.current = text; setThinking(text);
 		if (owned.enabled) notebook!.tutor.updateText(owner, text);
-		else if (chatId) writePracticeDraft(chatId, problemCallId, text);
+		else {
+			if (chatId) writePracticeDraft(chatId, problemCallId, text);
+			// D1 (round 20): a plain notebook copy stays current while the notebook is closed.
+			if (plainNotebookCopy(notebook, owner)) notebook!.tutor.updateText(owner, text);
+		}
 	};
 	// Back from another session or a reload: the kept working returns, into
 	// an empty box only (a saved notebook draft or newer typing wins).

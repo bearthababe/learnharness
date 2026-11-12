@@ -30,7 +30,7 @@ export function useHandwritingSubmission(chatId: string, review: () => Promise<A
 		let mounted = true;
 		const changed = () => { if (mounted && (notebookView.current?.canUpdate() ?? true)) render(value => value + 1); };
 		const sessionReview = callbacks.current.review;
-		const model = new HandwritingSubmission(chatId, { device: handwritingTransferDevice, fetch: (...args) => fetch(...args), review: sessionReview, changed: () => { if (mounted) render(value => value + 1); } });
+		const model = new HandwritingSubmission(chatId, { device: handwritingTransferDevice, fetch: (...args) => fetch(...args), review: sessionReview, changed: () => { if (mounted) render(value => value + 1); }, journal: () => window.localStorage });
 		modelRef.current = model;
 		const attachment = new HandwritingAttachment(chatId, { device: handwritingTransferDevice, fetch: (...args) => fetch(...args), encode: encodeHandwritingRaster, refresh: sessionReview, reveal: pageId => notebookView.current?.reveal(pageId), changed });
 		attachmentRef.current = attachment; void attachment.open();

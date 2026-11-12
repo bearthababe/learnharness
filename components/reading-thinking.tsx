@@ -6,7 +6,7 @@ import { PathInput } from "@/components/path-input";
 import { useHandwritingEditor } from "./handwriting/submission";
 import { joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import type { NotebookSession } from "./notebook-session";
-import { useNotebookActivityDraft } from "./notebook-activity-draft";
+import { plainNotebookCopy, useNotebookActivityDraft } from "./notebook-activity-draft";
 import { CompactLearningInput, useFocusWithin, useMicSlot } from "@/components/compact-learning-input";
 import { usePhoneLayout } from "@/components/use-phone-viewport";
 import { ChevronLeftIcon, ChevronRightIcon, EyeIcon, NotebookPenIcon } from "lucide-react";
@@ -129,7 +129,8 @@ export function ReadingThinkingField({
 	}, [owned.enabled, owned.draft, notebook, toolCallId, value]);
 	const change = (value: string) => {
 		textRef.current = value;
-		if (notebook?.getSnapshot().view?.contextId) notebook.tutor.updateText(owner, value);
+		// D1 (round 20): a plain notebook copy stays current while the notebook is closed.
+		if (notebook?.getSnapshot().view?.contextId || plainNotebookCopy(notebook, owner)) notebook!.tutor.updateText(owner, value);
 		if (mounted.current) { setDraft(value); onChange(value); }
 	};
 	const transfer = useHandwritingEditor(targetKey, () => ({ readingThinking: textRef.current }), draft => change(draft.readingThinking ?? ""), claim);
