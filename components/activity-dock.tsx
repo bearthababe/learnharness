@@ -215,6 +215,12 @@ export function useActivity(): { feed: ActivityFeed; refresh: () => void } {
 	return useContext(ActivityContext);
 }
 
+/** Failures that can still be retried: what Helpers reports first (its
+ *  header, and the laptop's folded rail, round 20 L1). */
+export function failedHelpers(recent: FeedRecentJob[]): number {
+	return recent.filter((job) => job.status === "error" && job.canRetry && jobStatusText(job) === "Failed").length;
+}
+
 /** R12 (round 16): one line saying what Helpers are (the sheet, ⋯). */
 export const HELPERS_DESCRIPTION = "Background work the tutor started for your lessons";
 
@@ -377,7 +383,7 @@ export function ActivitySection({ feed: feedProp, trailing, sheet = false }: {
 	const [historyOpen, setHistoryOpen] = useState(sheet);
 	const refresh = ctx.refresh;
 	// Failures that can still be retried are what the header reports first.
-	const failedCount = recent.filter((job) => job.status === "error" && job.canRetry && jobStatusText(job) === "Failed").length;
+	const failedCount = failedHelpers(recent);
 	const blobs = useMemo(() => toBlobs(feed), [feed]);
 	const [openBlob, setOpenBlob] = useState<string | null>(null); // detail, inline-expanded
 	const [abortStates, setAbortStates] = useState<Record<string, AbortState>>({});

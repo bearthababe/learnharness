@@ -1226,6 +1226,10 @@ export function GraphView({
 			refreshActivity();
 			setTimeout(() => refreshActivity(), 600);
 		},
+		// P3 (round 20): the finished import also refetches the graph, so Ideas
+		// shows the new source at once — a run that finishes before the status
+		// feed ever lists it (or an import with no background run) is covered too.
+		onFinish: () => setRefreshTick((t) => t + 1),
 	});
 	const { importing, onImportFiles } = notesImport;
 

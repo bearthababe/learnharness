@@ -216,14 +216,14 @@ export function DeleteSessionBody({
 			)}
 			{/* The node dialog's exact bottom row: quiet Cancel, destructive
 			    red Delete (border + text, fill on hover — the app's
-			    established destructive pair). */}
+			    established destructive pair). P5 (round 20): 44px targets. */}
 			<div className="mt-4 flex justify-end gap-2">
 				<button
 					type="button"
 					data-testid="delete-cancel"
 					onClick={onClose}
 					disabled={busy}
-					className="h-10 rounded-xl border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-40"
+					className="h-11 rounded-xl border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-40"
 				>
 					Cancel
 				</button>
@@ -232,7 +232,7 @@ export function DeleteSessionBody({
 					data-testid="delete-confirm"
 					onClick={onRun}
 					disabled={busy}
-					className="h-10 rounded-xl bg-[#c94545] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#d65252] disabled:opacity-40"
+					className="h-11 rounded-xl bg-[#c94545] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#d65252] disabled:opacity-40"
 				>
 					{busy ? "Deleting…" : "Delete"}
 				</button>

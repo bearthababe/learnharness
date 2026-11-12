@@ -10,6 +10,7 @@ import { forgetHandwritingOnDevice } from "@/components/handwriting/device";
 import type { ChatDeleteMode } from "@/src/core";
 import { BookOpenIcon, BugIcon, ChevronLeftIcon, DumbbellIcon, MoreHorizontalIcon, PanelLeftCloseIcon, PlusIcon, PanelLeftOpenIcon, RotateCwIcon, SearchIcon, SettingsIcon, TargetIcon, XIcon } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
+import { FoldedRail } from "@/components/folded-rail";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
 import { BrailleSpinner } from "@/components/braille-spinner";
@@ -1285,6 +1286,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 					onClick={(event) => { event.preventDefault(); window.dispatchEvent(new CustomEvent("lh:kbd-sessions-search")); }}
 					onKeyDown={(event) => { if (event.key !== "Enter") return; event.preventDefault(); event.stopPropagation(); window.dispatchEvent(new CustomEvent("lh:kbd-sessions-search")); }}>Skip to sessions</a>
 			</div>
+			{/* L1 (round 20): the laptop's folded sidebar keeps Report, Helpers and
+			    Settings in a rail at the window's edge (the folded sidebar beside it is
+			    0 wide). A tablet-width window's drawer opens over it, so it stays put. */}
+			{!phone && <FoldedRail folded={drawer || !open} />}
 			<SessionsSidebar />
 			<FilePathDropZone className="lh-app-main relative min-w-0 flex-1" inert={phone && open && sessionsPage === "header"}>{children}</FilePathDropZone>
 			{drawer && open && <div className="lh-drawer-scrim" aria-hidden="true" data-testid="sessions-drawer-scrim" onClick={toggle} />}

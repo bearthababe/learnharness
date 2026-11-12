@@ -8,6 +8,7 @@ import { finishDictation, dictationCheckpoint, isDictationActive, joinDictation,
 import { explanationHasContent, type NotebookInputFields } from "@/src/core";
 import type { NotebookSession } from "./notebook-session";
 import { plainNotebookCopy, useNotebookActivityDraft } from "./notebook-activity-draft";
+import { WorkingChip } from "./working-chip";
 import { useDeploymentActivity } from "./deployment-activity";
 import { useHandwritingEditor } from "./handwriting/submission";
 import type { SharedWriting } from "@/src/core";
@@ -186,6 +187,8 @@ export function PracticeDock({ chatId, dictation, problemCallId, input, expanded
 
 			{/* The learner's half: Enter SENDS (owner round 2, 2026-10-05);
 			    Shift+Enter makes a newline — less to decide about. */}
+			{/* P1 (round 20): notebook working waiting to go with this answer. */}
+			<WorkingChip session={notebook} owner={owner} goesWith="your answer" />
 			<div
 				data-testid="practice-thinking-field"
 				className={cn("lh-question-input m-1.5 rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50", !expanded && "lh-practice-collapsed")}

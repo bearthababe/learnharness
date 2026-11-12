@@ -3844,7 +3844,7 @@ button[role="switch"]:where(:not(.lh-proto-toggle))[aria-checked="true"] > span 
 
 /* A question's keyboard model, beside it (laptops; touch never shows it). */
 .lh-kbd-hint { display: none; }
-@media (pointer: fine) and (min-width: 1024px) {
+@media (min-width: 1024px) and (not (pointer: coarse)) {
 	.lh-kbd-hint {
 		display: block;
 		padding: 2px 16px 8px;
@@ -5850,7 +5850,7 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 	padding: 14px; border-radius: 18px; border: 1px solid var(--border); background: var(--card); color: var(--foreground);
 	box-shadow: 0 18px 48px rgb(0 0 0 / .45);
 }
-@media (min-width: 1024px) and (pointer: fine) { .lh-bug-sheet { left: auto; right: 20px; bottom: 20px; width: 420px; } }
+@media (min-width: 1024px) and (not (pointer: coarse)) { .lh-bug-sheet { left: auto; right: 20px; bottom: 20px; width: 420px; } }
 .lh-bug-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .lh-bug-head strong { font-size: 16px; font-weight: 650; }
 .lh-bug-status { flex-basis: 100%; font-size: 13px; color: var(--muted-foreground); } /* its own line: the text changes as it saves (never re-wraps the head) */
@@ -5996,13 +5996,9 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 :root[data-focus-place="tabs"] .lh-edge-tab-focus[data-active] { border-color: transparent; background: transparent; color: var(--foreground); }
 :root[data-focus-place="tabs"] .lh-edge-tab-focus[data-active] svg { width: 22px; height: 22px; filter: drop-shadow(0 0 3px var(--background)) drop-shadow(0 0 6px var(--background)); }
 :root[data-focus-place="tabs"] .session-tutor [data-session-find-root] { padding-right: 40px; }
-/* P2 (round 19): Ask tutor in the notebook pane, and its confirmation. */
+/* P2 (round 19): Ask tutor in the notebook pane (its confirmation is the
+   composer's working chip since round 20, P1). */
 .lh-pane-quiet-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
-.lh-ask-notice {
-	position: fixed; z-index: 55; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 132px); transform: translateX(-50%);
-	padding: 10px 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--foreground);
-	font-size: 15px; font-weight: 600; box-shadow: 0 8px 24px rgb(0 0 0 / .35); white-space: nowrap;
-}
 /* L9 (round 19): in a Card pane the quiet action (Back to lesson) is as wide
    as its words (still 44px tall, centred), so the row's ends stay bare
    background — the layout switch's spot now that ⋯ holds the card's corner. */
@@ -6071,9 +6067,13 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 	   is what fits title, order, label and Close on one row (B5, T5). The card
 	   view and landscape keep the larger size. */
 	@media (max-width: 1023px) {
-		:root:root:root:root [data-expanded="true"] .hw-notebookHeader .hw-headerAction { font-size: 14px; }
-		:root:root:root:root [data-expanded="true"] .hw-notebookHeader h2 { font-size: 15px; }
-		:root:root:root:root [data-expanded="true"] .hw-notebookHeader .hw-zoom :is(button, span) { font-size: 14px; }
+		/* T1 (round 20): the same 16px as the card, with tighter spacing, so
+		   title, order, "Show question too" and Close still share one row. */
+		:root:root:root:root [data-expanded="true"] .hw-notebookHeader { column-gap: 3px; padding-inline: 4px; }
+		:root:root:root:root [data-expanded="true"] .hw-notebookHeader .hw-headerAction { padding-inline: 6px; gap: 4px; }
+		:root:root:root:root [data-expanded="true"] .hw-notebookHeader h2 { padding-inline: 4px 2px; }
+		:root:root:root:root [data-expanded="true"] .hw-notebookHeader .hw-zoom .hw-headerAction { padding-inline: 4px; }
+		:root:root:root:root [data-expanded="true"] .hw-notebookHeader .hw-zoom .hw-zoomValue { min-width: 44px; }
 	}
 	/* Settings uses the tablet's height instead of floating small in it. */
 	:root:root .lh-settings.settings-dialog-pop { height: calc(100dvh - 48px); max-height: none; width: min(960px, calc(100vw - 32px)); max-width: none; }
@@ -6157,3 +6157,156 @@ html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-closed-toggle [dat
 .lh-chains-count-short { display: none; }
 @container (max-width: 200px) { .lh-chains-count-full { display: none; } .lh-chains-count-short { display: inline; } }
 @container (max-width: 70px) { .lh-chains-count-short { display: none; } }
+
+/* ===================================================================
+   Round 20 — the round-19 leftovers.
+   =================================================================== */
+/* P1: notebook working waiting to go with the next message — a calm chip in
+   the field it goes with; its arrival (a brief highlight) is the confirmation. */
+.lh-working-chip {
+	display: flex; align-items: center; gap: 8px; min-height: 40px; margin: 6px 8px 4px; padding: 2px 2px 2px 12px;
+	border: 1px solid color-mix(in oklab, var(--primary) 45%, var(--border)); border-radius: 12px;
+	background: color-mix(in oklab, var(--primary) 10%, var(--card)); color: var(--foreground);
+	font-size: 14px; font-weight: 550; animation: lh-working-chip-in 1.6s ease-out 1;
+}
+.lh-working-chip > svg { flex: none; width: 16px; height: 16px; color: var(--lh-brand-ink, var(--primary)); }
+.lh-working-chip-text { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: baseline; column-gap: 8px; min-width: 0; padding-block: 4px; line-height: 1.3; }
+.lh-working-chip-label { flex: none; }
+.lh-working-chip-note { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: 13px; font-weight: 450; }
+.lh-working-chip-remove {
+	flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; color: var(--muted-foreground);
+}
+.lh-working-chip-remove:hover, .lh-working-chip-remove:focus-visible { background: var(--accent); color: var(--foreground); }
+.lh-working-chip-remove svg { width: 16px; height: 16px; }
+@media (pointer: coarse) {
+	.lh-working-chip { min-height: 48px; }
+	.lh-working-chip-remove { width: 44px; height: 44px; }
+}
+@keyframes lh-working-chip-in {
+	0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 55%, transparent); }
+	60% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--primary) 0%, transparent); }
+	100% { box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) { .lh-working-chip { animation: none; } }
+/* P2: Report a problem — a dimmed backdrop, ✕ beside the title, the captured
+   screenshot (its row keeps one height, so nothing moves when it arrives), a
+   clearly chosen Bug/Change, and on laptops a centred modal. */
+.lh-bug-backdrop { position: fixed; inset: 0; z-index: 119; background: rgb(0 0 0 / .5); }
+.lh-bug-sheet:focus { outline: none; }
+:root .lh-bug-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 10px; }
+:root .lh-bug-head .lh-bug-status { grid-column: 1 / -1; }
+.lh-bug-x { display: grid; place-items: center; width: 36px; height: 36px; margin: -6px -6px -6px 0; border-radius: 10px; color: var(--muted-foreground); }
+.lh-bug-x:hover, .lh-bug-x:focus-visible { background: var(--accent); color: var(--foreground); }
+.lh-bug-x svg { width: 18px; height: 18px; }
+@media (pointer: coarse) { .lh-bug-x { width: 44px; height: 44px; } }
+.lh-bug-shot { display: flex; align-items: center; gap: 12px; min-height: 72px; }
+.lh-bug-shot > a, .lh-bug-shot-wait { flex: none; display: grid; place-items: center; width: 104px; height: 72px; overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: var(--muted); }
+.lh-bug-shot img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+.lh-bug-shot-wait { color: var(--muted-foreground); font-size: 12.5px; }
+.lh-bug-shot[data-state="pending"] .lh-bug-shot-wait { animation: lh-bug-wait 1.2s ease-in-out infinite alternate; }
+@keyframes lh-bug-wait { from { opacity: .55; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .lh-bug-shot[data-state="pending"] .lh-bug-shot-wait { animation: none; } }
+.lh-bug-shot-caption { min-width: 0; color: var(--muted-foreground); font-size: 13.5px; line-height: 1.35; }
+:root .lh-bug-kind { background: transparent; padding: 0; gap: 8px; }
+:root .lh-bug-kind button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border: 1px solid var(--border); background: transparent; color: var(--muted-foreground); box-shadow: none; }
+:root .lh-bug-kind button[aria-checked="true"] { border: 2px solid var(--primary); background: color-mix(in oklab, var(--primary) 16%, var(--card)); color: var(--foreground); font-weight: 650; box-shadow: none; }
+.lh-bug-kind-check { width: 16px; height: 16px; color: var(--primary); }
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	:root .lh-bug-sheet { top: 50%; left: 50%; right: auto; bottom: auto; width: 460px; max-height: calc(100vh - 48px); overflow: auto; transform: translate(-50%, -50%); }
+}
+/* P6: Undo beside Apply in the phone notebook pane's command row. */
+:root .notebook-panel[data-pane] .notebook-input-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+.notebook-undo-inline {
+	display: grid; place-items: center; align-self: end; width: 48px; height: 54px; border: 1px solid var(--border); border-radius: 12px;
+	background: var(--card); color: var(--foreground);
+}
+.notebook-undo-inline:disabled { color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); }
+.notebook-undo-inline svg { width: 20px; height: 20px; }
+/* P7: a quiet Import row at the top of phone Ideas (⋯ keeps the corner). */
+.lh-ideas-import-row { display: flex; padding: 2px 8px; border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
+:root .lh-ideas-import-row .lh-ideas-import-quiet {
+	display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 8px; border: 0; border-radius: 10px; background: none;
+	color: var(--muted-foreground); font-size: 15px; font-weight: 550;
+}
+:root .lh-ideas-import-row .lh-ideas-import-quiet:hover, :root .lh-ideas-import-row .lh-ideas-import-quiet:focus-visible { background: var(--accent); color: var(--foreground); }
+:root .lh-ideas-import-row .lh-ideas-import-quiet svg { width: 18px; height: 18px; color: var(--lh-brand-ink, var(--primary)); }
+/* T1: the larger tablet sizing carried through the remaining surfaces — the
+   question card, the folded check row, the writing captions and Ideas' list. */
+@media (min-width: 768px) and (pointer: coarse) {
+	:root:root :is(.lh-option, .lh-option p, .lh-option .lh-prose) { font-size: 18px; }
+	:root:root :is(.lh-question-text, .lh-question-text p) { font-size: 18px; }
+	/* Above the tablet's 13px floor for small labels (an :is() list, 0,4,1). */
+	:root:root:root:root:root .lh-eyebrow { font-size: 14.5px; }
+	:root:root .lh-submit-label { font-size: 16px; }
+	:root:root .lh-question-opener { font-size: 17px; }
+	:root:root .lh-question-opener > span:first-child { font-size: 14.5px; }
+	:root:root .lh-show-question { font-size: 16px; }
+	:root:root .lh-reading-label { font-size: 14.5px; }
+	:root:root:root:root:root .lh-pane-keyboard > span { font-size: 14px; }
+	/* The Ideas list: names, counts and dates, a chain's line, the source
+	   chips, row actions and "Show empty"; the column heads; Import in its bar
+	   (the bar's other chips' 17px). */
+	:root:root [data-testid="chain-table"] .lh-row-name { font-size: 16.5px; }
+	:root:root [data-testid="chain-table"] .lh-ideas-scroll :is(.lh-row-count, .lh-row-date, .text-xs) { font-size: 15px; }
+	:root:root [data-testid="chain-table"] [data-testid^="chain-row-"] .text-\[13px\] { font-size: 15px; }
+	:root:root:root:root:root [data-testid="chain-table"] :is(.lh-source-chip, [data-testid^="chain-row-"] .rounded.border) { font-size: 14px; }
+	:root:root [data-testid="chain-table"] .lh-row-actions > :is(button, a) { font-size: 15px; }
+	:root:root [data-testid="chain-table"] .lh-show-empty { font-size: 16px; }
+	:root:root [data-testid="chain-table"] .lh-show-empty-note { font-size: 14.5px; }
+	:root:root:root:root:root [data-testid="chain-table"] .lh-ideas-head :is(button, span) { font-size: 13.5px; }
+	:root:root [data-testid="chain-table"] .lh-topbar .lh-ideas-import { font-size: 17px; }
+	:root:root .lh-chains-count { font-size: 15px; }
+}
+/* T2: the tablet's two-row bar — the session's name on its own row, aligned
+   under Sessions and Home (not centred under the right-hand chips), its mode
+   beside it. T3: the reading measure capped at about 70 characters at the
+   18px reading size; the dock keeps the column's edges. */
+@media (min-width: 768px) and (pointer: coarse) {
+	:root:root:root .lh-topbar > .lh-title-block { justify-content: flex-start; padding-inline: 0; text-align: left; }
+	:root:root:root:root:root .lh-topbar .lh-session-subtitle { font-size: 15px; }
+	:root:root :is(.lh-column, .lh-dock-column) { max-width: 32rem; }
+}
+/* L1 (round 20): the laptop's folded rail — Report at the top, Helpers and
+   Settings at the foot, where the open sidebar has them; each an icon over its
+   name (no bare icons). Laptops only, never in focus mode. Until React has
+   applied the remembered sidebar state, the boot script's reading decides, so
+   a page load never shifts the lesson. */
+.lh-folded-rail { display: none; }
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	/* Folding and opening, the rail's width moves with the sidebar's. */
+	.lh-folded-rail { display: block; flex-shrink: 0; width: 0; height: 100%; overflow: hidden; }
+	.lh-folded-rail[data-folded] { width: 68px; }
+	.lh-rail-inner {
+		display: flex; flex-direction: column; justify-content: space-between;
+		width: 68px; height: 100%; padding: 12px 6px; border-right: 1px solid var(--border);
+		background: var(--color-background);
+	}
+	html[data-sidebar-boot="open"]:not([data-sidebar-synced]) .lh-folded-rail { width: 0; }
+	html[data-focus-mode] .lh-folded-rail { display: none; }
+	.lh-electron[data-lh-platform="darwin"] .lh-folded-rail { padding-top: calc(52px / var(--lh-zoom)); }
+	.lh-rail-foot { display: flex; flex-direction: column; gap: 4px; }
+	.lh-rail-item {
+		display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+		width: 56px; min-height: 52px; padding: 6px 2px; border-radius: 12px;
+		color: var(--muted-foreground); font-size: 12px; font-weight: 550; line-height: 1.1;
+		transition: background-color .15s, color .15s;
+	}
+	.lh-rail-item:hover, .lh-rail-item:focus-visible, .lh-rail-item[aria-expanded="true"] { background: var(--accent); color: var(--foreground); }
+	.lh-rail-item svg { width: 18px; height: 18px; }
+	.lh-rail-report svg { color: #f59e0b; }
+	.lh-rail-icon { position: relative; display: inline-flex; }
+	.lh-rail-dot {
+		position: absolute; top: -2px; right: -4px; width: 8px; height: 8px; border-radius: 999px;
+		background: var(--primary); box-shadow: 0 0 0 2px var(--color-background);
+	}
+	.lh-rail-dot[data-failed] { background: var(--destructive); }
+	/* The bar's own left gutter is unchanged: Sessions sits 12px from the rail. */
+}
+/* L2 (round 20): the laptop's composer chips at a readable 14px, still
+   secondary (muted, quiet borders); the reasoning chip's own name is quieter
+   than its level. */
+.lh-chip-key { color: var(--muted-foreground); font-weight: 400; }
+@media (min-width: 768px) and (not (pointer: coarse)) {
+	:root .lh-stats-bar, :root .lh-stats-bar [data-testid="stats-summary"] { font-size: 14px; }
+	:root [data-testid="stats-model"], :root [data-testid="stats-thinking"] { height: 32px; font-size: 14px; }
+}

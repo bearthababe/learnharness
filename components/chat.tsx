@@ -53,6 +53,7 @@ import type { NotebookInputFields, TutorDraftOwner } from "@/src/core";
 import { NotebookPanel } from "@/components/notebook-panel";
 import { NotebookFrame, NotebookSplit, useNotebookLayout } from "@/components/notebook-layout";
 import { NotebookSavedDrafts } from "@/components/notebook-saved-drafts";
+import { WorkingChip } from "@/components/working-chip";
 import { useNotebookDestination } from "@/components/notebook-destination";
 import { notebookTutorInput } from "@/components/notebook-speech-input";
 import { NotebookSpeechDestination, NotebookSpeechRecovery } from "@/components/notebook-speech-status";
@@ -130,7 +131,7 @@ import { currentUserThinkingOpen, setAllUserThinkingOpen } from "@/components/th
  * same place — width polish only.
  */
 const COLUMN = "lh-column mx-auto w-full max-w-[46rem] px-4";
-const DOCK = "mx-auto w-full max-w-[46rem] px-4";
+const DOCK = "lh-dock-column mx-auto w-full max-w-[46rem] px-4";
 // The DOCK container's fixed width (46rem) and the plan marginalia's
 // geometry (owner, plan-placement round): the bare diagram sits in the
 // dock band's RIGHT flank — MARGIN_GAP from the DOCK container's edge and
@@ -731,6 +732,10 @@ export function Chat({
 	const readingThinkingRef = useRef("");
 	const readingNow = useCallback(() => readingThinkingRef.current, []);
 	const phoneLayout = usePhoneLayout();
+	// P4 (round 20): on phones the mode marker ("Practice", "Drill") sits beside
+	// the name, so a leading "Practice:" / "Drill:" isn't repeated in it.
+	const modeLead = phoneLayout && kind === "practice" ? titleText.match(/^(practice|drill)\s*[:\-–—]\s*(\S.*)$/i) : null;
+	const shownTitle = modeLead && modeLead[1]!.toLowerCase() === (practiceMode === "drill" ? "drill" : "practice") ? modeLead[2]!.charAt(0).toUpperCase() + modeLead[2]!.slice(1) : titleText;
 	const stackedNotebook = useStackedNotebook();
 	// P5 (round 17, phones): the equation notebook takes over the screen like
 	// the thinking pane — the big mic bar, the keyboard button and Peek; the
@@ -1794,12 +1799,6 @@ export function Chat({
 	};
 	// P1 (round 19): where Focus lives on this phone or tablet (null on laptops).
 	const focusPlace = useFocusPlace();
-	const [askTutorNotice, setAskTutorNotice] = useState(false);
-	useEffect(() => {
-		if (!askTutorNotice) return;
-		const timer = window.setTimeout(() => setAskTutorNotice(false), 5000);
-		return () => window.clearTimeout(timer);
-	}, [askTutorNotice]);
 	const notebookOpenerEl = <NotebookOpener
 		equations={notebookOn ? { open: notebookVisible, toggle: toggleEquations } : undefined}
 		handwriting={writingOn ? { open: handwriting.open, toggle: () => handwriting.show(!handwriting.open) } : undefined}
@@ -1814,6 +1813,8 @@ export function Chat({
 							: <p role="alert" className="px-3 text-xs text-destructive">Your draft couldn't be saved yet: {tutorDraftState.error}</p>)}
 						{tutorDraftState.saving && !tutorDraftState.error && <p role="status" className="px-3 text-xs text-muted-foreground">Saving draft…</p>}
 						{tutorDraftState.recovery.map((draft) => <section key={draft.id} className="max-h-56 overflow-auto p-3"><h3>Local draft retained for review</h3><LearnerExplanation parts={draft.parts} /></section>)}
+						{/* P1 (round 20): working waiting to go with the next message, removable. */}
+						<WorkingChip session={notebook.session} owner={{ kind: "ordinary" }} />
 						<ChatSessionComposer
 							dictation={tutorDictation}
 							hasContent={hasSharedWriting || handwritingSubmission.hasAttempt() || !!ordinaryDraft && explanationHasContent(ordinaryDraft.parts)}
@@ -1948,14 +1949,15 @@ export function Chat({
 								setRenaming(true);
 							}}
 							className="lh-session-title lh-no-drag -mx-1.5 min-w-4 shrink cursor-text truncate rounded-md px-1.5 text-left font-title transition-colors hover:bg-accent"
+							aria-label={shownTitle !== titleText ? titleText : undefined}
 						>
-							{titleText}
+							{shownTitle}
 							</button>
 						</Hint>
-						{/* Phones fold the phase/mode chip into a quiet subtitle. L5 (round 19):
-						    the session's name gets the room — "Practice"/"Drill" only, and
-						    nothing when the name already says it ("Practice: …"). */}
-						{!(phoneLayout && kind === "practice" && /^(practice|drill)\b/i.test(titleText)) && <span className="lh-session-subtitle" aria-hidden="true" data-kind={kind === "practice" ? (practiceMode === "drill" ? "drill" : "practice") : "teach"}>
+						{/* Phones fold the phase/mode chip into a quiet subtitle. P4 (round 20):
+						    practice and drill keep a compact mode marker, like "Teaching"; a
+						    name that starts with it ("Drill: …") shows the rest beside it. */}
+						{<span className="lh-session-subtitle" aria-hidden="true" data-kind={kind === "practice" ? (practiceMode === "drill" ? "drill" : "practice") : "teach"}>
 							{kind === "practice" ? (practiceMode === "drill" ? (phoneLayout ? "Drill" : "Drill session") : (phoneLayout ? "Practice" : "Practice session")) : phaseLabel(phases.at(-1) ?? "probe")}
 						</span>}
 						</span>
@@ -2042,7 +2044,6 @@ export function Chat({
 				]} />
 				<FocusModeExit />
 				<FocusPlaceSync />
-				{askTutorNotice && <div role="status" className="lh-ask-notice" data-testid="ask-tutor-notice">Your working is attached. Ask the tutor below.</div>}
 				{!notebookVisible && notebook.error && (friendlyNetworkError(notebook.error)
 					? <p role="status" className="lh-quiet-status px-3 py-1">Offline — your notebook working is kept and syncs when you're back.</p>
 					: <p role="alert" className="px-3 py-1 text-sm text-destructive">Notebook: {notebook.error}</p>)}
@@ -2477,7 +2478,7 @@ export function Chat({
 							}
 							// Keyboard users carry on typing: focus returns to the composer
 							// once it is back (never on touch, where it would raise a keyboard).
-							if (pendingRef.current?.toolCallId !== toolCallId && window.matchMedia?.("(pointer: fine)").matches) {
+							if (pendingRef.current?.toolCallId !== toolCallId && !window.matchMedia?.("(pointer: coarse)").matches) {
 								let tries = 0;
 								const focus = () => {
 									const editor = composerInputRef.current;
@@ -2522,7 +2523,6 @@ export function Chat({
 							if (!workspaceRef.current) return;
 							void notebook.session.speech.closeNotebook(notebookTutorInput(workspaceRef.current)).then(() => {
 								requestAnimationFrame(focusDictationDestination);
-								setAskTutorNotice(true);
 							}).catch(() => {});
 						}}
 						onClose={() => {

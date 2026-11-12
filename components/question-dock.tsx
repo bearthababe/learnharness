@@ -9,6 +9,7 @@ import { MalformedQuestion } from "@/components/malformed-question";
 import { dictationCheckpoint, finishDictation, isDictationActive, joinDictation, useDictationTarget, type Dictation } from "@/components/dictation";
 import { useEnterSubmits, notebookOwnsKeyboard } from "@/components/enter-submits";
 import { CompactLearningInput, useMicSlot } from "@/components/compact-learning-input";
+import { WorkingChip } from "@/components/working-chip";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
 import { useHandwritingEditor } from "./handwriting/submission";
@@ -1010,6 +1011,8 @@ function QuestionDockForm({
 					submit();
 				}}
 			>
+				{/* P1 (round 20): notebook working waiting to go with this answer. */}
+				<WorkingChip session={notebook} owner={owner} goesWith="your answer" />
 				<div
 					data-testid={qd.mode === "text" ? "answer-field" : "thinking-field"}
 					className="lh-question-input rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"

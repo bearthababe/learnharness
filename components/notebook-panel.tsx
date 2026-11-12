@@ -101,6 +101,10 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 			</CompactLearningInput>
 			{/* S1 (round 17): the mic, right before Apply (the pane's is in its bar). */}
 			{!pane && <span ref={setMicSlot} className="lh-mic-slot" />}
+			{/* P6 (round 20): in the phone pane the correction loop stays under the
+			    hand — Undo right before Apply, by the command field (not at the
+			    header's far edge). */}
+			{pane && <button type="button" className="notebook-undo-inline" data-testid="notebook-undo" aria-label="Undo" title="Undo the last change" disabled={applyWaiting || !!view?.pending || !view?.canUndo} onClick={() => command("undo")}><Undo2Icon /></button>}
 			<button type="submit" aria-label="Apply changes" disabled={!speech.active && !draftText.trim() || applyWaiting} className="notebook-apply">{editing ? <Loader2Icon className="animate-spin" /> : "Apply"}</button>
 			</div>
 			{(saving || editing) && <span className="sr-only" role="status">{editing ? view?.pending?.status === "awaiting-transcript" ? "Working pending…" : "Applying changes…" : "Saving…"}</span>}
@@ -124,7 +128,7 @@ export function NotebookPanel({ session, dictation, viewControls, activity = { k
 			{/* P5 (round 17): the help sits behind an info icon instead of over
 			    the working. */}
 			<button type="button" aria-label="How the notebook works" title="How the notebook works" data-testid="notebook-help" aria-expanded={menu === "help"} onClick={() => setMenu(menu === "help" ? null : "help")} ref={helpTrigger}><InfoIcon /></button>
-			<button type="button" aria-label="Undo" title="Undo" disabled={applyWaiting || !!view?.pending || !view?.canUndo} onClick={() => command("undo")}><Undo2Icon /></button>
+			{!pane && <button type="button" aria-label="Undo" title="Undo" disabled={applyWaiting || !!view?.pending || !view?.canUndo} onClick={() => command("undo")}><Undo2Icon /></button>}
 			{viewControls && !pane && (viewControls.expanded
 				? <button type="button" className="notebook-back-lesson" data-testid="notebook-back-lesson" aria-label="Back to the lesson" title="Back to the lesson" onClick={viewControls.toggleExpanded}>
 					<Minimize2Icon /><span>Lesson</span>

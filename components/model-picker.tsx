@@ -353,7 +353,8 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 				{/* Just the level — the button reads like the model button reads
 				   the model name (owner, stats-control round 1). */}
 				<span className="text-card-foreground">
-					{effectiveLevel === undefined ? (nothingChosen ? "Reasoning" : "—") : (THINKING_LABEL[effectiveLevel] ?? effectiveLevel)}
+					{/* L2 (round 20): the chip names itself ("Reasoning low"), quietly. */}
+					{effectiveLevel === undefined ? (nothingChosen ? "Reasoning" : "—") : <><span className="lh-chip-key">Reasoning </span>{THINKING_LABEL[effectiveLevel] ?? effectiveLevel}</>}
 				</span>
 				<span aria-hidden className="text-xs text-muted-foreground">▾</span>
 			</button>

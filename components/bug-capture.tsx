@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MicIcon, SquareIcon } from "lucide-react";
+import { CheckIcon, MicIcon, SquareIcon, XIcon } from "lucide-react";
 import { useDeploymentActivity } from "@/components/deployment-activity";
 import { useDeviceClass } from "@/components/device-features";
 import { dictationAvailable, finishDictation, joinDictation, useDictationTarget } from "@/components/dictation";
@@ -153,12 +153,29 @@ export function BugCapture() {
 		if (w.requestIdleCallback) w.requestIdleCallback(load); else window.setTimeout(load, 3000);
 	}, []);
 
+	// P2 (round 20): a proper modal — focus moves in once the screenshot is
+	// taken (a held menu stays open for its shot), Tab stays inside, Escape
+	// saves and closes, and focus returns where it was (pointer devices; a
+	// touch screen never gets its keyboard raised by it).
+	const sheetRef = useRef<HTMLDivElement>(null);
+	const returnFocus = useRef<HTMLElement | null>(null);
+	const restoreFocus = () => {
+		const back = returnFocus.current; returnFocus.current = null;
+		if (back?.isConnected && !matchMedia("(pointer: coarse)").matches) back.focus({ preventScroll: true });
+	};
+	const trapKeys = (event: React.KeyboardEvent<HTMLDivElement>) => {
+		if (event.key !== "Tab") return;
+		const items = [...(sheetRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], textarea, [tabindex='0']") ?? [])].filter(el => el.getClientRects().length > 0);
+		if (!items.length) return;
+		const first = items[0]!, last = items.at(-1)!, at = document.activeElement;
+		if (event.shiftKey ? at === first || at === sheetRef.current : at === last) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
+	};
 	/** Leave the dialog keeping the report (Close, Open report, another page). */
 	const leave = useCallback(async (silent = false) => {
 		// Words still being spoken land in the note before it lets go of the mic.
 		if (isDictationActive()) await finishDictation().catch(() => {});
 		const draft = draftRef.current;
-		setOpen(false); openAt.current = null;
+		setOpen(false); openAt.current = null; restoreFocus();
 		if (!draft) return;
 		draft.update({ closed: true });
 		if (!silent) showToast({ text: "Report saved", id: draft.value.id });
@@ -169,12 +186,20 @@ export function BugCapture() {
 	const discard = useCallback(async () => {
 		if (isDictationActive()) await finishDictation().catch(() => {});
 		const draft = draftRef.current;
-		setOpen(false); openAt.current = null; draftRef.current = null;
+		setOpen(false); openAt.current = null; draftRef.current = null; restoreFocus();
 		if (!draft) return;
 		draft.update({ discardPending: true });
 		showToast({ text: "Report discarded" });
 		void draft.flush().catch(() => {});
 	}, [showToast]);
+
+	// P2 (round 20): Escape saves and closes, like ✕ (first, so nothing beneath acts on it).
+	useEffect(() => {
+		if (!open) return;
+		const onKey = (event: KeyboardEvent) => { if (event.key !== "Escape" || event.defaultPrevented) return; event.preventDefault(); event.stopPropagation(); void leave(); };
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [open, leave]);
 
 	// Navigating away keeps the report (and says so).
 	useEffect(() => {
@@ -211,6 +236,8 @@ export function BugCapture() {
 			persistDraft(value, false);
 			setId(reportId); setKind("bug"); setNote(""); setShot("pending"); setCopied(false); setSaving("saving");
 			setCanDictate(dictationAvailable());
+			const active = document.activeElement;
+			returnFocus.current = active instanceof HTMLElement && active !== document.body ? active : null;
 			setOpen(true);
 			flush(draft);
 			// Menus close first (a tap), so the shot shows the page, not the menu.
@@ -223,7 +250,7 @@ export function BugCapture() {
 					width: innerWidth, height: h, scale: 1, font: false, type: "image/jpeg", quality: 0.85,
 					backgroundColor: getComputedStyle(document.body).backgroundColor,
 					style: { margin: "0" },
-					filter: node => !(node instanceof Element) || !node.closest(".lh-bug-sheet, .lh-bug-toast"),
+					filter: node => !(node instanceof Element) || !node.closest(".lh-bug-sheet, .lh-bug-toast, .lh-bug-backdrop"),
 					onCloneEachNode: maskClone,
 				});
 				await draft.flush();
@@ -236,6 +263,8 @@ export function BugCapture() {
 			} catch {
 				if (draftRef.current === draft) setShot("failed");
 			}
+			const sheet = sheetRef.current;
+			if (draftRef.current === draft && sheet && !sheet.contains(document.activeElement)) sheet.focus({ preventScroll: true });
 		};
 		const on = (event: Event) => void go((event as CustomEvent<{ keepMenus?: boolean }>).detail?.keepMenus ?? false);
 		window.addEventListener(BUG_CAPTURE_EVENT, on);
@@ -260,17 +289,31 @@ export function BugCapture() {
 	return (
 		<>
 			{open && (
-				<div className="lh-bug-sheet" role="dialog" aria-label="Report a problem" data-testid="bug-dialog" data-kind={kind}>
+				// P2 (round 20): a dimmed backdrop (a tap on it saves and closes, like ✕);
+				// the screenshot never includes it (see the capture's filter).
+				<div className="lh-bug-backdrop" data-testid="bug-backdrop" aria-hidden="true" onClick={() => void leave()} />
+			)}
+			{open && (
+				<div ref={sheetRef} className="lh-bug-sheet" role="dialog" aria-modal="true" aria-labelledby="lh-bug-title" data-testid="bug-dialog" data-kind={kind} tabIndex={-1} onKeyDown={trapKeys}>
 					<div className="lh-bug-head">
-						<strong>🐞 Report a problem</strong>
+						<strong id="lh-bug-title">🐞 Report a problem</strong>
+						<button type="button" className="lh-bug-x" data-testid="bug-x" aria-label="Save and close" title="Save and close" onClick={() => void leave()}><XIcon aria-hidden /></button>
 						<span className="lh-bug-status" role="status" data-testid="bug-status" data-saving={saving} data-shot={shot}>
 							{saving === "offline" ? "Kept on this device · will save when online" : saving === "saving" ? "Saving…" : shot === "pending" ? "Saved · taking the screenshot…" : shot === "failed" ? "Saved · no screenshot" : "Saved with a screenshot"}
 						</span>
 					</div>
+					{/* P2: the captured screenshot, once it is ready (keys and passwords hidden). */}
+					<div className="lh-bug-shot" data-testid="bug-shot" data-state={shot}>
+						{shot === "ok" && id ? <a href={`/api/bugs/${id}/screenshot`} target="_blank" rel="noreferrer" aria-label="Open the screenshot">
+							{/* eslint-disable-next-line @next/next/no-img-element */}
+							<img src={`/api/bugs/${id}/screenshot`} alt="Screenshot of this screen (keys and passwords hidden)" data-testid="bug-thumb" /></a>
+							: <span className="lh-bug-shot-wait" aria-hidden="true">{shot === "failed" ? "No screenshot" : "Screenshot…"}</span>}
+						<span className="lh-bug-shot-caption">{shot === "ok" ? "This screen, with keys and passwords hidden" : shot === "failed" ? "The report is saved without one" : "Taking it now"}</span>
+					</div>
 					<div className="lh-bug-kind" role="radiogroup" aria-label="Kind of report">
 						{(["bug", "change"] as const).map(k => (
 							<button key={k} type="button" role="radio" aria-checked={kind === k} data-testid={`bug-kind-${k}`} onClick={() => { setKind(k); edit({ kind: k }); }}>
-								{k === "bug" ? "🐞 Bug" : "💡 Change"}
+								{kind === k && <CheckIcon aria-hidden className="lh-bug-kind-check" />}{k === "bug" ? "🐞 Bug" : "💡 Change"}
 							</button>
 						))}
 					</div>
@@ -286,7 +329,7 @@ export function BugCapture() {
 							</button>
 						)}
 					</div>
-					<p className="lh-bug-hint">{kind === "change" ? "A change keeps your note, the page and the screenshot (no error log)." : "The screenshot hides keys and passwords. Reports stay on this computer."}</p>
+					<p className="lh-bug-hint">{kind === "change" ? "A change keeps your note, the page and the screenshot (no error log)." : "Reports stay on this computer."}</p>
 					<div className="lh-bug-actions">
 						<button type="button" className="lh-bug-primary" data-testid="bug-close" onClick={() => void leave()}>Save and close</button>
 						{url ? <Link href={url} className="lh-bug-secondary" data-testid="bug-open" onClick={() => void leave()}>Open report</Link> : <span className="lh-bug-secondary" aria-disabled="true">Open report</span>}

@@ -151,7 +151,8 @@ test("D1: an edit made while the notebook is closed is what the notebook shows w
 	const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
 	try {
 		await act(async () => { root.render(<Probe session={double.session} api={api} />); });
-		assert.equal(double.drafts()[0]?.parts[0]?.kind === "text" && double.drafts()[0]!.parts[0]!.text, "Initial reasoning.", "opening the notebook seeds its copy");
+		const seeded = double.drafts()[0]?.parts[0];
+		assert.equal(seeded?.kind === "text" ? seeded.text : null, "Initial reasoning.", "opening the notebook seeds its copy");
 		await act(async () => { double.setOpen(false); });
 		await act(async () => { api.current!.change("thinking", "Corrected reasoning."); });
 		const copy = double.drafts()[0]!;

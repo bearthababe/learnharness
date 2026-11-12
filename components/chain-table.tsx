@@ -456,6 +456,9 @@ export function ChainTableBody({
 					</button>
 				</div>
 
+				{/* P7 (round 20): on phones Import lives in ⋯ (the corner stays ⋯'s); a
+				    quiet row at the top of the list keeps it in sight here too. */}
+				{phone && !selectMode && <div className="lh-ideas-import-row"><ImportNotesLink testid="ideas-import-row" label="Import notes or a folder" className="lh-ideas-import-quiet lh-no-drag" /></div>}
 				{handleHint && onOrganizationChange && !selectMode && <p className="lh-handle-hint" data-testid="ideas-handle-hint">
 					<GripVerticalIcon aria-hidden /><span>Drag a row’s handle to move it into a folder — or tap the handle for Move to…</span>
 					<button type="button" aria-label="Got it" onClick={seenHandleHint}><XIcon aria-hidden /></button>

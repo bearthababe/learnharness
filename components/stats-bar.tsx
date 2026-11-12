@@ -28,6 +28,17 @@ export function formatContextMeasurement(tokens: number | null, limit: number | 
 	return limit === null ? numerator : `${numerator} / ${formatTokens(limit)}`;
 }
 
+/** L2 (round 20): the composer's figure in plain words — how full the tutor's
+ *  memory of this conversation is (the exact tokens stay in the panel). With
+ *  replies but no figure yet (after a compaction) it says when it returns
+ *  (round 15, A7); never "? / …" (round 14, C6). */
+export function plainContextLabel(tokens: number | null, limit: number | null, replies: number): string {
+	if (tokens === null) return replies > 0 ? "Memory shown after the next reply" : "Not measured yet";
+	if (limit === null || limit <= 0) return `Memory ${formatTokens(tokens)} used`;
+	const percent = (tokens / limit) * 100;
+	return percent > 0 && percent < 1 ? "Memory under 1% full" : `Memory ${Math.min(100, Math.round(percent))}% full`;
+}
+
 /** CLI aliases have no global catalog limit: only this session's matching
  * response can supply a denominator. Other providers keep their catalog join. */
 export function contextLimitForModel(model: string | undefined, limits: ReadonlyMap<string, number> | undefined,
@@ -146,8 +157,9 @@ export function StatsBar({
 	// says when it comes back instead of disappearing; before any reply it is
 	// simply not measured yet. Never a "?" placeholder (C6).
 	const contextPending = turns.length > 0 ? "Updates after the next reply" : "Not measured yet";
+	const contextPlain = plainContextLabel(contextTokens, limit, turns.length);
 	const usageLabel = !hasUsage ? null
-		: contextKnown ? `${contextLabel} · ${costLabel === "—" ? "cost not reported" : costLabel}`
+		: contextKnown ? `${contextPlain} · ${costLabel === "—" ? "cost not reported" : costLabel}`
 		: costLabel === "—" ? "Not measured yet" : costLabel;
 	useEffect(() => { publishPageMenu({ usage: usageLabel }); }, [usageLabel]);
 	useEffect(() => () => publishPageMenu({ usage: null }), []);
@@ -196,7 +208,7 @@ export function StatsBar({
 			>
 				<span className="lh-phone-usage-label">Usage</span>
 				<span className="lh-usage-numbers contents"><span data-testid="stats-context" data-pending={!contextKnown || undefined}>
-					{contextKnown ? contextLabel : `Context: ${contextPending.toLowerCase()}`}
+					{contextPlain}
 				</span>
 				<span aria-hidden>·</span>
 				<span data-testid="stats-cost">{costLabel}</span>
@@ -209,7 +221,7 @@ export function StatsBar({
 						</div>
 						<div className="flex flex-col gap-1 text-muted-foreground">
 							<div className="flex justify-between gap-2">
-								<span>Context (last call)</span>
+								<span>Tutor&apos;s memory (last reply)</span>
 								<span className="tabular-nums text-card-foreground">
 									{contextKnown ? contextLabel : contextPending}
 								</span>

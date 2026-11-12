@@ -238,6 +238,28 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		entry.dirty = true; stash(); publish();
 		void queue(() => flush(owner)).catch(() => {});
 	}
+	/** P1 (round 20): take the notebook working out of a draft before it is
+	 *  sent (the composer chip's ✕). Saved working can't be edited out of a
+	 *  draft (the server keeps its parts), so the draft is discarded and a
+	 *  fresh plain one holds the learner's own words, joined — the box then
+	 *  shows all of them again. A snapshot still being delivered lands first. */
+	function removeWorking(owner: TutorDraftOwner): Promise<void> {
+		if (locked) return Promise.resolve();
+		load();
+		return queue(async () => {
+			await flush(owner).catch(() => {});
+			const key = keyOf(owner), entry = entries.get(key);
+			if (!entry || entry.conflict || entry.frozen || locked || !entry.draft.parts.some((part) => part.kind === "working")) return;
+			const text = entry.draft.parts.flatMap((part) => part.kind === "text" && part.text.trim() ? [part.text] : []).join("\n\n");
+			const form = entry.draft.form && owner.kind === "question" ? { ...entry.draft.form, ...(owner.channel === "text" ? { text } : { thinking: text }) } : entry.draft.form;
+			if (entry.base) await post({ type: "discard-tutor-draft", owner, draftId: entry.base.id, expectedRevision: entry.base.revision });
+			const fresh: Entry = { draft: { id: crypto.randomUUID(), owner, revision: 0, parts: [{ id: crypto.randomUUID(), kind: "text", text }], ...(form ? { form } : {}) }, base: null, dirty: true };
+			entries.set(key, fresh);
+			stash(); publish(null);
+			if (text.trim() || form) await flush(owner);
+			else { entries.delete(key); stash(); publish(null); }
+		});
+	}
 	function prepareSubmission(owner: TutorDraftOwner): Promise<PreparedNotebookContent> {
 		return prepare([owner], () => {
 			const entry = entries.get(keyOf(owner));
@@ -304,7 +326,7 @@ export function createNotebookTutorDrafts(chatId: string, post: (command: DraftC
 		getSnapshot: () => state,
 		subscribe(listener: () => void) { disposed = false; listeners.add(listener); return () => { listeners.delete(listener); }; },
 		draft(owner: TutorDraftOwner) { return entries.get(keyOf(owner))?.draft; },
-		adopt, updateText, updateForm, returnToTutor, prepareSubmission, prepareAnswer,
+		adopt, updateText, updateForm, returnToTutor, removeWorking, prepareSubmission, prepareAnswer,
 		discard(owner: TutorDraftOwner) {
 			return queue(async () => {
 				const entry = entries.get(keyOf(owner));
